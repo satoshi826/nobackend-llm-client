@@ -4,7 +4,6 @@ import {
   enabledProviders,
   keyInfos,
   modal,
-  models,
   modelsStates,
   modelPickerTarget,
   regenerateWith,
@@ -15,19 +14,25 @@ import {
   visibleModels
 } from '../state/app';
 import type { ModelInfo } from '../lib/providers/types';
+import { arrangeModels, FILTER_LABELS, FILTER_ORDER, matchesFilter, SORT_LABELS, type ModelFilter, type ModelSort } from '../lib/model-list';
+import { PRESETS } from '../lib/providers/registry';
 import { Badge, Button, Icon, Modal, cx, formatCtx, formatPrice } from './ui';
+
+function copyOf(providerId: string) {
+  return PRESETS[providerId]?.copy ?? {};
+}
 
 function PrivacyBadge({ m }: { m: ModelInfo }) {
   if (m.privacy === 'private')
     return (
-      <Badge tone="green" title="Venice がホストし、プロンプトを保存しない">
+      <Badge tone="green" title={copyOf(m.providerId).private ?? '提供元がプロンプトを保存しないと明示しているモデル'}>
         <Icon name="lock" class="size-3" />
         private
       </Badge>
     );
   if (m.privacy === 'anonymized')
     return (
-      <Badge tone="amber" title="Claude・Gemini などの外部事業者に中継される。各社の保持ポリシーに従う">
+      <Badge tone="amber" title={copyOf(m.providerId).relayed ?? '外部の事業者に中継されるモデル。各社の保持ポリシーに従う'}>
         外部中継
       </Badge>
     );
@@ -85,22 +90,51 @@ function ModelRow({ m, selected, onPick }: { m: ModelInfo; selected: boolean; on
   );
 }
 
+const FILTER_TITLES: Partial<Record<ModelFilter, string>> = {
+  private: '提供元がプロンプトを保存しないと明示しているモデルだけ',
+  free: '無料モデルは提供元がデータを利用する場合があります'
+};
+
+function FilterChip({ label, count, on, title, onToggle }: { label: string; count: number; on: boolean; title?: string; onToggle(): void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      title={title}
+      onClick={onToggle}
+      class={cx(
+        'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs',
+        on
+          ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
+          : 'border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'
+      )}
+    >
+      {on && <Icon name="check" class="size-3" />}
+      {label}
+      <span class={cx('tabular-nums', on ? 'opacity-70' : 'text-zinc-400')}>{count}</span>
+    </button>
+  );
+}
+
 export function ModelPicker() {
   const [q, setQ] = useState('');
   const conv = currentConv.value;
   const selProvider = conv.providerId;
   const selModel = conv.modelId;
-  const showAnon = settings.value.showAnonymized;
+  const { modelSort: sort, modelFilters: filters } = settings.value;
   const provs = enabledProviders.value;
-  const [tab, setTab] = useState<string>(provs.some((p) => p.id === selProvider) ? selProvider : provs[0]?.id ?? 'venice');
+  const [tab, setTab] = useState<string>(provs.some((p) => p.id === selProvider) ? selProvider : provs[0]?.id ?? '');
 
-  const list = useMemo(() => {
-    const ql = q.toLowerCase();
-    return visibleModels.value.filter((m) => m.providerId === tab && (!ql || m.name.toLowerCase().includes(ql) || m.id.toLowerCase().includes(ql)));
-  }, [q, tab, visibleModels.value]);
-  const hiddenCount = models.value.filter((m) => m.providerId === tab && m.privacy === 'anonymized' && !m.offline).length;
+  const inTab = useMemo(() => visibleModels.value.filter((m) => m.providerId === tab), [tab, visibleModels.value]);
+  // この接続先に該当するモデルがある絞り込みだけを出す（OpenRouter には private がない、など）
+  const chips = FILTER_ORDER.map((f) => ({ f, count: inTab.filter((m) => matchesFilter(m, f)).length })).filter((c) => c.count > 0);
+  const active = filters.filter((f) => chips.some((c) => c.f === f));
+  const list = useMemo(() => arrangeModels(inTab, { query: q, filters: active, sort }), [inTab, q, active.join(), sort]);
+  const hasAnonymized = list.some((m) => m.privacy === 'anonymized');
+
   const st = modelsStates.value[tab] ?? { loading: false, error: null, fetchedAt: null };
   const anyLoading = Object.values(modelsStates.value).some((s) => s.loading);
+  const toggleFilter = (f: ModelFilter) => saveSettings({ modelFilters: filters.includes(f) ? filters.filter((x) => x !== f) : [...filters, f] });
 
   const target = modelPickerTarget.value;
   const pick = async (m: ModelInfo) => {
@@ -133,34 +167,47 @@ export function ModelPicker() {
             ))}
           </div>
         )}
-        <label class="flex items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
-          <Icon name="search" class="size-4 text-zinc-400" />
-          <input class="w-full bg-transparent outline-none" placeholder="モデル名で検索" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label="モデル名で検索" />
-        </label>
-        <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
-          {hiddenCount > 0 || showAnon ? (
-            <label class="flex items-center gap-1.5">
-              <input type="checkbox" checked={showAnon} onChange={(e) => saveSettings({ showAnonymized: (e.target as HTMLInputElement).checked })} />
-              外部中継のモデルも表示（{hiddenCount}）
-            </label>
-          ) : (
-            <span>{list.length} モデル</span>
-          )}
+        <div class="flex gap-2">
+          <label class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
+            <Icon name="search" class="size-4 shrink-0 text-zinc-400" />
+            <input class="w-full bg-transparent outline-none" placeholder="モデル名で検索" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label="モデル名で検索" />
+          </label>
+          <select
+            aria-label="並び順"
+            class="rounded-lg border border-zinc-300 bg-transparent px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            value={sort}
+            onChange={(e) => saveSettings({ modelSort: (e.target as HTMLSelectElement).value as ModelSort })}
+          >
+            {(Object.keys(SORT_LABELS) as ModelSort[]).map((k) => (
+              <option key={k} value={k}>
+                {SORT_LABELS[k]}
+              </option>
+            ))}
+          </select>
+        </div>
+        {chips.length > 0 && (
+          <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="絞り込み">
+            {chips.map(({ f, count }) => (
+              <FilterChip key={f} label={FILTER_LABELS[f]} count={count} on={active.includes(f)} title={FILTER_TITLES[f]} onToggle={() => toggleFilter(f)} />
+            ))}
+            {active.length > 0 && (
+              <button type="button" class="px-1 text-xs text-zinc-500 underline-offset-2 hover:underline" onClick={() => saveSettings({ modelFilters: [] })}>
+                解除
+              </button>
+            )}
+          </div>
+        )}
+        <div class="flex items-center justify-between gap-2 text-xs text-zinc-500">
+          <span>{list.length === inTab.length ? `${inTab.length} モデル` : `${list.length} / ${inTab.length} モデル`}</span>
           <Button class="text-xs" onClick={() => refreshAllModels()} disabled={anyLoading}>
             <Icon name="refresh" class={cx('size-3.5', anyLoading && 'animate-spin')} />
             {anyLoading ? '取得中…' : '一覧を更新'}
           </Button>
         </div>
-        {tab === 'venice' && showAnon && (
-          <p class="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
-            「外部中継」のモデルは、Venice が匿名化したうえで Claude・Gemini などの外部事業者に送ります。プロンプトの保持や検閲は各社の方針に従います。
-          </p>
+        {hasAnonymized && copyOf(tab).relayedNote && (
+          <p class="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">{copyOf(tab).relayedNote}</p>
         )}
-        {tab === 'openrouter' && (
-          <p class="rounded-lg bg-zinc-50 p-2.5 text-xs text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">
-            OpenRouter は複数の提供元に中継します。このアプリは既定で「データを保存・学習に使う提供元」を経由しない設定（data_collection: deny）で送信します。
-          </p>
-        )}
+        {copyOf(tab).pickerNote && <p class="rounded-lg bg-zinc-50 p-2.5 text-xs text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">{copyOf(tab).pickerNote}</p>}
         {st.error && (
           <p role="alert" class="rounded-lg bg-rose-50 p-2.5 text-xs text-rose-800 dark:bg-rose-950 dark:text-rose-200">
             モデル一覧を取得できませんでした: {st.error.message}
@@ -172,7 +219,7 @@ export function ModelPicker() {
             <ModelRow key={m.providerId + m.id} m={m} selected={m.id === selModel && m.providerId === selProvider} onPick={() => pick(m)} />
           ))}
         </ul>
-        {list.length === 0 && !st.loading && <p class="py-6 text-center text-sm text-zinc-500">モデルが見つかりません</p>}
+        {list.length === 0 && !st.loading && <p class="py-6 text-center text-sm text-zinc-500">{inTab.length ? '条件に合うモデルがありません' : 'モデルが見つかりません'}</p>}
       </div>
     </Modal>
   );

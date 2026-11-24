@@ -126,7 +126,17 @@ function UserMessage({ m }: { m: MessageRecord }) {
   }
   return (
     <div class="group flex flex-col items-end">
-      <div class="max-w-[85%] rounded-2xl bg-zinc-100 px-4 py-2.5 text-[15px] leading-7 whitespace-pre-wrap dark:bg-zinc-800">{textOf(m)}</div>
+      {m.skills?.length ? (
+        <div class="mb-1 flex max-w-[85%] flex-wrap justify-end gap-1">
+          {m.skills.map((s) => (
+            <span key={s.name} class="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 font-mono text-xs text-violet-800 dark:bg-violet-950 dark:text-violet-200" title="指定したスキル">
+              <Icon name="book" class="size-3" />
+              {s.name}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {textOf(m) && <div class="max-w-[85%] rounded-2xl bg-zinc-100 px-4 py-2.5 text-[15px] leading-7 whitespace-pre-wrap dark:bg-zinc-800">{textOf(m)}</div>}
       <div class="mt-1 flex items-center gap-0.5 opacity-60 transition group-hover:opacity-100 focus-within:opacity-100">
         <SiblingNav m={m} />
         <Button aria-label="コピー" onClick={() => copy(textOf(m))}>

@@ -2,7 +2,7 @@
 import { signal } from '@preact/signals';
 
 export type ModalName = 'settings' | 'models' | 'system';
-export type SettingsTab = 'connections' | 'chat' | 'search' | 'privacy';
+export type SettingsTab = 'connections' | 'chat' | 'search' | 'skills' | 'privacy';
 
 export const modal = signal<ModalName | null>(null);
 export const settingsTab = signal<SettingsTab>('connections');

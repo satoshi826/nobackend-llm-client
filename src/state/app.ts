@@ -4,6 +4,7 @@ import { loadSettings } from './settings';
 import { checkLeftoverLocalKeys, connectKeys } from './keys';
 import { loadModels } from './models';
 import { loadConversations, restoreFromHash, startNewChat } from './conversations';
+import { loadSkills } from './skills';
 
 export * from './settings';
 export * from './ui';
@@ -12,6 +13,7 @@ export * from './models';
 export * from './conversations';
 export * from './generation';
 export * from './data';
+export * from './skills';
 
 export const ready = signal(false);
 
@@ -21,6 +23,7 @@ export async function init() {
   await connectKeys();
   await checkLeftoverLocalKeys();
   await loadConversations();
+  await loadSkills();
   startNewChat();
   ready.value = true;
   await restoreFromHash();

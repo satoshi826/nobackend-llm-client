@@ -10,12 +10,29 @@ const KEY_GUIDE =
 export const venicePreset: ProviderPreset = {
   id: 'venice',
   label: 'Venice.ai',
+  tagline: 'プロンプトを保存しない private モデルと、制限の少ないモデル。内蔵の Web 検索と残高の確認つき。',
+  features: { builtInWebSearch: true },
+  settings: [{ key: 'includeSystemPrompt', label: 'Venice 既定のシステムプロンプトを付ける', desc: 'オフ（既定）なら、あなたが書いた指示だけがモデルに渡ります。', default: false }],
+  requestOptions: ({ purpose, webSearch, settings }) =>
+    purpose === 'summary'
+      ? { include_venice_system_prompt: false, strip_thinking_response: true }
+      : { include_venice_system_prompt: !!settings.includeSystemPrompt, ...(webSearch !== 'off' ? { enable_web_search: webSearch } : {}) },
+  responseHeaders: ['x-venice-balance-usd', 'x-venice-balance-diem'],
+  copy: {
+    private: 'Venice がホストし、プロンプトを保存しないモデル',
+    relayed: 'Venice が匿名化して Claude・Gemini などの外部事業者に中継するモデル。各社の保持ポリシーに従う',
+    relayedNote: '「外部中継」のモデルは、Venice が匿名化したうえで Claude・Gemini などの外部事業者に送ります。プロンプトの保持や検閲は各社の方針に従います。',
+    extraDestinations: [
+      ['Venice の検索提供元', 'Venice 内蔵の Web 検索をオンにしたときの検索語（Venice 経由）'],
+      ['外部 AI 事業者', 'Venice の「外部中継」のモデルを使ったときの会話（Venice が匿名化して中継）']
+    ]
+  },
   defaults: {
     name: 'Venice',
     kind: 'openai-compatible',
     preset: 'venice',
     baseUrl: BASE_URL,
-    // Venice 既定のシステムプロンプトは付けない（UI で切り替え可能）
+    // Venice 既定のシステムプロンプトは付けない（設定で切り替え可能）
     extraBody: { venice_parameters: { include_venice_system_prompt: false } },
     modelListMode: 'fetch',
     enabled: true

@@ -1,7 +1,8 @@
 // キー金庫（別オリジンの iframe）と本体アプリの間のメッセージ形式。
 // 本体は API キーを一切持たず、「このプロバイダーのキーを付けてこの URL に送って」とだけ依頼する。
 
-import type { KeyStatus } from '../keys/accounts';
+import type { KeyStatus, VaultState } from '../keys/accounts';
+import { PRESETS } from '../providers/registry';
 
 export const VAULT_PROTOCOL = 'nbl-vault/1';
 
@@ -10,11 +11,15 @@ export const VAULT_PROTOCOL = 'nbl-vault/1';
 export type ToVault =
   | { type: 'fetch'; id: string; providerId: string; url: string; method: 'GET' | 'POST'; headers: [string, string][]; body?: string }
   | { type: 'abort'; id: string }
-  | { type: 'status' };
+  | { type: 'status' }
+  /** すべてのキーを削除 / ロック（終わったら ack） */
+  | { type: 'clear-all'; id: string }
+  | { type: 'lock'; id: string };
 
 /** 金庫 → 本体（MessagePort 経由） */
 export type FromVault =
-  | { type: 'status'; providers: Record<string, KeyStatus> }
+  | { type: 'status'; providers: Record<string, KeyStatus>; vault: VaultState }
+  | { type: 'ack'; id: string }
   | { type: 'head'; id: string; status: number; statusText: string; headers: [string, string][] }
   | { type: 'chunk'; id: string; chunk: Uint8Array }
   | { type: 'end'; id: string }
@@ -33,4 +38,6 @@ export interface ResizeMessage {
 }
 
 /** 金庫が中継してよいレスポンスヘッダ（キーや Cookie に関わるものは返さない） */
-export const PASSTHROUGH_HEADERS = ['content-type', 'retry-after', 'x-venice-balance-usd', 'x-venice-balance-diem', 'x-ratelimit-remaining-requests', 'x-ratelimit-remaining-tokens'];
+export const PASSTHROUGH_HEADERS = [
+  ...new Set(['content-type', 'retry-after', 'x-ratelimit-remaining-requests', 'x-ratelimit-remaining-tokens', ...Object.values(PRESETS).flatMap((p) => p.responseHeaders ?? [])].map((h) => h.toLowerCase()))
+];

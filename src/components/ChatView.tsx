@@ -10,6 +10,7 @@ import {
   isDraft,
   isStreaming,
   keyStatus,
+  vaultState,
   modal,
   modelOf,
   openModelPicker,
@@ -18,25 +19,42 @@ import {
   sendMessage,
   sidebarOpen,
   stopGeneration,
-  updateConversation
+  updateConversation,
+  skills,
+  attachedSkills,
+  attachedSkillIds,
+  toggleAttachedSkill,
+  openSettings,
+  enabledProviders,
+  providers,
+  setProviderEnabled,
+  hostOfProvider as hostOf
 } from '../state/app';
+import { getPreset } from '../lib/providers/registry';
 import { MessageItem } from './MessageItem';
 import { KeyPanel } from './KeyPanel';
 import { Badge, Button, Icon, cx } from './ui';
 
+/** プリセットの説明文（接続先ごと） */
+function copyOf(providerId: string) {
+  const cfg = providerById(providerId);
+  return cfg ? (getPreset(cfg.preset).copy ?? {}) : {};
+}
+
 function PrivacyBadge() {
   const conv = currentConv.value;
   const m = modelOf(conv.providerId, conv.modelId);
+  const copy = copyOf(conv.providerId);
   if (m?.privacy === 'private')
     return (
-      <Badge tone="green" title="Venice がホストし、プロンプトを保存しないモデル">
+      <Badge tone="green" title={copy.private ?? '提供元がプロンプトを保存しないと明示しているモデル'}>
         <Icon name="lock" class="size-3" />
         private
       </Badge>
     );
   if (m?.privacy === 'anonymized')
     return (
-      <Badge tone="amber" title="Claude・Gemini などの外部事業者に中継されるモデル">
+      <Badge tone="amber" title={copy.relayed ?? '外部の事業者に中継されるモデル'}>
         外部中継
       </Badge>
     );
@@ -100,11 +118,71 @@ function Header() {
   );
 }
 
+/** 入力欄の「スキル」ボタンと、指定できるスキルの一覧 */
+function SkillMenu({ onClose }: { onClose(): void }) {
+  const list = skills.value;
+  const ids = attachedSkillIds.value;
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  return (
+    <div ref={ref} role="menu" aria-label="スキルを指定" class="absolute bottom-full left-0 z-20 mb-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+      {list.length === 0 ? (
+        <p class="p-2 text-xs text-zinc-500">スキルはまだありません。</p>
+      ) : (
+        <ul class="scroll-thin max-h-64 overflow-y-auto">
+          {list.map((s) => (
+            <li key={s.id}>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={ids.includes(s.id)}
+                class="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                onClick={() => toggleAttachedSkill(s.id)}
+              >
+                <Icon name="check" class={cx('mt-0.5 size-4 shrink-0', ids.includes(s.id) ? 'text-violet-600' : 'invisible')} />
+                <span class="min-w-0">
+                  <span class="block font-mono text-sm">{s.name}</span>
+                  <span class="line-clamp-2 block text-xs text-zinc-500">{s.description}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        class="mt-1 w-full rounded-lg border-t border-zinc-100 px-2 pt-2 pb-1 text-left text-xs text-zinc-500 hover:text-zinc-800 dark:border-zinc-800 dark:hover:text-zinc-200"
+        onClick={() => {
+          onClose();
+          openSettings('skills');
+        }}
+      >
+        スキルを管理…
+      </button>
+    </div>
+  );
+}
+
 function Composer() {
   const conv = currentConv.value;
   const [text, setText] = useState('');
+  const [menu, setMenu] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const streaming = isStreaming.value;
+  const attached = attachedSkills.value;
   // タッチ端末では Enter は改行（送信はボタン）
   const touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
@@ -119,8 +197,18 @@ function Composer() {
     ref.current?.focus();
   }, [conv.id]);
 
+  // 「/名前」でスキルを指定する
+  const slash = /^\/([a-z0-9-]*)$/.exec(text);
+  const suggestions = slash ? skills.value.filter((s) => s.name.startsWith(slash[1]) && !attachedSkillIds.value.includes(s.id)).slice(0, 6) : [];
+  const pickSuggestion = (id: string) => {
+    toggleAttachedSkill(id);
+    setText('');
+    ref.current?.focus();
+  };
+
+  const canSend = !!text.trim() || attached.length > 0;
   const submit = () => {
-    if (!text.trim() || streaming) return;
+    if (!canSend || streaming) return;
     const t = text;
     setText('');
     void sendMessage(t);
@@ -128,25 +216,67 @@ function Composer() {
 
   const mode = searchModeFor(conv.providerId, conv.modelId);
   const webOn = conv.webSearch !== 'off';
+  const pname = providerById(conv.providerId)?.name ?? '';
   const searchTitle =
-    mode === 'venice'
-      ? 'Web 検索（Venice 内蔵。検索語は Venice 経由で検索事業者に送られます）'
+    mode === 'builtin'
+      ? `Web 検索（${pname} の内蔵検索。検索語は ${pname} 経由で検索事業者に送られます）`
       : mode === 'tools'
         ? 'Web 検索（ツール。検索語は Tavily、読むページの URL は Jina Reader に送られます）'
         : 'このモデルでは Web 検索を使えません（ツール方式には、ツール対応モデルと Tavily のキーが必要です）';
 
   return (
     <div class="mx-auto w-full max-w-3xl px-3 pb-3 sm:px-4">
-      <div class="rounded-2xl border border-zinc-300 bg-white shadow-sm focus-within:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
+      <div class="relative rounded-2xl border border-zinc-300 bg-white shadow-sm focus-within:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
+        {suggestions.length > 0 && (
+          <ul role="listbox" aria-label="スキルの候補" class="absolute bottom-full left-0 z-20 mb-2 w-80 max-w-full rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            {suggestions.map((s, i) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={i === 0}
+                  class={cx('flex w-full flex-col rounded-lg px-2 py-1.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800', i === 0 && 'bg-zinc-50 dark:bg-zinc-800')}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickSuggestion(s.id)}
+                >
+                  <span class="font-mono text-sm">/{s.name}</span>
+                  <span class="truncate text-xs text-zinc-500">{s.description}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {attached.length > 0 && (
+          <div class="flex flex-wrap gap-1 px-3 pt-2.5">
+            {attached.map((s) => (
+              <span key={s.id} class="inline-flex items-center gap-1 rounded-full bg-violet-50 py-0.5 pr-1 pl-2 font-mono text-xs text-violet-800 dark:bg-violet-950 dark:text-violet-200">
+                <Icon name="book" class="size-3" />
+                {s.name}
+                <button type="button" aria-label={`${s.name} を外す`} class="rounded-full p-0.5 hover:bg-violet-100 dark:hover:bg-violet-900" onClick={() => toggleAttachedSkill(s.id)}>
+                  <Icon name="x" class="size-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <textarea
           ref={ref}
           rows={1}
           value={text}
-          placeholder={touch ? 'メッセージを入力' : 'メッセージを入力（Enter で送信、Shift+Enter で改行）'}
+          placeholder={touch ? 'メッセージを入力' : 'メッセージを入力（Enter で送信、Shift+Enter で改行、/ でスキル）'}
           aria-label="メッセージ"
           class="block max-h-60 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[15px] outline-none placeholder:text-zinc-400"
           onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
           onKeyDown={(e) => {
+            if (suggestions.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.isComposing))) {
+              e.preventDefault();
+              pickSuggestion(suggestions[0].id);
+              return;
+            }
+            if (e.key === 'Backspace' && !text && attached.length) {
+              toggleAttachedSkill(attached[attached.length - 1].id);
+              return;
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !touch) {
               e.preventDefault();
               submit();
@@ -164,13 +294,26 @@ function Composer() {
             <Icon name="globe" class="size-4" />
             Web 検索{webOn && mode ? ': オン' : ''}
           </Button>
+          <div class="relative">
+            <Button
+              aria-haspopup="menu"
+              aria-expanded={menu}
+              title="スキルを指定して送る（/ でも指定できます）"
+              class={cx('text-xs', attached.length > 0 && 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300')}
+              onClick={() => setMenu(!menu)}
+            >
+              <Icon name="book" class="size-4" />
+              スキル{attached.length ? `: ${attached.length}` : ''}
+            </Button>
+            {menu && <SkillMenu onClose={() => setMenu(false)} />}
+          </div>
           <div class="ml-auto">
             {streaming ? (
               <Button variant="primary" aria-label="停止" onClick={() => stopGeneration()} class="rounded-full! p-2!">
                 <Icon name="stop" class="size-4" />
               </Button>
             ) : (
-              <Button variant="primary" aria-label="送信" disabled={!text.trim()} onClick={submit} class="rounded-full! p-2!">
+              <Button variant="primary" aria-label="送信" disabled={!canSend} onClick={submit} class="rounded-full! p-2!">
                 <Icon name="send" class="size-4" />
               </Button>
             )}
@@ -229,21 +372,64 @@ function EmptyState() {
   );
 }
 
-/** 選んでいる接続先のキーが未設定・ロック中のときの画面 */
-function KeySetup() {
-  const conv = currentConv.value;
-  const p = providerById(conv.providerId);
-  const st = keyStatus(conv.providerId);
+/** 最初に使う接続先を選ぶ画面（有効な接続先がないとき） */
+function ProviderChooser() {
+  const choose = async (id: string) => {
+    await setProviderEnabled(id, true);
+    await updateConversation({ providerId: id, modelId: '' });
+  };
   return (
     <div class="scroll-thin flex-1 overflow-y-auto">
       <div class="mx-auto max-w-lg px-5 py-10">
         <div class="mb-4 grid size-12 place-items-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-          <Icon name={st.locked ? 'lock' : 'key'} class="size-6 text-zinc-500" />
+          <Icon name="key" class="size-6 text-zinc-500" />
         </div>
-        {st.locked ? (
+        <h1 class="text-2xl font-semibold">はじめに</h1>
+        <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+          このアプリはサーバーを持ちません。会話はこのブラウザにだけ保存され、あなたの API キーで LLM の提供元に直接接続します。アカウント登録・解析ツール・外部スクリプトはありません。
+        </p>
+        <h2 class="mt-6 mb-2 text-sm font-semibold">使う接続先を選んでください</h2>
+        <ul class="space-y-2">
+          {providers.value.map((p) => {
+            const preset = getPreset(p.preset);
+            return (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  class="w-full rounded-xl border border-zinc-200 p-3 text-left hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
+                  onClick={() => void choose(p.id)}
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium">{preset.label}</span>
+                    <span class="truncate text-xs text-zinc-500">{hostOf(p.id)}</span>
+                    <Icon name="chevron-right" class="ml-auto size-4 shrink-0 text-zinc-400" />
+                  </div>
+                  {preset.tagline && <p class="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{preset.tagline}</p>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <p class="mt-4 text-xs text-zinc-500">あとから設定の「接続とキー」で、ほかの接続先も追加できます。</p>
+      </div>
+    </div>
+  );
+}
+
+/** 選んでいる接続先のキーが未設定・ロック中のときの画面 */
+function KeySetup({ providerId }: { providerId: string }) {
+  const p = providerById(providerId);
+  const locked = vaultState.value.locked;
+  return (
+    <div class="scroll-thin flex-1 overflow-y-auto">
+      <div class="mx-auto max-w-lg px-5 py-10">
+        <div class="mb-4 grid size-12 place-items-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
+          <Icon name={locked ? 'lock' : 'key'} class="size-6 text-zinc-500" />
+        </div>
+        {locked ? (
           <>
             <h1 class="text-2xl font-semibold">キーがロックされています</h1>
-            <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{p?.name} の API キーはパスフレーズで暗号化されています。下のフォームで解錠してください。</p>
+            <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-400">保存済みの API キーはパスフレーズで暗号化されています。解錠すると、すべてのキーが使えるようになります。</p>
           </>
         ) : (
           <>
@@ -254,24 +440,34 @@ function KeySetup() {
           </>
         )}
         <div class="mt-6">
-          <KeyPanel accountId={conv.providerId} showGuide={!st.locked} />
+          <KeyPanel accountId={providerId} showGuide={!locked} />
         </div>
-        <p class="mt-4 text-xs text-zinc-500">
-          別の接続先を使う場合は、上のモデル名から選び直してください。
-        </p>
+        {!locked && (
+          <p class="mt-4 text-xs text-zinc-500">
+            別の接続先を使う場合は、上のモデル名から選び直すか、
+            <button type="button" class="underline underline-offset-2" onClick={() => openSettings('connections')}>
+              設定の「接続とキー」
+            </button>
+            で追加してください。
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
 export function ChatView() {
-  const st = keyStatus(currentConv.value.providerId);
-  const needsKey = !st.present || st.locked;
+  const provs = enabledProviders.value;
+  const conv = currentConv.value;
+  // 会話の接続先（下書きでモデル一覧がまだ届いていなければ、最初の有効な接続先）
+  const providerId = provs.some((p) => p.id === conv.providerId) || !isDraft.value ? conv.providerId : (provs[0]?.id ?? '');
+  const st = keyStatus(providerId);
+  const body = provs.length === 0 ? 'choose' : !st.present || st.locked ? 'key' : 'chat';
   return (
     <main class="flex h-full min-w-0 flex-1 flex-col">
-      <Header />
-      {needsKey ? <KeySetup /> : isDraft.value ? <EmptyState /> : <MessageList />}
-      {!needsKey && <Composer />}
+      {body !== 'choose' && <Header />}
+      {body === 'choose' ? <ProviderChooser /> : body === 'key' ? <KeySetup providerId={providerId} /> : isDraft.value ? <EmptyState /> : <MessageList />}
+      {body === 'chat' && <Composer />}
     </main>
   );
 }

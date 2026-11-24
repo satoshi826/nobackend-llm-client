@@ -6,7 +6,8 @@ import { getAdapter, getPreset, PRESET_ORDER } from '../lib/providers/registry';
 import { plainTransport } from '../lib/providers/transport';
 import { ProviderFailure } from '../lib/providers/errors';
 import { providerConfigOf } from '../lib/keys/accounts';
-import { DEFAULT_PROVIDER_ID, saveSettings, settings } from './settings';
+import { compareModels } from '../lib/model-list';
+import { saveSettings, settings } from './settings';
 
 type ModelsState = { loading: boolean; error: ProviderError | null; fetchedAt: number | null };
 const EMPTY_MODELS_STATE: ModelsState = { loading: false, error: null, fetchedAt: null };
@@ -16,12 +17,13 @@ export const providers = signal<ProviderConfig[]>(PRESET_ORDER.map((id) => provi
 export const models = signal<ModelInfo[]>([]);
 export const modelsStates = signal<Record<string, ModelsState>>({});
 
-export const enabledProviders = computed(() => providers.value.filter((p) => p.id === DEFAULT_PROVIDER_ID || settings.value.enabledProviders.includes(p.id)));
+/** 使う接続先（設定で有効にした順ではなく、画面の並び順） */
+export const enabledProviders = computed(() => providers.value.filter((p) => settings.value.enabledProviders.includes(p.id)));
 
-/** 一覧に出すモデル（有効な接続先・提供中・「外部中継」は設定次第） */
+/** 選べるモデル（有効な接続先で提供中のもの） */
 export const visibleModels = computed(() => {
   const enabled = new Set(enabledProviders.value.map((p) => p.id));
-  return models.value.filter((m) => enabled.has(m.providerId) && !m.offline && (settings.value.showAnonymized || m.privacy !== 'anonymized'));
+  return models.value.filter((m) => enabled.has(m.providerId) && !m.offline);
 });
 
 export function providerById(id: string): ProviderConfig | undefined {
@@ -39,8 +41,7 @@ export function modelOf(providerId: string | undefined, id: string | undefined):
 }
 
 function sortModels(list: ModelInfo[]): ModelInfo[] {
-  const order = (m: ModelInfo) => (m.privacy === 'private' ? 0 : m.privacy === 'unknown' ? 1 : 2);
-  return [...list].sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
+  return [...list].sort(compareModels('recommended'));
 }
 
 /** 保存済みの一覧を読み、古ければ取り直す */
@@ -89,17 +90,19 @@ export async function setProviderEnabled(id: string, enabled: boolean) {
   const set = new Set(settings.value.enabledProviders);
   if (enabled) set.add(id);
   else set.delete(id);
-  set.add(DEFAULT_PROVIDER_ID);
   await saveSettings({ enabledProviders: [...set] });
   if (enabled && !modelsStates.value[id]?.fetchedAt) void refreshModels(id);
 }
 
-/** 新しいチャットで使うモデル: 最後に使ったもの → Venice の既定 → 先頭 */
+/** 新しいチャットで使うモデル: 最後に使ったもの → 最初の有効な接続先の既定モデル → その先頭 */
 export function defaultModel(): { providerId: string; modelId: string } {
   const s = settings.value;
   const vis = visibleModels.value;
   if (s.lastModelId && vis.some((m) => m.id === s.lastModelId && m.providerId === s.lastProviderId)) return { providerId: s.lastProviderId, modelId: s.lastModelId };
-  const venice = vis.filter((m) => m.providerId === DEFAULT_PROVIDER_ID);
-  const m = venice.find((x) => x.tags?.includes('default')) ?? venice[0] ?? vis[0];
-  return m ? { providerId: m.providerId, modelId: m.id } : { providerId: DEFAULT_PROVIDER_ID, modelId: '' };
+  for (const p of enabledProviders.value) {
+    const list = vis.filter((m) => m.providerId === p.id);
+    const m = list.find((x) => x.tags?.includes('default')) ?? list[0];
+    if (m) return { providerId: m.providerId, modelId: m.id };
+  }
+  return { providerId: enabledProviders.value[0]?.id ?? '', modelId: '' };
 }

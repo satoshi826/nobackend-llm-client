@@ -1,6 +1,7 @@
 // 送信するメッセージの組み立て（履歴・圧縮・同じターン内のツール呼び出し）
 import type { ChatMessage, Part } from '../providers/types';
 import type { MessageRecord } from '../db/schema';
+import { withAttachedSkills } from '../skills/skill';
 
 export interface BuildOptions {
   /** 前回までの思考（reasoning_content など）をモデルに送り返す。同じプロバイダー・モデルの発言のみ */
@@ -38,7 +39,12 @@ export function buildRequestMessages(history: MessageRecord[], systemPrompt: str
   for (const m of rest) {
     if (m.compaction) continue;
     if (m.role === 'assistant' && m.status === 'error' && !m.parts.some((p) => p.type === 'text' && p.text)) continue;
-    const parts = m.parts.filter((p) => p.type === 'text' || p.type === 'tool');
+    let parts = m.parts.filter((p) => p.type === 'text' || p.type === 'tool');
+    // ユーザーが指定したスキルは、そのメッセージの本文の前に添える
+    if (m.role === 'user' && m.skills?.length) {
+      const text = parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
+      parts = [{ type: 'text', text: withAttachedSkills(text, m.skills) }];
+    }
     if (parts.length === 0) continue;
     const sameModel = !!opts.model && m.meta?.providerId === opts.providerId && m.meta?.model === opts.model;
     out.push({ id: m.id, role: m.role, parts, vendorState: opts.resendReasoning && sameModel ? m.vendorState : undefined });

@@ -4,8 +4,9 @@ import { searchMessages, type SearchHit } from '../lib/db/repo';
 import type { Conversation } from '../lib/db/schema';
 import {
   abortConversation,
-  balance,
-  balanceAlert,
+  balances,
+  balanceAlerts,
+  providerById,
   clearLeftoverLocalKeys,
   conversations,
   currentConv,
@@ -113,13 +114,17 @@ function Notices() {
   const backupDays = s.lastBackupAt ? Math.floor((Date.now() - s.lastBackupAt) / 86400_000) : null;
   const needBackup = conversations.value.length >= 5 && (backupDays === null || backupDays >= 14);
   const items = [];
-  if (balanceAlert.value)
+  for (const [pid, b] of balanceAlerts.value) {
+    const name = providerById(pid)?.name ?? pid;
     items.push(
-      <div key="balance" role="alert" class="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-950 dark:text-rose-200">
-        <div class="font-semibold">残高がこのアプリでの利用分より ${balance.value.unexplainedUsd.toFixed(2)} 多く減っています</div>
-        キーが他の場所で使われている可能性があります。心当たりがなければ、Venice の管理画面でキーを無効化してください。
+      <div key={`balance-${pid}`} role="alert" class="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-950 dark:text-rose-200">
+        <div class="font-semibold">
+          {name} の残高がこのアプリでの利用分より ${b.unexplainedUsd.toFixed(2)} 多く減っています
+        </div>
+        キーが他の場所で使われている可能性があります。心当たりがなければ、{name} の管理画面でキーを無効化してください。
       </div>
     );
+  }
   if (leftoverLocalKeys.value)
     items.push(
       <div key="leftover" role="alert" class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
@@ -237,11 +242,15 @@ export function Sidebar() {
             <Icon name="settings" />
             設定
           </Button>
-          {balance.value.last && (
-            <span class="ml-auto text-xs text-zinc-500 tabular-nums" title={`Venice の残高（最終確認: ${new Date(balance.value.last.at).toLocaleTimeString()}）`}>
-              残高 ${balance.value.last.usd.toFixed(2)}
-            </span>
-          )}
+          <span class="ml-auto flex flex-col items-end text-xs text-zinc-500 tabular-nums">
+            {Object.entries(balances.value).map(([pid, b]) =>
+              b.last ? (
+                <span key={pid} title={`${providerById(pid)?.name ?? pid} の残高（最終確認: ${new Date(b.last.at).toLocaleTimeString()}）`}>
+                  {Object.keys(balances.value).length > 1 ? `${providerById(pid)?.name ?? pid} ` : '残高 '}${b.last.usd.toFixed(2)}
+                </span>
+              ) : null
+            )}
+          </span>
         </div>
       </aside>
     </>

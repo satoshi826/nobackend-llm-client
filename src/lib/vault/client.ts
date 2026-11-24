@@ -5,7 +5,7 @@ import { ProviderFailure } from '../providers/errors';
 import type { Transport } from '../providers/types';
 import { plainTransport } from '../providers/transport';
 import { VAULT_PROTOCOL, type FromVault, type ToVault } from './protocol';
-import type { KeyStatus } from '../keys/accounts';
+import type { KeyStatus, VaultState } from '../keys/accounts';
 
 /**
  * キー金庫ページの URL。キーの保存・送信は常にこのページが行い、本体アプリはキーを持たない。
@@ -34,7 +34,8 @@ class VaultConnection {
   private port: MessagePort | null = null;
   private ready: Promise<void> | null = null;
   private pending = new Map<string, Pending>();
-  private statusListeners = new Set<(s: Record<string, KeyStatus>) => void>();
+  private statusListeners = new Set<(s: Record<string, KeyStatus>, v: VaultState) => void>();
+  private acks = new Map<string, () => void>();
   private seq = 0;
 
   connect(): Promise<void> {
@@ -61,7 +62,7 @@ class VaultConnection {
     return this.ready;
   }
 
-  onStatus(fn: (s: Record<string, KeyStatus>) => void): () => void {
+  onStatus(fn: (s: Record<string, KeyStatus>, v: VaultState) => void): () => void {
     this.statusListeners.add(fn);
     return () => this.statusListeners.delete(fn);
   }
@@ -75,9 +76,24 @@ class VaultConnection {
     this.send({ type: 'status' });
   }
 
+  /** 金庫への操作（すべてのキーの削除・ロック）。終わるまで待つ */
+  async command(type: 'clear-all' | 'lock'): Promise<void> {
+    await this.connect();
+    const id = `c${++this.seq}`;
+    await new Promise<void>((resolve) => {
+      this.acks.set(id, resolve);
+      this.send({ type, id });
+    });
+  }
+
   private onMessage(m: FromVault) {
     if (m.type === 'status') {
-      for (const l of this.statusListeners) l(m.providers);
+      for (const l of this.statusListeners) l(m.providers, m.vault);
+      return;
+    }
+    if (m.type === 'ack') {
+      this.acks.get(m.id)?.();
+      this.acks.delete(m.id);
       return;
     }
     const p = this.pending.get(m.id);

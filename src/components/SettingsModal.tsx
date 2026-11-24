@@ -1,4 +1,4 @@
-// 設定（タブ: 接続とキー / チャット / Web 検索 / プライバシーとデータ）
+// 設定（タブ: 接続とキー / チャット / Web 検索 / スキル / プライバシーとデータ）
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
@@ -18,14 +18,19 @@ import {
   showToast,
   visibleModels,
   wipeEverything,
-  DEFAULT_PROVIDER_ID,
+  clearAllKeys,
+  vaultState,
+  providerSettingsOf,
+  setProviderSetting,
   type SettingsTab
 } from '../state/app';
 import { vaultIsolated, VAULT_ORIGIN } from '../lib/vault/client';
 import { accountById } from '../lib/keys/accounts';
 import { SERVICE_ORDER } from '../lib/tools/services';
+import { getPreset, PRESETS } from '../lib/providers/registry';
 import type { Permission } from '../lib/tools/types';
-import { KeyPanel } from './KeyPanel';
+import { KeyPanel, VaultSecurityPanel } from './KeyPanel';
+import { SkillsTab } from './SkillsTab';
 import { askConfirm } from './ConfirmDialog';
 import { Badge, Button, Icon, Modal, cx } from './ui';
 
@@ -33,6 +38,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'connections', label: '接続とキー' },
   { id: 'chat', label: 'チャット' },
   { id: 'search', label: 'Web 検索' },
+  { id: 'skills', label: 'スキル' },
   { id: 'privacy', label: 'プライバシーとデータ' }
 ];
 
@@ -83,8 +89,22 @@ function AccountRow(props: { id: string; title: string; host: string; open: bool
   );
 }
 
+/** 接続先のキーと、その接続先だけの設定 */
+function ProviderDetails({ id }: { id: string }) {
+  const preset = getPreset(providerById(id)!.preset);
+  const values = providerSettingsOf(id, preset.settings);
+  return (
+    <div class="space-y-3">
+      <KeyPanel accountId={id} compact />
+      {preset.settings?.map((d) => (
+        <Toggle key={d.key} checked={values[d.key]} onChange={(v) => setProviderSetting(id, d.key, v)} title={d.label} desc={d.desc} />
+      ))}
+    </div>
+  );
+}
+
 function ConnectionsTab() {
-  const [open, setOpen] = useState<string>(currentConv.value.providerId);
+  const [open, setOpen] = useState<string>(currentConv.value.providerId || (enabledProviders.value[0]?.id ?? ''));
   const enabled = new Set(enabledProviders.value.map((p) => p.id));
   return (
     <div class="space-y-6">
@@ -97,6 +117,9 @@ function ConnectionsTab() {
           ? 'API キーはアプリ本体とは別のオリジンに保管されます。アプリ本体で問題が起きても、キーそのものは読み出せません。'
           : 'API キーはこのブラウザ内のキー保管ページに保存され、アプリ本体の画面には渡りません。キー金庫を別オリジンに置くとさらに安全です（README の「キー金庫」）。'}
       </div>
+      <Section title="キーの保護">
+        <VaultSecurityPanel />
+      </Section>
       <Section title="LLM の接続先">
         <div class="space-y-2">
           {providers.value.map((p) => {
@@ -110,15 +133,13 @@ function ConnectionsTab() {
                 open={open === p.id}
                 onToggle={() => setOpen(open === p.id ? '' : p.id)}
                 right={
-                  p.id !== DEFAULT_PROVIDER_ID && (
-                    <label class="flex shrink-0 items-center gap-1.5 text-xs">
-                      <input type="checkbox" checked={on} onChange={(e) => setProviderEnabled(p.id, (e.target as HTMLInputElement).checked)} />
-                      使う
-                    </label>
-                  )
+                  <label class="flex shrink-0 items-center gap-1.5 text-xs">
+                    <input type="checkbox" checked={on} onChange={(e) => setProviderEnabled(p.id, (e.target as HTMLInputElement).checked)} />
+                    使う
+                  </label>
                 }
               >
-                {on ? <KeyPanel accountId={p.id} compact /> : <p class="text-xs text-zinc-500">「使う」をオンにすると、モデル一覧に表示され、キーを設定できます。</p>}
+                {on ? <ProviderDetails id={p.id} /> : <p class="text-xs text-zinc-500">{getPreset(p.preset).tagline} 「使う」をオンにすると、モデル一覧に表示され、キーを設定できます。</p>}
               </AccountRow>
             );
           })}
@@ -160,12 +181,7 @@ function ChatTab() {
             }}
           />
         </label>
-        <Toggle
-          checked={s.includeVeniceSystemPrompt}
-          onChange={(v) => saveSettings({ includeVeniceSystemPrompt: v })}
-          title="Venice 既定のシステムプロンプトを付ける"
-          desc="オフ（既定）なら、あなたが書いた指示だけがモデルに渡ります。"
-        />
+        <p class="text-xs text-zinc-500">接続先だけの設定（Venice 既定のシステムプロンプトなど）は「接続とキー」の各接続先にあります。</p>
       </Section>
       <Section title="会話の長さと費用">
         <p class="text-xs text-zinc-500">
@@ -198,9 +214,9 @@ function ChatTab() {
           checked={s.resendReasoning}
           onChange={(v) => saveSettings({ resendReasoning: v })}
           title="前回までの思考をモデルに送り返す"
-          desc="思考するモデルの思考内容を次の送信にも含めます。Venice のドキュメントでは推奨されていますが、思考のトークンにも毎回課金されます。"
+          desc="思考するモデルの思考内容を次の送信にも含めます。提供元によっては推奨されていますが、思考のトークンにも毎回課金されます。"
         />
-        <p class="text-xs text-zinc-500">プロンプトキャッシュ: Venice には会話ごとのキャッシュキーを送ります。回答の下の「キャッシュ」は通常より安く課金されたトークン数です。</p>
+        <p class="text-xs text-zinc-500">プロンプトキャッシュ: 対応する接続先には会話ごとのキャッシュキーを送ります。回答の下の「キャッシュ」は通常より安く課金されたトークン数です。</p>
       </Section>
     </div>
   );
@@ -210,20 +226,26 @@ const PERM_LABEL: Record<Permission, string> = { ask: '毎回確認する', allo
 
 function SearchTab() {
   const s = settings.value;
+  const builtin = Object.values(PRESETS).filter((p) => p.features?.builtInWebSearch);
   const [open, setOpen] = useState('');
   return (
     <div class="space-y-6">
       <Section>
         <p class="text-xs text-zinc-500">
-          入力欄の「Web 検索」をオンにすると、モデルが必要に応じて検索します。ツール方式では、モデルが Tavily で検索し、Jina Reader でページ本文を読みます（ツール呼び出しに対応したモデルのみ。OpenRouter はこの方式だけ）。
+          入力欄の「Web 検索」をオンにすると、モデルが必要に応じて検索します。ツール方式では、モデルが Tavily で検索し、Jina Reader でページ本文を読みます（ツール呼び出しに対応したモデルのみ）。内蔵の検索を持たない接続先は、ツール方式だけです。
         </p>
-        <label class="flex items-center justify-between gap-3 text-sm">
-          Venice での検索方式
-          <select class={selectCls} value={s.searchEngine} onChange={(e) => saveSettings({ searchEngine: (e.target as HTMLSelectElement).value as 'venice' | 'tools' })}>
-            <option value="venice">Venice 内蔵（キー不要）</option>
-            <option value="tools">ツール（Tavily + Jina）</option>
-          </select>
-        </label>
+        {builtin.length > 0 && (
+          <label class="flex items-center justify-between gap-3 text-sm">
+            <span>
+              内蔵検索のある接続先での方式
+              <span class="block text-xs text-zinc-500">{builtin.map((p) => p.label).join('・')}</span>
+            </span>
+            <select class={selectCls} value={s.searchEngine} onChange={(e) => saveSettings({ searchEngine: (e.target as HTMLSelectElement).value as 'builtin' | 'tools' })}>
+              <option value="builtin">接続先の内蔵検索（追加のキー不要）</option>
+              <option value="tools">ツール（Tavily + Jina）</option>
+            </select>
+          </label>
+        )}
       </Section>
       <Section title="ツールの実行">
         {(['web_search', 'fetch_url'] as const).map((name) => (
@@ -271,12 +293,14 @@ function PrivacyTab() {
   }, []);
   const rows: [string, string][] = [
     ...enabledProviders.value.map(
-      (p) => [hostOfProvider(p.id), `${p.name}: 会話の内容（チャット時、キー付き）・モデル一覧の取得（キーなし）${p.preset === 'openrouter' ? '。実際に処理する提供元へ中継されます（データ収集する提供元は既定で除外）' : ''}`] as [string, string]
+      (p) => {
+        const note = getPreset(p.preset).copy?.destinationNote;
+        return [hostOfProvider(p.id), `${p.name}: 会話の内容（チャット時、キー付き）・モデル一覧の取得（キーなし）${note ? `。${note}` : ''}`] as [string, string];
+      }
     ),
     [accountById('tavily')!.host, 'Tavily: ツール方式の Web 検索の検索語'],
     [accountById('jina')!.host, 'Jina Reader: ツール方式で読むページの URL（Jina がそのページを取得）'],
-    ['Venice の検索提供元', 'Venice 内蔵の Web 検索をオンにしたときの検索語（Venice 経由）'],
-    ['外部 AI 事業者', '「外部中継」のモデルを使ったときの会話（Venice が匿名化して中継）'],
+    ...enabledProviders.value.flatMap((p) => getPreset(p.preset).copy?.extraDestinations ?? []),
     ['このサイトの配信元', 'ページの読み込みのみ。会話は送りません']
   ];
   return (
@@ -320,7 +344,7 @@ function PrivacyTab() {
               if (!f) return;
               try {
                 const r = await importFromFile(f);
-                showToast(`会話 ${r.conversations} 件を読み込みました（重複 ${r.skipped} 件はスキップ）`);
+                showToast(`会話 ${r.conversations} 件${r.skills ? `・スキル ${r.skills} 件` : ''}を読み込みました（重複 ${r.skipped} 件はスキップ）`);
               } catch (err) {
                 showToast((err as Error).message, 'error');
               } finally {
@@ -333,11 +357,29 @@ function PrivacyTab() {
           {s.lastBackupAt ? `最終バックアップ: ${new Date(s.lastBackupAt).toLocaleString()}。` : 'まだバックアップしていません。'}バックアップに API キーは含まれません。
         </p>
       </Section>
+      <Section title="API キーの削除">
+        <p class="text-xs text-zinc-500">保存されているすべての API キー{vaultState.value.hasPassphrase ? 'とパスフレーズ' : ''}を削除します。会話や設定は残ります。</p>
+        <Button
+          variant="outline"
+          onClick={() =>
+            void askConfirm({
+              title: 'すべての API キーを削除',
+              message: `キー金庫に保存されているすべての API キー${vaultState.value.hasPassphrase ? 'とパスフレーズ' : ''}を削除します。元に戻せません。使い続けるには、キーを入れ直してください。`,
+              confirmLabel: 'すべてのキーを削除',
+              danger: true
+            }).then(async (ok) => {
+              if (!ok) return;
+              await clearAllKeys();
+              showToast('すべての API キーを削除しました');
+            })
+          }
+        >
+          <Icon name="key" />
+          すべての API キーを削除
+        </Button>
+      </Section>
       <Section title="すべて削除">
-        <p class="text-xs text-zinc-500">
-          会話・設定{vaultIsolated ? '' : '・API キー'}など、このブラウザ内のアプリのデータをすべて削除します。元に戻せません。
-          {vaultIsolated && '別オリジンのキー金庫のキーは「接続とキー」で個別に削除してください。'}
-        </p>
+        <p class="text-xs text-zinc-500">会話・設定・スキル・API キーなど、このブラウザ内のアプリのデータをすべて削除します。元に戻せません。</p>
         <Button
           variant="danger"
           onClick={() =>
@@ -381,6 +423,7 @@ export function SettingsModal() {
         {tab === 'connections' && <ConnectionsTab />}
         {tab === 'chat' && <ChatTab />}
         {tab === 'search' && <SearchTab />}
+        {tab === 'skills' && <SkillsTab />}
         {tab === 'privacy' && <PrivacyTab />}
       </div>
     </Modal>

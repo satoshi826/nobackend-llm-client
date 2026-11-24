@@ -9,12 +9,16 @@ import { estimateRequestTokens, planCompaction, summarize } from '../lib/chat/co
 import { estimateTokens } from '../lib/chat/context';
 import { initialBalanceState, observeBalance, recordSpend, type BalanceState } from '../lib/chat/balance';
 import { WEB_TOOLS } from '../lib/tools/web';
+import { makeSkillTool } from '../lib/tools/skill';
+import { withSkillCatalog } from '../lib/skills/skill';
+import type { Skill } from '../lib/db/schema';
 import { vaultTransport as transport } from '../lib/vault/client';
-import { settings, saveSettings } from './settings';
+import { settings, saveSettings, providerSettingsOf } from './settings';
 import { authFor, keyReady } from './keys';
 import { modelOf, providerById } from './models';
 import { conversations, currentConv, currentId, currentPath, liveMessages, messages, persistDraft, putMessage, touchConversation, updateConversation } from './conversations';
 import { openSettings, showToast } from './ui';
+import { attachedSkillIds, attachedSkills, modelSkills } from './skills';
 
 // ---- 生成中の状態 ----
 export const streamingConv = signal<Set<string>>(new Set());
@@ -52,24 +56,44 @@ function flushUpdates() {
   messages.value = messages.value.map((m) => ups.get(m.id) ?? m);
 }
 
-// ---- 残高（Venice）: このアプリで使った分以上に減ったら警告 ----
-export const balance = signal<BalanceState>(initialBalanceState());
+// ---- 残高（応答ヘッダで残高を返す接続先のみ）: このアプリで使った分以上に減ったら警告 ----
+export const balances = signal<Record<string, BalanceState>>({});
 export const BALANCE_ALERT_USD = 0.5;
-export const balanceAlert = computed(() => balance.value.unexplainedUsd >= BALANCE_ALERT_USD);
+/** 説明のつかない減少があった接続先 */
+export const balanceAlerts = computed(() => Object.entries(balances.value).filter(([, b]) => b.unexplainedUsd >= BALANCE_ALERT_USD));
+
+function updateBalance(providerId: string, fn: (b: BalanceState) => BalanceState) {
+  balances.value = { ...balances.value, [providerId]: fn(balances.value[providerId] ?? initialBalanceState()) };
+}
+
+/** 接続先固有の要求オプション（プリセットが決める） */
+function providerOptionsFor(providerId: string, purpose: 'chat' | 'summary', webSearch: 'off' | 'auto' | 'on' = 'off') {
+  const cfg = providerById(providerId);
+  if (!cfg) return undefined;
+  const preset = getPreset(cfg.preset);
+  const opts = preset.requestOptions?.({ purpose, webSearch, settings: providerSettingsOf(cfg.id, preset.settings) });
+  return opts ? { [preset.id]: opts } : undefined;
+}
 
 // ---- Web 検索 ----
 /**
  * この会話で Web 検索をどう行うか。
- * - 'tools': ツール呼び出し対応モデル + Tavily のキー（Venice では設定で「ツール」を選んだとき）
- * - 'venice': Venice の内蔵検索
+ * - 'tools': ツール呼び出し対応モデル + Tavily のキー（内蔵検索がある接続先では、設定で「ツール」を選んだとき）
+ * - 'builtin': 接続先の内蔵検索（features.builtInWebSearch）
  * - null: 使えない
  */
-export function searchModeFor(providerId: string, modelId: string): 'tools' | 'venice' | null {
+/** このモデルに一覧を見せるスキル（ツール呼び出しに対応したモデルのみ） */
+export function skillsFor(providerId: string, modelId: string): Skill[] {
+  return modelOf(providerId, modelId)?.capabilities.tools ? modelSkills.value : [];
+}
+
+export function searchModeFor(providerId: string, modelId: string): 'tools' | 'builtin' | null {
   const m = modelOf(providerId, modelId);
   const toolsReady = !!m?.capabilities.tools && keyReady('tavily');
-  if (providerById(providerId)?.preset === 'venice') {
+  const cfg = providerById(providerId);
+  if (cfg && getPreset(cfg.preset).features?.builtInWebSearch) {
     if (settings.value.searchEngine === 'tools' && toolsReady) return 'tools';
-    return m?.capabilities.webSearch === false ? (toolsReady ? 'tools' : null) : 'venice';
+    return m?.capabilities.webSearch === false ? (toolsReady ? 'tools' : null) : 'builtin';
   }
   return toolsReady ? 'tools' : null;
 }
@@ -103,7 +127,7 @@ export async function resolveApproval(toolCallId: string, d: ApprovalDecision) {
 // ---- 文脈の使用量と圧縮 ----
 export const contextUsage = computed<{ tokens: number; limit: number | null; ratio: number | null }>(() => {
   const conv = currentConv.value;
-  const tokens = estimateRequestTokens(currentPath.value, conv.systemPrompt);
+  const tokens = estimateRequestTokens(currentPath.value, withSkillCatalog(conv.systemPrompt, skillsFor(conv.providerId, conv.modelId)));
   const limit = modelOf(conv.providerId, conv.modelId)?.contextLength ?? null;
   return { tokens, limit, ratio: limit ? tokens / limit : null };
 });
@@ -138,7 +162,7 @@ export async function compactConversation(auto = false): Promise<boolean> {
       transport,
       model: ref.modelId,
       contextLength: modelOf(ref.providerId, ref.modelId)?.contextLength,
-      providerOptions: cfg.preset === 'venice' ? { venice: { include_venice_system_prompt: false, strip_thinking_response: true } } : undefined,
+      providerOptions: providerOptionsFor(cfg.id, 'summary'),
       signal: ctrl.signal
     });
     const node: MessageRecord = {
@@ -177,7 +201,8 @@ function ensureKey(providerId: string): boolean {
 }
 
 export async function sendMessage(text: string) {
-  if (!text.trim()) return;
+  const attached = attachedSkills.value.map((s) => ({ name: s.name, body: s.body }));
+  if (!text.trim() && !attached.length) return;
   const cur = currentConv.value;
   if (!ensureKey(cur.providerId)) return;
   if (!cur.modelId) {
@@ -189,7 +214,8 @@ export async function sendMessage(text: string) {
     const u = contextUsage.value;
     if (u.limit && (u.tokens + estimateTokens(text)) / u.limit >= settings.value.compactThreshold) await compactConversation(true);
   }
-  const conv = await persistDraft(text);
+  attachedSkillIds.value = [];
+  const conv = await persistDraft(text.trim() ? text : attached.map((s) => s.name).join(', '));
   const user: MessageRecord = {
     id: repo.newId(),
     conversationId: conv.id,
@@ -197,7 +223,8 @@ export async function sendMessage(text: string) {
     role: 'user',
     parts: [{ type: 'text', text }],
     createdAt: Date.now(),
-    status: 'done'
+    status: 'done',
+    ...(attached.length ? { skills: attached } : {})
   };
   await putMessage(user, conv);
   messages.value = [...messages.value, user];
@@ -229,10 +256,9 @@ async function generateReply(convId: string, parentUserId: string) {
   const model = modelOf(cfg.id, conv.modelId);
   const webOn = conv.webSearch !== 'off';
   const search = webOn ? searchModeFor(cfg.id, conv.modelId) : null;
-  const providerOptions: Record<string, Record<string, unknown>> = {};
-  if (cfg.preset === 'venice') {
-    providerOptions.venice = { include_venice_system_prompt: settings.value.includeVeniceSystemPrompt, ...(search === 'venice' ? { enable_web_search: conv.webSearch } : {}) };
-  }
+  const skillList = skillsFor(cfg.id, conv.modelId);
+  const tools = [...(search === 'tools' ? WEB_TOOLS : []), ...(skillList.length ? [makeSkillTool(skillList)] : [])];
+  const providerOptions = providerOptionsFor(cfg.id, 'chat', search === 'builtin' ? conv.webSearch : 'off');
   try {
     const final = await runAssistant({
       provider: cfg,
@@ -241,21 +267,21 @@ async function generateReply(convId: string, parentUserId: string) {
       transport,
       model: conv.modelId,
       history,
-      systemPrompt: conv.systemPrompt,
+      systemPrompt: withSkillCatalog(conv.systemPrompt, skillList),
       params: settings.value.temperature != null ? { temperature: settings.value.temperature } : undefined,
       providerOptions,
       contextLength: model?.contextLength,
       maxOutputTokens: model?.maxOutputTokens,
       resendReasoning: settings.value.resendReasoning,
       cacheKey: conv.id,
-      tools: search === 'tools' ? WEB_TOOLS : [],
+      tools,
       toolContext: { transport, authFor },
       permissionFor: (name) => settings.value.toolPermissions[name] ?? 'ask',
       requestApproval: waitForApproval,
       draft,
       signal: ctrl.signal,
       onEvent: (ev) => {
-        if (ev.type === 'account' && ev.balanceUsd !== undefined && cfg.preset === 'venice') balance.value = observeBalance(balance.value, ev.balanceUsd);
+        if (ev.type === 'account' && ev.balanceUsd !== undefined) updateBalance(cfg.id, (b) => observeBalance(b, ev.balanceUsd!));
       },
       onUpdate: (m) => {
         liveMessages.set(m.id, { ...m, parts: m.parts.map((p) => ({ ...p })) });
@@ -267,7 +293,7 @@ async function generateReply(convId: string, parentUserId: string) {
       scheduleMessageUpdate(final);
       flushUpdates();
     }
-    if (final.meta?.costUsd && cfg.preset === 'venice') balance.value = recordSpend(balance.value, final.meta.costUsd);
+    if (final.meta?.costUsd && balances.value[cfg.id]) updateBalance(cfg.id, (b) => recordSpend(b, final.meta!.costUsd!));
     if (final.status === 'error' && final.error) showToast(final.error.message, 'error');
   } finally {
     liveMessages.delete(draft.id);

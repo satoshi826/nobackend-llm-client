@@ -157,3 +157,16 @@ input:not([type='radio']) {
   color: var(--fg);
   border-color: var(--border);
 }
+.btn.danger {
+  background: var(--err);
+  color: #fff;
+}
+.btns {
+  flex-wrap: wrap;
+}
+hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+  width: 100%;
+}

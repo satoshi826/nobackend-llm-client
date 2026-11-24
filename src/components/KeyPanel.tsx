@@ -1,11 +1,13 @@
 // キーの登録・解錠・削除の画面。中身はキー金庫のページ（iframe）で、入力したキーは本体アプリに渡らない。
+// - KeyPanel: 1 つの接続先のキー（金庫がロック中なら解錠）
+// - VaultSecurityPanel: 金庫全体のパスフレーズと、すべてのキーの削除
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { VAULT_ORIGIN, vaultViewUrl } from '../lib/vault/client';
 import { accountById } from '../lib/keys/accounts';
 import { connectKeys, modal } from '../state/app';
 import { Icon } from './ui';
 
-function VaultFrame({ accountId, compact }: { accountId: string; compact?: boolean }) {
+function VaultFrame({ params, title }: { params: Record<string, string>; title: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(280);
   const dark = document.documentElement.classList.contains('dark');
@@ -27,8 +29,8 @@ function VaultFrame({ accountId, compact }: { accountId: string; compact?: boole
   return (
     <iframe
       ref={ref}
-      src={vaultViewUrl({ view: 'keys', provider: accountId, theme: dark ? 'dark' : 'light', ...(compact ? { compact: '1' } : {}) })}
-      title="キーの設定"
+      src={vaultViewUrl({ ...params, theme: dark ? 'dark' : 'light' })}
+      title={title}
       referrerpolicy="no-referrer"
       class="block w-full rounded-lg border-0"
       style={{ height: `${height}px` }}
@@ -44,7 +46,7 @@ export function KeyPanel({ accountId, showGuide = true, compact }: { accountId: 
   const guide = accountById(accountId)?.keyGuide;
   return (
     <div class="space-y-3">
-      <VaultFrame accountId={accountId} compact={compact} />
+      <VaultFrame params={{ view: 'keys', provider: accountId, ...(compact ? { compact: '1' } : {}) }} title="キーの設定" />
       {showGuide && guide && (
         <div class="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
           <div class="mb-1 flex items-center gap-1 font-semibold">
@@ -56,4 +58,9 @@ export function KeyPanel({ accountId, showGuide = true, compact }: { accountId: 
       )}
     </div>
   );
+}
+
+/** パスフレーズ（設定・解錠・ロック・変更・解除）と、すべてのキーの削除 */
+export function VaultSecurityPanel() {
+  return <VaultFrame params={{ view: 'security' }} title="キーの保護" />;
 }

@@ -136,6 +136,23 @@ const server = http.createServer(async (req, res) => {
       res.write('data: [DONE]\n\n');
       res.end();
     };
+    // load_skill が渡され、ユーザーが「スキル」と書いたら、一覧の先頭のスキルを読み込む
+    if (toolNames.includes('load_skill') && lastMsg?.role === 'user' && last.includes('スキル')) {
+      const skillTool = body.tools.find((t) => t.function?.name === 'load_skill');
+      const name = skillTool.function.parameters?.properties?.name?.enum?.[0] ?? 'unknown';
+      await send({ content: 'スキルを確認します。' });
+      return finishTools('load_skill', { name });
+    }
+    const lastCall = [...msgs].reverse().find((m) => m.role === 'assistant' && m.tool_calls?.length)?.tool_calls?.[0]?.function?.name;
+    if (lastMsg?.role === 'tool' && lastCall === 'load_skill') {
+      const out = String(lastMsg.content ?? '');
+      const ans = `スキルの指示（${out.length} 文字）を読み込みました。\n\n> ${out.split('\n')[1] ?? ''}\n\nこの手順に従って回答します。`;
+      for (const p of chunked(ans)) await send({ content: p });
+      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+      chunk(res, { id, choices: [], usage: { prompt_tokens: 300, completion_tokens: ans.length }, cost: { usd: COST, diem: COST } });
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
     if (toolNames.includes('web_search') && lastMsg?.role === 'user' && last.includes('検索')) {
       await send({ content: '調べてみます。' });
       return finishTools('web_search', { query: last.replace(/検索して?/, '').trim() || last, max_results: 3 });
@@ -177,7 +194,7 @@ const server = http.createServer(async (req, res) => {
     else if (last.toLowerCase().includes('xss')) answer = 'XSS テスト: <img src=x onerror="alert(1)"> <script>alert(2)</script> <a href="javascript:alert(3)">クリック</a> **太字は残る**';
     else if (last.includes('長文')) answer = Array.from({ length: 40 }, (_, i) => `${i + 1}. これは長い出力の ${i + 1} 行目です。ストリーミング中の描画とスクロール追従を確認します。`).join('\n');
     else
-      answer = `## モック応答\n\nあなたのメッセージ: **${last.slice(0, 80)}**\n\n- モデル: \`${body.model}\`\n- システムプロンプト: ${sys ? `「${sys.slice(0, 40)}」` : 'なし'}\n- Venice 既定プロンプト: ${vp.include_venice_system_prompt ? 'あり' : 'なし'}\n- Web 検索: ${vp.enable_web_search ?? 'off'}\n- 履歴の件数: ${body.messages?.length ?? 0}\n\n| 項目 | 値 |\n|---|---|\n| temperature | ${body.temperature ?? '既定'} |\n| stream | ${body.stream} |\n${vp.enable_web_search && vp.enable_web_search !== 'off' ? '\n検索結果によると例示用のドメインがあります^1^。' : ''}`;
+      answer = `## モック応答\n\nあなたのメッセージ: **${last.slice(0, 80)}**\n\n- モデル: \`${body.model}\`\n- システムプロンプト: ${sys ? `「${sys.slice(0, 40)}」` : 'なし'}\n- スキル一覧: ${(sys ?? '').includes('## スキル') ? 'あり' : 'なし'} / 指定スキル: ${(last.match(/<skill name="([^"]+)"/g) ?? []).map((x) => x.slice(13, -1)).join(', ') || 'なし'}\n- Venice 既定プロンプト: ${vp.include_venice_system_prompt ? 'あり' : 'なし'}\n- Web 検索: ${vp.enable_web_search ?? 'off'}\n- 履歴の件数: ${body.messages?.length ?? 0}\n\n| 項目 | 値 |\n|---|---|\n| temperature | ${body.temperature ?? '既定'} |\n| stream | ${body.stream} |\n${vp.enable_web_search && vp.enable_web_search !== 'off' ? '\n検索結果によると例示用のドメインがあります^1^。' : ''}`;
     let i = 0;
     for (const p of chunked(answer)) {
       await send({ content: p });

@@ -44,10 +44,19 @@ export function providerConfigOf(id: string): ProviderConfig | undefined {
 /** キーの状態（金庫が本体に知らせる内容。キーそのものは含まない） */
 export interface KeyStatus {
   present: boolean;
-  mode: 'plain' | 'encrypted' | 'session' | null;
+  /** パスフレーズで暗号化して保存されている */
+  encrypted: boolean;
   locked: boolean;
   hosts: string[];
   last4: string;
 }
 
-export const EMPTY_KEY_STATUS: KeyStatus = { present: false, mode: null, locked: false, hosts: [], last4: '' };
+export const EMPTY_KEY_STATUS: KeyStatus = { present: false, encrypted: false, locked: false, hosts: [], last4: '' };
+
+/** 金庫全体の状態（パスフレーズは金庫に 1 つ） */
+export interface VaultState {
+  hasPassphrase: boolean;
+  locked: boolean;
+}
+
+export const EMPTY_VAULT_STATE: VaultState = { hasPassphrase: false, locked: false };

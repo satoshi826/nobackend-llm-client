@@ -15,6 +15,11 @@ function perMTok(v: unknown): number | undefined {
 export const openrouterPreset: ProviderPreset = {
   id: 'openrouter',
   label: 'OpenRouter',
+  tagline: '数百のモデルを 1 つのキーで。データを保存・学習に使う提供元は既定で経由しません。',
+  copy: {
+    pickerNote: 'OpenRouter は複数の提供元に中継します。このアプリは既定で「データを保存・学習に使う提供元」を経由しない設定（data_collection: deny）で送信します。',
+    destinationNote: '実際に処理する提供元へ中継されます（データ収集する提供元は既定で除外）'
+  },
   defaults: {
     name: 'OpenRouter',
     kind: 'openai-compatible',
@@ -66,7 +71,6 @@ export const openrouterPreset: ProviderPreset = {
       out.reasoning = { ...(out.reasoning ?? {}), effort: out.reasoning_effort };
       delete out.reasoning_effort;
     }
-    delete out.venice_parameters;
     return out;
   },
 

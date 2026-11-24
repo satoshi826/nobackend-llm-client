@@ -3,7 +3,9 @@ import * as repo from '../lib/db/repo';
 import { exportAll, importAll } from '../lib/db/export';
 import { saveSettings } from './settings';
 import { loadConversations } from './conversations';
+import { loadSkills } from './skills';
 import { stopAll } from './generation';
+import { clearAllKeys } from './keys';
 
 export async function downloadExport() {
   const data = await exportAll();
@@ -26,12 +28,19 @@ export async function importFromFile(file: File) {
   }
   const r = await importAll(json);
   await loadConversations();
+  await loadSkills();
   return r;
 }
 
 /** このブラウザ内のアプリのデータを消す（同一オリジンのキー金庫のキーも含む） */
 export async function wipeEverything() {
   stopAll();
+  // 金庫が別オリジンでも消えるよう、まず金庫に削除を頼む
+  try {
+    await Promise.race([clearAllKeys(), new Promise((r) => setTimeout(r, 3000))]);
+  } catch {
+    /* 金庫に接続できなくても続ける */
+  }
   await repo.wipeAll();
   await new Promise<void>((resolve) => {
     const req = indexedDB.deleteDatabase('key-vault');

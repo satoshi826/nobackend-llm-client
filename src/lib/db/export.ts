@@ -1,5 +1,6 @@
 // JSON エクスポート / インポート。API キーは既定で含めない。
-import { db, SCHEMA_VERSION, type Conversation, type MessageRecord, type SavedPrompt } from './schema';
+import { db, SCHEMA_VERSION, type Conversation, type MessageRecord, type SavedPrompt, type Skill } from './schema';
+import { validateSkill } from '../skills/skill';
 
 export const EXPORT_FORMAT = 'nobackend-llm-client/export';
 
@@ -10,6 +11,8 @@ export interface ExportFile {
   conversations: Conversation[];
   messages: MessageRecord[];
   prompts: SavedPrompt[];
+  /** v3 から */
+  skills?: Skill[];
   settings: { key: string; value: unknown }[];
 }
 
@@ -22,6 +25,7 @@ export async function exportAll(): Promise<ExportFile> {
     conversations: await d.conversations.toArray(),
     messages: await d.messages.toArray(),
     prompts: await d.prompts.toArray(),
+    skills: await d.skills.toArray(),
     // 接続設定・キーは含めない（インポートで baseUrl を差し替えられる攻撃を避ける）
     settings: (await d.settings.toArray()).filter((s) => !String(s.key).startsWith('secret'))
   };
@@ -31,6 +35,7 @@ export interface ImportResult {
   conversations: number;
   messages: number;
   prompts: number;
+  skills: number;
   skipped: number;
 }
 
@@ -38,8 +43,8 @@ export interface ImportResult {
 export async function importAll(raw: unknown): Promise<ImportResult> {
   const f = validate(raw);
   const d = db();
-  const res: ImportResult = { conversations: 0, messages: 0, prompts: 0, skipped: 0 };
-  await d.transaction('rw', d.conversations, d.messages, d.prompts, async () => {
+  const res: ImportResult = { conversations: 0, messages: 0, prompts: 0, skills: 0, skipped: 0 };
+  await d.transaction('rw', [d.conversations, d.messages, d.prompts, d.skills], async () => {
     for (const c of f.conversations) {
       if (await d.conversations.get(c.id)) {
         res.skipped++;
@@ -64,6 +69,15 @@ export async function importAll(raw: unknown): Promise<ImportResult> {
       await d.prompts.put(p);
       res.prompts++;
     }
+    // スキルは名前が一意。同じ ID か同じ名前があれば手元のものを残す
+    for (const s of f.skills ?? []) {
+      if ((await d.skills.get(s.id)) || (await d.skills.where('name').equals(s.name).count())) {
+        res.skipped++;
+        continue;
+      }
+      await d.skills.put(s);
+      res.skills++;
+    }
   });
   return res;
 }
@@ -85,7 +99,7 @@ export function validate(raw: unknown): ExportFile {
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     currentLeafId: isStr(c.currentLeafId) ? c.currentLeafId : null,
-    providerId: isStr(c.providerId) ? c.providerId : 'venice',
+    providerId: isStr(c.providerId) ? c.providerId : '',
     modelId: isStr(c.modelId) ? c.modelId : '',
     systemPrompt: isStr(c.systemPrompt) ? c.systemPrompt : '',
     webSearch: c.webSearch === 'auto' || c.webSearch === 'on' ? c.webSearch : 'off',
@@ -109,12 +123,27 @@ export function validate(raw: unknown): ExportFile {
       compaction:
         m.compaction && isStr(m.compaction.summary) && isStr(m.compaction.coversUntilId)
           ? { summary: m.compaction.summary, coversUntilId: m.compaction.coversUntilId, count: Number(m.compaction.count) || 0 }
-          : undefined
+          : undefined,
+      skills: Array.isArray(m.skills)
+        ? m.skills.filter((s: any) => s && isStr(s.name) && isStr(s.body)).map((s: any) => ({ name: s.name, body: s.body }))
+        : undefined
     } as MessageRecord))
     // 圧縮ノード以外の system メッセージは受け付けない（会話の途中に指示を紛れ込ませないため）
     .filter((m) => m.role !== 'system' || !!m.compaction);
   const prompts = (Array.isArray(f.prompts) ? f.prompts : [])
     .filter((p) => p && isStr(p.id) && isStr(p.name) && isStr(p.content))
     .map((p) => ({ id: p.id, name: p.name, content: p.content, updatedAt: typeof p.updatedAt === 'number' ? p.updatedAt : Date.now() }));
-  return { format: EXPORT_FORMAT, version: f.version, exportedAt: String(f.exportedAt ?? ''), conversations, messages, prompts, settings: [] };
+  const skills = (Array.isArray(f.skills) ? f.skills : [])
+    .filter((s) => s && isStr(s.id) && isStr(s.name) && isStr(s.description) && isStr(s.body))
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      body: s.body,
+      modelInvocable: s.modelInvocable !== false,
+      createdAt: typeof s.createdAt === 'number' ? s.createdAt : Date.now(),
+      updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : Date.now()
+    }))
+    .filter((s) => !validateSkill(s));
+  return { format: EXPORT_FORMAT, version: f.version, exportedAt: String(f.exportedAt ?? ''), conversations, messages, prompts, skills, settings: [] };
 }

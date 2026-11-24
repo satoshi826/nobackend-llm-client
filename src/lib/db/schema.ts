@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { ChatMessage, ModelInfo } from '../providers/types';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export interface Conversation {
   id: string;
@@ -31,6 +31,21 @@ export interface MessageRecord extends ChatMessage {
   error?: { kind: string; message: string; hint?: string };
   /** 圧縮ノード: coversUntilId までの会話を summary に置き換えて送る */
   compaction?: { summary: string; coversUntilId: string; count: number; model?: string; auto?: boolean };
+  /** ユーザーが入力欄から指定したスキル（送信時点の本文を保存。再生成でも同じ内容を送る） */
+  skills?: { name: string; body: string }[];
+}
+
+/** スキル（SKILL.md 互換の作業手順書） */
+export interface Skill {
+  id: string;
+  /** 小文字・数字・ハイフン。一意 */
+  name: string;
+  description: string;
+  body: string;
+  /** モデルが一覧から選んで読み込めるか（false ならユーザーが指定したときだけ使う） */
+  modelInvocable: boolean;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface SavedPrompt {
@@ -62,6 +77,7 @@ export class AppDB extends Dexie {
   prompts!: Table<SavedPrompt, string>;
   models!: Table<ModelRecord, [string, string]>;
   settings!: Table<SettingRecord, string>;
+  skills!: Table<Skill, string>;
 
   constructor(name = 'nobackend-llm-client') {
     super(name);
@@ -77,6 +93,8 @@ export class AppDB extends Dexie {
     });
     // v2: キーはキー金庫（別ページ）が保管するので secrets を廃止。接続先はプリセットから決まるので providers も廃止
     this.version(2).stores({ secrets: null, providers: null });
+    // v3: スキル
+    this.version(3).stores({ skills: 'id, name, updatedAt' });
   }
 }
 

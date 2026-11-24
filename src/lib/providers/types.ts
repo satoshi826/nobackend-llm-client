@@ -7,7 +7,7 @@ export interface ProviderConfig {
   id: string;
   name: string;
   kind: AdapterKind;
-  preset: string; // 'venice' | 'openrouter' | 'custom' ...
+  preset: string; // プリセット ID（registry.ts）
   baseUrl: string;
   extraHeaders?: Record<string, string>;
   extraBody?: Record<string, unknown>;
@@ -153,7 +153,7 @@ export interface ProviderError {
  * キーはキー金庫（別ページ）が保持し、許可されたホスト宛てのときだけ金庫が付けて送る。
  */
 export interface AuthRef {
-  /** 接続先 ID（venice / openrouter / tavily / jina） */
+  /** 接続先 ID（LLM プロバイダーのプリセット ID、または tavily / jina） */
   keyId: string;
 }
 
@@ -165,16 +165,58 @@ export interface Transport {
 /** キーを付けて送る関数（キー金庫の中でだけ作られる。キーの確認に使う） */
 export type KeyedFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
+/** 接続先だけの設定（真偽値。設定 > 接続とキー に出す） */
+export interface ProviderSetting {
+  key: string;
+  label: string;
+  desc?: string;
+  default: boolean;
+}
+
+export interface RequestOptionsContext {
+  purpose: 'chat' | 'summary';
+  /** 接続先の内蔵 Web 検索（features.builtInWebSearch のときだけ 'off' 以外になる） */
+  webSearch: 'off' | 'auto' | 'on';
+  /** ProviderSetting の値 */
+  settings: Record<string, boolean>;
+}
+
 export interface ProviderPreset {
   id: string;
   label: string;
+  /** 接続先を選ぶ画面に出す一言 */
+  tagline?: string;
+  features?: {
+    /** 接続先自身が Web 検索を持つ（追加のキー不要） */
+    builtInWebSearch?: boolean;
+  };
+  settings?: ProviderSetting[];
+  /** 要求に付ける接続先固有のオプション（transformRequest に req.providerOptions[preset.id] として渡る） */
+  requestOptions?(ctx: RequestOptionsContext): Record<string, unknown> | undefined;
+  /** キー金庫が本体に返してよい応答ヘッダ（残高など） */
+  responseHeaders?: string[];
+  /** 画面の説明文 */
+  copy?: {
+    /** privacy: 'private' のモデルの説明 */
+    private?: string;
+    /** privacy: 'anonymized'（外部事業者へ中継）のモデルの説明 */
+    relayed?: string;
+    /** 一覧に中継モデルがあるときの注意書き */
+    relayedNote?: string;
+    /** モデル選択画面の注意書き */
+    pickerNote?: string;
+    /** 通信先の一覧（プライバシー）での、この接続先の補足 */
+    destinationNote?: string;
+    /** 通信先の一覧に足す行 */
+    extraDestinations?: [string, string][];
+  };
   defaults: Omit<ProviderConfig, 'id'>;
   browserAccess: 'direct' | 'needs-header' | 'needs-proxy' | 'unknown';
   modelsPath?: string;
   mapModel?(raw: any, providerId: string): ModelInfo | null;
   transformRequest?(body: Record<string, any>, req: ChatRequest): Record<string, any>;
   parseExtra?(chunk: any, seen: Set<string>): ProviderEvent[];
-  /** 応答ヘッダから残高などを読む（Venice: x-venice-balance-usd） */
+  /** 応答ヘッダから残高などを読む（返してもらうヘッダは responseHeaders に書く） */
   readHeaders?(headers: Headers): ProviderEvent[];
   /** キーの確認（キー金庫の中で、候補のキーを付ける fetch を渡して呼ぶ） */
   validateKey?(cfg: ProviderConfig, fetchWithKey: KeyedFetch): Promise<{ ok: boolean; error?: ProviderError }>;

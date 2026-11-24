@@ -6,8 +6,9 @@ import { Button, Icon, cx } from './ui';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
 
-const LABEL: Record<string, string> = { web_search: 'Web 検索', fetch_url: 'ページ本文の取得' };
-const FIELD: Record<string, string> = { web_search: 'query', fetch_url: 'url' };
+const LABEL: Record<string, string> = { web_search: 'Web 検索', fetch_url: 'ページ本文の取得', load_skill: 'スキル' };
+const FIELD: Record<string, string> = { web_search: 'query', fetch_url: 'url', load_skill: 'name' };
+const ICON = { web_search: 'search', fetch_url: 'globe', load_skill: 'book' } as const;
 
 function summary(p: ToolPart): string {
   const i = (p.input ?? {}) as Record<string, unknown>;
@@ -26,7 +27,7 @@ function ApprovalCard({ p }: { p: ToolPart }) {
   return (
     <div role="group" aria-label="ツールの実行の確認" class="my-2 rounded-lg border border-sky-300 bg-sky-50/60 p-3 text-sm dark:border-sky-800 dark:bg-sky-950/40">
       <div class="mb-2 flex items-center gap-1.5 font-medium">
-        <Icon name={p.name === 'web_search' ? 'search' : 'globe'} class="size-4" />
+        <Icon name={ICON[p.name as keyof typeof ICON] ?? 'wrench'} class="size-4" />
         {LABEL[p.name] ?? p.name} を実行してよいですか？
       </div>
       {field ? (
@@ -78,7 +79,14 @@ export function ToolCallCard({ p, live }: { p: ToolPart; live: boolean }) {
       status = '確認待ちのまま中断';
       break;
     case 'output-available':
-      status = p.name === 'web_search' ? `${d.results?.length ?? 0} 件` : p.name === 'fetch_url' ? `${(d.chars ?? 0).toLocaleString()} 文字${d.truncated ? '（一部）' : ''}` : '完了';
+      status =
+        p.name === 'web_search'
+          ? `${d.results?.length ?? 0} 件`
+          : p.name === 'fetch_url'
+            ? `${(d.chars ?? 0).toLocaleString()} 文字${d.truncated ? '（一部）' : ''}`
+            : p.name === 'load_skill'
+              ? '読み込みました'
+              : '完了';
       break;
     case 'output-denied':
       status = p.approval?.auto ? '禁止（設定）' : '拒否しました';
@@ -97,7 +105,7 @@ export function ToolCallCard({ p, live }: { p: ToolPart; live: boolean }) {
         onClick={() => hasDetails && setOpen(!open)}
         aria-expanded={hasDetails ? open : undefined}
       >
-        <Icon name={p.name === 'web_search' ? 'search' : p.name === 'fetch_url' ? 'globe' : 'wrench'} class={cx('size-3.5 shrink-0', live && p.state === 'input-available' && 'animate-pulse')} />
+        <Icon name={ICON[p.name as keyof typeof ICON] ?? 'wrench'} class={cx('size-3.5 shrink-0', live && p.state === 'input-available' && 'animate-pulse')} />
         <span class="shrink-0 font-medium">{LABEL[p.name] ?? p.name}</span>
         <span class="min-w-0 truncate text-zinc-500">{summary(p)}</span>
         <span class={cx('ml-auto shrink-0', tone)}>{status}</span>

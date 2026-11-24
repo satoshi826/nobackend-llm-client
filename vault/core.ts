@@ -1,7 +1,7 @@
 // キー金庫と本体アプリのやり取り（MessagePort）。送信依頼を検証し、キーストアにキーを付けて送らせ、応答を流し返す。
 import { PASSTHROUGH_HEADERS, type FromVault, type ToVault } from '../src/lib/vault/protocol';
 import { accountById } from '../src/lib/keys/accounts';
-import { allStatus, allowedHosts, isAllowedUrl, KeyError, keyedFetch, label } from './store';
+import { allStatus, allowedHosts, clearAll, isAllowedUrl, KeyError, keyedFetch, label, lock } from './store';
 
 export { allowedHosts };
 
@@ -17,7 +17,18 @@ const inflight = new Map<string, AbortController>();
 
 export async function handle(msg: ToVault, send: (m: FromVault, transfer?: Transferable[]) => void) {
   if (msg.type === 'status') {
-    send({ type: 'status', providers: await allStatus() });
+    const s = await allStatus();
+    send({ type: 'status', providers: s.keys, vault: s.vault });
+    return;
+  }
+  if (msg.type === 'clear-all') {
+    await clearAll();
+    send({ type: 'ack', id: msg.id });
+    return;
+  }
+  if (msg.type === 'lock') {
+    lock();
+    send({ type: 'ack', id: msg.id });
     return;
   }
   if (msg.type === 'abort') {

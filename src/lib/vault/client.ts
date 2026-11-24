@@ -12,7 +12,8 @@ import type { KeyStatus, VaultState } from '../keys/accounts';
  * - 未指定: 本体と同じオリジンの /vault/（デプロイ 1 つで動く。XSS からの隔離はない）
  * - VITE_VAULT_URL 指定: 別オリジンの金庫（例: https://vault.example.com/index.html）。本体で XSS が起きてもキーは読めない
  */
-const SAME_ORIGIN_PATH = '/vault/index.html';
+// /vault/index.html は Cloudflare などで /vault/ にリダイレクトされるので、最初から /vault/ を開く
+const SAME_ORIGIN_PATH = '/vault/';
 export const VAULT_URL: string = (import.meta as any).env?.VITE_VAULT_URL || (typeof location !== 'undefined' ? new URL(SAME_ORIGIN_PATH, location.origin).toString() : SAME_ORIGIN_PATH);
 export const VAULT_ORIGIN = typeof location !== 'undefined' ? new URL(VAULT_URL, location.origin).origin : '';
 /** キー金庫が本体と別オリジンにあるか（XSS からキーを隔離できているか） */

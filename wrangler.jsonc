@@ -1,0 +1,15 @@
+// Cloudflare Workers（静的アセットだけ）で配信するための設定。Worker のコードはない。
+// - build.command: デプロイの前に dist/ を作る（ダッシュボードのビルドコマンドが空でも動くように）
+// - _headers（dist/_headers。csp.config.ts から生成）でセキュリティヘッダを付ける
+// - 会話の URL は #/c/<id>（ハッシュ）なので、知らないパスは 404 のまま（index.html にフォールバックしない）
+// name はダッシュボードの Worker 名と同じにすること
+{
+  "name": "nobackend-llm-client",
+  "compatibility_date": "2026-11-20",
+  "build": { "command": "npm run build" },
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  }
+}

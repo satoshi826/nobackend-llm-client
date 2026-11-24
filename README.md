@@ -50,34 +50,40 @@ npm run build
 node scripts/serve-with-headers.mjs dist 4173     # dist/_headers を適用して配信
 ```
 
-## デプロイ（Cloudflare Pages）
+## デプロイ（Cloudflare）
 
 `npm run build` の `dist/` をそのまま配信します。`dist/_headers` に CSP などのセキュリティヘッダが入っています（ビルド時に `csp.config.ts` から生成）。キー金庫は `dist/vault/` として同じプロジェクトに入ります。
 自分でデプロイして使うのが最も安全です（配布元を信頼する必要がなくなります）。
 
-### GitHub 連携で自動デプロイ（金庫は同じオリジン）
+### GitHub 連携で自動デプロイ（Workers。金庫は同じオリジン）
+
+静的ファイルだけを配る Worker として動かします。設定は `wrangler.jsonc`（Worker のコードはなく、`dist/` を配るだけ）。
 
 1. このリポジトリを GitHub にプッシュする。
-2. Cloudflare ダッシュボード → Workers & Pages → Create → **Pages** → Connect to Git でリポジトリを選ぶ。
-3. ビルド設定:
-   - Framework preset: **None**
-   - Build command: `npm run build`
-   - Build output directory: `dist`
+2. Cloudflare ダッシュボード → Workers & Pages → Create → **Import a repository** でリポジトリを選ぶ。
+3. 設定:
+   - Project name（Worker 名）: `wrangler.jsonc` の `name`（`nobackend-llm-client`）と同じにする
+   - Build command: `npm run build`（空でも `wrangler.jsonc` の `build.command` で作られる）
+   - Deploy command: `npx wrangler deploy`（既定のまま）
    - 環境変数: なし（`.node-version` で Node 22 を使う）。**`VITE_*_BASE_URL` は設定しない**（モック用）
-4. デプロイ後、`https://<プロジェクト名>.pages.dev` で開く。以後は main ブランチへのプッシュで自動デプロイ、それ以外のブランチはプレビュー URL になる（オリジンが違うので、データは本番と別）。
+4. デプロイ後、`https://<Worker 名>.<アカウントのサブドメイン>.workers.dev` で開く。以後は main ブランチへのプッシュで自動デプロイ。
 
-**Cloudflare 側でオフにするもの**（スクリプトを差し込むため、CSP で止まるうえ「外部スクリプトなし」の方針に反する）: Web Analytics（Pages の Metrics）、Rocket Loader、Email Address Obfuscation、Zaraz。独自ドメインを使わない `*.pages.dev` では、ゾーンの設定（Rocket Loader など）は関係ありません。
+ローカルで本番と同じ動き（`_headers`、`/index.html` → `/` のリダイレクトなど）を確かめるには `npx wrangler dev --local`。
+
+Cloudflare **Pages** で配る場合は、Build command `npm run build`、Build output directory `dist` にします（`_headers` はどちらでも同じように効く）。
+
+**Cloudflare 側でオフにするもの**（スクリプトを差し込むため、CSP で止まるうえ「外部スクリプトなし」の方針に反する）: Web Analytics、Rocket Loader、Email Address Obfuscation、Zaraz。独自ドメインを使わない `*.workers.dev` / `*.pages.dev` では、ゾーンの設定（Rocket Loader など）は関係ありません。
 
 **確認**:
 
 ```bash
-curl -sI https://<プロジェクト名>.pages.dev/ | grep -i content-security-policy
-curl -sI https://<プロジェクト名>.pages.dev/vault/index.html | grep -i content-security-policy   # 金庫用（connect-src に LLM の API）
+curl -sI https://<サイトの URL>/ | grep -i content-security-policy
+curl -sI https://<サイトの URL>/vault/ | grep -i content-security-policy   # 金庫用（connect-src に LLM の API）
 ```
 
 ブラウザの開発者ツールのコンソールに CSP 違反が出ていないこと、利用上限付きのキーでキーの保存 → チャット → パスフレーズの設定・解錠 → すべてのキーを削除が通ることを確かめます。
 
-**データはオリジンごと**: 会話とキーは、開いた URL（オリジン）ごとに別々に保存されます。お試し用（localhost）から本番に移る、`pages.dev` から独自ドメインに移る、などのときは、先に「プライバシーとデータ」でバックアップを書き出し、移った先で読み込んでください（キーは入れ直し）。
+**データはオリジンごと**: 会話とキーは、開いた URL（オリジン）ごとに別々に保存されます。お試し用（localhost）から本番に移る、`workers.dev` から独自ドメインに移る、などのときは、先に「プライバシーとデータ」でバックアップを書き出し、移った先で読み込んでください（キーは入れ直し）。
 
 ### ビルド時に接続先を足す（Ollama などの OpenAI 互換 API）
 
@@ -107,7 +113,7 @@ API キーの入力・保存・暗号化と、キーを付けた送信は、常�
 # 金庫（別サイトとしてデプロイ。dist-vault/ をそのまま配信）
 VITE_APP_ORIGIN=https://app.example.com npx vite build --config vite.vault.config.ts
 # 本体（金庫の URL を指定してビルド。CSP の frame-src に金庫が自動で追加される）
-VITE_VAULT_URL=https://vault.example.com/index.html npm run build
+VITE_VAULT_URL=https://vault.example.com/ npm run build
 ```
 
 Cloudflare Pages なら 2 つのプロジェクトに分けます。`*.pages.dev` 同士は別サイト扱いのため、ブラウザによっては金庫の保存領域が制限されることがあります。毎日使うなら、独自ドメインで `app.example.com` と `vault.example.com` のように同じドメインの下に置くのがおすすめです。

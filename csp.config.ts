@@ -65,18 +65,29 @@ export function vaultCsp(env: Env, appOrigins: string[]): string {
   ].join('; ');
 }
 
-/** 本体のデプロイ用 _headers（同一オリジンの金庫 /vault/ には金庫用の CSP を当てる） */
+/**
+ * 本体のデプロイ用 _headers（Cloudflare Pages / Workers の静的アセット共通の形式）。
+ * CSP は文書ごとに当てる: 本体のページ（/ と /index.html）と、同一オリジンの金庫（/vault/ 以下）。
+ * 「/* に本体の CSP、/vault/* で外す」という書き方は「! ヘッダ」の対応に依存し、
+ * 外れないと CSP が 2 つ重なって金庫の通信が止まるため使わない。
+ * 本体は # で画面を切り替えるので、ほかのパスで HTML を返すことはない（404）。
+ */
 export function appHeadersFile(env: Env): string {
   const vaultOrigin = env.VITE_VAULT_URL ? new URL(env.VITE_VAULT_URL).origin : undefined;
+  const app = `  Content-Security-Policy: ${appCsp(env, vaultOrigin)}`;
   return [
     '/*',
-    `  Content-Security-Policy: ${appCsp(env, vaultOrigin)}`,
     ...COMMON.map((h) => '  ' + h),
     '  Cross-Origin-Opener-Policy: same-origin',
     '  Cross-Origin-Resource-Policy: same-origin',
     '',
+    '/',
+    app,
+    '',
+    '/index.html',
+    app,
+    '',
     '/vault/*',
-    '  ! Content-Security-Policy',
     `  Content-Security-Policy: ${vaultCsp(env, ["'self'"])}`,
     ''
   ].join('\n');

@@ -2,8 +2,11 @@
 // - API など別オリジンへの通信には一切関与しない（会話内容はキャッシュしない）
 // - ページ（index.html）はネットワーク優先 → 失敗時のみキャッシュ（更新をすぐ反映するため）
 // - /assets/ はファイル名にハッシュが付くのでキャッシュ優先
-const CACHE = 'app-shell-v1';
-const SHELL = ['/', '/index.html', '/favicon.svg', '/manifest.webmanifest'];
+// - 本体のページ（/）だけを扱う。金庫（/vault/）のページには関与しない
+// - /index.html は配信元によって / へリダイレクトされるので、キャッシュの鍵は / に統一する
+//   （リダイレクトされた応答をページの表示に使うとブラウザが拒否するため）
+const CACHE = 'app-shell-v2';
+const SHELL = ['/', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -25,14 +28,17 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return; // 外部（API 等）は素通し
 
   if (req.mode === 'navigate') {
+    if (url.pathname !== '/' && url.pathname !== '/index.html') return; // 金庫など、本体以外のページは素通し
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('/index.html', copy));
+          if (res.ok && !res.redirected) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put('/', copy));
+          }
           return res;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match('/'))
     );
     return;
   }

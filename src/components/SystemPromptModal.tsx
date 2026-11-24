@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'preact/hooks';
-import { currentConv, modal, newChatDraft, saveSettings, settings, showToast, updateConversation } from '../state/app';
+import { currentConv, modal, saveSettings, settings, showToast, updateConversation } from '../state/app';
 import * as repo from '../lib/db/repo';
 import type { SavedPrompt } from '../lib/db/schema';
 import { Button, Icon, Modal } from './ui';
 
 export function SystemPromptModal() {
   const conv = currentConv.value;
-  const [text, setText] = useState(conv?.systemPrompt ?? newChatDraft.value.systemPrompt);
+  const [text, setText] = useState(conv.systemPrompt);
   const [saved, setSaved] = useState<SavedPrompt[]>([]);
   const [name, setName] = useState('');
 

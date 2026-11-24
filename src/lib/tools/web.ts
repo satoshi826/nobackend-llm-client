@@ -12,10 +12,9 @@ const UNTRUSTED_NOTE =
 export const FETCH_MAX_CHARS = 12000;
 
 async function call(ctx: ToolContext, serviceId: string, url: string, init: RequestInit): Promise<Response> {
-  const cred = await ctx.credentialFor(serviceId);
   let res: Response;
   try {
-    res = await ctx.transport.fetch(url, { ...init, signal: ctx.signal }, cred);
+    res = await ctx.transport.fetch(url, { ...init, signal: ctx.signal }, ctx.authFor(serviceId));
   } catch (e) {
     if (e instanceof ProviderFailure) throw e;
     throw new ProviderFailure(errorFromFetchFailure(e));

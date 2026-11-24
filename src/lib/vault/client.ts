@@ -3,13 +3,20 @@
 // 応答は ReadableStream に詰め直して Response として返すので、既存の Adapter / SSE パーサはそのまま使える。
 import { ProviderFailure } from '../providers/errors';
 import type { Transport } from '../providers/types';
-import { directTransport } from '../providers/transport';
-import { VAULT_PROTOCOL, type FromVault, type ToVault, type VaultKeyStatus } from './protocol';
+import { plainTransport } from '../providers/transport';
+import { VAULT_PROTOCOL, type FromVault, type ToVault } from './protocol';
+import type { KeyStatus } from '../keys/accounts';
 
-/** 金庫ページの URL（例: https://vault.example.com/index.html）。未設定なら金庫を使わない（直接モード）。 */
-export const VAULT_URL: string = (import.meta as any).env?.VITE_VAULT_URL || '';
-export const vaultEnabled = !!VAULT_URL;
-export const VAULT_ORIGIN = vaultEnabled ? new URL(VAULT_URL).origin : '';
+/**
+ * キー金庫ページの URL。キーの保存・送信は常にこのページが行い、本体アプリはキーを持たない。
+ * - 未指定: 本体と同じオリジンの /vault/（デプロイ 1 つで動く。XSS からの隔離はない）
+ * - VITE_VAULT_URL 指定: 別オリジンの金庫（例: https://vault.example.com/index.html）。本体で XSS が起きてもキーは読めない
+ */
+const SAME_ORIGIN_PATH = '/vault/index.html';
+export const VAULT_URL: string = (import.meta as any).env?.VITE_VAULT_URL || (typeof location !== 'undefined' ? new URL(SAME_ORIGIN_PATH, location.origin).toString() : SAME_ORIGIN_PATH);
+export const VAULT_ORIGIN = typeof location !== 'undefined' ? new URL(VAULT_URL, location.origin).origin : '';
+/** キー金庫が本体と別オリジンにあるか（XSS からキーを隔離できているか） */
+export const vaultIsolated = typeof location !== 'undefined' && VAULT_ORIGIN !== location.origin;
 
 export function vaultViewUrl(params: Record<string, string>): string {
   const u = new URL(VAULT_URL);
@@ -27,7 +34,7 @@ class VaultConnection {
   private port: MessagePort | null = null;
   private ready: Promise<void> | null = null;
   private pending = new Map<string, Pending>();
-  private statusListeners = new Set<(s: Record<string, VaultKeyStatus>) => void>();
+  private statusListeners = new Set<(s: Record<string, KeyStatus>) => void>();
   private seq = 0;
 
   connect(): Promise<void> {
@@ -54,7 +61,7 @@ class VaultConnection {
     return this.ready;
   }
 
-  onStatus(fn: (s: Record<string, VaultKeyStatus>) => void): () => void {
+  onStatus(fn: (s: Record<string, KeyStatus>) => void): () => void {
     this.statusListeners.add(fn);
     return () => this.statusListeners.delete(fn);
   }
@@ -136,9 +143,8 @@ export const vault = new VaultConnection();
  * キーの要らない通信（モデル一覧など）は本体から直接送る。
  */
 export const vaultTransport: Transport = {
-  fetch(url, init, credential) {
-    if (credential?.kind === 'vault') return vault.fetch(credential.providerId, url, init);
-    if (credential) throw new ProviderFailure({ kind: 'auth', message: '金庫モードでは本体はキーを扱いません。' });
-    return directTransport.fetch(url, init);
+  fetch(url, init, auth) {
+    if (auth) return vault.fetch(auth.keyId, url, init);
+    return plainTransport.fetch(url, init);
   }
 };

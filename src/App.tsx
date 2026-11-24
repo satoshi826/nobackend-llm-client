@@ -2,7 +2,7 @@ import { modal, ready, toast } from './state/app';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { ModelPicker } from './components/ModelPicker';
-import { SettingsModal, PrivacyModal } from './components/SettingsModal';
+import { SettingsModal } from './components/SettingsModal';
 import { SystemPromptModal } from './components/SystemPromptModal';
 import { cx } from './components/ui';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -18,7 +18,6 @@ export function App() {
       <ChatView />
       {modal.value === 'models' && <ModelPicker />}
       {modal.value === 'settings' && <SettingsModal />}
-      {modal.value === 'privacy' && <PrivacyModal />}
       {modal.value === 'system' && <SystemPromptModal />}
       <ConfirmDialog />
       {t && (

@@ -1,133 +1,21 @@
-// ChatRunner: ProviderEvent を受けてメッセージ（パーツ）を組み立てるループ。
-// ツールがあれば「生成 → ツール実行（必要なら承認）→ 結果を渡して再生成」を上限ステップまで繰り返す（§9）。
-import type { ChatMessage, ChatParams, Credential, Part, ProviderConfig, ProviderEvent, ProviderPreset, Transport } from '../providers/types';
+// 実行ループ: 「生成 → ツール実行（必要なら承認）→ 結果を渡して再生成」を上限ステップまで繰り返す（§9）。
+import type { AuthRef, ChatParams, ProviderConfig, ProviderEvent, ProviderPreset, Transport } from '../providers/types';
+import type { Part } from '../providers/types';
 import { getAdapter } from '../providers/registry';
 import type { MessageRecord } from '../db/schema';
 import { fitToContext, inputBudget } from './context';
 import { toDefinition, type Permission, type Tool, type ToolContext } from '../tools/types';
+import { applyEvent, type BlockMap } from './events';
+import { buildRequestMessages, turnMessages } from './request';
 
-export interface BlockMap {
-  /** ProviderEvent の index → parts 配列の位置 */
-  [index: number]: number;
-}
-
-/** 1 イベントを下書きメッセージに反映する（純粋関数的に書き換える） */
-export function applyEvent(msg: MessageRecord, ev: ProviderEvent, blocks: BlockMap): void {
-  switch (ev.type) {
-    case 'text-start':
-    case 'reasoning-start': {
-      const part: Part = { type: ev.type === 'text-start' ? 'text' : 'reasoning', text: '', state: 'streaming' };
-      blocks[ev.index] = msg.parts.push(part) - 1;
-      break;
-    }
-    case 'text-delta':
-    case 'reasoning-delta': {
-      const p = msg.parts[blocks[ev.index]] as Extract<Part, { type: 'text' | 'reasoning' }> | undefined;
-      if (p) p.text += ev.delta;
-      break;
-    }
-    case 'text-end':
-    case 'reasoning-end': {
-      const p = msg.parts[blocks[ev.index]] as Extract<Part, { type: 'text' | 'reasoning' }> | undefined;
-      if (p) p.state = 'done';
-      break;
-    }
-    case 'tool-call-start': {
-      blocks[ev.index] = msg.parts.push({ type: 'tool', toolCallId: ev.toolCallId, name: ev.name, argsText: '', state: 'input-streaming' }) - 1;
-      break;
-    }
-    case 'tool-call-delta': {
-      const p = msg.parts[blocks[ev.index]];
-      if (p?.type === 'tool') p.argsText += ev.argsDelta;
-      break;
-    }
-    case 'tool-call-end': {
-      const p = msg.parts[blocks[ev.index]];
-      if (p?.type === 'tool') {
-        p.input = ev.input;
-        p.state = ev.parseError ? 'output-error' : 'input-available';
-        if (ev.parseError) p.error = `引数を解析できませんでした: ${ev.parseError}`;
-      }
-      break;
-    }
-    case 'source': {
-      if (!msg.parts.some((p) => p.type === 'source' && p.url === ev.url)) {
-        msg.parts.push({ type: 'source', url: ev.url, title: ev.title, snippet: ev.snippet });
-      }
-      break;
-    }
-    case 'usage': {
-      msg.meta = { ...msg.meta, usage: ev.usage, costUsd: ev.costUsd ?? msg.meta?.costUsd };
-      break;
-    }
-    case 'vendor-state': {
-      msg.vendorState = { ...(msg.vendorState ?? {}), ...ev.data };
-      break;
-    }
-    case 'done': {
-      msg.status = 'done';
-      msg.meta = { ...msg.meta, finishReason: ev.reason };
-      break;
-    }
-    case 'error': {
-      msg.status = ev.error.kind === 'aborted' ? 'aborted' : 'error';
-      if (ev.error.kind !== 'aborted') msg.error = { kind: ev.error.kind, message: ev.error.message, hint: ev.error.hint };
-      break;
-    }
-    case 'start':
-    case 'account':
-      break;
-  }
-}
-
-export interface BuildOptions {
-  /** 前回までの思考（reasoning_content など）をモデルに送り返す。同じプロバイダー・モデルの発言のみ */
-  resendReasoning?: boolean;
-  providerId?: string;
-  model?: string;
-}
-
-/**
- * 履歴 → プロバイダーに送るメッセージ。
- * - 思考の本文（reasoning パーツ）は送らない
- * - vendorState（reasoning_content など）は resendReasoning が有効で、同じモデルの発言のときだけ送り返す
- * - 圧縮ノード（compaction）があれば、最後の圧縮で要約した範囲を要約文に置き換える
- *   （要約はシステムプロンプトの末尾に付ける。複数の system メッセージを嫌う API があるため）
- */
-export function buildRequestMessages(history: MessageRecord[], systemPrompt: string, opts: BuildOptions = {}): ChatMessage[] {
-  let sys = systemPrompt.trim();
-  let rest = history;
-  let lastCompaction = -1;
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i].compaction) {
-      lastCompaction = i;
-      break;
-    }
-  }
-  if (lastCompaction >= 0) {
-    const c = history[lastCompaction].compaction!;
-    const coveredIdx = history.findIndex((m) => m.id === c.coversUntilId);
-    const summaryBlock = `## これまでの会話の要約\n以下は、この会話の前半を要約したものです。続きの会話の文脈として扱ってください。\n\n${c.summary}`;
-    sys = sys ? `${sys}\n\n${summaryBlock}` : summaryBlock;
-    rest = history.slice(coveredIdx + 1);
-  }
-  const out: ChatMessage[] = [];
-  if (sys) out.push({ id: 'system', role: 'system', parts: [{ type: 'text', text: sys }] });
-  for (const m of rest) {
-    if (m.compaction) continue;
-    if (m.role === 'assistant' && m.status === 'error' && !m.parts.some((p) => p.type === 'text' && p.text)) continue;
-    const parts = m.parts.filter((p) => p.type === 'text' || p.type === 'tool');
-    if (parts.length === 0) continue;
-    const sameModel = !!opts.model && m.meta?.providerId === opts.providerId && m.meta?.model === opts.model;
-    out.push({ id: m.id, role: m.role, parts, vendorState: opts.resendReasoning && sameModel ? m.vendorState : undefined });
-  }
-  return out;
-}
+export { applyEvent } from './events';
+export { buildRequestMessages, turnMessages } from './request';
 
 export interface RunOptions {
   provider: ProviderConfig;
   preset: ProviderPreset;
-  credential: Credential | undefined;
+  /** 付けるキー（キー金庫が付ける） */
+  auth: AuthRef | undefined;
   transport: Transport;
   model: string;
   history: MessageRecord[];
@@ -171,36 +59,6 @@ export interface ApprovalDecision {
   input?: unknown;
 }
 
-/**
- * このターン内のステップ（step-start で区切られる）を、送信用のアシスタント発言とツール結果に変換する。
- * 同じターン内の思考は、ツール呼び出しの続きに必要なモデルがあるため vendorState として送り返す。
- */
-export function turnMessages(msg: MessageRecord): ChatMessage[] {
-  const out: ChatMessage[] = [];
-  let seg: Part[] = [];
-  const flush = () => {
-    if (seg.some((p) => p.type === 'tool')) {
-      const reasoning = seg
-        .filter((p) => p.type === 'reasoning')
-        .map((p) => (p as { text: string }).text)
-        .join('');
-      out.push({
-        id: `${msg.id}-s${out.length}`,
-        role: 'assistant',
-        parts: seg.filter((p) => p.type === 'text' || p.type === 'tool'),
-        vendorState: reasoning ? { reasoning_content: reasoning } : undefined
-      });
-    }
-    seg = [];
-  };
-  for (const p of msg.parts) {
-    if (p.type === 'step-start') flush();
-    else seg.push(p);
-  }
-  flush();
-  return out;
-}
-
 export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
   const msg = o.draft;
   msg.status = 'streaming';
@@ -234,7 +92,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
     let sawTerminal = false;
     let failed = false;
     try {
-      for await (let ev of adapter.chat(o.provider, o.preset, o.credential, req, o.transport)) {
+      for await (let ev of adapter.chat(o.provider, o.preset, o.auth, req, o.transport)) {
         if (ev.type === 'usage') {
           // ステップをまたいで合計する
           total.inputTokens += ev.usage.inputTokens ?? 0;
@@ -380,9 +238,4 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
   o.onUpdate(msg);
   await o.persist(msg);
   return msg;
-}
-
-export function titleFrom(text: string): string {
-  const t = text.replace(/\s+/g, ' ').trim();
-  return t.length > 40 ? t.slice(0, 40) + '…' : t || '新しいチャット';
 }

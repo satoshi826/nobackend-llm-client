@@ -1,12 +1,8 @@
 // リポジトリ層。一時チャット（temporary）の会話はメモリにだけ保持し、IndexedDB には書かない。
-import { db, type Conversation, type MessageRecord, type SavedPrompt, type SecretRecord, type ModelRecord } from './schema';
-import type { ProviderConfig } from '../providers/types';
-import { decryptSecret, encryptSecret } from '../crypto/passphrase';
+import { db, type Conversation, type MessageRecord, type SavedPrompt, type ModelRecord } from './schema';
 
 const memConversations = new Map<string, Conversation>();
 const memMessages = new Map<string, MessageRecord>();
-/** 「このセッションのみ」保存のキー（メモリのみ） */
-const memSecrets = new Map<string, SecretRecord>();
 
 export function newId(): string {
   return crypto.randomUUID();
@@ -98,10 +94,6 @@ export const listPrompts = () => db().prompts.orderBy('updatedAt').reverse().toA
 export const putPrompt = (p: SavedPrompt) => db().prompts.put(p);
 export const deletePrompt = (id: string) => db().prompts.delete(id);
 
-// ---- providers ----
-export const listProviders = () => db().providers.toArray();
-export const putProvider = (p: ProviderConfig) => db().providers.put(p);
-
 // ---- models cache ----
 export async function replaceModels(providerId: string, models: Omit<ModelRecord, 'fetchedAt'>[]): Promise<void> {
   const now = Date.now();
@@ -112,68 +104,6 @@ export async function replaceModels(providerId: string, models: Omit<ModelRecord
 }
 export const listModels = (providerId: string) => db().models.where('providerId').equals(providerId).toArray();
 
-// ---- secrets ----
-// 保存方法: plain（このブラウザに保存）/ encrypted（パスフレーズで暗号化して保存）/ session（保存しない）
-export type SecretMode = 'plain' | 'encrypted' | 'session';
-
-export interface SecretStatus {
-  present: boolean;
-  mode: SecretMode | null;
-  locked: boolean;
-  hosts: string[];
-  last4: string;
-}
-
-/** 使える状態のキー（解錠済み・平文保存・セッション限定）を返す。ロック中なら undefined。 */
-export async function getSecret(providerId: string): Promise<{ key: string; hosts: string[] } | undefined> {
-  const m = memSecrets.get(providerId);
-  if (m) return { key: m.key!, hosts: m.hosts };
-  const r = await db().secrets.get(providerId);
-  if (r?.key) return { key: r.key, hosts: r.hosts };
-  return undefined;
-}
-
-export async function getSecretStatus(providerId: string): Promise<SecretStatus> {
-  const m = memSecrets.get(providerId);
-  const r = await db().secrets.get(providerId);
-  if (r?.enc) return { present: true, mode: 'encrypted', locked: !m, hosts: r.hosts, last4: m?.key?.slice(-4) ?? '' };
-  if (r?.key) return { present: true, mode: 'plain', locked: false, hosts: r.hosts, last4: r.key.slice(-4) };
-  if (m) return { present: true, mode: 'session', locked: false, hosts: m.hosts, last4: m.key!.slice(-4) };
-  return { present: false, mode: null, locked: false, hosts: [], last4: '' };
-}
-
-export async function setSecret(rec: { id: string; key: string; hosts: string[] }, mode: SecretMode, passphrase?: string): Promise<void> {
-  const base = { id: rec.id, hosts: rec.hosts, createdAt: Date.now() };
-  if (mode === 'session') {
-    memSecrets.set(rec.id, { ...base, key: rec.key });
-    await db().secrets.delete(rec.id);
-  } else if (mode === 'encrypted') {
-    const enc = await encryptSecret(rec.key, passphrase ?? '');
-    await db().secrets.put({ ...base, enc });
-    memSecrets.set(rec.id, { ...base, key: rec.key }); // 保存直後は解錠状態
-  } else {
-    memSecrets.delete(rec.id);
-    await db().secrets.put({ ...base, key: rec.key });
-  }
-}
-
-export async function unlockSecret(providerId: string, passphrase: string): Promise<void> {
-  const r = await db().secrets.get(providerId);
-  if (!r?.enc) return;
-  const key = await decryptSecret(r.enc, passphrase);
-  memSecrets.set(providerId, { id: providerId, key, hosts: r.hosts, createdAt: r.createdAt });
-}
-
-/** 暗号化キーをメモリから消して再びロックする */
-export function lockSecret(providerId: string): void {
-  memSecrets.delete(providerId);
-}
-
-export async function deleteSecret(providerId: string): Promise<void> {
-  memSecrets.delete(providerId);
-  await db().secrets.delete(providerId);
-}
-
 // ---- settings ----
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
   const r = await db().settings.get(key);
@@ -182,21 +112,9 @@ export async function getSetting<T>(key: string, fallback: T): Promise<T> {
 export const setSetting = (key: string, value: unknown) => db().settings.put({ key, value });
 
 // ---- 全削除 ----
-/** 本体オリジンに保存されているキーの件数（キー金庫モードでの残存チェック用） */
-export async function countStoredSecrets(): Promise<number> {
-  return db().secrets.count();
-}
-
-/** 本体オリジンに保存されているキーをすべて消す（会話・設定は消さない） */
-export async function clearStoredSecrets(): Promise<void> {
-  memSecrets.clear();
-  await db().secrets.clear();
-}
-
 export async function wipeAll(): Promise<void> {
   memConversations.clear();
   memMessages.clear();
-  memSecrets.clear();
   const d = db();
   d.close();
   await d.delete();

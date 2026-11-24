@@ -2,10 +2,12 @@
 import type {
   ChatMessage,
   ChatRequest,
-  Credential,
+  AuthRef,
+  KeyedFetch,
   ModelInfo,
   ProviderAdapter,
   ProviderConfig,
+  ProviderError,
   ProviderEvent,
   ProviderPreset,
   Transport
@@ -13,6 +15,19 @@ import type {
 import { parseSSE } from './sse';
 import { ThinkSplitter } from './think-splitter';
 import { errorFromFetchFailure, errorFromResponse, isAbort, ProviderFailure } from './errors';
+
+/** キーの確認: キー付きで GET して 2xx なら有効 */
+export async function checkKey(url: string, fetchWithKey: KeyedFetch, corsHint?: string): Promise<{ ok: boolean; error?: ProviderError }> {
+  let res: Response;
+  try {
+    res = await fetchWithKey(url, { method: 'GET', headers: { Accept: 'application/json' } });
+  } catch (e) {
+    if (e instanceof ProviderFailure) return { ok: false, error: e.error };
+    return { ok: false, error: errorFromFetchFailure(e, corsHint) };
+  }
+  if (!res.ok) return { ok: false, error: await errorFromResponse(res) };
+  return { ok: true };
+}
 
 export function joinUrl(base: string, path: string): string {
   return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
@@ -86,11 +101,11 @@ export function buildChatBody(cfg: ProviderConfig, preset: ProviderPreset, req: 
 }
 
 export const openAICompatibleAdapter: ProviderAdapter = {
-  async listModels(cfg, preset, cred, transport): Promise<ModelInfo[]> {
+  async listModels(cfg, preset, transport): Promise<ModelInfo[]> {
     const url = joinUrl(effectiveBase(cfg), preset.modelsPath ?? 'models');
     let res: Response;
     try {
-      res = await transport.fetch(url, { method: 'GET', headers: { Accept: 'application/json' } }, cred);
+      res = await transport.fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
     } catch (e) {
       if (e instanceof ProviderFailure) throw e;
       throw new ProviderFailure(errorFromFetchFailure(e, preset.corsHint));
@@ -106,8 +121,8 @@ export const openAICompatibleAdapter: ProviderAdapter = {
     return mapped;
   },
 
-  chat(cfg, preset, cred, req, transport) {
-    return streamChat(cfg, preset, cred, req, transport);
+  chat(cfg, preset, auth, req, transport) {
+    return streamChat(cfg, preset, auth, req, transport);
   }
 };
 
@@ -119,7 +134,7 @@ function defaultMapModel(raw: any, providerId: string): ModelInfo | null {
 async function* streamChat(
   cfg: ProviderConfig,
   preset: ProviderPreset,
-  cred: Credential | undefined,
+  auth: AuthRef | undefined,
   req: ChatRequest,
   transport: Transport
 ): AsyncGenerator<ProviderEvent> {
@@ -135,7 +150,7 @@ async function* streamChat(
         body: JSON.stringify(body),
         signal: req.signal
       },
-      cred
+      auth
     );
   } catch (e) {
     if (e instanceof ProviderFailure) {

@@ -77,7 +77,7 @@ describe('runAssistant', () => {
     const out = await runAssistant({
       provider: cfg,
       preset: venicePreset,
-      credential: undefined,
+      auth: undefined,
       transport: t,
       model: 'm',
       history: [rec('u', null, 'user', 'hi', 0)],
@@ -260,7 +260,7 @@ describe('ツール実行ループ', () => {
     const out = await runAssistant({
       provider: cfg,
       preset: venicePreset,
-      credential: undefined,
+      auth: undefined,
       transport: t,
       model: 'm',
       history: [rec('u', null, 'user', '調べて', 0)],
@@ -270,7 +270,7 @@ describe('ツール実行ループ', () => {
       onUpdate() {},
       async persist() {},
       tools: [echo],
-      toolContext: { transport: t, credentialFor: async () => undefined },
+      toolContext: { transport: t, authFor: () => undefined },
       permissionFor: () => 'allow',
       ...opts
     });

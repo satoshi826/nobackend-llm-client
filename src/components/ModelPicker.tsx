@@ -8,11 +8,10 @@ import {
   modelsStates,
   modelPickerTarget,
   regenerateWith,
-  newChatDraft,
   refreshAllModels,
   saveSettings,
   settings,
-  updateConversation,
+  chooseModel,
   visibleModels
 } from '../state/app';
 import type { ModelInfo } from '../lib/providers/types';
@@ -89,8 +88,8 @@ function ModelRow({ m, selected, onPick }: { m: ModelInfo; selected: boolean; on
 export function ModelPicker() {
   const [q, setQ] = useState('');
   const conv = currentConv.value;
-  const selProvider = conv?.providerId ?? newChatDraft.value.providerId;
-  const selModel = conv?.modelId ?? newChatDraft.value.modelId;
+  const selProvider = conv.providerId;
+  const selModel = conv.modelId;
   const showAnon = settings.value.showAnonymized;
   const provs = enabledProviders.value;
   const [tab, setTab] = useState<string>(provs.some((p) => p.id === selProvider) ? selProvider : provs[0]?.id ?? 'venice');
@@ -110,8 +109,7 @@ export function ModelPicker() {
       await regenerateWith(target.assistantId, m.providerId, m.id);
       return;
     }
-    await updateConversation({ providerId: m.providerId, modelId: m.id });
-    if (!settings.value.defaultModelId) await saveSettings({ defaultModelId: m.id, defaultProviderId: m.providerId });
+    await chooseModel(m.providerId, m.id);
     modal.value = null;
   };
 

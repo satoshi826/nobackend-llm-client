@@ -1,15 +1,10 @@
 // キー金庫（別オリジンの iframe）と本体アプリの間のメッセージ形式。
 // 本体は API キーを一切持たず、「このプロバイダーのキーを付けてこの URL に送って」とだけ依頼する。
 
+import type { KeyStatus } from '../keys/accounts';
+
 export const VAULT_PROTOCOL = 'nbl-vault/1';
 
-export interface VaultKeyStatus {
-  present: boolean;
-  mode: 'plain' | 'encrypted' | 'session' | null;
-  locked: boolean;
-  hosts: string[];
-  last4: string;
-}
 
 /** 本体 → 金庫（MessagePort 経由） */
 export type ToVault =
@@ -19,7 +14,7 @@ export type ToVault =
 
 /** 金庫 → 本体（MessagePort 経由） */
 export type FromVault =
-  | { type: 'status'; providers: Record<string, VaultKeyStatus> }
+  | { type: 'status'; providers: Record<string, KeyStatus> }
   | { type: 'head'; id: string; status: number; statusText: string; headers: [string, string][] }
   | { type: 'chunk'; id: string; chunk: Uint8Array }
   | { type: 'end'; id: string }

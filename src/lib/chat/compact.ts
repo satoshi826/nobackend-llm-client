@@ -3,10 +3,10 @@
 // - 直近のやり取りは要約せずにそのまま残す（細部が必要になりやすいため）
 // - 前回の圧縮がある場合は「前回の要約 + その後の会話」をまとめ直す
 import type { MessageRecord } from '../db/schema';
-import type { Credential, ChatMessage, ProviderConfig, ProviderPreset, Transport } from '../providers/types';
+import type { AuthRef, ChatMessage, ProviderConfig, ProviderPreset, Transport } from '../providers/types';
 import { getAdapter } from '../providers/registry';
 import { estimateTokens, inputBudget, messageTokens } from './context';
-import { buildRequestMessages } from './runner';
+import { buildRequestMessages } from './request';
 
 /** 要約せずに残す直近のメッセージ数 */
 export const KEEP_RECENT = 4;
@@ -77,7 +77,7 @@ export function buildTranscript(plan: CompactionPlan, maxTokens?: number | null)
 export interface SummarizeOptions {
   provider: ProviderConfig;
   preset: ProviderPreset;
-  credential: Credential | undefined;
+  auth: AuthRef | undefined;
   transport: Transport;
   model: string;
   contextLength?: number;
@@ -97,7 +97,7 @@ export async function summarize(plan: CompactionPlan, o: SummarizeOptions): Prom
   for await (const ev of getAdapter(o.provider).chat(
     o.provider,
     o.preset,
-    o.credential,
+    o.auth,
     { model: o.model, messages, params: { maxTokens: 4096, temperature: 0.2 }, providerOptions: o.providerOptions, signal: o.signal },
     o.transport
   )) {

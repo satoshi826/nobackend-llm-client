@@ -1,11 +1,10 @@
 import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
-import { joinUrl } from '../openai-compatible';
-import { errorFromFetchFailure, errorFromResponse, ProviderFailure } from '../errors';
+import { checkKey, joinUrl } from '../openai-compatible';
 
 // 開発時はモック（scripts/mock-venice.mjs）に向けられるようにする
 const BASE_URL: string = (import.meta as any).env?.VITE_VENICE_BASE_URL || 'https://api.venice.ai/api/v1';
 
-export const VENICE_KEY_GUIDE =
+const KEY_GUIDE =
   'Venice の管理画面（Settings → API）で「INFERENCE」タイプのキーを作り、1 日の利用上限（consumption limit）と有効期限を設定してください。モデルを Venice ホストのものに限る「PRIVATE_ONLY」もおすすめです。キーが万一漏れても被害額が上限で止まります。';
 
 export const venicePreset: ProviderPreset = {
@@ -22,6 +21,7 @@ export const venicePreset: ProviderPreset = {
     enabled: true
   },
   browserAccess: 'direct',
+  keyGuide: KEY_GUIDE,
   modelsPath: 'models?type=text',
   corsHint: 'Venice は通常ブラウザから直接接続できます。ネットワーク接続、または広告ブロッカー等の拡張機能が api.venice.ai をブロックしていないか確認してください。',
 
@@ -91,22 +91,5 @@ export const venicePreset: ProviderPreset = {
     return [{ type: 'account', balanceUsd: Number.isFinite(usd) ? usd : undefined, balanceDiem: Number.isFinite(diem) ? diem : undefined }];
   },
 
-  async validateKey(cfg, cred, transport) {
-    const url = joinUrl(cfg.baseUrl, 'api_keys/rate_limits');
-    let res: Response;
-    try {
-      res = await transport.fetch(url, { method: 'GET', headers: { Accept: 'application/json' } }, cred);
-    } catch (e) {
-      if (e instanceof ProviderFailure) return { ok: false, error: e.error };
-      return { ok: false, error: errorFromFetchFailure(e, venicePreset.corsHint) };
-    }
-    if (!res.ok) return { ok: false, error: await errorFromResponse(res) };
-    let info: any = null;
-    try {
-      info = await res.json();
-    } catch {
-      /* ignore */
-    }
-    return { ok: true, info };
-  }
+  validateKey: (cfg, fetchWithKey) => checkKey(joinUrl(cfg.baseUrl, 'api_keys/rate_limits'), fetchWithKey, venicePreset.corsHint)
 };

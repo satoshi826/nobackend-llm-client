@@ -1,8 +1,7 @@
 import Dexie, { type Table } from 'dexie';
-import type { ChatMessage, ModelInfo, ProviderConfig } from '../providers/types';
-import type { EncryptedBlob } from '../crypto/passphrase';
+import type { ChatMessage, ModelInfo } from '../providers/types';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface Conversation {
   id: string;
@@ -41,16 +40,6 @@ export interface SavedPrompt {
   updatedAt: number;
 }
 
-export interface SecretRecord {
-  id: string; // providerId
-  /** 平文で保存する場合のみ */
-  key?: string;
-  /** パスフレーズで暗号化して保存する場合 */
-  enc?: EncryptedBlob;
-  hosts: string[];
-  createdAt: number;
-}
-
 export interface SettingRecord {
   key: string;
   value: unknown;
@@ -71,9 +60,7 @@ export class AppDB extends Dexie {
   messages!: Table<MessageRecord, string>;
   blobs!: Table<BlobRecord, string>;
   prompts!: Table<SavedPrompt, string>;
-  providers!: Table<ProviderConfig, string>;
   models!: Table<ModelRecord, [string, string]>;
-  secrets!: Table<SecretRecord, string>;
   settings!: Table<SettingRecord, string>;
 
   constructor(name = 'nobackend-llm-client') {
@@ -88,6 +75,8 @@ export class AppDB extends Dexie {
       secrets: 'id',
       settings: 'key'
     });
+    // v2: キーはキー金庫（別ページ）が保管するので secrets を廃止。接続先はプリセットから決まるので providers も廃止
+    this.version(2).stores({ secrets: null, providers: null });
   }
 }
 

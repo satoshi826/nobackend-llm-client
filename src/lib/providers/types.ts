@@ -149,18 +149,21 @@ export interface ProviderError {
 }
 
 /**
- * 資格情報。
- * - key: キーとホストを紐づけたもの（直接モード）。Adapter はこれ以外のホストへキーを送らない。
- * - vault: キーは別オリジンのキー金庫が保持し、本体はプロバイダー ID だけを渡す（キー金庫モード）。
+ * 「どのキーを付けて送るか」の指定。キーそのものは本体アプリに存在しない。
+ * キーはキー金庫（別ページ）が保持し、許可されたホスト宛てのときだけ金庫が付けて送る。
  */
-export type Credential =
-  | { kind?: 'key'; key: string; /** 登録時のホスト（例: api.venice.ai） */ hosts: string[] }
-  | { kind: 'vault'; providerId: string };
-
-/** 通信部分の抽象。Phase 3 でキー金庫（別オリジン iframe）実装に差し替える。 */
-export interface Transport {
-  fetch(url: string, init: RequestInit, credential?: Credential): Promise<Response>;
+export interface AuthRef {
+  /** 接続先 ID（venice / openrouter / tavily / jina） */
+  keyId: string;
 }
+
+/** 通信の抽象。auth を指定した通信はキー金庫が代行し、指定のない通信はそのまま送る。 */
+export interface Transport {
+  fetch(url: string, init: RequestInit, auth?: AuthRef): Promise<Response>;
+}
+
+/** キーを付けて送る関数（キー金庫の中でだけ作られる。キーの確認に使う） */
+export type KeyedFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 export interface ProviderPreset {
   id: string;
@@ -173,11 +176,14 @@ export interface ProviderPreset {
   parseExtra?(chunk: any, seen: Set<string>): ProviderEvent[];
   /** 応答ヘッダから残高などを読む（Venice: x-venice-balance-usd） */
   readHeaders?(headers: Headers): ProviderEvent[];
-  validateKey?(cfg: ProviderConfig, cred: Credential, transport: Transport): Promise<{ ok: boolean; error?: ProviderError; info?: unknown }>;
+  /** キーの確認（キー金庫の中で、候補のキーを付ける fetch を渡して呼ぶ） */
+  validateKey?(cfg: ProviderConfig, fetchWithKey: KeyedFetch): Promise<{ ok: boolean; error?: ProviderError }>;
+  /** キーの作り方・安全な設定の案内 */
+  keyGuide?: string;
   corsHint?: string;
 }
 
 export interface ProviderAdapter {
-  listModels(cfg: ProviderConfig, preset: ProviderPreset, cred: Credential | undefined, transport: Transport): Promise<ModelInfo[]>;
-  chat(cfg: ProviderConfig, preset: ProviderPreset, cred: Credential | undefined, req: ChatRequest, transport: Transport): AsyncIterable<ProviderEvent>;
+  listModels(cfg: ProviderConfig, preset: ProviderPreset, transport: Transport): Promise<ModelInfo[]>;
+  chat(cfg: ProviderConfig, preset: ProviderPreset, auth: AuthRef | undefined, req: ChatRequest, transport: Transport): AsyncIterable<ProviderEvent>;
 }

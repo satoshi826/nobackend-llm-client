@@ -3,7 +3,7 @@ import { parseSSE } from './sse';
 import { ThinkSplitter } from './think-splitter';
 import { openAICompatibleAdapter, toOpenAIMessages } from './openai-compatible';
 import { venicePreset } from './presets/venice';
-import { assertCredentialAllowed, directTransport } from './transport';
+import { plainTransport } from './transport';
 import { classifyError } from './errors';
 import type { ProviderConfig, ProviderEvent, Transport } from './types';
 
@@ -63,12 +63,11 @@ describe('ThinkSplitter', () => {
 });
 
 const cfg: ProviderConfig = { id: 'p1', ...venicePreset.defaults, baseUrl: 'https://api.venice.ai/api/v1' };
-const cred = { key: 'test-key', hosts: ['api.venice.ai'] };
+const cred = { keyId: 'venice' };
 
 function fakeTransport(body: string[] | (() => Response), capture?: { url?: string; init?: RequestInit }): Transport {
   return {
-    async fetch(url, init, credential) {
-      if (credential && credential.kind !== 'vault') assertCredentialAllowed(url, credential);
+    async fetch(url, init) {
       if (capture) {
         capture.url = url;
         capture.init = init;
@@ -152,17 +151,20 @@ describe('openAICompatibleAdapter.chat', () => {
   });
 });
 
-describe('キーとホストの紐づけ', () => {
-  it('登録ホスト以外にはキーを送らない', () => {
-    expect(() => assertCredentialAllowed('https://evil.example/v1/chat', cred)).toThrow();
-    expect(() => assertCredentialAllowed('http://api.venice.ai/v1', cred)).toThrow();
-    expect(() => assertCredentialAllowed('https://api.venice.ai/api/v1/models', cred)).not.toThrow();
+describe('キーを付ける通信', () => {
+  it('キー金庫を通さない通信（plainTransport）はキーの指定を拒否する', async () => {
+    await expect(plainTransport.fetch('https://api.venice.ai/api/v1/chat/completions', { method: 'POST' }, { keyId: 'venice' })).rejects.toThrow();
   });
-  it('directTransport もホスト不一致で例外を投げる（fetch は呼ばれない）', async () => {
-    await expect(directTransport.fetch('https://evil.example/x', { method: 'GET' }, cred)).rejects.toThrow();
-  });
-  it('localhost の http は許可（ローカル LLM 用）', () => {
-    expect(() => assertCredentialAllowed('http://localhost:11434/v1', { hosts: ['localhost:11434'] })).not.toThrow();
+  it('Adapter はキーの値を扱わず、どのキーを付けるかだけを Transport に渡す', async () => {
+    let seen: unknown;
+    const t: Transport = {
+      async fetch(_url, _init, auth) {
+        seen = auth;
+        return new Response(streamOf([sse({ choices: [{ delta: { content: 'x' }, finish_reason: 'stop' }] })]), { status: 200 });
+      }
+    };
+    await collect(openAICompatibleAdapter.chat(cfg, venicePreset, { keyId: 'venice' }, { model: 'm', messages: [], signal: new AbortController().signal }, t));
+    expect(seen).toEqual({ keyId: 'venice' });
   });
 });
 

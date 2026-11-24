@@ -191,7 +191,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
             disabled={isStreaming.value}
             onClick={() => openModelPicker({ kind: 'regenerate', assistantId: m.id })}
           >
-            <Icon name="sparkle" class="size-3.5" />
+            <Icon name="swap" class="size-3.5" />
           </Button>
           <span class="ml-1 truncate" title={m.meta?.model}>
             {model?.name ?? m.meta?.model}

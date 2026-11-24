@@ -4,13 +4,22 @@
 // 依存ライブラリなし。DOM は createElement と textContent だけで組み立てる（innerHTML 不使用）。
 import { VAULT_PROTOCOL, type ToVault } from '../src/lib/vault/protocol';
 import { MIN_PASSPHRASE_LENGTH } from '../src/lib/crypto/passphrase';
-import { allowedHosts, handle, lock, onChange, providerLabel, PROVIDER_IDS, remove, saveKey, status, unlock, allStatus, type Mode } from './core';
+import { handle } from './core';
+import { allowedHosts, allStatus, label as providerLabel, lock, onChange, remove, saveKey, status, unlock, type Mode } from './store';
+import { ACCOUNT_IDS as PROVIDER_IDS, accountById } from '../src/lib/keys/accounts';
 import './style.css';
 
-const APP_ORIGINS: string[] = String((import.meta as any).env?.VITE_APP_ORIGIN || 'http://localhost:5173')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
+// 埋め込みを受け付ける本体のオリジン: ビルド時の指定（別オリジン配置）と、自分自身（同一オリジン配置）
+const APP_ORIGINS: string[] = [
+  ...String((import.meta as any).env?.VITE_APP_ORIGIN || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+  location.origin
+];
+/** 埋め込んでいる本体のオリジン（Chromium 系のみ取得できる） */
+const parentOrigin: string | undefined = (location as any).ancestorOrigins?.[0];
+const isolated = parentOrigin ? parentOrigin !== location.origin : undefined;
 
 const params = new URLSearchParams(location.search);
 const view = params.get('view') ?? 'transport';
@@ -69,9 +78,12 @@ async function render() {
   const name = providerLabel(id);
   const nodes: Node[] = [];
 
-  nodes.push(
-    h('p', { class: 'badge-line' }, '🔒 このフォームはキー金庫（', h('code', {}, location.host), '）の中にあります。入力したキーはアプリ本体には渡りません。')
+  if (params.get('compact') !== '1') nodes.push(
+    isolated === false
+      ? h('p', { class: 'badge-line' }, '🔑 キーはこのブラウザ内のキー保管領域に保存されます（アプリと同じオリジン）。キー金庫を別オリジンに置くと、さらに安全になります。')
+      : h('p', { class: 'badge-line' }, '🔒 このフォームはキー金庫（', h('code', {}, location.host), '）の中にあります。入力したキーはアプリ本体には渡りません。')
   );
+  if (accountById(id)?.keyOptional && !st.present) nodes.push(h('p', { class: 'muted' }, 'この接続先はキーなしでも使えます（制限付き）。キーを設定すると上限が上がります。'));
 
   if (st.present) {
     const row = h(
@@ -112,7 +124,7 @@ async function render() {
     const passBox = h('div', { class: 'grid2', hidden: mode !== 'encrypted' }, h('label', {}, 'パスフレーズ', p1), h('label', {}, '確認用', p2));
     const radios = h('fieldset', { class: 'stack' }, h('legend', {}, '保存方法'));
     const opts: [Mode, string, string][] = [
-      ['plain', 'この金庫に保存', '次回から入力不要。'],
+      ['plain', isolated === false ? 'このブラウザに保存' : 'この金庫に保存', '次回から入力不要。'],
       ['encrypted', 'パスフレーズで暗号化して保存', '起動のたびに解錠。端末やバックアップからの流出に強い。'],
       ['session', 'このセッションのみ', '保存しない。タブを閉じると消える。']
     ];
@@ -147,7 +159,7 @@ async function render() {
   }
 
   if (message) nodes.push(h('p', { class: message.ok ? 'ok' : 'err', role: 'status' }, message.text));
-  nodes.push(h('p', { class: 'muted small' }, `キーは ${allowedHosts(id).join(', ')} への通信にだけ使われます。アプリ本体が乗っ取られても、キーそのものは読み出せません。`));
+  nodes.push(h('p', { class: 'muted small' }, `キーは ${allowedHosts(id).join(', ')} への通信にだけ付けて送られます。${isolated === false ? '' : 'アプリ本体が乗っ取られても、キーそのものは読み出せません。'}`));
   root.replaceChildren(...nodes);
   postHeight();
 }
@@ -158,6 +170,10 @@ function show(m: { ok: boolean; text: string }) {
 }
 
 if (view === 'keys') {
+  // Esc は親（本体）に伝えて、開いている画面を閉じてもらう
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') for (const o of APP_ORIGINS) window.parent.postMessage({ type: 'vault-escape' }, o);
+  });
   if (window.parent === window) {
     // 直接開かれた場合（埋め込みでない）は保存領域が別になるため操作させない
     root.replaceChildren(h('p', { class: 'muted' }, 'このページはアプリから埋め込まれて使われます。直接開いても操作できません。'));

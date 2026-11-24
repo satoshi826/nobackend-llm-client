@@ -1,10 +1,9 @@
 import type { ModelInfo, ProviderPreset } from '../types';
-import { joinUrl } from '../openai-compatible';
-import { errorFromFetchFailure, errorFromResponse, ProviderFailure } from '../errors';
+import { checkKey, joinUrl } from '../openai-compatible';
 
 const BASE_URL: string = (import.meta as any).env?.VITE_OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 
-export const OPENROUTER_KEY_GUIDE =
+const KEY_GUIDE =
   'OpenRouter の管理画面（Keys）でキーを作り、クレジットの上限（credit limit）を設定してください。キーが万一漏れても被害額が上限で止まります。';
 
 /** 1 トークンあたりの文字列価格 → 100 万トークンあたりの USD */
@@ -27,6 +26,7 @@ export const openrouterPreset: ProviderPreset = {
     enabled: false
   },
   browserAccess: 'direct',
+  keyGuide: KEY_GUIDE,
   modelsPath: 'models',
   corsHint: 'OpenRouter は通常ブラウザから直接接続できます。ネットワーク接続、または拡張機能が openrouter.ai をブロックしていないか確認してください。',
 
@@ -70,22 +70,5 @@ export const openrouterPreset: ProviderPreset = {
     return out;
   },
 
-  async validateKey(cfg, cred, transport) {
-    const url = joinUrl(cfg.baseUrl, 'key');
-    let res: Response;
-    try {
-      res = await transport.fetch(url, { method: 'GET', headers: { Accept: 'application/json' } }, cred);
-    } catch (e) {
-      if (e instanceof ProviderFailure) return { ok: false, error: e.error };
-      return { ok: false, error: errorFromFetchFailure(e, openrouterPreset.corsHint) };
-    }
-    if (!res.ok) return { ok: false, error: await errorFromResponse(res) };
-    let info: any = null;
-    try {
-      info = await res.json();
-    } catch {
-      /* ignore */
-    }
-    return { ok: true, info };
-  }
+  validateKey: (cfg, fetchWithKey) => checkKey(joinUrl(cfg.baseUrl, 'key'), fetchWithKey, openrouterPreset.corsHint)
 };

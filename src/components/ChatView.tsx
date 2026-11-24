@@ -20,7 +20,7 @@ import {
   sidebarOpen,
   stopGeneration,
   updateConversation,
-  skills,
+  allSkills,
   attachedSkills,
   attachedSkillIds,
   toggleAttachedSkill,
@@ -30,7 +30,7 @@ import {
   setProviderEnabled,
   hostOfProvider as hostOf
 } from '../state/app';
-import { getPreset } from '../lib/providers/registry';
+import { getPreset, PRESETS } from '../lib/providers/registry';
 import { MessageItem } from './MessageItem';
 import { KeyPanel } from './KeyPanel';
 import { Badge, Button, Icon, cx } from './ui';
@@ -120,7 +120,7 @@ function Header() {
 
 /** 入力欄の「スキル」ボタンと、指定できるスキルの一覧 */
 function SkillMenu({ onClose }: { onClose(): void }) {
-  const list = skills.value;
+  const list = allSkills.value;
   const ids = attachedSkillIds.value;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -199,7 +199,7 @@ function Composer() {
 
   // 「/名前」でスキルを指定する
   const slash = /^\/([a-z0-9-]*)$/.exec(text);
-  const suggestions = slash ? skills.value.filter((s) => s.name.startsWith(slash[1]) && !attachedSkillIds.value.includes(s.id)).slice(0, 6) : [];
+  const suggestions = slash ? allSkills.value.filter((s) => s.name.startsWith(slash[1]) && !attachedSkillIds.value.includes(s.id)).slice(0, 6) : [];
   const pickSuggestion = (id: string) => {
     toggleAttachedSkill(id);
     setText('');
@@ -462,7 +462,8 @@ export function ChatView() {
   // 会話の接続先（下書きでモデル一覧がまだ届いていなければ、最初の有効な接続先）
   const providerId = provs.some((p) => p.id === conv.providerId) || !isDraft.value ? conv.providerId : (provs[0]?.id ?? '');
   const st = keyStatus(providerId);
-  const body = provs.length === 0 ? 'choose' : !st.present || st.locked ? 'key' : 'chat';
+  const keyOptional = !!PRESETS[providerById(providerId)?.preset ?? '']?.keyOptional;
+  const body = provs.length === 0 ? 'choose' : (!st.present && !keyOptional) || st.locked ? 'key' : 'chat';
   return (
     <main class="flex h-full min-w-0 flex-1 flex-col">
       {body !== 'choose' && <Header />}

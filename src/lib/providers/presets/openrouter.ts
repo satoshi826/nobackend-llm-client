@@ -1,7 +1,8 @@
 import type { ModelInfo, ProviderPreset } from '../types';
 import { checkKey, joinUrl } from '../openai-compatible';
+import { builtinBaseUrl } from '../endpoints';
 
-const BASE_URL: string = (import.meta as any).env?.VITE_OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+const BASE_URL = builtinBaseUrl('openrouter', (import.meta as any).env ?? {});
 
 const KEY_GUIDE =
   'OpenRouter の管理画面（Keys）でキーを作り、クレジットの上限（credit limit）を設定してください。キーが万一漏れても被害額が上限で止まります。';

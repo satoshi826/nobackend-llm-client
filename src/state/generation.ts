@@ -1,6 +1,7 @@
 // 送信・回答の生成・再生成・編集・停止、ツールの承認、圧縮、残高の監視
 import { computed, signal } from '@preact/signals';
 import type { Conversation, MessageRecord } from '../lib/db/schema';
+import type { Usage } from '../lib/providers/types';
 import * as repo from '../lib/db/repo';
 import { getPreset } from '../lib/providers/registry';
 import { runAssistant, type ApprovalDecision, type ApprovalRequest } from '../lib/chat/runner';
@@ -9,8 +10,10 @@ import { estimateRequestTokens, planCompaction, summarize } from '../lib/chat/co
 import { estimateTokens } from '../lib/chat/context';
 import { initialBalanceState, observeBalance, recordSpend, type BalanceState } from '../lib/chat/balance';
 import { WEB_TOOLS } from '../lib/tools/web';
-import { makeSkillTool } from '../lib/tools/skill';
-import { withSkillCatalog } from '../lib/skills/skill';
+import { ALWAYS_ASK, makeSaveSkillTool, makeSkillTool } from '../lib/tools/skill';
+import { unlockedTools, withSkillCatalog } from '../lib/skills/skill';
+import type { Tool } from '../lib/tools/types';
+import { makeUsageRecord } from '../lib/usage';
 import type { Skill } from '../lib/db/schema';
 import { vaultTransport as transport } from '../lib/vault/client';
 import { settings, saveSettings, providerSettingsOf } from './settings';
@@ -18,7 +21,8 @@ import { authFor, keyReady } from './keys';
 import { modelOf, providerById } from './models';
 import { conversations, currentConv, currentId, currentPath, liveMessages, messages, persistDraft, putMessage, touchConversation, updateConversation } from './conversations';
 import { openSettings, showToast } from './ui';
-import { attachedSkillIds, attachedSkills, modelSkills } from './skills';
+import { accountById } from '../lib/keys/accounts';
+import { allSkills, attachedSkillIds, attachedSkills, modelSkills, saveSkill } from './skills';
 
 // ---- 生成中の状態 ----
 export const streamingConv = signal<Set<string>>(new Set());
@@ -75,6 +79,13 @@ function providerOptionsFor(providerId: string, purpose: 'chat' | 'summary', web
   return opts ? { [preset.id]: opts } : undefined;
 }
 
+/** 使用量を記録する（一時チャットは記録しない） */
+function recordUsage(o: { id: string; providerId: string; model: string; kind: 'chat' | 'summary'; usage?: Usage; costUsd?: number; temporary?: boolean }) {
+  if (o.temporary) return;
+  const r = makeUsageRecord({ ...o, at: Date.now() }, modelOf(o.providerId, o.model)?.pricing);
+  if (r) void repo.addUsage(r).catch(() => {});
+}
+
 // ---- Web 検索 ----
 /**
  * この会話で Web 検索をどう行うか。
@@ -120,7 +131,7 @@ function waitForApproval(req: ApprovalRequest): Promise<ApprovalDecision> {
 /** 承認カードからの回答。「常に許可」はそのツールの設定を allow にする */
 export async function resolveApproval(toolCallId: string, d: ApprovalDecision) {
   const p = pendingApprovals.value[toolCallId];
-  if (d.approved && d.always && p) await saveSettings({ toolPermissions: { ...settings.value.toolPermissions, [p.toolName]: 'allow' } });
+  if (d.approved && d.always && p && !ALWAYS_ASK.has(p.toolName)) await saveSettings({ toolPermissions: { ...settings.value.toolPermissions, [p.toolName]: 'allow' } });
   approvalResolvers.get(toolCallId)?.(d);
 }
 
@@ -163,6 +174,7 @@ export async function compactConversation(auto = false): Promise<boolean> {
       model: ref.modelId,
       contextLength: modelOf(ref.providerId, ref.modelId)?.contextLength,
       providerOptions: providerOptionsFor(cfg.id, 'summary'),
+      onUsage: (usage, costUsd) => recordUsage({ id: repo.newId(), providerId: cfg.id, model: ref.modelId, kind: 'summary', usage, costUsd, temporary: conv.temporary }),
       signal: ctrl.signal
     });
     const node: MessageRecord = {
@@ -194,7 +206,7 @@ export async function compactConversation(auto = false): Promise<boolean> {
 // ---- 送信と生成 ----
 /** キーが使えない場合は設定を開いて false */
 function ensureKey(providerId: string): boolean {
-  if (keyReady(providerId)) return true;
+  if (keyReady(providerId) || accountById(providerId)?.keyOptional) return true;
   openSettings('connections');
   showToast(`先に ${providerById(providerId)?.name ?? ''} の API キーを設定してください。`, 'error');
   return false;
@@ -258,6 +270,20 @@ async function generateReply(convId: string, parentUserId: string) {
   const search = webOn ? searchModeFor(cfg.id, conv.modelId) : null;
   const skillList = skillsFor(cfg.id, conv.modelId);
   const tools = [...(search === 'tools' ? WEB_TOOLS : []), ...(skillList.length ? [makeSkillTool(skillList)] : [])];
+  // スキルを読み込んだ（指定した）会話でだけ使えるツール。skill-creator なら save_skill と、全スキルを読める load_skill
+  const toolsCapable = !!model?.capabilities.tools;
+  const dynamicTools = (turn: MessageRecord): Tool[] => {
+    if (!toolsCapable) return [];
+    const unlocked = unlockedTools([...history, turn], allSkills.value);
+    if (!unlocked.has('save_skill')) return [];
+    return [
+      makeSkillTool(allSkills.value),
+      makeSaveSkillTool({
+        find: (name) => allSkills.value.find((s) => s.name === name),
+        save: (draft, id) => saveSkill(draft, id, 'model')
+      })
+    ];
+  };
   const providerOptions = providerOptionsFor(cfg.id, 'chat', search === 'builtin' ? conv.webSearch : 'off');
   try {
     const final = await runAssistant({
@@ -275,8 +301,9 @@ async function generateReply(convId: string, parentUserId: string) {
       resendReasoning: settings.value.resendReasoning,
       cacheKey: conv.id,
       tools,
+      dynamicTools,
       toolContext: { transport, authFor },
-      permissionFor: (name) => settings.value.toolPermissions[name] ?? 'ask',
+      permissionFor: (name) => (ALWAYS_ASK.has(name) ? 'ask' : (settings.value.toolPermissions[name] ?? 'ask')),
       requestApproval: waitForApproval,
       draft,
       signal: ctrl.signal,
@@ -293,6 +320,7 @@ async function generateReply(convId: string, parentUserId: string) {
       scheduleMessageUpdate(final);
       flushUpdates();
     }
+    recordUsage({ id: final.id, providerId: cfg.id, model: conv.modelId, kind: 'chat', usage: final.meta?.usage, costUsd: final.meta?.costUsd, temporary: conv.temporary });
     if (final.meta?.costUsd && balances.value[cfg.id]) updateBalance(cfg.id, (b) => recordSpend(b, final.meta!.costUsd!));
     if (final.status === 'error' && final.error) showToast(final.error.message, 'error');
   } finally {

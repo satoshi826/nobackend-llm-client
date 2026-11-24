@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { parseSkillMd, serializeSkillMd, skillCatalog, validateSkill, withAttachedSkills, withSkillCatalog } from './skill';
-import { makeSkillTool } from '../tools/skill';
+import { parseSkillMd, serializeSkillMd, skillCatalog, unlockedTools, validateSkill, withAttachedSkills, withSkillCatalog } from './skill';
+import { ALWAYS_ASK, makeSaveSkillTool, makeSkillTool } from '../tools/skill';
+import { lineDiff } from './diff';
 import { buildRequestMessages } from '../chat/request';
 import type { MessageRecord, Skill } from '../db/schema';
 import { db } from '../db/schema';
@@ -108,5 +109,41 @@ describe('skills in backups', () => {
     });
     expect(v.skills?.map((s) => s.id)).toEqual(['ok']);
     expect(v.messages[0].skills).toEqual([{ name: 'a', body: 'B' }]);
+  });
+});
+
+describe('creating and editing skills from a conversation', () => {
+  const list = [{ name: 'skill-creator', allowedTools: ['save_skill'] }, { name: 'plain' }];
+  const msg = (o: Partial<MessageRecord>): MessageRecord => ({ id: 'x', conversationId: 'c', parentId: null, role: 'user', parts: [], createdAt: 1, status: 'done', ...o });
+  it('unlocks save_skill only after skill-creator is attached or loaded', () => {
+    expect(unlockedTools([msg({ skills: [{ name: 'plain', body: 'b' }] })], list).size).toBe(0);
+    expect(unlockedTools([msg({ skills: [{ name: 'skill-creator', body: 'b' }] })], list).has('save_skill')).toBe(true);
+    const loaded = (state: string) =>
+      msg({ role: 'assistant', parts: [{ type: 'tool', toolCallId: 't', name: 'load_skill', argsText: '', input: { name: 'skill-creator' }, state } as any] });
+    expect(unlockedTools([loaded('output-available')], list).has('save_skill')).toBe(true);
+    expect(unlockedTools([loaded('output-error')], list).size).toBe(0);
+  });
+  it('save_skill validates, protects built-ins, creates and updates', async () => {
+    const saved: { draft: unknown; id?: string }[] = [];
+    const existing = new Map([['notes', { id: 'n1', name: 'notes' }], ['skill-creator', { id: 'b', name: 'skill-creator', builtin: true }]]);
+    const tool = makeSaveSkillTool({ find: (n) => existing.get(n), save: async (draft, id) => void saved.push({ draft, id }) });
+    expect(() => tool.prepare({ name: 'Bad Name', description: 'd', body: 'b' })).toThrow();
+    expect(() => tool.prepare({ name: 'skill-creator', description: 'd', body: 'b' })).toThrow(/組み込み/);
+    const input = tool.prepare({ name: ' New-One ', description: ' does x ', body: 'steps' });
+    expect(input).toEqual({ name: 'new-one', description: 'does x', body: 'steps', model_invocable: true });
+    expect((await tool.execute(input, ctx)).content).toContain('作成');
+    const upd = await tool.execute(tool.prepare({ name: 'notes', description: 'd', body: 'b2', model_invocable: false }), ctx);
+    expect(upd.content).toContain('更新');
+    expect(saved[1]).toEqual({ draft: { name: 'notes', description: 'd', body: 'b2', modelInvocable: false }, id: 'n1' });
+    expect(ALWAYS_ASK.has(tool.name)).toBe(true);
+  });
+  it('line diff marks added and removed lines', () => {
+    expect(lineDiff('a\nb\nc', 'a\nB\nc\nd')).toEqual([
+      { type: 'same', text: 'a' },
+      { type: 'del', text: 'b' },
+      { type: 'add', text: 'B' },
+      { type: 'same', text: 'c' },
+      { type: 'add', text: 'd' }
+    ]);
   });
 });

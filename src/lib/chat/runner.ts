@@ -38,6 +38,11 @@ export interface RunOptions {
   cacheKey?: string;
   /** 使えるツール（空ならツールなし＝1 ステップで終わる） */
   tools?: Tool[];
+  /**
+   * ステップごとに足すツール（同じ名前なら tools を置き換える）。
+   * スキルを読み込んだ直後のステップから、そのスキル用のツールを使えるようにするため
+   */
+  dynamicTools?(turn: MessageRecord): Tool[];
   toolContext?: Omit<ToolContext, 'signal'>;
   permissionFor?(toolName: string): Permission;
   requestApproval?(req: ApprovalRequest): Promise<ApprovalDecision>;
@@ -64,8 +69,8 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
   msg.status = 'streaming';
   msg.meta = { ...msg.meta, providerId: o.provider.id, model: o.model };
   const adapter = getAdapter(o.provider);
-  const tools = o.tools ?? [];
-  const maxSteps = o.maxSteps ?? (tools.length ? 8 : 1);
+  const baseTools = o.tools ?? [];
+  const maxSteps = o.maxSteps ?? (baseTools.length || o.dynamicTools ? 8 : 1);
   const interval = o.persistIntervalMs ?? 1500;
   let lastPersist = Date.now();
   const total = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0, cost: 0, hasCost: false };
@@ -78,6 +83,8 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
 
   for (let step = 0; step < maxSteps; step++) {
     const blocks: BlockMap = {};
+    const extra = o.dynamicTools?.(msg) ?? [];
+    const tools = [...baseTools.filter((t) => !extra.some((x) => x.name === t.name)), ...extra];
     if (step > 0) msg.parts.push({ type: 'step-start' });
     const segStart = msg.parts.length;
     const req = {

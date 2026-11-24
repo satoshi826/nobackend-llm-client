@@ -3,12 +3,13 @@ import { useState } from 'preact/hooks';
 import type { Part } from '../lib/providers/types';
 import { pendingApprovals, resolveApproval } from '../state/app';
 import { Button, Icon, cx } from './ui';
+import { SkillApproval } from './SkillApproval';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
 
-const LABEL: Record<string, string> = { web_search: 'Web 検索', fetch_url: 'ページ本文の取得', load_skill: 'スキル' };
-const FIELD: Record<string, string> = { web_search: 'query', fetch_url: 'url', load_skill: 'name' };
-const ICON = { web_search: 'search', fetch_url: 'globe', load_skill: 'book' } as const;
+const LABEL: Record<string, string> = { web_search: 'Web 検索', fetch_url: 'ページ本文の取得', load_skill: 'スキル', save_skill: 'スキルの保存' };
+const FIELD: Record<string, string> = { web_search: 'query', fetch_url: 'url', load_skill: 'name', save_skill: 'name' };
+const ICON = { web_search: 'search', fetch_url: 'globe', load_skill: 'book', save_skill: 'book' } as const;
 
 function summary(p: ToolPart): string {
   const i = (p.input ?? {}) as Record<string, unknown>;
@@ -64,8 +65,8 @@ function ApprovalCard({ p }: { p: ToolPart }) {
 
 export function ToolCallCard({ p, live }: { p: ToolPart; live: boolean }) {
   const [open, setOpen] = useState(false);
-  if (p.state === 'approval-requested' && live && pendingApprovals.value[p.toolCallId]) return <ApprovalCard p={p} />;
-  const d = (p.uiDetails ?? {}) as { results?: { title: string; url: string }[]; title?: string; chars?: number; truncated?: boolean };
+  if (p.state === 'approval-requested' && live && pendingApprovals.value[p.toolCallId]) return p.name === 'save_skill' ? <SkillApproval p={p} /> : <ApprovalCard p={p} />;
+  const d = (p.uiDetails ?? {}) as { results?: { title: string; url: string }[]; title?: string; chars?: number; truncated?: boolean; updated?: boolean };
   let status: string;
   let tone = 'text-zinc-500';
   switch (p.state) {
@@ -86,7 +87,11 @@ export function ToolCallCard({ p, live }: { p: ToolPart; live: boolean }) {
             ? `${(d.chars ?? 0).toLocaleString()} 文字${d.truncated ? '（一部）' : ''}`
             : p.name === 'load_skill'
               ? '読み込みました'
-              : '完了';
+              : p.name === 'save_skill'
+                ? d.updated
+                  ? '更新しました'
+                  : '作成しました'
+                : '完了';
       break;
     case 'output-denied':
       status = p.approval?.auto ? '禁止（設定）' : '拒否しました';

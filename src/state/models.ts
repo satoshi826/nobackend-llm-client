@@ -4,12 +4,14 @@ import * as repo from '../lib/db/repo';
 import type { ModelInfo, ProviderConfig, ProviderError } from '../lib/providers/types';
 import { getAdapter, getPreset, PRESET_ORDER } from '../lib/providers/registry';
 import { plainTransport } from '../lib/providers/transport';
+import { vaultTransport } from '../lib/vault/client';
+import { authFor, keyReady } from './keys';
 import { ProviderFailure } from '../lib/providers/errors';
 import { providerConfigOf } from '../lib/keys/accounts';
 import { compareModels } from '../lib/model-list';
 import { saveSettings, settings } from './settings';
 
-type ModelsState = { loading: boolean; error: ProviderError | null; fetchedAt: number | null };
+type ModelsState = { loading: boolean; error: ProviderError | null; fetchedAt: number | null; needsKey?: boolean };
 const EMPTY_MODELS_STATE: ModelsState = { loading: false, error: null, fetchedAt: null };
 
 /** 接続先はプリセットから決まる（保存しない） */
@@ -67,10 +69,18 @@ export async function refreshModels(providerId: string) {
   const cfg = providerById(providerId);
   if (!cfg) return;
   const setState = (st: ModelsState) => (modelsStates.value = { ...modelsStates.value, [providerId]: st });
-  setState({ ...(modelsStates.value[providerId] ?? EMPTY_MODELS_STATE), loading: true, error: null });
+  const preset = getPreset(cfg.preset);
+  // モデル一覧にキーが要る接続先は、キーを設定するまで取らない
+  if (preset.modelsNeedKey && !keyReady(providerId)) {
+    setState({ ...(modelsStates.value[providerId] ?? EMPTY_MODELS_STATE), loading: false, error: null, needsKey: true });
+    return;
+  }
+  setState({ ...(modelsStates.value[providerId] ?? EMPTY_MODELS_STATE), loading: true, error: null, needsKey: false });
   try {
-    // モデル一覧は公開情報なのでキーを付けずに取る
-    const list = await getAdapter(cfg).listModels(cfg, getPreset(cfg.preset), plainTransport);
+    // 公開されているモデル一覧はキーを付けずに取る。キーが要るものは金庫に付けてもらう
+    const list = preset.modelsNeedKey
+      ? await getAdapter(cfg).listModels(cfg, preset, vaultTransport, authFor(providerId))
+      : await getAdapter(cfg).listModels(cfg, preset, plainTransport);
     await repo.replaceModels(cfg.id, list);
     batch(() => {
       models.value = sortModels([...models.value.filter((m) => m.providerId !== providerId), ...list]);
@@ -84,6 +94,14 @@ export async function refreshModels(providerId: string) {
 
 export async function refreshAllModels() {
   await Promise.all(enabledProviders.value.map((p) => refreshModels(p.id)));
+}
+
+/** キーが使えるようになった接続先で、まだモデル一覧がなければ取る（キーが要る接続先） */
+export function refreshModelsNeedingKey() {
+  for (const p of enabledProviders.value) {
+    const st = modelsStates.value[p.id];
+    if (getPreset(p.preset).modelsNeedKey && keyReady(p.id) && !st?.loading && (st?.needsKey || !st?.fetchedAt) && !st?.error) void refreshModels(p.id);
+  }
 }
 
 export async function setProviderEnabled(id: string, enabled: boolean) {

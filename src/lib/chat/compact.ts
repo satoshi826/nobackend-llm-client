@@ -3,7 +3,7 @@
 // - 直近のやり取りは要約せずにそのまま残す（細部が必要になりやすいため）
 // - 前回の圧縮がある場合は「前回の要約 + その後の会話」をまとめ直す
 import type { MessageRecord } from '../db/schema';
-import type { AuthRef, ChatMessage, ProviderConfig, ProviderPreset, Transport } from '../providers/types';
+import type { AuthRef, ChatMessage, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
 import { getAdapter } from '../providers/registry';
 import { estimateTokens, inputBudget, messageTokens } from './context';
 import { buildRequestMessages } from './request';
@@ -83,6 +83,8 @@ export interface SummarizeOptions {
   contextLength?: number;
   providerOptions?: Record<string, Record<string, unknown>>;
   signal: AbortSignal;
+  /** 要約にかかったトークン数と費用（使用量の記録用） */
+  onUsage?(usage: Usage, costUsd?: number): void;
 }
 
 /** 要約を生成する（思考は捨てて本文だけを集める） */
@@ -102,6 +104,7 @@ export async function summarize(plan: CompactionPlan, o: SummarizeOptions): Prom
     o.transport
   )) {
     if (ev.type === 'text-delta') out += ev.delta;
+    else if (ev.type === 'usage') o.onUsage?.(ev.usage, ev.costUsd);
     else if (ev.type === 'error') throw new Error(ev.error.message);
   }
   out = out.trim();

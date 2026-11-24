@@ -49,3 +49,26 @@ describe('キー金庫: Web 検索サービス', () => {
     expect(validateRequest(req({ providerId: 'jina', method: 'GET', body: undefined, url: 'https://r.jina.ai/https://example.com/' }))).toBeNull();
   });
 });
+
+import { keyedFetch } from './store';
+import { vi } from 'vitest';
+
+describe('keyed fetch uses the provider key header', () => {
+  it('Anthropic gets x-api-key, others Bearer; app-supplied auth headers are dropped', async () => {
+    const calls: Headers[] = [];
+    const orig = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (_u: any, init: any) => {
+      calls.push(new Headers(init.headers));
+      return new Response('{}');
+    }) as any;
+    try {
+      await keyedFetch('anthropic', 'https://api.anthropic.com/v1/models', { headers: { 'x-api-key': 'stolen', Authorization: 'Bearer x' } }, 'sk-ant');
+      await keyedFetch('groq', 'https://api.groq.com/openai/v1/models', {}, 'gsk');
+    } finally {
+      globalThis.fetch = orig;
+    }
+    expect(calls[0].get('x-api-key')).toBe('sk-ant');
+    expect(calls[0].get('authorization')).toBeNull();
+    expect(calls[1].get('authorization')).toBe('Bearer gsk');
+  });
+});

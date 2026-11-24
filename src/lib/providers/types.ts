@@ -186,6 +186,17 @@ export interface ProviderPreset {
   label: string;
   /** 接続先を選ぶ画面に出す一言 */
   tagline?: string;
+  /** キーを付けるヘッダ（既定: Authorization: Bearer <key>）。キー金庫が使う */
+  keyHeader?: { name: string; prefix?: string };
+  /** キーなしでも使える（ローカルの Ollama など） */
+  keyOptional?: boolean;
+  /** モデル一覧の取得にキーが要る（金庫を通して取る） */
+  modelsNeedKey?: boolean;
+  /**
+   * 前回までの思考（reasoning_content）を送り返してよいか。
+   * always: 設定どおり / tool-turns: ツール呼び出しを含む発言だけ / never: 送らない（受け付けない API）
+   */
+  reasoningResend?: 'always' | 'tool-turns' | 'never';
   features?: {
     /** 接続先自身が Web 検索を持つ（追加のキー不要） */
     builtInWebSearch?: boolean;
@@ -226,6 +237,7 @@ export interface ProviderPreset {
 }
 
 export interface ProviderAdapter {
-  listModels(cfg: ProviderConfig, preset: ProviderPreset, transport: Transport): Promise<ModelInfo[]>;
+  /** auth: モデル一覧にキーが要る接続先（preset.modelsNeedKey）のときだけ渡す */
+  listModels(cfg: ProviderConfig, preset: ProviderPreset, transport: Transport, auth?: AuthRef): Promise<ModelInfo[]>;
   chat(cfg: ProviderConfig, preset: ProviderPreset, auth: AuthRef | undefined, req: ChatRequest, transport: Transport): AsyncIterable<ProviderEvent>;
 }

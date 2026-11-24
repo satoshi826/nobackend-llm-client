@@ -293,7 +293,9 @@ export async function keyedFetch(id: string, url: string, init: RequestInit, can
   const key = candidate ?? (await keyFor(id));
   if (!key) throw new KeyError('auth', `${label(id)} のキーが未設定か、ロックされています。`);
   const headers = new Headers(init.headers);
-  for (const h of ['authorization', 'cookie', 'proxy-authorization']) headers.delete(h);
-  headers.set('Authorization', `Bearer ${key}`);
+  // 本体から来た認証系のヘッダは捨て、この接続先のヘッダにだけキーを付ける
+  for (const h of ['authorization', 'cookie', 'proxy-authorization', 'x-api-key', 'x-goog-api-key', 'api-key']) headers.delete(h);
+  const kh = accountById(id)!.keyHeader;
+  headers.set(kh.name, `${kh.prefix}${key}`);
   return fetch(url, { ...init, headers, redirect: 'error', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store' });
 }

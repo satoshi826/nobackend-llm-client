@@ -1,4 +1,4 @@
-// OpenAI 互換 Chat Completions Adapter（Venice / OpenRouter / DeepSeek / Ollama などが乗る）
+// OpenAI 互換 Chat Completions Adapter（Venice / OpenRouter / Gemini / DeepSeek / Groq / Ollama などが乗る）
 import type {
   ChatMessage,
   ChatRequest,
@@ -17,10 +17,10 @@ import { ThinkSplitter } from './think-splitter';
 import { errorFromFetchFailure, errorFromResponse, isAbort, ProviderFailure } from './errors';
 
 /** キーの確認: キー付きで GET して 2xx なら有効 */
-export async function checkKey(url: string, fetchWithKey: KeyedFetch, corsHint?: string): Promise<{ ok: boolean; error?: ProviderError }> {
+export async function checkKey(url: string, fetchWithKey: KeyedFetch, corsHint?: string, headers: Record<string, string> = {}): Promise<{ ok: boolean; error?: ProviderError }> {
   let res: Response;
   try {
-    res = await fetchWithKey(url, { method: 'GET', headers: { Accept: 'application/json' } });
+    res = await fetchWithKey(url, { method: 'GET', headers: { Accept: 'application/json', ...headers } });
   } catch (e) {
     if (e instanceof ProviderFailure) return { ok: false, error: e.error };
     return { ok: false, error: errorFromFetchFailure(e, corsHint) };
@@ -78,12 +78,23 @@ export function toOpenAIMessages(messages: ChatMessage[]): any[] {
   return out;
 }
 
+/** 思考の送り返しを受け付けない API 向けに reasoning_content を外す */
+function limitReasoning(msgs: any[], mode: 'always' | 'tool-turns' | 'never'): any[] {
+  if (mode === 'always') return msgs;
+  return msgs.map((m) => {
+    if (m.role !== 'assistant' || m.reasoning_content === undefined) return m;
+    if (mode === 'tool-turns' && m.tool_calls?.length) return m;
+    const { reasoning_content: _r, ...rest } = m;
+    return rest;
+  });
+}
+
 export function buildChatBody(cfg: ProviderConfig, preset: ProviderPreset, req: ChatRequest): Record<string, any> {
   const p = req.params ?? {};
   let body: Record<string, any> = {
     ...(cfg.extraBody ?? {}),
     model: req.model,
-    messages: toOpenAIMessages(req.messages),
+    messages: limitReasoning(toOpenAIMessages(req.messages), preset.reasoningResend ?? 'always'),
     stream: true,
     stream_options: { include_usage: true }
   };
@@ -101,11 +112,11 @@ export function buildChatBody(cfg: ProviderConfig, preset: ProviderPreset, req: 
 }
 
 export const openAICompatibleAdapter: ProviderAdapter = {
-  async listModels(cfg, preset, transport): Promise<ModelInfo[]> {
+  async listModels(cfg, preset, transport, auth): Promise<ModelInfo[]> {
     const url = joinUrl(effectiveBase(cfg), preset.modelsPath ?? 'models');
     let res: Response;
     try {
-      res = await transport.fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+      res = await transport.fetch(url, { method: 'GET', headers: { Accept: 'application/json', ...(cfg.extraHeaders ?? {}) } }, auth);
     } catch (e) {
       if (e instanceof ProviderFailure) throw e;
       throw new ProviderFailure(errorFromFetchFailure(e, preset.corsHint));
@@ -216,14 +227,15 @@ async function* streamChat(
           finishReason = { type: 'done', reason: mapFinish(choice.finish_reason) };
         }
       }
-      if (chunk?.usage) {
-        const u = chunk.usage;
+      const usage = chunk?.usage ?? chunk?.x_groq?.usage;
+      if (usage) {
+        const u = usage;
         const cost = chunk.cost?.usd ?? u.cost?.usd ?? (typeof u.cost === 'number' ? u.cost : undefined);
         yield {
           type: 'usage',
           usage: {
             inputTokens: u.prompt_tokens,
-            cachedInputTokens: u.prompt_tokens_details?.cached_tokens ?? u.cache_read_input_tokens ?? undefined,
+            cachedInputTokens: u.prompt_tokens_details?.cached_tokens ?? u.cache_read_input_tokens ?? u.prompt_cache_hit_tokens ?? undefined,
             outputTokens: u.completion_tokens,
             reasoningTokens: u.completion_tokens_details?.reasoning_tokens
           },

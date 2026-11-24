@@ -162,7 +162,7 @@ export function ModelPicker() {
                 class={cx('flex-1 rounded-md px-3 py-1.5 text-sm', tab === p.id ? 'bg-white shadow-sm dark:bg-zinc-950' : 'text-zinc-500')}
               >
                 {p.name}
-                {!keyInfos.value[p.id]?.present && <span class="ml-1 text-xs text-amber-600">（キー未設定）</span>}
+                {!keyInfos.value[p.id]?.present && !PRESETS[p.preset]?.keyOptional && <span class="ml-1 text-xs text-amber-600">（キー未設定）</span>}
               </button>
             ))}
           </div>
@@ -219,7 +219,11 @@ export function ModelPicker() {
             <ModelRow key={m.providerId + m.id} m={m} selected={m.id === selModel && m.providerId === selProvider} onPick={() => pick(m)} />
           ))}
         </ul>
-        {list.length === 0 && !st.loading && <p class="py-6 text-center text-sm text-zinc-500">{inTab.length ? '条件に合うモデルがありません' : 'モデルが見つかりません'}</p>}
+        {list.length === 0 && !st.loading && (
+          <p class="py-6 text-center text-sm text-zinc-500">
+            {inTab.length ? '条件に合うモデルがありません' : st.needsKey ? 'この接続先はキーを設定するとモデル一覧を取得します（設定の「接続とキー」）' : 'モデルが見つかりません'}
+          </p>
+        )}
       </div>
     </Modal>
   );

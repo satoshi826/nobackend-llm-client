@@ -1,4 +1,4 @@
-// 設定（タブ: 接続とキー / チャット / Web 検索 / スキル / プライバシーとデータ）
+// 設定（タブ: 接続とキー / チャット / Web 検索 / スキル / 使用量 / プライバシーとデータ）
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
@@ -31,6 +31,7 @@ import { getPreset, PRESETS } from '../lib/providers/registry';
 import type { Permission } from '../lib/tools/types';
 import { KeyPanel, VaultSecurityPanel } from './KeyPanel';
 import { SkillsTab } from './SkillsTab';
+import { UsageTab } from './UsageTab';
 import { askConfirm } from './ConfirmDialog';
 import { Badge, Button, Icon, Modal, cx } from './ui';
 
@@ -39,6 +40,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'chat', label: 'チャット' },
   { id: 'search', label: 'Web 検索' },
   { id: 'skills', label: 'スキル' },
+  { id: 'usage', label: '使用量' },
   { id: 'privacy', label: 'プライバシーとデータ' }
 ];
 
@@ -424,6 +426,7 @@ export function SettingsModal() {
         {tab === 'chat' && <ChatTab />}
         {tab === 'search' && <SearchTab />}
         {tab === 'skills' && <SkillsTab />}
+        {tab === 'usage' && <UsageTab />}
         {tab === 'privacy' && <PrivacyTab />}
       </div>
     </Modal>

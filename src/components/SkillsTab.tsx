@@ -1,6 +1,6 @@
 // 設定 > スキル: 一覧・作成・編集・SKILL.md の取り込み/書き出し
 import { useRef, useState } from 'preact/hooks';
-import { downloadSkill, importSkillFiles, removeSkill, saveSkill, setModelInvocable, showToast, skills } from '../state/app';
+import { builtinSkills, downloadSkill, importSkillFiles, removeSkill, saveSkill, setBuiltinEnabled, setModelInvocable, settings, showToast, skills } from '../state/app';
 import type { Skill } from '../lib/db/schema';
 import { DESCRIPTION_MAX, NAME_MAX, type SkillDraft } from '../lib/skills/skill';
 import { askConfirm } from './ConfirmDialog';
@@ -81,13 +81,53 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
   );
 }
 
+/** 組み込みスキル（読み取り専用。オン/オフだけ） */
+function BuiltinRow({ s }: { s: Skill }) {
+  const on = !settings.value.disabledBuiltinSkills.includes(s.name);
+  const [open, setOpen] = useState(false);
+  return (
+    <li class="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      <div class="flex items-start gap-2">
+        <Icon name="book" class="mt-0.5 size-4 shrink-0 text-zinc-400" />
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="font-mono text-sm font-medium">{s.name}</span>
+            <span class="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">組み込み</span>
+          </div>
+          <p class="mt-0.5 text-xs text-zinc-500">{s.description}</p>
+          {s.allowedTools?.includes('save_skill') && (
+            <p class="mt-1 text-xs text-zinc-500">このスキルを使った会話では、モデルがスキルを保存できるようになります（保存の前に毎回あなたの確認が入ります）。</p>
+          )}
+          <div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
+            <label class="flex items-center gap-1.5">
+              <input type="checkbox" checked={on} onChange={(e) => void setBuiltinEnabled(s.name, (e.target as HTMLInputElement).checked)} />
+              使う
+            </label>
+            <button type="button" class="text-zinc-500 underline-offset-2 hover:underline" aria-expanded={open} onClick={() => setOpen(!open)}>
+              {open ? '指示を隠す' : '指示を見る'}
+            </button>
+          </div>
+          {open && <pre class="mt-2 max-h-64 overflow-auto rounded-lg bg-zinc-50 p-2 text-xs leading-5 whitespace-pre-wrap dark:bg-zinc-900">{s.body}</pre>}
+        </div>
+      </div>
+    </li>
+  );
+}
+
 function SkillRow({ s, onEdit }: { s: Skill; onEdit(): void }) {
   return (
     <li class="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
       <div class="flex items-start gap-2">
         <Icon name="book" class="mt-0.5 size-4 shrink-0 text-zinc-400" />
         <div class="min-w-0 flex-1">
-          <div class="font-mono text-sm font-medium">{s.name}</div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="font-mono text-sm font-medium">{s.name}</span>
+            {s.createdBy === 'model' && (
+              <span class="rounded bg-violet-100 px-1.5 py-0.5 text-[11px] text-violet-800 dark:bg-violet-950 dark:text-violet-200" title="会話の中でモデルが作ったスキル（保存前にあなたが承認したもの）">
+                モデルが作成
+              </span>
+            )}
+          </div>
           <p class="mt-0.5 line-clamp-2 text-xs text-zinc-500">{s.description}</p>
           <label class="mt-2 flex items-center gap-1.5 text-xs">
             <input type="checkbox" checked={s.modelInvocable} onChange={(e) => void setModelInvocable(s.id, (e.target as HTMLInputElement).checked)} />
@@ -135,7 +175,7 @@ export function SkillsTab() {
   return (
     <div class="space-y-4">
       <p class="text-xs leading-5 text-zinc-500">
-        スキルは、特定の作業のやり方をまとめた指示書です。モデルには名前と説明だけを渡し、依頼に合うときだけ本文を読み込ませます（ツール呼び出しに対応したモデルのみ）。入力欄の「スキル」ボタンや「/名前」で、自分で指定して使うこともできます。
+        スキルは、特定の作業のやり方をまとめた指示書です。モデルには名前と説明だけを渡し、依頼に合うときだけ本文を読み込ませます（ツール呼び出しに対応したモデルのみ）。入力欄の「スキル」ボタンや「/名前」で、自分で指定して使うこともできます。会話の中で「この手順をスキルにして」と頼むと、組み込みの skill-creator を使ってモデルが下書きし、あなたの確認のあとで保存します（既存のスキルの手直しも同じ）。
       </p>
       <p class="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
         スキルの指示はそのままモデルに渡ります。他の人が作ったスキルは、中身を確認してから取り込んでください。Claude の SKILL.md を取り込めますが、同梱のスクリプトや参照ファイルにはまだ対応していません。
@@ -151,6 +191,15 @@ export function SkillsTab() {
         </Button>
         <input ref={file} type="file" accept=".md,.markdown,text/markdown,text/plain" multiple class="hidden" onChange={(e) => void onImport((e.target as HTMLInputElement).files)} />
       </div>
+      <section class="space-y-2">
+        <h4 class="text-xs font-semibold text-zinc-500">組み込み</h4>
+        <ul class="space-y-2">
+          {builtinSkills.map((s) => (
+            <BuiltinRow key={s.id} s={s} />
+          ))}
+        </ul>
+      </section>
+      <h4 class="text-xs font-semibold text-zinc-500">あなたのスキル</h4>
       {editing === 'new' && <SkillEditor onDone={() => setEditing(null)} />}
       {list.length === 0 && editing !== 'new' ? (
         <p class="py-6 text-center text-sm text-zinc-500">スキルはまだありません</p>

@@ -141,6 +141,7 @@ export function validate(raw: unknown): ExportFile {
       description: s.description,
       body: s.body,
       modelInvocable: s.modelInvocable !== false,
+      ...(s.createdBy === 'model' ? { createdBy: 'model' as const } : {}),
       createdAt: typeof s.createdAt === 'number' ? s.createdAt : Date.now(),
       updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : Date.now()
     }))

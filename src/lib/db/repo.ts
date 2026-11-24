@@ -1,5 +1,6 @@
 // リポジトリ層。一時チャット（temporary）の会話はメモリにだけ保持し、IndexedDB には書かない。
 import { db, type Conversation, type MessageRecord, type SavedPrompt, type ModelRecord, type Skill } from './schema';
+import type { UsageRecord } from '../usage';
 
 const memConversations = new Map<string, Conversation>();
 const memMessages = new Map<string, MessageRecord>();
@@ -88,6 +89,11 @@ export async function searchMessages(query: string, limit = 50): Promise<SearchH
     .each(consider);
   return [...hits.values()];
 }
+
+// ---- usage ----
+export const addUsage = (r: UsageRecord) => db().usage.put(r);
+export const listUsage = (since: number | null) => (since === null ? db().usage.orderBy('at').toArray() : db().usage.where('at').aboveOrEqual(since).toArray());
+export const clearUsage = () => db().usage.clear();
 
 // ---- skills ----
 export const listSkills = () => db().skills.orderBy('name').toArray();

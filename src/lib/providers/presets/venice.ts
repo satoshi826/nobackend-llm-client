@@ -1,8 +1,9 @@
 import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
 import { checkKey, joinUrl } from '../openai-compatible';
+import { builtinBaseUrl } from '../endpoints';
 
-// 開発時はモック（scripts/mock-venice.mjs）に向けられるようにする
-const BASE_URL: string = (import.meta as any).env?.VITE_VENICE_BASE_URL || 'https://api.venice.ai/api/v1';
+// 開発時はモック（scripts/mock-venice.mjs）に向けられるようにする（VITE_VENICE_BASE_URL）
+const BASE_URL = builtinBaseUrl('venice', (import.meta as any).env ?? {});
 
 const KEY_GUIDE =
   'Venice の管理画面（Settings → API）で「INFERENCE」タイプのキーを作り、1 日の利用上限（consumption limit）と有効期限を設定してください。モデルを Venice ホストのものに限る「PRIVATE_ONLY」もおすすめです。キーが万一漏れても被害額が上限で止まります。';

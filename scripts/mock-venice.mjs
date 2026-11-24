@@ -81,6 +81,28 @@ const server = http.createServer(async (req, res) => {
 
   if (path === '/models' && req.method === 'GET') return json(res, 200, { object: 'list', type: 'text', data: models });
 
+  // ---- Anthropic（Messages API）のモック: /anthropic/v1/...。キーは x-api-key: mock-ant ----
+  if (url.pathname.startsWith('/anthropic/v1/')) {
+    if (req.headers['x-api-key'] !== 'mock-ant') return json(res, 401, { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } });
+    if (!req.headers['anthropic-version']) return json(res, 400, { type: 'error', error: { type: 'invalid_request_error', message: 'anthropic-version header is required' } });
+    if (url.pathname === '/anthropic/v1/models') return json(res, 200, { data: [{ id: 'claude-mock-1', display_name: 'Claude Mock', max_input_tokens: 200000, max_tokens: 8192 }] });
+    if (url.pathname === '/anthropic/v1/messages' && req.method === 'POST') {
+      const b = await readBody(req);
+      const lastUser = [...b.messages].reverse().find((m) => m.role === 'user');
+      const text = (lastUser?.content ?? []).map((c) => c.text ?? '').join('');
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      const ev = (o) => res.write(`event: ${o.type}\ndata: ${JSON.stringify(o)}\n\n`);
+      ev({ type: 'message_start', message: { usage: { input_tokens: 20, cache_read_input_tokens: 30, cache_creation_input_tokens: 0, output_tokens: 1 } } });
+      ev({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
+      const ans = 'Anthropic モックの応答です。system: ' + (b.system ? 'あり' : 'なし') + ' / max_tokens: ' + b.max_tokens + ' / あなた: ' + text.slice(0, 40);
+      for (const p of chunked(ans)) { ev({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: p } }); await sleep(15); }
+      ev({ type: 'content_block_stop', index: 0 });
+      ev({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: ans.length } });
+      ev({ type: 'message_stop' });
+      return res.end();
+    }
+  }
+
   // ---- Tavily / Jina のモック ----
   if (url.pathname === '/tavily/search' && req.method === 'POST') {
     if (req.headers.authorization !== 'Bearer tvly-mock') return json(res, 401, { detail: { error: 'Unauthorized: missing or invalid API key.' } });
@@ -136,6 +158,27 @@ const server = http.createServer(async (req, res) => {
       res.write('data: [DONE]\n\n');
       res.end();
     };
+    // save_skill（skill-creator を使った会話でだけ渡される）: 「作って」で新規、「直して」で更新
+    const userText = String(last).split('\n---\n').pop();
+    const lastCallName = [...msgs].reverse().find((m) => m.role === 'assistant' && m.tool_calls?.length)?.tool_calls?.[0]?.function?.name;
+    const wantsSave = /作って|直して/.test(userText);
+    if (toolNames.includes('save_skill') && wantsSave && (lastMsg?.role === 'user' || (lastMsg?.role === 'tool' && lastCallName === 'load_skill'))) {
+      const update = userText.includes('直して');
+      await send({ content: update ? 'スキルを直します。' : 'スキルの下書きを作りました。' });
+      return finishTools('save_skill', {
+        name: 'mock-notes',
+        description: update ? '会議のメモを要点・決定事項・宿題に分けて整理する。「議事録にして」と頼まれたとき。' : '会議のメモを整理する。「議事録にして」と頼まれたとき。',
+        body: update ? '# 手順\n1. 要点を 3 行で書く\n2. 決定事項を箇条書き\n3. 宿題を担当者つきで書く' : '# 手順\n1. 要点を書く\n2. 決定事項を箇条書き'
+      });
+    }
+    if (lastMsg?.role === 'tool' && lastCallName === 'save_skill') {
+      const ans = `結果: ${String(lastMsg.content ?? '').slice(0, 80)}`;
+      for (const p of chunked(ans)) await send({ content: p });
+      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+      chunk(res, { id, choices: [], usage: { prompt_tokens: 300, completion_tokens: ans.length }, cost: { usd: COST, diem: COST } });
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
     // load_skill が渡され、ユーザーが「スキル」と書いたら、一覧の先頭のスキルを読み込む
     if (toolNames.includes('load_skill') && lastMsg?.role === 'user' && last.includes('スキル')) {
       const skillTool = body.tools.find((t) => t.function?.name === 'load_skill');

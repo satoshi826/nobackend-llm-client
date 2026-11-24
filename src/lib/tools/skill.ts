@@ -1,6 +1,6 @@
 // load_skill: システムプロンプトの一覧にあるスキルの本文を読み込むツール（ブラウザ内で完結。外部に送らない）
 import type { Skill } from '../db/schema';
-import { skillBlock } from '../skills/skill';
+import { skillBlock, validateSkill, type SkillDraft } from '../skills/skill';
 import type { Tool } from './types';
 
 export const LOAD_SKILL = 'load_skill';
@@ -27,6 +27,62 @@ export function makeSkillTool(list: Pick<Skill, 'name' | 'body'>[]): Tool<{ name
       const s = list.find((x) => x.name === name);
       if (!s) return { content: `スキル「${name}」はありません。使えるスキル: ${names.join(', ') || 'なし'}`, isError: true };
       return { content: skillBlock(s), details: { name: s.name, chars: s.body.length } };
+    }
+  };
+}
+
+export const SAVE_SKILL = 'save_skill';
+/** 設定や「常に許可」に関係なく、毎回ユーザーの確認を求めるツール */
+export const ALWAYS_ASK = new Set([SAVE_SKILL]);
+
+export interface SaveSkillInput {
+  name: string;
+  description: string;
+  body: string;
+  model_invocable: boolean;
+}
+
+export interface SaveSkillDeps {
+  find(name: string): Pick<Skill, 'id' | 'name' | 'builtin'> | undefined;
+  save(draft: SkillDraft, id: string | undefined): Promise<unknown>;
+}
+
+/** save_skill: スキルを作る・直す（必ずユーザーの承認を経る） */
+export function makeSaveSkillTool(deps: SaveSkillDeps): Tool<SaveSkillInput> {
+  return {
+    name: SAVE_SKILL,
+    label: 'スキルの保存',
+    description:
+      'Create a new skill, or update an existing skill with the same name. The user reviews and may edit the draft before it is saved. When updating, load the current skill first and keep the parts the user did not ask to change.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'lowercase letters, digits and hyphens, e.g. meeting-notes. Same name = update.' },
+        description: { type: 'string', description: 'What the skill does and when to use it (1-2 sentences). Models decide from this alone.' },
+        body: { type: 'string', description: 'The instructions in Markdown.' },
+        model_invocable: { type: 'boolean', description: 'Let models load it on their own (default true).' }
+      },
+      required: ['name', 'description', 'body']
+    },
+    risk: 'write',
+    summarize: (i) => i.name,
+    prepare(raw) {
+      const r = (raw ?? {}) as Record<string, unknown>;
+      const input: SaveSkillInput = {
+        name: typeof r.name === 'string' ? r.name.trim().toLowerCase() : '',
+        description: typeof r.description === 'string' ? r.description.trim() : '',
+        body: typeof r.body === 'string' ? r.body : '',
+        model_invocable: r.model_invocable !== false
+      };
+      const err = validateSkill({ name: input.name, description: input.description, body: input.body, modelInvocable: input.model_invocable });
+      if (err) throw new Error(err);
+      if (deps.find(input.name)?.builtin) throw new Error(`「${input.name}」は組み込みスキルなので変更できません。別の名前にしてください。`);
+      return input;
+    },
+    async execute(i) {
+      const existing = deps.find(i.name);
+      await deps.save({ name: i.name, description: i.description, body: i.body, modelInvocable: i.model_invocable }, existing?.id);
+      return { content: `スキル「${i.name}」を${existing ? '更新' : '作成'}しました。`, details: { name: i.name, updated: !!existing } };
     }
   };
 }

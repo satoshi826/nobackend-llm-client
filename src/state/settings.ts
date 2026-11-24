@@ -30,6 +30,8 @@ export interface Settings {
   compactModel: string;
   /** 内蔵の Web 検索を持つ接続先での検索方式。内蔵検索がない接続先は常にツール */
   searchEngine: 'builtin' | 'tools';
+  /** オフにした組み込みスキル */
+  disabledBuiltinSkills: string[];
   /** ツールごとの許可（allow: 自動 / ask: 毎回確認 / deny: 禁止） */
   toolPermissions: Record<string, Permission>;
 }
@@ -45,11 +47,12 @@ export const DEFAULT_SETTINGS: Settings = {
   temperature: null,
   lastBackupAt: null,
   enabledProviders: [],
-  resendReasoning: false,
+  resendReasoning: true,
   autoCompact: false,
   compactThreshold: 0.7,
   compactModel: '',
   searchEngine: 'builtin',
+  disabledBuiltinSkills: [],
   toolPermissions: { web_search: 'ask', fetch_url: 'ask', load_skill: 'allow' }
 };
 

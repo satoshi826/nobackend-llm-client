@@ -16,7 +16,11 @@ export interface Account {
   keyGuide: string;
   /** キーの確認方法（LLM プロバイダーのみ） */
   preset?: ProviderPreset;
+  /** キーを付けるヘッダ（既定: Authorization: Bearer） */
+  keyHeader: { name: string; prefix: string };
 }
+
+const BEARER = { name: 'Authorization', prefix: 'Bearer ' };
 
 function hostOf(url: string): string {
   return new URL(url).host;
@@ -24,10 +28,19 @@ function hostOf(url: string): string {
 
 export const ACCOUNTS: Record<string, Account> = {};
 for (const [id, p] of Object.entries(PRESETS)) {
-  ACCOUNTS[id] = { id, label: p.label, host: hostOf(p.defaults.baseUrl), kind: 'llm', keyOptional: false, keyGuide: p.keyGuide ?? '', preset: p };
+  ACCOUNTS[id] = {
+    id,
+    label: p.label,
+    host: hostOf(p.defaults.baseUrl),
+    kind: 'llm',
+    keyOptional: !!p.keyOptional,
+    keyGuide: p.keyGuide ?? '',
+    preset: p,
+    keyHeader: p.keyHeader ? { name: p.keyHeader.name, prefix: p.keyHeader.prefix ?? '' } : BEARER
+  };
 }
 for (const [id, s] of Object.entries(SERVICES)) {
-  ACCOUNTS[id] = { id, label: s.label, host: hostOf(s.baseUrl), kind: 'tool', keyOptional: s.keyOptional, keyGuide: s.keyGuide };
+  ACCOUNTS[id] = { id, label: s.label, host: hostOf(s.baseUrl), kind: 'tool', keyOptional: s.keyOptional, keyGuide: s.keyGuide, keyHeader: BEARER };
 }
 
 export const ACCOUNT_IDS = Object.keys(ACCOUNTS);

@@ -1,9 +1,9 @@
 // セキュリティヘッダ（Cloudflare Pages の _headers 形式）を 1 か所で組み立てる。
 // 本体アプリとキー金庫で許可する通信先を分ける（最小権限）:
-//   本体: キーの要らない通信だけ（モデル一覧、キーなしの Jina Reader）
+//   本体: キーの要らない通信だけ（モデル一覧、キーなしの Jina Reader、キーなしで使う接続先）
 //   金庫: キーを付ける通信（LLM・Tavily・Jina）
-
-type Env = Record<string, string | undefined>;
+// 接続先の宛先は src/lib/providers/endpoints.ts から作る（ビルド時の VITE_CUSTOM_PROVIDERS も含む）。
+import { appDirectOrigins, keyedProviderOrigins, type Env } from './src/lib/providers/endpoints';
 
 function origin(url: string | undefined, fallback: string): string {
   try {
@@ -15,10 +15,12 @@ function origin(url: string | undefined, fallback: string): string {
 
 export function serviceOrigins(env: Env) {
   return {
-    venice: origin(env.VITE_VENICE_BASE_URL, 'https://api.venice.ai'),
-    openrouter: origin(env.VITE_OPENROUTER_BASE_URL, 'https://openrouter.ai'),
     tavily: origin(env.VITE_TAVILY_BASE_URL, 'https://api.tavily.com'),
-    jina: origin(env.VITE_JINA_BASE_URL, 'https://r.jina.ai')
+    jina: origin(env.VITE_JINA_BASE_URL, 'https://r.jina.ai'),
+    /** 本体から直接送る LLM の接続先 */
+    appProviders: appDirectOrigins(env),
+    /** 金庫がキーを付けて送る LLM の接続先 */
+    keyedProviders: keyedProviderOrigins(env)
   };
 }
 
@@ -33,7 +35,7 @@ export function appCsp(env: Env, vaultOrigin?: string): string {
     "style-src 'self'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
-    `connect-src 'self' ${o.venice} ${o.openrouter} ${o.jina}`,
+    `connect-src 'self' ${[...o.appProviders, o.jina].join(' ')}`,
     `frame-src 'self'${vaultOrigin ? ' ' + vaultOrigin : ''}`,
     "worker-src 'self'",
     "manifest-src 'self'",
@@ -53,7 +55,7 @@ export function vaultCsp(env: Env, appOrigins: string[]): string {
     "default-src 'none'",
     "script-src 'self'",
     "style-src 'self'",
-    `connect-src ${o.venice} ${o.openrouter} ${o.tavily} ${o.jina}`,
+    `connect-src ${[...o.keyedProviders, o.tavily, o.jina].join(' ')}`,
     "base-uri 'none'",
     "form-action 'none'",
     `frame-ancestors ${appOrigins.join(' ')}`,

@@ -290,6 +290,15 @@ describe('ツール実行ループ', () => {
     expect(out.parts.filter((p) => p.type === 'text').map((p: any) => p.text).join('')).toBe('猫は可愛い[1]');
   });
 
+  it('dynamicTools: 前のステップの結果に応じて、次のステップからツールを足す', async () => {
+    const extra: Tool = { ...echo, name: 'extra', label: 'extra' };
+    const { bodies } = await run([toolCall('a'), answer('ok')], {
+      dynamicTools: (turn) => (turn.parts.some((p) => p.type === 'tool' && p.state === 'output-available') ? [extra] : [])
+    });
+    expect(bodies[0].tools.map((t: any) => t.function.name)).toEqual(['echo']);
+    expect(bodies[1].tools.map((t: any) => t.function.name)).toEqual(['echo', 'extra']);
+  });
+
   it('承認で拒否されたら output-denied をモデルに返して続ける', async () => {
     const { out, bodies } = await run([toolCall('犬'), answer('検索できませんでした')], {
       permissionFor: () => 'ask',

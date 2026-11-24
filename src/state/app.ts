@@ -1,8 +1,9 @@
 // アプリ状態の入口。UI はここから import する（UI 非依存の lib/ からは import しない）。
-import { signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import { loadSettings } from './settings';
 import { checkLeftoverLocalKeys, connectKeys } from './keys';
-import { loadModels } from './models';
+import { loadModels, refreshModelsNeedingKey } from './models';
+import { keyInfos } from './keys';
 import { loadConversations, restoreFromHash, startNewChat } from './conversations';
 import { loadSkills } from './skills';
 
@@ -26,6 +27,11 @@ export async function init() {
   await loadSkills();
   startNewChat();
   ready.value = true;
+  // キーを設定・解錠したら、キーが要るモデル一覧を取る
+  effect(() => {
+    void keyInfos.value;
+    refreshModelsNeedingKey();
+  });
   await restoreFromHash();
   try {
     await navigator.storage?.persist?.();

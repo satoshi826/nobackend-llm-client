@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:vault": "vite build --config vite.vault.config.ts",
     "preview:csp": "node scripts/serve-with-headers.mjs dist 4173",
     "mock": "node scripts/mock-venice.mjs 8787",
     "test": "vitest run",

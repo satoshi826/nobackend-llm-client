@@ -1,15 +1,16 @@
 import type { ProviderAdapter, ProviderConfig, ProviderPreset } from './types';
 import { openAICompatibleAdapter } from './openai-compatible';
+import { anthropicAdapter } from './anthropic';
 import { venicePreset } from './presets/venice';
 import { openrouterPreset } from './presets/openrouter';
+import { anthropicPreset, customPresets, deepseekPreset, geminiPreset, groqPreset } from './presets/more';
 
-export const PRESETS: Record<string, ProviderPreset> = {
-  venice: venicePreset,
-  openrouter: openrouterPreset
-};
+const BUILTIN: ProviderPreset[] = [venicePreset, openrouterPreset, anthropicPreset, geminiPreset, deepseekPreset, groqPreset];
 
-/** 画面に出す順番 */
-export const PRESET_ORDER = ['venice', 'openrouter'] as const;
+export const PRESETS: Record<string, ProviderPreset> = Object.fromEntries([...BUILTIN, ...customPresets].map((p) => [p.id, p]));
+
+/** 画面に出す順番（組み込み → ビルド時に足したもの） */
+export const PRESET_ORDER: string[] = [...BUILTIN, ...customPresets].map((p) => p.id);
 
 export function getPreset(id: string): ProviderPreset {
   const p = PRESETS[id];
@@ -21,6 +22,8 @@ export function getAdapter(cfg: ProviderConfig): ProviderAdapter {
   switch (cfg.kind) {
     case 'openai-compatible':
       return openAICompatibleAdapter;
+    case 'anthropic':
+      return anthropicAdapter;
     default:
       throw new Error(`adapter not implemented: ${cfg.kind}`);
   }

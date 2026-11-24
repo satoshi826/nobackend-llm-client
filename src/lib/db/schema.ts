@@ -1,7 +1,8 @@
 import Dexie, { type Table } from 'dexie';
 import type { ChatMessage, ModelInfo } from '../providers/types';
+import type { UsageRecord } from '../usage';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export interface Conversation {
   id: string;
@@ -46,6 +47,12 @@ export interface Skill {
   modelInvocable: boolean;
   createdAt: number;
   updatedAt: number;
+  /** モデルが save_skill で作ったスキル（ユーザーが作ったものは省略） */
+  createdBy?: 'model';
+  // 以下は組み込みスキルだけが持つ（保存しない）
+  builtin?: boolean;
+  /** このスキルを読み込んだ会話でだけ使えるようになるツール */
+  allowedTools?: string[];
 }
 
 export interface SavedPrompt {
@@ -78,6 +85,7 @@ export class AppDB extends Dexie {
   models!: Table<ModelRecord, [string, string]>;
   settings!: Table<SettingRecord, string>;
   skills!: Table<Skill, string>;
+  usage!: Table<UsageRecord, string>;
 
   constructor(name = 'nobackend-llm-client') {
     super(name);
@@ -95,6 +103,31 @@ export class AppDB extends Dexie {
     this.version(2).stores({ secrets: null, providers: null });
     // v3: スキル
     this.version(3).stores({ skills: 'id, name, updatedAt' });
+    // v4: 使用量の記録（会話を消しても残る）。既存の回答の usage から作り直す
+    this.version(4)
+      .stores({ usage: 'id, at, providerId' })
+      .upgrade(async (tx) => {
+        const rows: UsageRecord[] = [];
+        await tx
+          .table('messages')
+          .filter((m: MessageRecord) => m.role === 'assistant' && !!(m.meta?.usage || m.meta?.costUsd !== undefined))
+          .each((m: MessageRecord) => {
+            const u = m.meta?.usage ?? {};
+            rows.push({
+              id: m.id,
+              at: m.createdAt,
+              providerId: m.meta?.providerId ?? '',
+              model: m.meta?.model ?? '',
+              kind: 'chat',
+              inputTokens: u.inputTokens ?? 0,
+              cachedInputTokens: u.cachedInputTokens ?? 0,
+              outputTokens: u.outputTokens ?? 0,
+              reasoningTokens: u.reasoningTokens ?? 0,
+              ...(m.meta?.costUsd !== undefined ? { costUsd: m.meta.costUsd } : {})
+            });
+          });
+        if (rows.length) await tx.table('usage').bulkPut(rows);
+      });
   }
 }
 

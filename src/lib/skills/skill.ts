@@ -1,7 +1,7 @@
 // スキル: 名前・説明・指示本文からなる作業手順書（Claude の Agent Skills の SKILL.md と互換）。
 // - モデルには名前と説明の一覧だけを見せ、必要なときに load_skill ツールで本文を読ませる（段階的な読み込み）
 // - ユーザーが入力欄から指定したスキルは、そのメッセージに本文を添えて送る
-import type { Skill } from '../db/schema';
+import type { MessageRecord, Skill } from '../db/schema';
 
 export type { Skill } from '../db/schema';
 
@@ -83,6 +83,26 @@ export function serializeSkillMd(s: SkillDraft): string {
   if (!s.modelInvocable) lines.push('disable-model-invocation: true');
   lines.push('---', '', s.body.trimEnd(), '');
   return lines.join('\n');
+}
+
+// ---- スキルで使えるようになるツール ----
+
+/**
+ * この会話で使えるようになったツール。
+ * - ユーザーが入力欄で指定したスキル（MessageRecord.skills）
+ * - モデルが load_skill で読み込めたスキル
+ * のうち、allowedTools を持つもの（組み込みの skill-creator → save_skill など）
+ */
+export function unlockedTools(messages: MessageRecord[], list: Pick<Skill, 'name' | 'allowedTools'>[]): Set<string> {
+  const out = new Set<string>();
+  const add = (name: unknown) => {
+    for (const t of list.find((s) => s.name === name)?.allowedTools ?? []) out.add(t);
+  };
+  for (const m of messages) {
+    if (m.role === 'user') for (const s of m.skills ?? []) add(s.name);
+    for (const p of m.parts) if (p.type === 'tool' && p.name === 'load_skill' && p.state === 'output-available') add((p.input as { name?: unknown } | undefined)?.name);
+  }
+  return out;
 }
 
 // ---- モデルに渡す文 ----

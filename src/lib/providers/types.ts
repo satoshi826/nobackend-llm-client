@@ -1,0 +1,183 @@
+// Provider 層の型定義（docs/design.md §3.3）
+// この層は UI・DB に依存しない。
+
+export type AdapterKind = 'openai-compatible' | 'anthropic' | 'gemini';
+
+export interface ProviderConfig {
+  id: string;
+  name: string;
+  kind: AdapterKind;
+  preset: string; // 'venice' | 'openrouter' | 'custom' ...
+  baseUrl: string;
+  extraHeaders?: Record<string, string>;
+  extraBody?: Record<string, unknown>;
+  proxyUrl?: string;
+  modelListMode: 'fetch' | 'manual' | 'both';
+  enabled: boolean;
+}
+
+export interface ModelCapabilities {
+  vision?: boolean;
+  tools?: boolean;
+  reasoning?: boolean;
+  reasoningEffort?: string[];
+  webSearch?: boolean;
+  jsonSchema?: boolean;
+}
+
+export interface ModelInfo {
+  providerId: string;
+  id: string;
+  name: string;
+  description?: string;
+  contextLength?: number;
+  maxOutputTokens?: number;
+  capabilities: ModelCapabilities;
+  pricing?: { inputPerMTok?: number; outputPerMTok?: number; currency: 'USD' };
+  privacy?: 'private' | 'anonymized' | 'unknown';
+  tags?: string[];
+  offline?: boolean;
+  deprecated?: { date?: string; replacementId?: string };
+  source: 'fetched' | 'manual';
+}
+
+export type ToolState =
+  | 'input-streaming'
+  | 'input-available'
+  | 'approval-requested'
+  | 'approval-responded'
+  | 'output-available'
+  | 'output-error'
+  | 'output-denied';
+
+export type Part =
+  | { type: 'text'; text: string; state?: 'streaming' | 'done' }
+  | { type: 'reasoning'; text: string; state?: 'streaming' | 'done' }
+  | { type: 'file'; blobId: string; name: string; mimeType: string }
+  | { type: 'source'; url: string; title?: string; snippet?: string }
+  | {
+      type: 'tool';
+      toolCallId: string;
+      name: string;
+      argsText: string;
+      input?: unknown;
+      state: ToolState;
+      approval?: { approved: boolean; reason?: string; auto: boolean };
+      modelOutput?: unknown;
+      uiDetails?: unknown;
+      error?: string;
+      startedAt?: number;
+      endedAt?: number;
+    }
+  | { type: 'step-start' }
+  | { type: 'error'; message: string; code?: string };
+
+export interface Usage {
+  inputTokens?: number;
+  /** 入力のうちプロンプトキャッシュに当たった分 */
+  cachedInputTokens?: number;
+  outputTokens?: number;
+  reasoningTokens?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'system' | 'user' | 'assistant';
+  parts: Part[];
+  vendorState?: Record<string, unknown>;
+  meta?: { providerId?: string; model?: string; usage?: Usage; costUsd?: number; finishReason?: string; truncated?: number };
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>; // JSON Schema
+}
+
+export interface ChatParams {
+  temperature?: number;
+  topP?: number;
+  maxTokens?: number;
+  reasoningEffort?: string;
+  stop?: string[];
+  seed?: number;
+}
+
+export interface ChatRequest {
+  model: string;
+  messages: ChatMessage[];
+  params?: ChatParams;
+  tools?: ToolDefinition[];
+  providerOptions?: Record<string, Record<string, unknown>>;
+  /** プロンプトキャッシュの振り分けキー（同じ会話の要求を同じキャッシュに当てる） */
+  cacheKey?: string;
+  signal: AbortSignal;
+}
+
+export type ProviderEvent =
+  | { type: 'start'; responseId?: string }
+  | { type: 'text-start' | 'reasoning-start'; index: number }
+  | { type: 'text-delta' | 'reasoning-delta'; index: number; delta: string }
+  | { type: 'text-end' | 'reasoning-end'; index: number }
+  | { type: 'tool-call-start'; index: number; toolCallId: string; name: string }
+  | { type: 'tool-call-delta'; index: number; argsDelta: string }
+  | { type: 'tool-call-end'; index: number; input: unknown; parseError?: string }
+  | { type: 'source'; url: string; title?: string; snippet?: string }
+  | { type: 'usage'; usage: Usage; costUsd?: number }
+  | { type: 'vendor-state'; data: Record<string, unknown> }
+  | { type: 'account'; balanceUsd?: number; balanceDiem?: number }
+  | { type: 'done'; reason: 'stop' | 'length' | 'tool-calls' | 'content-filter' }
+  | { type: 'error'; error: ProviderError };
+
+export type ProviderErrorKind =
+  | 'auth'
+  | 'insufficient-balance'
+  | 'rate-limit'
+  | 'model-unavailable'
+  | 'bad-request'
+  | 'server'
+  | 'network-or-cors'
+  | 'host-mismatch'
+  | 'aborted';
+
+export interface ProviderError {
+  kind: ProviderErrorKind;
+  status?: number;
+  message: string;
+  retryAfterMs?: number;
+  hint?: string;
+}
+
+/**
+ * 資格情報。
+ * - key: キーとホストを紐づけたもの（直接モード）。Adapter はこれ以外のホストへキーを送らない。
+ * - vault: キーは別オリジンのキー金庫が保持し、本体はプロバイダー ID だけを渡す（キー金庫モード）。
+ */
+export type Credential =
+  | { kind?: 'key'; key: string; /** 登録時のホスト（例: api.venice.ai） */ hosts: string[] }
+  | { kind: 'vault'; providerId: string };
+
+/** 通信部分の抽象。Phase 3 でキー金庫（別オリジン iframe）実装に差し替える。 */
+export interface Transport {
+  fetch(url: string, init: RequestInit, credential?: Credential): Promise<Response>;
+}
+
+export interface ProviderPreset {
+  id: string;
+  label: string;
+  defaults: Omit<ProviderConfig, 'id'>;
+  browserAccess: 'direct' | 'needs-header' | 'needs-proxy' | 'unknown';
+  modelsPath?: string;
+  mapModel?(raw: any, providerId: string): ModelInfo | null;
+  transformRequest?(body: Record<string, any>, req: ChatRequest): Record<string, any>;
+  parseExtra?(chunk: any, seen: Set<string>): ProviderEvent[];
+  /** 応答ヘッダから残高などを読む（Venice: x-venice-balance-usd） */
+  readHeaders?(headers: Headers): ProviderEvent[];
+  validateKey?(cfg: ProviderConfig, cred: Credential, transport: Transport): Promise<{ ok: boolean; error?: ProviderError; info?: unknown }>;
+  corsHint?: string;
+}
+
+export interface ProviderAdapter {
+  listModels(cfg: ProviderConfig, preset: ProviderPreset, cred: Credential | undefined, transport: Transport): Promise<ModelInfo[]>;
+  chat(cfg: ProviderConfig, preset: ProviderPreset, cred: Credential | undefined, req: ChatRequest, transport: Transport): AsyncIterable<ProviderEvent>;
+}

@@ -1,0 +1,159 @@
+:root {
+  color-scheme: light;
+  --fg: #18181b;
+  --muted: #71717a;
+  --border: #d4d4d8;
+  --bg: #ffffff;
+  --input: #ffffff;
+  --primary-bg: #18181b;
+  --primary-fg: #ffffff;
+  --ok: #047857;
+  --err: #be123c;
+  --note: #eff6ff;
+}
+:root.dark {
+  color-scheme: dark;
+  --fg: #f4f4f5;
+  --muted: #a1a1aa;
+  --border: #3f3f46;
+  --bg: #18181b;
+  --input: #09090b;
+  --primary-bg: #f4f4f5;
+  --primary-fg: #18181b;
+  --ok: #34d399;
+  --err: #fb7185;
+  --note: #172554;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.6 system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+}
+#root {
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+p {
+  margin: 0;
+}
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+.block {
+  display: block;
+}
+.small {
+  font-size: 12px;
+}
+.strong {
+  font-weight: 600;
+}
+.ok {
+  color: var(--ok);
+}
+.err {
+  color: var(--err);
+}
+.badge-line {
+  font-size: 12px;
+  background: var(--note);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+code,
+.mono {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+legend {
+  font-weight: 600;
+  margin-bottom: 4px;
+  padding: 0;
+}
+label {
+  display: block;
+  font-weight: 500;
+}
+label > input:not([type='radio']) {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+.radio {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-weight: 400;
+}
+.radio input {
+  margin-top: 5px;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.grid2[hidden] {
+  display: none;
+}
+input:not([type='radio']) {
+  border: 1px solid var(--border);
+  background: var(--input);
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+}
+.btn {
+  border-radius: 8px;
+  padding: 7px 12px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn.primary {
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  align-self: flex-start;
+}
+.btn.outline {
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--border);
+}

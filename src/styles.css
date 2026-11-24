@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic UI', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Code', Consolas, 'Noto Sans Mono', monospace;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+body {
+  @apply bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+  font-family: var(--font-sans);
+}
+
+/* ---- Markdown ---- */
+.md {
+  @apply text-[15px] leading-7 break-words;
+}
+.md > * + * {
+  @apply mt-3;
+}
+.md h1 { @apply text-2xl font-bold mt-6; }
+.md h2 { @apply text-xl font-bold mt-5; }
+.md h3 { @apply text-lg font-semibold mt-4; }
+.md h4, .md h5, .md h6 { @apply font-semibold mt-3; }
+.md ul { @apply list-disc pl-6; }
+.md ol { @apply list-decimal pl-6; }
+.md li + li { @apply mt-1; }
+.md li > p { @apply m-0; }
+.md a { @apply text-sky-700 underline underline-offset-2 dark:text-sky-400; }
+.md blockquote { @apply border-l-4 border-zinc-300 pl-4 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400; }
+.md hr { @apply border-zinc-200 dark:border-zinc-800; }
+.md table { @apply block overflow-x-auto border-collapse text-sm; }
+.md th, .md td { @apply border border-zinc-200 px-3 py-1.5 dark:border-zinc-700; }
+.md th { @apply bg-zinc-50 font-semibold dark:bg-zinc-900; }
+.md :not(pre) > code {
+  @apply rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[0.85em] dark:bg-zinc-800;
+}
+.md .code-block { @apply overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800; }
+.md .code-head {
+  @apply flex items-center justify-between bg-zinc-100 px-3 py-1 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400;
+}
+.md .code-copy { @apply rounded px-2 py-0.5 hover:bg-zinc-200 dark:hover:bg-zinc-800; }
+.md pre { @apply m-0 overflow-x-auto bg-zinc-50 p-3 text-[13px] leading-6 dark:bg-zinc-900/60; }
+.md pre code { @apply font-mono; }
+.md .md-img-link { @apply rounded border border-dashed border-zinc-300 px-2 py-0.5 no-underline dark:border-zinc-700; }
+.md .md-fallback { @apply whitespace-pre-wrap; }
+.md input[type='checkbox'] { @apply mr-1.5 align-middle; }
+
+/* ---- highlight.js（GitHub 風・明暗両対応） ---- */
+.hljs-comment, .hljs-quote { @apply text-zinc-500 italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-type, .hljs-doctag { @apply text-rose-700 dark:text-rose-400; }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string { @apply text-emerald-700 dark:text-emerald-400; }
+.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet { @apply text-sky-700 dark:text-sky-400; }
+.hljs-title, .hljs-section, .hljs-title.function_ { @apply text-violet-700 dark:text-violet-400; }
+.hljs-built_in, .hljs-variable, .hljs-template-variable, .hljs-params { @apply text-amber-700 dark:text-amber-300; }
+.hljs-attr, .hljs-name, .hljs-tag { @apply text-sky-800 dark:text-sky-300; }
+.hljs-deletion { @apply text-rose-700 dark:text-rose-400; }
+.hljs-meta { @apply text-zinc-500; }
+.hljs-emphasis { @apply italic; }
+.hljs-strong { @apply font-bold; }
+
+/* ストリーミング中のカーソル */
+.streaming-caret::after {
+  content: '▍';
+  @apply ml-0.5 animate-pulse text-zinc-400;
+}
+
+.scroll-thin { scrollbar-width: thin; }

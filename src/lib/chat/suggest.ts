@@ -3,6 +3,7 @@
 import type { AuthRef, ChatMessage, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
 import type { MessageRecord } from '../db/schema';
 import { getAdapter } from '../providers/registry';
+import { t as tc } from './messages';
 
 /** Max characters sent per message (long answers keep their tail) */
 const MAX_CHARS = 3000;
@@ -30,27 +31,21 @@ export function recentExchanges(path: MessageRecord[], turns: number): string {
   let users = 0;
   for (let i = msgs.length - 1; i >= 0; i--) {
     const m = msgs[i];
-    out.unshift(`${m.role === 'user' ? 'ユーザー' : 'アシスタント'}: ${clip(textOf(m))}`);
+    out.unshift(`${tc(m.role === 'user' ? 'suggest.user' : 'suggest.assistant')}: ${clip(textOf(m))}`);
     if (m.role === 'user' && ++users >= turns) break;
   }
   return out.join('\n\n');
 }
 
+/** The instruction asks for suggestions in the UI language */
 export function suggestionInstruction(count: number): string {
-  return [
-    'あなたは、チャットでユーザーが次に送りそうな返信の候補を作ります。',
-    `与えられた会話の続きとして、ユーザーが次に送りそうなメッセージを ${count} 個考えてください。`,
-    '- ユーザーの立場で書く（アシスタントの立場で書かない）',
-    '- それぞれ 1 文で短く（40 文字程度まで）、互いに違う方向の内容にする',
-    '- ユーザーが使っている言語で書く',
-    '- 出力は JSON の文字列の配列だけ（例: ["…", "…"]）。説明や前置きは書かない'
-  ].join('\n');
+  return tc('suggest.instruction', { count });
 }
 
 export function suggestionMessages(path: MessageRecord[], turns: number, count: number): ChatMessage[] {
   return [
     { id: 'sys', role: 'system', parts: [{ type: 'text', text: suggestionInstruction(count) }] },
-    { id: 'u', role: 'user', parts: [{ type: 'text', text: `会話:\n\n${recentExchanges(path, turns)}` }] }
+    { id: 'u', role: 'user', parts: [{ type: 'text', text: `${tc('suggest.conversation')}\n\n${recentExchanges(path, turns)}` }] }
   ];
 }
 

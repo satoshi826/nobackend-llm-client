@@ -2,10 +2,27 @@
 import type { ComponentChildren } from 'preact';
 import type { Permission } from '../lib/tools/types';
 import { cx } from './ui';
+import { t } from './messages';
 
-export const selectCls = 'rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-950';
+/** A field (input / select / textarea) on glass */
+export const fieldCls = 'rounded-xl border border-transparent bg-sunken px-3 py-2 text-sm text-ink placeholder:text-faint transition hover:border-line focus:border-line-strong focus:outline-none';
+export const selectCls = 'rounded-[10px] border border-line bg-sunken px-2.5 py-1.5 text-sm text-ink transition hover:border-line-strong';
 
-export const PERM_LABEL: Record<Permission, string> = { ask: '毎回確認する', allow: '確認せずに実行', deny: '使わない' };
+/** Label of a permission choice (call it at render time: the language can change) */
+export const permLabel = (p: Permission): string => t(`perm.${p}`);
+
+/** The same labels as an object; the getters translate on every read, never at module load */
+export const PERM_LABEL: Record<Permission, string> = {
+  get ask() {
+    return permLabel('ask');
+  },
+  get allow() {
+    return permLabel('allow');
+  },
+  get deny() {
+    return permLabel('deny');
+  }
+};
 
 export function Section({ title, children }: { title?: string; children: ComponentChildren }) {
   return (
@@ -18,12 +35,12 @@ export function Section({ title, children }: { title?: string; children: Compone
 
 export function Toggle({ checked, onChange, title, desc, disabled }: { checked: boolean; onChange(v: boolean): void; title: string; desc?: string; disabled?: boolean }) {
   return (
-    <label class={cx('flex items-start gap-2 text-sm', disabled && 'opacity-50')}>
-      <input type="checkbox" class="mt-1" checked={checked} disabled={disabled} onChange={(e) => onChange((e.target as HTMLInputElement).checked)} />
+    <label class={cx('flex cursor-pointer items-start justify-between gap-4 text-sm', disabled && 'cursor-not-allowed opacity-50')}>
       <span>
         {title}
-        {desc && <span class="block text-xs text-zinc-500">{desc}</span>}
+        {desc && <span class="mt-0.5 block text-xs text-muted">{desc}</span>}
       </span>
+      <input type="checkbox" role="switch" class="switch mt-0.5" checked={checked} disabled={disabled} onChange={(e) => onChange((e.target as HTMLInputElement).checked)} />
     </label>
   );
 }
@@ -36,7 +53,7 @@ export function PermissionSelect({ label, value, onChange }: { label: string; va
       <select class={selectCls} value={value} onChange={(e) => onChange((e.target as HTMLSelectElement).value as Permission)}>
         {(['ask', 'allow', 'deny'] as Permission[]).map((v) => (
           <option key={v} value={v}>
-            {PERM_LABEL[v]}
+            {permLabel(v)}
           </option>
         ))}
       </select>

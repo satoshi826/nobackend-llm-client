@@ -1,33 +1,32 @@
 // Screen shown until unlocked while conversations are encrypted (hides the sidebar, search, and all conversations)
-import { dataLock, wipeEverything } from '../state/app';
+import { wipeEverything } from '../state/data';
+import { dataLock } from '../state/lock';
 import { VaultUnlockPanel } from './KeyPanel';
 import { askConfirm } from './ConfirmDialog';
 import { Button, Icon } from './ui';
+import { t } from './messages';
 
 export function LockScreen() {
   const lost = dataLock.value === 'lost';
   const forget = () =>
     void askConfirm({
-      title: lost ? '暗号化された会話を削除' : 'パスフレーズを忘れた',
-      message:
-        '暗号化された会話・保存済みのプロンプト・スキルは、パスフレーズがないと元に戻せません。このブラウザ内のアプリのデータと API キーをすべて削除して、最初からやり直します。',
-      confirmLabel: 'すべて削除してやり直す',
+      title: lost ? t('lock.deleteEncryptedTitle') : t('lock.forgotTitle'),
+      message: t('lock.wipeMessage'),
+      confirmLabel: t('lock.wipeConfirm'),
       danger: true,
-      requireText: '削除'
+      requireText: t('confirm.deleteWord')
     }).then((ok) => {
       if (ok) void wipeEverything();
     });
   return (
     <div class="grid h-full place-items-center overflow-y-auto px-5 py-10">
-      <div class="w-full max-w-sm">
-        <div class="mb-4 grid size-12 place-items-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-          <Icon name="lock" class="size-6 text-zinc-500" />
+      <div class="glass-float rise w-full max-w-sm rounded-[22px] p-6">
+        <div class="mb-4 grid size-12 place-items-center rounded-2xl bg-glass-strong">
+          <Icon name="lock" class="size-6 text-muted" />
         </div>
-        <h1 class="text-2xl font-semibold">{lost ? '会話を開けません' : 'ロックされています'}</h1>
-        <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          {lost
-            ? 'パスフレーズが削除されたため、暗号化された会話を開けなくなりました。'
-            : '会話と API キーはパスフレーズで暗号化されています。パスフレーズを入れると開きます。'}
+        <h1 class="text-2xl font-semibold text-ink-strong">{lost ? t('lock.lostHeading') : t('lock.lockedHeading')}</h1>
+        <p class="mt-2 text-sm leading-6 text-muted">
+          {lost ? t('lock.lostText') : t('lock.lockedText')}
         </p>
         {!lost && (
           <div class="mt-5">
@@ -35,7 +34,7 @@ export function LockScreen() {
           </div>
         )}
         <Button variant="outline" class="mt-6 text-xs" onClick={forget}>
-          {lost ? '暗号化された会話を削除する' : 'パスフレーズを忘れた場合'}
+          {lost ? t('lock.deleteEncrypted') : t('lock.forgot')}
         </Button>
       </div>
     </div>

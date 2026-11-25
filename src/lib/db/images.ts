@@ -3,6 +3,8 @@
 import { db, type BlobRecord } from './schema';
 import { currentDataKey, DataLockedError } from './sealed';
 import { openBytes, sealBytes, type DataKey } from '../crypto/data';
+import { registerDataTable } from './data-tables';
+import { t } from './messages';
 
 const mem = new Map<string, BlobRecord>();
 
@@ -26,7 +28,7 @@ export async function putImage(meta: ImageMeta, blob: Blob, temporary: boolean):
 
 async function toBlob(rec: BlobRecord, key: DataKey | null = currentDataKey()): Promise<Blob> {
   if (rec.blob) return rec.blob;
-  if (!rec.enc) throw new Error('画像のデータがありません。');
+  if (!rec.enc) throw new Error(t('images.noData'));
   if (!key) throw new DataLockedError();
   return new Blob([await openBytes(key, rec.enc)], { type: rec.mime });
 }
@@ -134,3 +136,19 @@ export async function deleteImageRecords(ids: string[]): Promise<void> {
   for (const id of ids) mem.delete(id);
   await db().blobs.bulkDelete(ids);
 }
+
+registerDataTable<ExportedImage>({
+  key: 'images',
+  exportRows: async ({ includeImages }) => (includeImages ? exportImages() : undefined),
+  clean: (raw, { conversationIds }) =>
+    (Array.isArray(raw) ? raw : []).filter(
+      (im: any): im is ExportedImage =>
+        !!im && typeof im.id === 'string' && conversationIds.has(im.conversationId) && typeof im.messageId === 'string' && typeof im.mime === 'string' && typeof im.data === 'string' && typeof im.createdAt === 'number'
+    ),
+  importRows: (rows) => importImages(rows, new Set(rows.map((r) => r.conversationId))),
+  reseal: resealImages,
+  async onConversationDeleted(id, temporary) {
+    if (temporary) forgetTemporaryImages(id);
+    else await db().blobs.where('conversationId').equals(id).delete();
+  }
+});

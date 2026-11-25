@@ -2,6 +2,8 @@
 // - the model sees only the list of names and descriptions, and reads the body with the load_skill tool when needed (progressive loading)
 // - skills the user picks in the input box are sent with their body attached to that message
 import type { MessageRecord, Skill } from '../db/schema';
+import { formatList, formatNumber } from '../i18n';
+import { t } from './messages';
 
 export type { Skill } from '../db/schema';
 
@@ -19,12 +21,12 @@ export interface SkillDraft {
 
 /** Validate the content. Returns a message if there is a problem */
 export function validateSkill(s: SkillDraft): string | null {
-  if (!s.name) return '名前を入れてください。';
-  if (s.name.length > NAME_MAX || !NAME_RE.test(s.name)) return `名前は半角の小文字・数字・ハイフンで、${NAME_MAX} 文字以内にしてください（例: code-review）。`;
-  if (!s.description.trim()) return '説明を入れてください。モデルはこの説明を見て、使うかどうかを決めます。';
-  if (s.description.length > DESCRIPTION_MAX) return `説明は ${DESCRIPTION_MAX} 文字以内にしてください。`;
-  if (!s.body.trim()) return '指示の本文を入れてください。';
-  if (s.body.length > BODY_MAX) return `本文が長すぎます（${BODY_MAX.toLocaleString()} 文字まで）。`;
+  if (!s.name) return t('validate.nameRequired');
+  if (s.name.length > NAME_MAX || !NAME_RE.test(s.name)) return t('validate.nameFormat', { max: NAME_MAX });
+  if (!s.description.trim()) return t('validate.descriptionRequired');
+  if (s.description.length > DESCRIPTION_MAX) return t('validate.descriptionTooLong', { max: formatNumber(DESCRIPTION_MAX) });
+  if (!s.body.trim()) return t('validate.bodyRequired');
+  if (s.body.length > BODY_MAX) return t('validate.bodyTooLong', { max: formatNumber(BODY_MAX) });
   return null;
 }
 
@@ -68,7 +70,7 @@ function parseFrontmatter(src: string): Record<string, string> {
 export function parseSkillMd(text: string): SkillDraft {
   const src = text.replace(/^﻿/, '');
   const m = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(src);
-  if (!m) throw new Error('先頭に「---」で囲んだ name と description がありません（SKILL.md の形式）。');
+  if (!m) throw new Error(t('parse.noFrontmatter'));
   const fm = parseFrontmatter(m[1]);
   return {
     name: (fm.name ?? '').trim(),
@@ -111,8 +113,8 @@ export function unlockedTools(messages: MessageRecord[], list: Pick<Skill, 'name
 export function skillCatalog(list: Pick<Skill, 'name' | 'description'>[]): string {
   if (!list.length) return '';
   return [
-    '## スキル',
-    '次のスキル（作業の手順書）を使えます。依頼に合うスキルがあれば、取りかかる前に load_skill ツールでその本文を読み込み、指示に従ってください。合うものがなければ使う必要はありません。',
+    t('catalog.heading'),
+    t('catalog.intro'),
     '',
     ...list.map((s) => `- ${s.name}: ${s.description.replace(/\s+/g, ' ')}`)
   ].join('\n');
@@ -131,7 +133,7 @@ export function skillBlock(s: { name: string; body: string }): string {
 /** Prepend the skills the user picked to that message */
 export function withAttachedSkills(text: string, attached: { name: string; body: string }[]): string {
   if (!attached.length) return text;
-  const names = attached.map((s) => s.name).join('、');
-  const head = `${attached.map(skillBlock).join('\n\n')}\n\nユーザーが上のスキル（${names}）を指定しました。その指示に従って、次の依頼に対応してください。`;
+  const names = formatList(attached.map((s) => s.name));
+  const head = `${attached.map(skillBlock).join('\n\n')}\n\n${t('attached.note', { names })}`;
   return text.trim() ? `${head}\n\n---\n\n${text}` : head;
 }

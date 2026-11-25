@@ -7,13 +7,11 @@ import { PASSTHROUGH_HEADERS } from '../lib/vault/protocol';
 describe('settings migration', () => {
   it('starts with no provider for a fresh install', () => {
     expect(migrateSettings({}).enabledProviders).toEqual([]);
-    expect(migrateSettings({}).searchEngine).toBe('builtin');
   });
   it('keeps Venice for people who used the Venice-first version', () => {
     const s = migrateSettings({ lastModelId: 'x', includeVeniceSystemPrompt: true, searchEngine: 'venice', showAnonymized: true });
     expect(s.enabledProviders).toEqual(['venice']);
     expect(s.providerSettings).toEqual({ venice: { includeSystemPrompt: true } });
-    expect(s.searchEngine).toBe('builtin');
     expect('includeVeniceSystemPrompt' in s).toBe(false);
     expect('showAnonymized' in s).toBe(false);
   });

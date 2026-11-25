@@ -1,5 +1,6 @@
 // Encryption of stored data such as conversations (data key: random AES-GCM-256).
 // The data key itself is stored wrapped with the passphrase (encrypted by the key vault) and kept in memory only while unlocked.
+import { t } from './messages';
 
 export interface Sealed {
   /** base64 */
@@ -33,7 +34,7 @@ export async function generateDataKey(): Promise<DataKey> {
 
 export async function importDataKey(raw: string): Promise<DataKey> {
   const bytes = unb64(raw);
-  if (bytes.length !== 32) throw new Error('データ鍵の形式が不正です。');
+  if (bytes.length !== 32) throw new Error(t('dataKey.invalid'));
   return { raw, key: await crypto.subtle.importKey('raw', bytes, 'AES-GCM', false, ['encrypt', 'decrypt']) };
 }
 

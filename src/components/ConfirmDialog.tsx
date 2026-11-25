@@ -3,6 +3,7 @@ import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Button, Icon } from './ui';
 import { useDialog } from './dialog';
+import { t } from './messages';
 
 interface ConfirmOptions {
   title: string;
@@ -43,11 +44,11 @@ export function ConfirmDialog() {
   const canConfirm = !s.requireText || typed.trim() === s.requireText;
 
   return (
-    <div class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onMouseDown={(e) => e.target === e.currentTarget && close(false)}>
-      <div ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg" class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-zinc-900">
+    <div class="fixed inset-0 z-[60] flex items-center justify-center bg-scrim p-4" onMouseDown={(e) => e.target === e.currentTarget && close(false)}>
+      <div ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg" class="panel rise w-full max-w-sm rounded-[22px] p-5">
         <div class="flex items-start gap-3">
           {s.danger && (
-            <div class="grid size-9 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600 dark:bg-rose-950">
+            <div class="grid size-9 shrink-0 place-items-center rounded-full bg-danger-soft text-danger">
               <Icon name="trash" />
             </div>
           )}
@@ -55,29 +56,29 @@ export function ConfirmDialog() {
             <h2 id="confirm-title" class="font-semibold">
               {s.title}
             </h2>
-            <p id="confirm-msg" class="mt-1 text-sm break-words whitespace-pre-wrap text-zinc-600 dark:text-zinc-400">
+            <p id="confirm-msg" class="mt-1 text-sm break-words whitespace-pre-wrap text-muted">
               {s.message}
             </p>
           </div>
         </div>
         {s.requireText && (
           <label class="mt-4 block text-sm">
-            確認のため「{s.requireText}」と入力してください
+            {t('confirm.typeToConfirm', { text: s.requireText })}
             <input
               data-autofocus
               value={typed}
               onInput={(e) => setTyped((e.target as HTMLInputElement).value)}
               onKeyDown={(e) => e.key === 'Enter' && canConfirm && close(true)}
-              class="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
+              class="mt-1 block w-full rounded-lg border border-line bg-glass px-3 py-2"
             />
           </label>
         )}
         <div class="mt-5 flex justify-end gap-2">
           <Button variant="outline" onClick={() => close(false)} {...(s.requireText ? {} : { 'data-autofocus': true })}>
-            キャンセル
+            {t('confirm.cancel')}
           </Button>
           <Button variant={s.danger ? 'danger' : 'primary'} disabled={!canConfirm} onClick={() => close(true)}>
-            {s.confirmLabel ?? 'OK'}
+            {s.confirmLabel ?? t('confirm.ok')}
           </Button>
         </div>
       </div>

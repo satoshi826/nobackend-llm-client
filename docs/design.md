@@ -46,12 +46,13 @@ Out of scope: a malicious build of the app itself (self-deploy to avoid trusting
           build-time custom) · Tavily · Jina Reader
 ```
 
-- **Stack**: Vite, Preact + `@preact/signals`, TypeScript, Tailwind v4, Dexie 4, marked + DOMPurify + highlight.js (lazy), Vitest.
+- **Stack**: Vite, Preact + `@preact/signals`, TypeScript, Tailwind v4, Dexie 4, marked + DOMPurify + highlight.js (lazy), Vitest. Screens off the first screen (settings, model picker, file manager) are separate chunks ([specs/architecture.md](specs/architecture.md) §3.1).
 - **Source layout** (dependencies point one way: `lib` → `state` → `components` → `features`; see [docs/specs/architecture.md](specs/architecture.md)):
-  - `src/lib/` — UI-independent logic (providers, chat pipeline, tools, skills, db, crypto, vault client, usage). Never imports state or UI.
-  - `src/state/` — core app state as signals: `settings`, `ui`, `keys`, `models`, `conversations`, `generation`, `skills`, `lock`, `data`, `images`; `app.ts` is the entry point and startup sequence. Extension points: `tool-registry.ts` (tools a feature offers to the model), `router.ts` (URL hash routes).
-  - `src/components/` — core UI. `extensions.ts` holds the UI extension points (sidebar tabs, composer add-ons, tool-card views, main-area views, user-message extras, settings sections).
-  - `src/features/<name>/` — self-contained features (`files` so far). A feature imports the core and registers itself through the extension points when `src/features/index.ts` imports it; the core never imports a feature.
+  - `src/lib/` — UI-independent logic (providers, chat pipeline, db and backups, crypto, vault client, skill format, usage). Never imports state, UI or features. `lib/chat/request.ts` lets features transform what is sent for a message (`registerMessageTransform`).
+  - `src/state/` — core app state as signals: `settings`, `ui`, `keys`, `models`, `conversations`, `generation`, `lock`, `data`; `app.ts` is only the startup sequence. Extension points: `tool-registry.ts` (tools, dynamic tools, system-prompt notes and built-in search a feature contributes to a reply; requests a feature answers itself, e.g. images), `router.ts` (URL hash routes), `lifecycle.ts` (data loaders run at startup, after unlocking and after an import).
+  - `src/components/` — core UI: shell, `chat/` (header, composer, message list, onboarding), `settings/` (connections, chat, privacy tabs), dialogs. `extensions.ts` holds the UI extension points (composer add-ons and modes, model slot, sidebar tabs, main views, tool views, assistant / user message extras, settings tabs and sections, overlays).
+  - `src/features/<name>/` — self-contained features: `images` (with an image-provider interface; Venice is the only adapter), `web` (search), `skills`, `files`, `usage` (settings tab). Each registers itself through the extension points when `src/features/index.ts` imports it (from `main.tsx`); the core never imports a feature, and features use each other only through `index.ts`.
+  - `npm run lint:deps` (`scripts/check-deps.mjs`, part of `npm run build`) fails on any import that breaks these rules.
   - `vault/` — the key vault page (no framework, DOM built with `createElement`/`textContent`).
   - `csp.config.ts` — builds the `_headers` file for both the app and a separately deployed vault.
 
@@ -314,11 +315,14 @@ From it are derived: presets, the vault's allowed hosts, the app CSP `connect-sr
 
 ## 8. UI structure
 
-- **Sidebar**: tabs at the top — 会話 (新しいチャット, search with full text, decrypted in memory when encrypted, list with pinned first) and tabs registered by features (ファイル: アップロード, search, views and per-conversation groups for the file manager); choosing a tab shows its screen in the main area (`showChat` / the tab's `onSelect`) — then notices (balance alert, leftover same-origin keys after moving to a separate vault, backup reminder), settings button, lock button, balances.
-- **Chat view**: header (model, privacy badge, context meter with manual compaction, system prompt), then one of: provider chooser, key setup or unlock, passphrase prompt, empty state, or message list. The composer has web search, skills, `/name`, add-ons registered by features (添付), and send/stop. The main area shows the chat or a feature's view (`mainView`, e.g. a file).
+- **Sidebar**: tabs at the top — 会話 (新しいチャット, search with full text, decrypted in memory when encrypted, list with pinned first) and tabs registered by features (ファイル: アップロード, search, views and per-conversation groups for the file manager); choosing a tab shows its screen in the main area (`showChat` / the tab's `onSelect`) — then notices (unexplained balance drop, leftover same-origin keys after moving to a separate vault), settings button and lock button. There is no backup reminder: backups are in Settings → Privacy & data, and the latest balances are on the Usage tab.
+- **Look**: the "Moonlight" design system ([design-system.md](design-system.md)): glass panels over a slow background light, dark by default (light uses the same tokens), shared parts in `components/ui.tsx` (Button, Chip, Segmented, TabStrip, Collapse, Badge, Modal) and `settings-ui.tsx` (switch toggle, fields). Every interactive element animates (hover, press, tabs, switches, accordions, menus); all motion stops under reduced motion.
+- **Chat view**: a glass header (conversation title, temporary chat, context meter with manual compaction, 指示 = system prompt), then one of: provider chooser, key setup or unlock, passphrase prompt, empty state, or message list. The composer (floating glass) has 添付 inside on the left, the model (lock icon for private models) and send/stop inside on the right, and a chip row below for 画像, Web 検索 and スキル; `/name` picks a skill. Answers show copy, one regenerate control (the arrow reruns, the chevron picks another model), model, tokens and cost. The main area shows the chat or a feature's view (`mainView`, e.g. a file).
 - **Settings tabs**:
   - Connections & keys: vault placement banner, passphrase section with auto-lock, per-provider key and settings.
-  - Chat: theme, temperature, default system prompt, reply suggestions, compaction, reasoning resend.
+  - Chat: temperature, reply suggestions, compaction, reasoning resend.
+  - 表示 (Appearance): theme (dark / light / system), language.
+  - 機能 (Features): sections features register with `tab: 'features'` (image generation, files); hidden when there are none.
   - Web search: mode, tool permissions, service keys.
   - Skills.
   - Usage.
@@ -326,7 +330,7 @@ From it are derived: presets, the vault's allowed hosts, the app CSP `connect-sr
 - No `alert()` or `confirm()`: dialogs are in-app (`askConfirm`, optionally requiring a typed word).
 - **Dialogs** (`components/dialog.ts`, `useDialog`): used by modals, the confirm dialog, the image viewer and the mobile sidebar drawer. It moves focus in (`[data-autofocus]`, else the first field, else the first control that is not the close button), traps Tab, makes everything outside inert (except `data-live` toasts), closes on Esc (only the topmost dialog when they stack) and returns focus to the opener. All controls get a visible `:focus-visible` ring.
 - **Lock screen**: the vault's unlock field is focused on load; a wrong passphrase keeps the text selected with an inline error.
-- The UI text is Japanese only for now.
+- **Language**: Japanese, English and Simplified Chinese ([specs/i18n.md](specs/i18n.md)). Settings → 表示 has the picker ('auto' follows the browser). Every folder keeps its texts in `messages.ts` (`defineMessages` in `lib/i18n`); text read during a render subscribes the component to the language, so switching updates the screen at once. Model-facing prompts (compaction, reply suggestions, skill catalog, built-in skills, tool notes) follow the UI language; the key vault gets it through its URL (`lang`).
 
 ## 9. Security details
 
@@ -351,10 +355,10 @@ From it are derived: presets, the vault's allowed hosts, the app CSP `connect-sr
 - Raw HTML is escaped, links open in a new tab with `noopener noreferrer nofollow`, `javascript:` links are removed, and external images become links (never fetched).
 - Code highlighting is loaded lazily.
 
-### 9.3 Service worker (`public/sw.js`)
+### 9.3 Service worker (`sw/sw.js` → `/sw.js`)
 
-- Caches same-origin static assets for offline start.
-- Hashed `/assets/` are cache-first; the app page `/` is network-first, keyed as `/`, and never serves a redirected response for a navigation.
+- Caches same-origin static assets for offline start. The build (`serviceWorkerPlugin` in `vite.config.ts`) writes the list of the build's files into `/sw.js`: every script and stylesheet is cached at install (so screens split into their own chunks also open offline), files that did not change keep their cached copy across updates, and files the new build no longer has are removed on activate.
+- Hashed `/assets/` are cache-first; an HTML response is never cached or served as an asset (a host that answers a missing file with a page must not poison the cache). The app page `/` is network-first, keyed as `/`, and never serves a redirected response for a navigation.
 - Never handles the vault page or any cross-origin request.
 
 ## 10. Deployment
@@ -390,7 +394,7 @@ From it are derived: presets, the vault's allowed hosts, the app CSP `connect-sr
 ## 13. Limitations and future work
 
 - **Not yet supported**: attachments (images, text, PDF), HTML/code preview (needs a third sandbox origin to run scripts), code execution and a generated-file store, MCP, memory.
-- **UI language** is Japanese only; there is no i18n yet.
+- **Translations** are written by hand for three languages; adding a language means adding a column to every `messages.ts` (TypeScript reports missing keys).
 - **Not verified with real keys**: OpenRouter, Anthropic, Gemini, DeepSeek, Groq, Tavily and Jina have been tested against mocks only.
 - **Approvals** waiting at reload are not resumed; an aborted reply cannot be continued.
 - **Pricing** is unavailable for Anthropic, Gemini, DeepSeek and Groq, so usage shows tokens only.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '../db/schema';
 import { parseSuggestions, recentExchanges, suggestionMessages } from './suggest';
+import { setLang } from '../i18n';
 
 const rec = (id: string, role: MessageRecord['role'], text: string, extra: Partial<MessageRecord> = {}): MessageRecord => ({
   id,
@@ -44,6 +45,20 @@ describe('reply suggestions', () => {
     expect(msgs[0].role).toBe('system');
     expect((msgs[0].parts[0] as { text: string }).text).toContain('4 個');
     expect(msgs[1].role).toBe('user');
+  });
+
+  it('asks in the UI language', () => {
+    setLang('en');
+    try {
+      const msgs = suggestionMessages(path, 1, 3);
+      const sys = (msgs[0].parts[0] as { text: string }).text;
+      expect(sys).toContain('come up with 3 messages');
+      expect(sys).toContain('Write in English');
+      expect((msgs[1].parts[0] as { text: string }).text).toBe('Conversation:\n\nUser: third question\n\nAssistant: third answer');
+    } finally {
+      setLang('ja');
+    }
+    expect((suggestionMessages(path, 1, 3)[0].parts[0] as { text: string }).text).toContain('日本語で書く');
   });
 
   it('parses JSON arrays, code fences and bullet lists', () => {

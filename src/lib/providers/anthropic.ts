@@ -6,13 +6,14 @@ import type { ChatMessage, ChatRequest, ModelInfo, ProviderAdapter, ProviderEven
 import { parseSSE } from './sse';
 import { classifyError, errorFromFetchFailure, errorFromResponse, isAbort, ProviderFailure } from './errors';
 import { joinUrl } from './openai-compatible';
+import { t as tp } from './messages';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
 export const ANTHROPIC_DEFAULT_MAX_TOKENS = 8192;
 
 function toolResultText(t: ToolPart): string {
-  if (t.state === 'output-denied') return `ユーザーがこのツールの実行を拒否しました。${t.approval?.reason ?? ''}`;
-  if (t.state === 'output-error') return `ツールの実行に失敗しました: ${t.error ?? ''}`;
+  if (t.state === 'output-denied') return tp('tool.denied', { reason: t.approval?.reason ?? '' }).trim();
+  if (t.state === 'output-error') return tp('tool.failed', { error: t.error ?? '' });
   return typeof t.modelOutput === 'string' ? t.modelOutput : JSON.stringify(t.modelOutput ?? null);
 }
 
@@ -116,7 +117,7 @@ export const anthropicAdapter: ProviderAdapter = {
       return;
     }
     if (!res.body) {
-      yield { type: 'error', error: { kind: 'server', message: '応答本文が空でした。' } };
+      yield { type: 'error', error: { kind: 'server', message: tp('stream.emptyBody') } };
       return;
     }
     yield { type: 'start' };
@@ -208,7 +209,7 @@ export const anthropicAdapter: ProviderAdapter = {
             yield* closeAll();
             const e = d.error ?? {};
             const kind = e.type === 'overloaded_error' ? 'server' : e.type === 'rate_limit_error' ? 'rate-limit' : 'server';
-            yield { type: 'error', error: { ...classifyError(500, { error: e }), kind, message: `ストリームの途中でエラーが発生しました: ${e.message ?? e.type ?? '不明なエラー'}` } };
+            yield { type: 'error', error: { ...classifyError(500, { error: e }), kind, message: tp('stream.error', { message: e.message ?? e.type ?? tp('stream.unknownError') }) } };
             return;
           }
         }
@@ -216,13 +217,13 @@ export const anthropicAdapter: ProviderAdapter = {
     } catch (e) {
       yield* closeAll();
       yield isAbort(e) || req.signal.aborted
-        ? { type: 'error', error: { kind: 'aborted', message: '停止しました。' } }
-        : { type: 'error', error: { kind: 'network-or-cors', message: '受信中に接続が切れました。' } };
+        ? { type: 'error', error: { kind: 'aborted', message: tp('stream.stopped') } }
+        : { type: 'error', error: { kind: 'network-or-cors', message: tp('stream.disconnected') } };
       return;
     }
     yield* closeAll();
     if (req.signal.aborted) {
-      yield { type: 'error', error: { kind: 'aborted', message: '停止しました。' } };
+      yield { type: 'error', error: { kind: 'aborted', message: tp('stream.stopped') } };
       return;
     }
     yield { type: 'usage', usage: { inputTokens: usage.inputTokens, cachedInputTokens: usage.cachedInputTokens || undefined, outputTokens: usage.outputTokens } };

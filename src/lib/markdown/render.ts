@@ -5,6 +5,7 @@
 // - only this module's setSafeHTML() puts HTML into the DOM (Trusted Types policy app-md)
 import { Marked, type Tokens } from 'marked';
 import DOMPurify from 'dompurify';
+import { t } from './messages';
 
 type Highlighter = (code: string, lang: string) => string | null;
 let highlighter: Highlighter | null = null;
@@ -43,10 +44,10 @@ function makeMarked(highlight: boolean): Marked {
         return `<a href="${escapeHtml(href)}"${title}>${inner}</a>`;
       },
       image(token: Tokens.Image) {
-        const label = escapeHtml(token.text || token.title || '画像');
+        const label = escapeHtml(token.text || token.title || t('image.alt'));
         const href = token.href ?? '';
-        if (!/^https?:\/\//i.test(href)) return `<span class="md-img-blocked">[画像: ${label}]</span>`;
-        return `<a href="${escapeHtml(href)}" class="md-img-link" title="外部画像は自動で読み込みません">🖼 ${label}</a>`;
+        if (!/^https?:\/\//i.test(href)) return `<span class="md-img-blocked">${t('image.blocked', { label })}</span>`;
+        return `<a href="${escapeHtml(href)}" class="md-img-link" title="${escapeHtml(t('image.externalTitle'))}">🖼 ${label}</a>`;
       },
       code(token: Tokens.Code) {
         const lang = (token.lang ?? '').trim().split(/\s+/)[0].toLowerCase();
@@ -55,7 +56,7 @@ function makeMarked(highlight: boolean): Marked {
         if (highlight && highlighter) body = highlighter(raw, lang);
         const codeHtml = body ?? escapeHtml(raw);
         const langLabel = lang ? `<span class="code-lang">${escapeHtml(lang)}</span>` : '<span class="code-lang">text</span>';
-        return `<div class="code-block"><div class="code-head">${langLabel}<button type="button" class="code-copy" data-copy>コピー</button></div><pre><code class="hljs">${codeHtml}</code></pre></div>`;
+        return `<div class="code-block"><div class="code-head">${langLabel}<button type="button" class="code-copy" data-copy>${escapeHtml(t('code.copy'))}</button></div><pre><code class="hljs">${codeHtml}</code></pre></div>`;
       }
     }
   });

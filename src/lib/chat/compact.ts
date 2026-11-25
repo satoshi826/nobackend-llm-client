@@ -7,6 +7,7 @@ import type { AuthRef, ChatMessage, ProviderConfig, ProviderPreset, Transport, U
 import { getAdapter } from '../providers/registry';
 import { estimateTokens, inputBudget, messageTokens } from './context';
 import { buildRequestMessages } from './request';
+import { t as tc } from './messages';
 
 /** Number of most recent messages kept without summarizing */
 export const KEEP_RECENT = 4;
@@ -43,18 +44,10 @@ export function planCompaction(path: MessageRecord[], keepRecent = KEEP_RECENT):
   return { previousSummary, toSummarize, coversUntilId: toSummarize[toSummarize.length - 1].id };
 }
 
-const SUMMARY_INSTRUCTION = `あなたは会話の記録係です。与えられた会話を、続きの会話に必要な情報を失わないように要約してください。
-次の見出しで、箇条書き中心に日本語で書いてください（会話が英語なら英語でかまいません）。
-
-## 目的・話題
-## 重要な事実・前提（固有名詞、数値、条件、ユーザーの好みや制約）
-## 決まったこと・結論
-## 未解決の点・次にやること
-## 直近の流れ
-
-- 会話に書かれていないことは書かない
-- コードや設定値など、後で正確に必要になりそうなものは要点を残す
-- 要約だけを出力し、前置きや挨拶は書かない`;
+/** The summarizing instruction (in the UI language) */
+export function summaryInstruction(): string {
+  return tc('summary.instruction');
+}
 
 export function buildTranscript(plan: CompactionPlan, maxTokens?: number | null): string {
   const lines: string[] = [];
@@ -63,15 +56,15 @@ export function buildTranscript(plan: CompactionPlan, maxTokens?: number | null)
       .filter((p) => p.type === 'text')
       .map((p) => (p as { text: string }).text)
       .join('');
-    lines.push(`【${m.role === 'user' ? 'ユーザー' : 'アシスタント'}】\n${text}`);
+    lines.push(`${tc(m.role === 'user' ? 'summary.userLabel' : 'summary.assistantLabel')}\n${text}`);
   }
   let body = lines.join('\n\n');
   // If it may exceed the summarizing model's context length, cut the old end (the previous summary covers it, so older parts are the safest to lose)
   if (maxTokens && estimateTokens(body) > maxTokens) {
     while (lines.length > 1 && estimateTokens(lines.join('\n\n')) > maxTokens) lines.shift();
-    body = '（ここより前は長すぎるため省略）\n\n' + lines.join('\n\n');
+    body = tc('summary.omitted') + '\n\n' + lines.join('\n\n');
   }
-  return (plan.previousSummary ? `# これまでの要約\n${plan.previousSummary}\n\n# その後の会話\n` : '# 会話\n') + body;
+  return (plan.previousSummary ? `${tc('summary.previousHeading')}\n${plan.previousSummary}\n\n${tc('summary.sinceHeading')}\n` : `${tc('summary.conversationHeading')}\n`) + body;
 }
 
 export interface SummarizeOptions {
@@ -90,9 +83,10 @@ export interface SummarizeOptions {
 /** Generate the summary (discard reasoning and collect only the text) */
 export async function summarize(plan: CompactionPlan, o: SummarizeOptions): Promise<string> {
   const budget = inputBudget(o.contextLength, 4096);
-  const transcript = buildTranscript(plan, budget ? budget - estimateTokens(SUMMARY_INSTRUCTION) - 200 : null);
+  const instruction = summaryInstruction();
+  const transcript = buildTranscript(plan, budget ? budget - estimateTokens(instruction) - 200 : null);
   const messages: ChatMessage[] = [
-    { id: 's', role: 'system', parts: [{ type: 'text', text: SUMMARY_INSTRUCTION }] },
+    { id: 's', role: 'system', parts: [{ type: 'text', text: instruction }] },
     { id: 'u', role: 'user', parts: [{ type: 'text', text: transcript }] }
   ];
   let out = '';
@@ -108,7 +102,7 @@ export async function summarize(plan: CompactionPlan, o: SummarizeOptions): Prom
     else if (ev.type === 'error') throw new Error(ev.error.message);
   }
   out = out.trim();
-  if (!out) throw new Error('要約が空でした。別のモデルで試してください。');
+  if (!out) throw new Error(tc('summary.empty'));
   return out;
 }
 

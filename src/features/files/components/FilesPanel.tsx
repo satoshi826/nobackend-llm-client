@@ -1,10 +1,13 @@
 // The Files tab in the sidebar: upload, search and navigation for the file manager in the main area
 import { useRef } from 'preact/hooks';
-import { conversations, mainView } from '../../../state/app';
+import { conversations } from '../../../state/conversations';
+import { mainView } from '../../../state/ui';
 import { Button, Icon, cx, type IconName } from '../../../components/ui';
 import { conversationsWithItems, inView } from '../filer';
 import { filerConversation, filerQuery, filerView, importFromDevice, openFiler, type FilerView } from '../state';
-import { useFilerItems, VIEW_LABEL } from './Filer';
+import { useFilerItems, viewLabel } from './filer-items';
+import { formatNumber } from '../../../lib/i18n';
+import { t } from '../messages';
 
 const VIEWS: [FilerView, IconName][] = [
   ['all', 'files'],
@@ -29,7 +32,7 @@ export function FilesPanel() {
       <div class="space-y-2 px-2 pb-2">
         <Button variant="outline" class="w-full justify-start" onClick={() => input.current?.click()}>
           <Icon name="upload" />
-          アップロード
+          {t('upload')}
         </Button>
         <input
           ref={input}
@@ -46,21 +49,21 @@ export function FilesPanel() {
             }
           }}
         />
-        <label class="flex items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-sm focus-within:ring-2 focus-within:ring-sky-500/60 dark:bg-zinc-900">
-          <Icon name="search" class="size-3.5 text-zinc-400" />
+        <label class="flex items-center gap-2 rounded-lg bg-glass px-2.5 py-1.5 text-sm focus-within:ring-2 focus-within:ring-accent/50">
+          <Icon name="search" class="size-3.5 text-faint" />
           <input
             class="w-full bg-transparent outline-none"
-            placeholder="ファイルを検索（中身も対象）"
+            placeholder={t('panel.search')}
             value={filerQuery.value}
             onInput={(e) => {
               filerQuery.value = (e.target as HTMLInputElement).value;
               if (!onFiler) openFiler();
             }}
-            aria-label="ファイルを検索"
+            aria-label={t('panel.searchLabel')}
           />
         </label>
       </div>
-      <nav class="scroll-thin flex-1 space-y-3 overflow-y-auto px-2 pb-2" aria-label="ファイルの表示">
+      <nav class="scroll-thin flex-1 space-y-3 overflow-y-auto px-2 pb-2" aria-label={t('panel.nav')}>
         <ul>
           {VIEWS.map(([v, icon]) => {
             const active = onFiler && view === v && !conv;
@@ -69,12 +72,12 @@ export function FilesPanel() {
                 <button
                   type="button"
                   aria-current={active ? 'page' : undefined}
-                  class={cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm', active ? 'bg-zinc-200/70 font-medium dark:bg-zinc-800' : 'hover:bg-zinc-100 dark:hover:bg-zinc-900')}
+                  class={cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm', active ? 'bg-glass-strong font-medium' : 'hover:bg-glass-strong')}
                   onClick={() => openFiler(v, null)}
                 >
-                  <Icon name={icon} class="size-4 shrink-0 text-zinc-500" />
-                  <span class="flex-1 truncate">{VIEW_LABEL[v]}</span>
-                  <span class="text-xs text-zinc-500 tabular-nums">{count(v) ?? ''}</span>
+                  <Icon name={icon} class="size-4 shrink-0 text-muted" />
+                  <span class="flex-1 truncate">{viewLabel(v)}</span>
+                  <span class="text-xs text-muted tabular-nums">{items ? formatNumber(count(v) ?? 0) : ''}</span>
                 </button>
               </li>
             );
@@ -82,7 +85,7 @@ export function FilesPanel() {
         </ul>
         {convs.length > 0 && (
           <section>
-            <h3 class="px-2.5 py-1 text-xs font-medium text-zinc-500">会話ごと</h3>
+            <h3 class="px-2.5 py-1 text-xs font-medium text-muted">{t('panel.byConversation')}</h3>
             <ul>
               {convs.map((c) => {
                 const active = onFiler && conv === c.id;
@@ -91,12 +94,12 @@ export function FilesPanel() {
                     <button
                       type="button"
                       aria-current={active ? 'page' : undefined}
-                      class={cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm', active ? 'bg-zinc-200/70 font-medium dark:bg-zinc-800' : 'hover:bg-zinc-100 dark:hover:bg-zinc-900')}
+                      class={cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm', active ? 'bg-glass-strong font-medium' : 'hover:bg-glass-strong')}
                       onClick={() => openFiler('all', c.id)}
                     >
-                      <Icon name="chat" class="size-4 shrink-0 text-zinc-400" />
-                      <span class="flex-1 truncate">{title(c.id) ?? '削除された会話'}</span>
-                      <span class="text-xs text-zinc-500 tabular-nums">{c.count}</span>
+                      <Icon name="chat" class="size-4 shrink-0 text-faint" />
+                      <span class="flex-1 truncate">{title(c.id) ?? t('deletedConversation')}</span>
+                      <span class="text-xs text-muted tabular-nums">{formatNumber(c.count)}</span>
                     </button>
                   </li>
                 );

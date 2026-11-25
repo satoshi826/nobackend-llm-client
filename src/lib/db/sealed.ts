@@ -4,6 +4,7 @@
 // Crypto cannot be awaited inside an IndexedDB transaction, so conversion happens before writes and after reads.
 import { openJSON, sealJSON, type DataKey, type Sealed } from '../crypto/data';
 import type { Conversation, FileRecord, MessageRecord, SavedPrompt, Skill } from './schema';
+import { t } from './messages';
 
 let dataKey: DataKey | null = null;
 
@@ -17,7 +18,7 @@ export function currentDataKey(): DataKey | null {
 
 export class DataLockedError extends Error {
   constructor() {
-    super('データがロックされています。パスフレーズで解錠してください。');
+    super(t('sealed.locked'));
   }
 }
 

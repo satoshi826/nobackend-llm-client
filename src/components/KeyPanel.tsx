@@ -4,8 +4,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { VAULT_ORIGIN, vaultViewUrl } from '../lib/vault/client';
 import { accountById } from '../lib/keys/accounts';
-import { connectKeys, modal } from '../state/app';
+import { connectKeys } from '../state/keys';
+import { modal } from '../state/ui';
 import { Icon } from './ui';
+import { t } from './messages';
 
 function VaultFrame({ params, title }: { params: Record<string, string>; title: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
@@ -46,12 +48,12 @@ export function KeyPanel({ accountId, showGuide = true, compact }: { accountId: 
   const guide = accountById(accountId)?.keyGuide;
   return (
     <div class="space-y-3">
-      <VaultFrame params={{ view: 'keys', provider: accountId, ...(compact ? { compact: '1' } : {}) }} title="キーの設定" />
+      <VaultFrame params={{ view: 'keys', provider: accountId, ...(compact ? { compact: '1' } : {}) }} title={t('keys.frameKeys')} />
       {showGuide && guide && (
-        <div class="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
+        <div class="rounded-lg bg-warn-soft p-3 text-xs leading-5 text-warn">
           <div class="mb-1 flex items-center gap-1 font-semibold">
             <Icon name="shield" class="size-3.5" />
-            安全に使うために
+            {t('keys.guideTitle')}
           </div>
           {guide}
         </div>
@@ -62,10 +64,10 @@ export function KeyPanel({ accountId, showGuide = true, compact }: { accountId: 
 
 /** Passphrase (set, unlock, lock, change, remove) and deleting all keys */
 export function VaultSecurityPanel({ setup }: { setup?: boolean } = {}) {
-  return <VaultFrame params={{ view: 'security', ...(setup ? { setup: '1' } : {}) }} title="キーの保護" />;
+  return <VaultFrame params={{ view: 'security', ...(setup ? { setup: '1' } : {}) }} title={t('keys.frameSecurity')} />;
 }
 
 /** Frame with only the unlock form, used on the main app's lock screen */
 export function VaultUnlockPanel() {
-  return <VaultFrame params={{ view: 'unlock' }} title="解錠" />;
+  return <VaultFrame params={{ view: 'unlock' }} title={t('keys.frameUnlock')} />;
 }

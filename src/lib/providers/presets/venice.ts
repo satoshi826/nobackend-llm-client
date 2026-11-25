@@ -1,32 +1,52 @@
 import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
 import { checkKey, joinUrl } from '../openai-compatible';
 import { builtinBaseUrl } from '../endpoints';
+import { t as tp } from '../messages';
 
 // In development it can point at the mock (scripts/mock-venice.mjs) via VITE_VENICE_BASE_URL
 const BASE_URL = builtinBaseUrl('venice', (import.meta as any).env ?? {});
 
-const KEY_GUIDE =
-  'Venice の管理画面（Settings → API）で「INFERENCE」タイプのキーを作り、1 日の利用上限（consumption limit）と有効期限を設定してください。モデルを Venice ホストのものに限る「PRIVATE_ONLY」もおすすめです。キーが万一漏れても被害額が上限で止まります。';
-
+// Texts are getters so they follow the current language
 export const venicePreset: ProviderPreset = {
   id: 'venice',
   label: 'Venice.ai',
-  tagline: 'プロンプトを保存しない private モデルと、制限の少ないモデル。内蔵の Web 検索と残高の確認つき。',
+  get tagline() {
+    return tp('venice.tagline');
+  },
   features: { builtInWebSearch: true },
-  settings: [{ key: 'includeSystemPrompt', label: 'Venice 既定のシステムプロンプトを付ける', desc: 'オフ（既定）なら、あなたが書いた指示だけがモデルに渡ります。', default: false }],
+  settings: [
+    {
+      key: 'includeSystemPrompt',
+      get label() {
+        return tp('venice.systemPrompt');
+      },
+      get desc() {
+        return tp('venice.systemPromptDesc');
+      },
+      default: false
+    }
+  ],
   requestOptions: ({ purpose, webSearch, settings }) =>
     purpose === 'summary'
       ? { include_venice_system_prompt: false, strip_thinking_response: true }
       : { include_venice_system_prompt: !!settings.includeSystemPrompt, ...(webSearch !== 'off' ? { enable_web_search: webSearch } : {}) },
   responseHeaders: ['x-venice-balance-usd', 'x-venice-balance-diem', 'x-venice-is-blurred', 'x-venice-is-content-violation', 'x-venice-content-violation-count', 'x-venice-enhanced-prompt'],
   copy: {
-    private: 'Venice がホストし、プロンプトを保存しないモデル',
-    relayed: 'Venice が匿名化して Claude・Gemini などの外部事業者に中継するモデル。各社の保持ポリシーに従う',
-    relayedNote: '「外部中継」のモデルは、Venice が匿名化したうえで Claude・Gemini などの外部事業者に送ります。プロンプトの保持や検閲は各社の方針に従います。',
-    extraDestinations: [
-      ['Venice の検索提供元', 'Venice 内蔵の Web 検索をオンにしたときの検索語（Venice 経由）'],
-      ['外部 AI 事業者', 'Venice の「外部中継」のモデルを使ったときの会話（Venice が匿名化して中継）']
-    ]
+    get private() {
+      return tp('venice.private');
+    },
+    get relayed() {
+      return tp('venice.relayed');
+    },
+    get relayedNote() {
+      return tp('venice.relayedNote');
+    },
+    get extraDestinations(): [string, string][] {
+      return [
+        [tp('venice.searchProviders'), tp('venice.searchProvidersWhat')],
+        [tp('venice.thirdParties'), tp('venice.thirdPartiesWhat')]
+      ];
+    }
   },
   defaults: {
     name: 'Venice',
@@ -39,9 +59,13 @@ export const venicePreset: ProviderPreset = {
     enabled: true
   },
   browserAccess: 'direct',
-  keyGuide: KEY_GUIDE,
+  get keyGuide() {
+    return tp('venice.keyGuide');
+  },
   modelsPath: 'models?type=text',
-  corsHint: 'Venice は通常ブラウザから直接接続できます。ネットワーク接続、または広告ブロッカー等の拡張機能が api.venice.ai をブロックしていないか確認してください。',
+  get corsHint() {
+    return tp('cors.venice');
+  },
 
   mapModel(raw: any, providerId: string): ModelInfo | null {
     if (!raw?.id) return null;

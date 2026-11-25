@@ -1,6 +1,7 @@
 import type { ComponentChildren, ButtonHTMLAttributes } from 'preact';
-import { useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { useDialog } from './dialog';
+import { t } from './messages';
 
 export function cx(...xs: (string | false | null | undefined)[]): string {
   return xs.filter(Boolean).join(' ');
@@ -72,15 +73,111 @@ export function Button({
   children,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'outline' | 'danger' }) {
-  const base = 'inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-sky-500';
+  // primary: the one main action of a view; outline = secondary (glass); ghost: toolbar / icon buttons; danger: destructive
+  const base =
+    'inline-flex items-center justify-center gap-1.5 rounded-[10px] text-sm font-medium transition duration-200 active:scale-[.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100';
   const v = {
-    primary: 'bg-zinc-900 text-white hover:bg-zinc-700 px-3 py-2 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300',
-    ghost: 'hover:bg-zinc-100 dark:hover:bg-zinc-800 px-2 py-1.5',
-    outline: 'border border-zinc-300 hover:bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:hover:bg-zinc-900',
-    danger: 'bg-rose-600 text-white hover:bg-rose-500 px-3 py-2'
+    primary: 'bg-accent text-accent-ink hover:opacity-90 px-3.5 py-2',
+    ghost: 'text-ink hover:bg-glass-strong px-2 py-1.5',
+    outline: 'border border-line bg-glass hover:border-line-strong hover:bg-glass-strong px-3.5 py-2',
+    danger: 'bg-danger-soft text-danger border border-danger/40 hover:bg-danger/20 px-3.5 py-2'
   }[variant];
   return (
     <button type="button" class={cx(base, v, className as string)} {...rest}>
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Accordion body: opens and closes by animating its height (grid rows 0fr <-> 1fr).
+ * Content mounts on first open and unmounts after the close animation.
+ */
+export function Collapse({ open, class: className, children }: { open: boolean; class?: string; children: ComponentChildren }) {
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  const show = open || mounted;
+  return (
+    <div
+      class={cx('collapse-grid', open && 'is-open')}
+      aria-hidden={!open}
+      {...(!open ? { inert: true } : {})}
+      onTransitionEnd={(e) => e.target === e.currentTarget && !open && setMounted(false)}
+    >
+      <div class="min-h-0 overflow-hidden">{show && <div class={className}>{children}</div>}</div>
+    </div>
+  );
+}
+
+/**
+ * Segmented control (tabs): a sunken track with a selected segment that slides to the chosen item.
+ * Children are the equal-width items (role="tab" buttons with flex-1 and relative z-10).
+ */
+export function Segmented({ label, index, count, class: className, children }: { label: string; index: number; count: number; class?: string; children: ComponentChildren }) {
+  return (
+    <div role="tablist" aria-label={label} class={cx('relative flex rounded-xl bg-sunken p-0.5', className)}>
+      {index >= 0 && (
+        <span
+          aria-hidden="true"
+          class="absolute inset-y-0.5 left-0.5 rounded-[9px] border border-line bg-glass-strong shadow-sm transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]"
+          style={{ width: `calc((100% - 4px) / ${count})`, transform: `translateX(${index * 100}%)` }}
+        />
+      )}
+      {children}
+    </div>
+  );
+}
+
+/** A row of tabs with an underline that slides to the selected tab */
+export function TabStrip<T extends string>({ tabs, value, onChange, label, class: className }: { tabs: { id: T; label: string }[]; value: T; onChange(id: T): void; label?: string; class?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [bar, setBar] = useState<{ x: number; w: number } | null>(null);
+  const key = tabs.map((x) => x.label).join('|');
+  useLayoutEffect(() => {
+    const el = ref.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!el) return;
+    setBar({ x: el.offsetLeft, w: el.offsetWidth });
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }, [value, key]);
+  return (
+    <div ref={ref} role="tablist" aria-label={label} class={cx('relative flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]', className)}>
+      {tabs.map((x) => (
+        <button
+          key={x.id}
+          type="button"
+          role="tab"
+          aria-selected={value === x.id}
+          onClick={() => onChange(x.id)}
+          class={cx('shrink-0 rounded-t-lg px-3 py-2 text-sm', value === x.id ? 'font-medium text-ink-strong' : 'text-muted hover:bg-glass hover:text-ink')}
+        >
+          {x.label}
+        </button>
+      ))}
+      {bar && (
+        <span
+          aria-hidden="true"
+          class="absolute bottom-0 left-0 h-0.5 rounded-full bg-accent transition-[translate,width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]"
+          style={{ width: `${bar.w}px`, translate: `${bar.x}px 0` }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Toggle chip / menu chip (pill). `on` marks a selected or active state */
+export function Chip({ on, class: className, children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { on?: boolean }) {
+  return (
+    <button
+      type="button"
+      class={cx(
+        'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition duration-200 active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100',
+        on ? 'border-transparent bg-accent-soft text-ink-strong' : 'border-line bg-glass text-muted hover:border-line-strong hover:text-ink',
+        className as string
+      )}
+      {...rest}
+    >
       {children}
     </button>
   );
@@ -90,17 +187,17 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
   const ref = useRef<HTMLDivElement>(null);
   useDialog(ref, { onClose });
   return (
-    <div class="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div class="fixed inset-0 z-40 flex items-end justify-center bg-scrim backdrop-blur-[2px] sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        class={cx('flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-zinc-900', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}
+        class={cx('panel rise flex max-h-[92dvh] w-full flex-col rounded-t-[22px] sm:rounded-[22px]', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}
       >
-        <div class="flex items-center justify-between border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
-          <h2 class="font-semibold">{title}</h2>
-          <Button onClick={onClose} aria-label="閉じる" data-dialog-close>
+        <div class="flex items-center justify-between border-b border-line px-5 py-3">
+          <h2 class="font-semibold text-ink-strong">{title}</h2>
+          <Button onClick={onClose} aria-label={t('ui.close')} data-dialog-close>
             <Icon name="x" />
           </Button>
         </div>
@@ -111,15 +208,16 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
 }
 
 export function Badge({ children, tone = 'zinc', title }: { children: ComponentChildren; tone?: 'zinc' | 'green' | 'amber' | 'sky' | 'rose'; title?: string }) {
-  const t = {
-    zinc: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
-    green: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
-    amber: 'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
-    sky: 'bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
-    rose: 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+  // Only ok (green), warn (amber) and danger (rose) carry meaning; everything else is neutral
+  const toneCls = {
+    zinc: 'bg-glass-strong text-muted',
+    green: 'bg-ok-soft text-ok',
+    amber: 'bg-warn-soft text-warn',
+    sky: 'bg-glass-strong text-muted',
+    rose: 'bg-danger-soft text-danger'
   }[tone];
   return (
-    <span title={title} class={cx('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium', t)}>
+    <span title={title} class={cx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', toneCls)}>
       {children}
     </span>
   );

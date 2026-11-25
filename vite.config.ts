@@ -42,10 +42,31 @@ function pdfCmapsPlugin(): Plugin {
   };
 }
 
+/**
+ * The Service Worker (sw/sw.js → /sw.js) with this build's file list, so it can cache every script and
+ * stylesheet at install, including screens that load their code later (components/lazy.tsx).
+ */
+function serviceWorkerPlugin(): Plugin {
+  return {
+    name: 'service-worker',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const assets = Object.keys(bundle)
+        .filter((f) => f.startsWith('assets/'))
+        .map((f) => `/${f}`)
+        .sort();
+      const precache = assets.filter((f) => /\.(js|css)$/.test(f));
+      const source =
+        `self.__PRECACHE__ = ${JSON.stringify(precache)};\n` + `self.__ASSETS__ = ${JSON.stringify(assets)};\n` + readFileSync(resolve(__dirname, 'sw/sw.js'), 'utf8');
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source });
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env };
   return {
-    plugins: [preact(), tailwindcss(), headersPlugin(env), pdfCmapsPlugin()],
+    plugins: [preact(), tailwindcss(), headersPlugin(env), pdfCmapsPlugin(), serviceWorkerPlugin()],
     build: {
       target: 'es2022',
       emptyOutDir: true,

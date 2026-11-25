@@ -1,9 +1,12 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { parseSkillMd, serializeSkillMd, skillCatalog, unlockedTools, validateSkill, withAttachedSkills, withSkillCatalog } from './skill';
-import { ALWAYS_ASK, makeSaveSkillTool, makeSkillTool } from '../tools/skill';
+import { makeSaveSkillTool, makeSkillTool } from '../../features/skills/tools';
 import { lineDiff } from './diff';
-import { buildRequestMessages } from '../chat/request';
+import { buildRequestMessages, registerMessageTransform } from '../chat/request';
+import { skillsTransform } from '../../features/skills/transform';
+
+registerMessageTransform(skillsTransform);
 import type { MessageRecord, Skill } from '../db/schema';
 import { db } from '../db/schema';
 import { exportAll, importAll, validate } from '../db/export';
@@ -135,7 +138,7 @@ describe('creating and editing skills from a conversation', () => {
     const upd = await tool.execute(tool.prepare({ name: 'notes', description: 'd', body: 'b2', model_invocable: false }), ctx);
     expect(upd.content).toContain('更新');
     expect(saved[1]).toEqual({ draft: { name: 'notes', description: 'd', body: 'b2', modelInvocable: false }, id: 'n1' });
-    expect(ALWAYS_ASK.has(tool.name)).toBe(true);
+    expect(tool.alwaysAsk).toBe(true);
   });
   it('line diff marks added and removed lines', () => {
     expect(lineDiff('a\nb\nc', 'a\nB\nc\nd')).toEqual([

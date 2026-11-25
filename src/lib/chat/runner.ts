@@ -7,6 +7,7 @@ import { fitToContext, inputBudget } from './context';
 import { toDefinition, type Permission, type Tool, type ToolContext } from '../tools/types';
 import { applyEvent, type BlockMap } from './events';
 import { buildRequestMessages, turnMessages } from './request';
+import { t } from './messages';
 
 export { applyEvent } from './events';
 export { buildRequestMessages, turnMessages } from './request';
@@ -44,7 +45,7 @@ export interface RunOptions {
    */
   dynamicTools?(turn: MessageRecord): Tool[];
   toolContext?: Omit<ToolContext, 'signal'>;
-  permissionFor?(toolName: string): Permission;
+  permissionFor?(tool: Tool): Permission;
   requestApproval?(req: ApprovalRequest): Promise<ApprovalDecision>;
 }
 
@@ -141,7 +142,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
     }
     if (!sawTerminal) {
       if (o.signal.aborted) {
-        applyEvent(msg, { type: 'error', error: { kind: 'aborted', message: '停止しました。' } }, blocks);
+        applyEvent(msg, { type: 'error', error: { kind: 'aborted', message: t('run.stopped') } }, blocks);
         failed = true;
       } else applyEvent(msg, { type: 'done', reason: 'stop' }, blocks);
     }
@@ -160,7 +161,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
       const tool = tools.find((t) => t.name === call.name);
       if (!tool) {
         call.state = 'output-error';
-        call.error = `ツール「${call.name}」は使えません。`;
+        call.error = t('run.unknownTool', { name: call.name });
         continue;
       }
       let input: unknown;
@@ -177,14 +178,14 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
       callCounts.set(sig, n);
       if (n >= 3) {
         call.state = 'output-error';
-        call.error = '同じ呼び出しが繰り返されたため中止しました。';
+        call.error = t('run.repeated');
         stop = true;
         continue;
       }
-      const perm = o.permissionFor?.(tool.name) ?? 'ask';
+      const perm = o.permissionFor?.(tool) ?? 'ask';
       if (perm === 'deny') {
         call.state = 'output-denied';
-        call.approval = { approved: false, auto: true, reason: '設定でこのツールは禁止されています。' };
+        call.approval = { approved: false, auto: true, reason: t('run.forbidden') };
         continue;
       }
       if (perm === 'ask') {
@@ -193,7 +194,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
         await o.persist(msg);
         const d: ApprovalDecision = o.requestApproval
           ? await o.requestApproval({ toolCallId: call.toolCallId, tool, input, signal: o.signal })
-          : { approved: false, reason: '承認できる画面がありません。' };
+          : { approved: false, reason: t('run.noApprovalUi') };
         if (o.signal.aborted) break;
         if (!d.approved) {
           call.state = 'output-denied';
@@ -229,7 +230,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
         }
       } catch (e) {
         call.state = 'output-error';
-        call.error = o.signal.aborted ? '停止しました。' : (e as Error).message;
+        call.error = o.signal.aborted ? t('run.stopped') : (e as Error).message;
       }
       call.endedAt = Date.now();
       o.onUpdate(msg);

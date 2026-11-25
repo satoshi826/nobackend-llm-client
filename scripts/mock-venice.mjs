@@ -256,8 +256,8 @@ const server = http.createServer(async (req, res) => {
       await sleep(25);
     };
 
-    // ---- Reply-suggestion requests (detected by the system prompt) get a JSON array ----
-    if (String(sys ?? '').includes('次に送りそうな')) {
+    // ---- Reply-suggestion requests (detected by a phrase of the system prompt in ja / en / zh) get a JSON array ----
+    if (['次に送りそうな', 'likely to send next', '接下来可能发送'].some((k) => String(sys ?? '').includes(k))) {
       const ans = JSON.stringify(['もっと詳しく教えて', '具体例を見せて', '要点を3行でまとめて', 'ほかの方法はある？', '注意点は？'].slice(0, 3));
       for (const p of chunked(ans)) await send({ content: p });
       chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
@@ -410,7 +410,7 @@ const server = http.createServer(async (req, res) => {
     else if (last.toLowerCase().includes('xss')) answer = 'XSS テスト: <img src=x onerror="alert(1)"> <script>alert(2)</script> <a href="javascript:alert(3)">クリック</a> **太字は残る**';
     else if (last.includes('長文')) answer = Array.from({ length: 40 }, (_, i) => `${i + 1}. これは長い出力の ${i + 1} 行目です。ストリーミング中の描画とスクロール追従を確認します。`).join('\n');
     else
-      answer = `## モック応答\n\nあなたのメッセージ: **${last.slice(0, 80)}**\n\n- モデル: \`${body.model}\`\n- システムプロンプト: ${sys ? `「${sys.slice(0, 40)}」` : 'なし'}\n- スキル一覧: ${(sys ?? '').includes('## スキル') ? 'あり' : 'なし'} / 指定スキル: ${(last.match(/<skill name="([^"]+)"/g) ?? []).map((x) => x.slice(13, -1)).join(', ') || 'なし'}\n- Venice 既定プロンプト: ${vp.include_venice_system_prompt ? 'あり' : 'なし'}\n- Web 検索: ${vp.enable_web_search ?? 'off'}\n- 履歴の件数: ${body.messages?.length ?? 0}\n\n| 項目 | 値 |\n|---|---|\n| temperature | ${body.temperature ?? '既定'} |\n| stream | ${body.stream} |\n${vp.enable_web_search && vp.enable_web_search !== 'off' ? '\n検索結果によると例示用のドメインがあります^1^。' : ''}`;
+      answer = `## モック応答\n\nあなたのメッセージ: **${last.slice(0, 80)}**\n\n- モデル: \`${body.model}\`\n- システムプロンプト: ${sys ? `「${sys.slice(0, 40)}」` : 'なし'}\n- スキル一覧: ${['## スキル', '## Skills', '## 技能'].some((h) => (sys ?? '').includes(h)) ? 'あり' : 'なし'} / 指定スキル: ${(last.match(/<skill name="([^"]+)"/g) ?? []).map((x) => x.slice(13, -1)).join(', ') || 'なし'}\n- Venice 既定プロンプト: ${vp.include_venice_system_prompt ? 'あり' : 'なし'}\n- Web 検索: ${vp.enable_web_search ?? 'off'}\n- 履歴の件数: ${body.messages?.length ?? 0}\n\n| 項目 | 値 |\n|---|---|\n| temperature | ${body.temperature ?? '既定'} |\n| stream | ${body.stream} |\n${vp.enable_web_search && vp.enable_web_search !== 'off' ? '\n検索結果によると例示用のドメインがあります^1^。' : ''}`;
     let i = 0;
     for (const p of chunked(answer)) {
       await send({ content: p });

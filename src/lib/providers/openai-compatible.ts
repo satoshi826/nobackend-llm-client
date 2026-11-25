@@ -15,6 +15,7 @@ import type {
 import { parseSSE } from './sse';
 import { ThinkSplitter } from './think-splitter';
 import { errorFromFetchFailure, errorFromResponse, isAbort, ProviderFailure } from './errors';
+import { t as tp } from './messages';
 
 /** Key check: GET with the key; 2xx means valid */
 export async function checkKey(url: string, fetchWithKey: KeyedFetch, corsHint?: string, headers: Record<string, string> = {}): Promise<{ ok: boolean; error?: ProviderError }> {
@@ -62,9 +63,9 @@ export function toOpenAIMessages(messages: ChatMessage[]): any[] {
         if (t.state === 'output-available' || t.state === 'output-error' || t.state === 'output-denied') {
           const content =
             t.state === 'output-denied'
-              ? `ユーザーがこのツールの実行を拒否しました。${t.approval?.reason ?? ''}`
+              ? tp('tool.denied', { reason: t.approval?.reason ?? '' }).trim()
               : t.state === 'output-error'
-                ? `ツールの実行に失敗しました: ${t.error ?? ''}`
+                ? tp('tool.failed', { error: t.error ?? '' })
                 : typeof t.modelOutput === 'string'
                   ? t.modelOutput
                   : JSON.stringify(t.modelOutput ?? null);
@@ -176,7 +177,7 @@ async function* streamChat(
     return;
   }
   if (!res.body) {
-    yield { type: 'error', error: { kind: 'server', message: '応答本文が空でした。' } };
+    yield { type: 'error', error: { kind: 'server', message: tp('stream.emptyBody') } };
     return;
   }
 
@@ -204,7 +205,7 @@ async function* streamChat(
           type: 'error',
           error: {
             kind: e?.code === 'rate_limit_exceeded' || e?.type === 'rate_limit' ? 'rate-limit' : 'server',
-            message: `ストリームの途中でエラーが発生しました: ${typeof e === 'string' ? e : e?.message ?? '不明なエラー'}`,
+            message: tp('stream.error', { message: typeof e === 'string' ? e : e?.message ?? tp('stream.unknownError') }),
             retryAfterMs: typeof e?.retry_after === 'number' ? e.retry_after * 1000 : undefined
           }
         };
@@ -246,15 +247,15 @@ async function* streamChat(
   } catch (e) {
     yield* state.closeAll();
     if (isAbort(e) || req.signal.aborted) {
-      yield { type: 'error', error: { kind: 'aborted', message: '停止しました。' } };
+      yield { type: 'error', error: { kind: 'aborted', message: tp('stream.stopped') } };
     } else {
-      yield { type: 'error', error: { kind: 'network-or-cors', message: '受信中に接続が切れました。' } };
+      yield { type: 'error', error: { kind: 'network-or-cors', message: tp('stream.disconnected') } };
     }
     return;
   }
   if (req.signal.aborted) {
     yield* state.closeAll();
-    yield { type: 'error', error: { kind: 'aborted', message: '停止しました。' } };
+    yield { type: 'error', error: { kind: 'aborted', message: tp('stream.stopped') } };
     return;
   }
   yield* state.closeAll();

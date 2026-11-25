@@ -1,11 +1,9 @@
 import type { ModelInfo, ProviderPreset } from '../types';
 import { checkKey, joinUrl } from '../openai-compatible';
 import { builtinBaseUrl } from '../endpoints';
+import { t as tp } from '../messages';
 
 const BASE_URL = builtinBaseUrl('openrouter', (import.meta as any).env ?? {});
-
-const KEY_GUIDE =
-  'OpenRouter の管理画面（Keys）でキーを作り、クレジットの上限（credit limit）を設定してください。キーが万一漏れても被害額が上限で止まります。';
 
 /** Per-token price string → USD per million tokens */
 function perMTok(v: unknown): number | undefined {
@@ -16,10 +14,17 @@ function perMTok(v: unknown): number | undefined {
 export const openrouterPreset: ProviderPreset = {
   id: 'openrouter',
   label: 'OpenRouter',
-  tagline: '数百のモデルを 1 つのキーで。データを保存・学習に使う提供元は既定で経由しません。',
+  // Texts are getters so they follow the current language
+  get tagline() {
+    return tp('openrouter.tagline');
+  },
   copy: {
-    pickerNote: 'OpenRouter は複数の提供元に中継します。このアプリは既定で「データを保存・学習に使う提供元」を経由しない設定（data_collection: deny）で送信します。',
-    destinationNote: '実際に処理する提供元へ中継されます（データ収集する提供元は既定で除外）'
+    get pickerNote() {
+      return tp('openrouter.pickerNote');
+    },
+    get destinationNote() {
+      return tp('openrouter.destinationNote');
+    }
   },
   defaults: {
     name: 'OpenRouter',
@@ -32,9 +37,13 @@ export const openrouterPreset: ProviderPreset = {
     enabled: false
   },
   browserAccess: 'direct',
-  keyGuide: KEY_GUIDE,
+  get keyGuide() {
+    return tp('openrouter.keyGuide');
+  },
   modelsPath: 'models',
-  corsHint: 'OpenRouter は通常ブラウザから直接接続できます。ネットワーク接続、または拡張機能が openrouter.ai をブロックしていないか確認してください。',
+  get corsHint() {
+    return tp('cors.direct', { name: 'OpenRouter', host: 'openrouter.ai' });
+  },
 
   mapModel(raw: any, providerId: string): ModelInfo | null {
     if (!raw?.id) return null;

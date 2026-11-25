@@ -2,9 +2,9 @@
 import { db, SCHEMA_VERSION, type Conversation, type ImageParams, type MessageRecord, type SavedPrompt, type Skill } from './schema';
 import { validateSkill } from '../skills/skill';
 import { seal, unseal } from './sealed';
-import { exportImages, importImages, type ExportedImage } from './images';
-import { cleanFiles, exportFiles, importFiles } from './files';
-import type { Attachment, FileRecord } from './schema';
+import { dataTables } from './data-tables';
+import type { Attachment } from './schema';
+import { t } from './messages';
 
 const openAll = <T extends object>(rows: T[]) => Promise.all(rows.map((r) => unseal(r)));
 
@@ -19,10 +19,8 @@ export interface ExportFile {
   prompts: SavedPrompt[];
   /** Since v3 */
   skills?: Skill[];
-  /** Images (only when the user chose to include them) */
-  images?: ExportedImage[];
-  /** Since v6: documents and uploaded files (text) */
-  files?: FileRecord[];
+  /** Rows of registered data tables, by table key (e.g. images, files) */
+  [table: string]: unknown;
   settings: { key: string; value: unknown }[];
 }
 
@@ -37,11 +35,19 @@ export async function exportAll(includeImages = false): Promise<ExportFile> {
     messages: await openAll(await d.messages.toArray()),
     prompts: await openAll(await d.prompts.toArray()),
     skills: await openAll(await d.skills.toArray()),
-    ...(includeImages ? { images: await exportImages() } : {}),
-    files: await exportFiles(),
+    ...(await tableRows(includeImages)),
     // Connection settings and keys are excluded (avoids attacks that swap baseUrl via import)
     settings: (await d.settings.toArray()).filter((s) => !String(s.key).startsWith('secret'))
   };
+}
+
+async function tableRows(includeImages: boolean): Promise<Record<string, unknown[]>> {
+  const out: Record<string, unknown[]> = {};
+  for (const t of dataTables()) {
+    const rows = await t.exportRows({ includeImages });
+    if (rows) out[t.key] = rows;
+  }
+  return out;
 }
 
 export interface ImportResult {
@@ -49,16 +55,16 @@ export interface ImportResult {
   messages: number;
   prompts: number;
   skills: number;
-  images: number;
-  files: number;
   skipped: number;
+  /** Rows added per data table (e.g. { images: 3, files: 1 }) */
+  tables: Record<string, number>;
 }
 
 /** Validate the format, then merge (existing IDs are not overwritten, i.e. skipped). */
 export async function importAll(raw: unknown): Promise<ImportResult> {
   const f = validate(raw);
   const d = db();
-  const res: ImportResult = { conversations: 0, messages: 0, prompts: 0, skills: 0, images: 0, files: 0, skipped: 0 };
+  const res: ImportResult = { conversations: 0, messages: 0, prompts: 0, skills: 0, skipped: 0, tables: {} };
   // Encrypt up front, outside the transaction (awaiting inside would close the transaction)
   const conversations = await Promise.all(f.conversations.map((c) => seal('conversations', { ...c, temporary: undefined })));
   const messages = await Promise.all(f.messages.map((m) => seal('messages', m)));
@@ -99,8 +105,10 @@ export async function importAll(raw: unknown): Promise<ImportResult> {
       res.skills++;
     }
   });
-  if (f.images?.length) res.images = await importImages(f.images, new Set(f.conversations.map((c) => c.id)));
-  if (f.files?.length) res.files = await importFiles(f.files);
+  for (const t of dataTables()) {
+    const rows = f[t.key] as unknown[] | undefined;
+    if (rows?.length) res.tables[t.key] = await t.importRows(rows);
+  }
   return res;
 }
 
@@ -141,9 +149,9 @@ function isStr(x: unknown): x is string {
 
 export function validate(raw: unknown): ExportFile {
   const f = raw as ExportFile;
-  if (!f || typeof f !== 'object' || f.format !== EXPORT_FORMAT) throw new Error('このアプリのエクスポートファイルではありません。');
-  if (typeof f.version !== 'number' || f.version > SCHEMA_VERSION) throw new Error('より新しいバージョンで作られたファイルです。');
-  if (!Array.isArray(f.conversations) || !Array.isArray(f.messages)) throw new Error('ファイルの形式が不正です。');
+  if (!f || typeof f !== 'object' || f.format !== EXPORT_FORMAT) throw new Error(t('export.notBackup'));
+  if (typeof f.version !== 'number' || f.version > SCHEMA_VERSION) throw new Error(t('export.tooNew'));
+  if (!Array.isArray(f.conversations) || !Array.isArray(f.messages)) throw new Error(t('export.badFormat'));
   const conversations = f.conversations.filter(
     (c) => c && isStr(c.id) && isStr(c.title) && typeof c.createdAt === 'number' && typeof c.updatedAt === 'number'
   ).map((c) => ({
@@ -216,8 +224,7 @@ export function validate(raw: unknown): ExportFile {
       updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : Date.now()
     }))
     .filter((s) => !validateSkill(s));
-  const images = (Array.isArray(f.images) ? f.images : []).filter(
-    (im) => im && isStr(im.id) && isStr(im.conversationId) && isStr(im.messageId) && isStr(im.mime) && isStr(im.data) && typeof im.createdAt === 'number'
-  );
-  return { format: EXPORT_FORMAT, version: f.version, exportedAt: String(f.exportedAt ?? ''), conversations, messages, prompts, skills, images, files: cleanFiles(f.files), settings: [] };
+  const conversationIds = new Set(conversations.map((c) => c.id));
+  const tables = Object.fromEntries(dataTables().map((t) => [t.key, t.clean(f[t.key], { conversationIds })]));
+  return { format: EXPORT_FORMAT, version: f.version, exportedAt: String(f.exportedAt ?? ''), conversations, messages, prompts, skills, ...tables, settings: [] };
 }

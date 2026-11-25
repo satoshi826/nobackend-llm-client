@@ -1,10 +1,97 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/inter';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme {
-  --font-sans: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic UI', sans-serif;
+/* ---- Design tokens: "Moonlight" (docs/design-system.md). Light values first, dark overrides below ---- */
+:root {
+  --bg: #eceef4;
+  --glow-1: #94a3b8;
+  --glow-2: #818cf8;
+  --glow-3: #cbd5e1;
+  --glow-o1: 0.45;
+  --glow-o2: 0.28;
+  --glow-o3: 0.5;
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-strong: rgba(255, 255, 255, 0.9);
+  --sunken: rgba(15, 23, 42, 0.05);
+  --line: rgba(15, 23, 42, 0.1);
+  --line-strong: rgba(15, 23, 42, 0.22);
+  --ink: #1f2433;
+  --ink-strong: #0b0d17;
+  --muted: #545b6e;
+  --faint: #687086;
+  --accent: #334155;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(51, 65, 85, 0.1);
+  --accent-text: #1e293b;
+  --ok: #047857;
+  --ok-soft: rgba(16, 185, 129, 0.12);
+  --warn: #a16207;
+  --warn-soft: rgba(245, 158, 11, 0.14);
+  --danger: #be123c;
+  --danger-soft: rgba(244, 63, 94, 0.12);
+  --shadow-float: 0 18px 50px rgba(15, 23, 42, 0.12);
+  --scrim: rgba(15, 23, 42, 0.35);
+  color-scheme: light;
+}
+.dark {
+  --bg: #07080d;
+  --glow-1: #64748b;
+  --glow-2: #6366f1;
+  --glow-3: #94a3b8;
+  --glow-o1: 0.3;
+  --glow-o2: 0.24;
+  --glow-o3: 0.13;
+  --glass: rgba(255, 255, 255, 0.06);
+  --glass-strong: rgba(255, 255, 255, 0.11);
+  --sunken: rgba(0, 0, 0, 0.25);
+  --line: rgba(255, 255, 255, 0.12);
+  --line-strong: rgba(255, 255, 255, 0.24);
+  --ink: #e7e9f3;
+  --ink-strong: #ffffff;
+  --muted: #a3a8bd;
+  --faint: #868ba3;
+  --accent: #cbd5e1;
+  --accent-ink: #0b0d17;
+  --accent-soft: rgba(203, 213, 225, 0.14);
+  --accent-text: #e2e8f0;
+  --ok: #6ee7b7;
+  --ok-soft: rgba(52, 211, 153, 0.16);
+  --warn: #fcd34d;
+  --warn-soft: rgba(251, 191, 36, 0.14);
+  --danger: #fda4af;
+  --danger-soft: rgba(244, 63, 94, 0.16);
+  --shadow-float: 0 20px 60px rgba(0, 0, 0, 0.35);
+  --scrim: rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic UI', sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Code', Consolas, 'Noto Sans Mono', monospace;
+  --color-canvas: var(--bg);
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-strong: var(--ink-strong);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-scrim: var(--scrim);
+  --shadow-float: var(--shadow-float);
 }
 
 html,
@@ -13,9 +100,52 @@ body,
   height: 100%;
 }
 body {
-  @apply bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+  @apply bg-canvas text-ink antialiased;
   font-family: var(--font-sans);
 }
+
+/* ---- Glass surfaces ---- */
+@utility glass {
+  background-color: var(--glass);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+@utility glass-float {
+  background-color: var(--glass);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: var(--shadow-float);
+}
+/* Opaque panels for surfaces that sit over moving content (dialogs, menus) */
+@utility panel {
+  background-color: color-mix(in srgb, var(--bg) 82%, var(--glass-strong));
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-float);
+}
+
+/* ---- Background light: slow, desaturated blobs (static with reduced motion) ---- */
+@keyframes drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(120px, 60px) scale(1.15); }
+}
+@keyframes drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1.1); }
+  50% { transform: translate(-140px, -40px) scale(0.95); }
+}
+.sky-glow { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: -1; }
+.sky-glow span { position: absolute; border-radius: 50%; }
+.sky-glow span:nth-child(1) { left: -120px; top: -160px; width: 620px; height: 620px; background: var(--glow-1); opacity: var(--glow-o1); filter: blur(110px); animation: drift-a 22s ease-in-out infinite; }
+.sky-glow span:nth-child(2) { right: -160px; bottom: -200px; width: 700px; height: 700px; background: var(--glow-2); opacity: var(--glow-o2); filter: blur(120px); animation: drift-b 26s ease-in-out infinite; }
+.sky-glow span:nth-child(3) { left: 45%; top: 30%; width: 360px; height: 360px; background: var(--glow-3); opacity: var(--glow-o3); filter: blur(110px); animation: drift-a 30s ease-in-out infinite reverse; }
+
+/* New messages and cards rise into place */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.rise { animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 
 /* ---- Markdown ---- */
 .md {
@@ -32,28 +162,28 @@ body {
 .md ol { @apply list-decimal pl-6; }
 .md li + li { @apply mt-1; }
 .md li > p { @apply m-0; }
-.md a { @apply text-sky-700 underline underline-offset-2 dark:text-sky-400; }
-.md blockquote { @apply border-l-4 border-zinc-300 pl-4 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400; }
-.md hr { @apply border-zinc-200 dark:border-zinc-800; }
+.md a { @apply text-accent-text underline decoration-line-strong underline-offset-2 hover:decoration-accent; }
+.md blockquote { @apply border-l-2 border-line-strong pl-4 text-muted; }
+.md hr { @apply border-line; }
 .md table { @apply block overflow-x-auto border-collapse text-sm; }
-.md th, .md td { @apply border border-zinc-200 px-3 py-1.5 dark:border-zinc-700; }
-.md th { @apply bg-zinc-50 font-semibold dark:bg-zinc-900; }
+.md th, .md td { @apply border border-line px-3 py-1.5; }
+.md th { @apply bg-glass font-semibold; }
 .md :not(pre) > code {
-  @apply rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[0.85em] dark:bg-zinc-800;
+  @apply rounded-md bg-sunken px-1.5 py-0.5 font-mono text-[0.85em];
 }
-.md .code-block { @apply overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800; }
+.md .code-block { @apply overflow-hidden rounded-xl border border-line; }
 .md .code-head {
-  @apply flex items-center justify-between bg-zinc-100 px-3 py-1 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400;
+  @apply flex items-center justify-between bg-glass px-3 py-1 text-xs text-muted;
 }
-.md .code-copy { @apply rounded px-2 py-0.5 hover:bg-zinc-200 dark:hover:bg-zinc-800; }
-.md pre { @apply m-0 overflow-x-auto bg-zinc-50 p-3 text-[13px] leading-6 dark:bg-zinc-900/60; }
+.md .code-copy { @apply rounded-md px-2 py-0.5 hover:bg-glass-strong; }
+.md pre { @apply m-0 overflow-x-auto bg-sunken p-3 text-[13px] leading-6; }
 .md pre code { @apply font-mono; }
-.md .md-img-link { @apply rounded border border-dashed border-zinc-300 px-2 py-0.5 no-underline dark:border-zinc-700; }
+.md .md-img-link { @apply rounded border border-dashed border-line-strong px-2 py-0.5 no-underline; }
 .md .md-fallback { @apply whitespace-pre-wrap; }
 .md input[type='checkbox'] { @apply mr-1.5 align-middle; }
 
 /* ---- highlight.js (GitHub style, light and dark) ---- */
-.hljs-comment, .hljs-quote { @apply text-zinc-500 italic; }
+.hljs-comment, .hljs-quote { @apply text-muted italic; }
 .hljs-keyword, .hljs-selector-tag, .hljs-type, .hljs-doctag { @apply text-rose-700 dark:text-rose-400; }
 .hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string { @apply text-emerald-700 dark:text-emerald-400; }
 .hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet { @apply text-sky-700 dark:text-sky-400; }
@@ -61,14 +191,14 @@ body {
 .hljs-built_in, .hljs-variable, .hljs-template-variable, .hljs-params { @apply text-amber-700 dark:text-amber-300; }
 .hljs-attr, .hljs-name, .hljs-tag { @apply text-sky-800 dark:text-sky-300; }
 .hljs-deletion { @apply text-rose-700 dark:text-rose-400; }
-.hljs-meta { @apply text-zinc-500; }
+.hljs-meta { @apply text-muted; }
 .hljs-emphasis { @apply italic; }
 .hljs-strong { @apply font-bold; }
 
 /* Caret shown while streaming */
 .streaming-caret::after {
   content: '▍';
-  @apply ml-0.5 animate-pulse text-zinc-400;
+  @apply ml-0.5 animate-pulse text-faint;
 }
 
 .scroll-thin { scrollbar-width: thin; }
@@ -79,18 +209,14 @@ body {
   to { background-position: -50% 0; }
 }
 .text-shimmer {
-  --shimmer-base: var(--color-zinc-400);
-  --shimmer-peak: var(--color-zinc-800);
+  --shimmer-base: var(--faint);
+  --shimmer-peak: var(--ink-strong);
   background-image: linear-gradient(90deg, var(--shimmer-base) 30%, var(--shimmer-peak) 50%, var(--shimmer-base) 70%);
   background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   animation: text-shimmer 1.8s linear infinite;
-}
-.dark .text-shimmer {
-  --shimmer-base: var(--color-zinc-500);
-  --shimmer-peak: var(--color-zinc-100);
 }
 
 /* Three bouncing dots */
@@ -104,16 +230,135 @@ body {
 .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
 
 /* Respect reduced-motion preferences */
+/* ---- Motion for every interactive element (docs/design-system.md §2.5) ----
+   Base layer, so a component's own transition / transform utilities still win. */
+@layer base {
+  :root {
+    --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+  :where(a, button, summary, label, select, textarea, input, [role='tab'], [role='menuitem'], [role='option'], [role='button']) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, scale, translate, rotate, text-decoration-color;
+    transition-duration: 200ms;
+    transition-timing-function: var(--ease-out);
+  }
+  /* Press: everything clickable gives a little under the pointer */
+  :where(button, summary, [role='tab'], [role='menuitem'], [role='option'], [role='button']):not(:disabled):active {
+    scale: 0.97;
+    transition-duration: 80ms;
+  }
+  /* Icons inside buttons answer the hover too */
+  :where(button, a, [role='tab'], [role='menuitem']) > svg {
+    transition: scale 200ms var(--ease-spring), rotate 300ms var(--ease-out), translate 200ms var(--ease-out), color 200ms;
+  }
+  @media (hover: hover) {
+    :where(button, a, [role='tab'], [role='menuitem']):not(:disabled):hover > svg:first-child {
+      scale: 1.1;
+    }
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--accent);
+  }
+}
+
+/* Switch (settings toggles): a native-style track and knob that slides */
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 2.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--line-strong);
+  cursor: pointer;
+  transition: background-color 250ms var(--ease-out);
+}
+.switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.25rem - 4px);
+  height: calc(1.25rem - 4px);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: translate 300ms var(--ease-spring), width 200ms var(--ease-out);
+}
+.switch:checked { background: var(--accent); }
+.dark .switch:checked::before { background: var(--accent-ink); }
+.switch:checked::before { translate: 1rem 0; }
+.switch:not(:disabled):active::before { width: calc(1.25rem + 2px); }
+.switch:checked:not(:disabled):active::before { translate: calc(1rem - 6px) 0; }
+.switch:disabled { cursor: not-allowed; }
+
+/* Accordion body (components/ui.tsx Collapse) */
+.collapse-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 300ms var(--ease-out), opacity 200ms var(--ease-out);
+}
+.collapse-grid.is-open { grid-template-rows: 1fr; opacity: 1; }
+
+/* <details>: animate open/close where the browser supports it; the marker rotates */
+details { interpolate-size: allow-keywords; }
+details::details-content {
+  block-size: 0;
+  overflow: clip;
+  opacity: 0;
+  transition: block-size 300ms var(--ease-out), opacity 200ms var(--ease-out), content-visibility 300ms allow-discrete;
+}
+details[open]::details-content { block-size: auto; opacity: 1; }
+details > summary { list-style: none; display: flex; align-items: center; gap: 0.25rem; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  rotate: -45deg;
+  transition: rotate 250ms var(--ease-out);
+}
+details[open] > summary::before { rotate: 45deg; }
+
+/* Tab panels cross-fade in */
+@keyframes fade-in {
+  from { opacity: 0; translate: 0 4px; }
+  to { opacity: 1; translate: 0 0; }
+}
+.fade-in { animation: fade-in 220ms var(--ease-out) both; }
+
+/* Menus and popovers open from their anchor */
+@keyframes pop {
+  from { opacity: 0; scale: 0.96; translate: 0 4px; }
+  to { opacity: 1; scale: 1; translate: 0 0; }
+}
+.pop, [role='menu'], [role='listbox'] { animation: pop 180ms var(--ease-out) both; transform-origin: bottom left; }
+
+/* Cards that open something lift a little on hover */
+@utility lift {
+  transition: translate 250ms var(--ease-out), box-shadow 250ms var(--ease-out), border-color 200ms, background-color 200ms;
+  @media (hover: hover) {
+    &:hover { translate: 0 -2px; box-shadow: var(--shadow-float); }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .text-shimmer { animation: none; color: var(--color-zinc-500); background: none; }
+  .text-shimmer { animation: none; color: var(--muted); background: none; }
   .typing-dots span { animation: none; opacity: 0.7; }
+  .sky-glow span, .rise, .pop, .fade-in, [role='menu'], [role='listbox'] { animation: none !important; }
+  *, *::before, *::after, ::details-content { transition-duration: 0.01ms !important; }
+  :where(button, summary, [role='tab']):active { scale: none !important; }
 }
 
 /* Visible keyboard focus for every control. In the base layer, so a utility such as outline-none
    (fields whose wrapper shows the focus instead, like the chat input) can turn it off */
 @layer base {
   :where(a, button, summary, select, textarea, input, iframe, [tabindex], [role='tab']):focus-visible {
-    outline: 2px solid var(--color-sky-500);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
 }

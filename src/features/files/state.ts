@@ -6,11 +6,19 @@ import { getSetting, newId, setSetting } from '../../lib/db/repo';
 import { listImages } from '../../lib/db/images';
 import type { Attachment, Conversation, FileRecord, MessageRecord } from '../../lib/db/schema';
 import type { ImageMeta } from './filer';
-import { imagesVersion, mainView, settings, showChat, showToast, sidebarOpen, sidebarTab, type MainViewState } from '../../state/app';
+import { imagesVersion } from '../images';
+import { showChat } from '../../state/conversations';
+import { defineFeatureSettings, pickLegacy } from '../../state/feature-settings';
+import { mainView, showToast, sidebarOpen, sidebarTab, type MainViewState } from '../../state/ui';
 import { registerRoute, setHash } from '../../state/router';
 import { registerToolProvider } from '../../state/tool-registry';
 import { extractText } from './extract';
 import { FILE_TOOL_NAMES, filesNote, makeFileTools, type FileToolDetails } from './tools';
+import { formatNumber } from '../../lib/i18n';
+import { t } from './messages';
+
+/** Let chat models write and read files (create_file / append_file / edit_file / read_file) */
+export const fileSettings = defineFeatureSettings('files', { fileTools: true }, (old) => pickLegacy(old, { fileTools: true }));
 
 /** Characters of an attached file put directly into the message; the rest is read with read_file */
 export const ATTACH_INLINE_CHARS = 60_000;
@@ -24,7 +32,7 @@ let filesLoading: { v: number; p: Promise<void> } | null = null;
 /** Reload the file list (calls for the same change share one load) */
 export function refreshFiles(): Promise<void> {
   const v = filesVersion.value;
-  if (filesLoading?.v === v) return filesLoading.p;
+  if (filesLoading && filesLoading.v === v) return filesLoading.p;
   const p = fdb.listFiles().then((l) => {
     fileList.value = l;
   });
@@ -37,7 +45,7 @@ export const imageList = signal<ImageMeta[] | null>(null);
 let imagesLoading: { v: number; p: Promise<void> } | null = null;
 export function refreshImages(): Promise<void> {
   const v = imagesVersion.value;
-  if (imagesLoading?.v === v) return imagesLoading.p;
+  if (imagesLoading && imagesLoading.v === v) return imagesLoading.p;
   const p = listImages().then((l) => {
     imageList.value = l;
   });
@@ -120,7 +128,7 @@ registerRoute({
 export async function saveUserVersion(id: string, text: string) {
   const f = await fdb.getFile(id);
   if (!f) return;
-  await fdb.putFile(fdb.withVersion(f, text, 'user', '手動で編集'));
+  await fdb.putFile(fdb.withVersion(f, text, 'user', t('note.userEdit')));
   changed();
 }
 
@@ -129,7 +137,7 @@ export async function restoreVersion(id: string, v: number) {
   const f = await fdb.getFile(id);
   const old = f?.versions.find((x) => x.v === v);
   if (!f || !old) return;
-  await fdb.putFile(fdb.withVersion(f, old.text, 'user', `版 ${v} に戻す`));
+  await fdb.putFile(fdb.withVersion(f, old.text, 'user', t('note.restored', { v })));
   changed();
 }
 
@@ -183,7 +191,7 @@ async function importOne(file: File, id: string, temporary: boolean): Promise<Fi
     // A pdf's text is stored as text; keep the original extension visible but treat it as plain text
     if (rec.mime === 'application/pdf') rec.mime = 'text/plain';
     await fdb.putFile(rec, temporary);
-    if (ex.truncated) showToast(`「${file.name}」は長すぎるため、先頭 ${fdb.MAX_FILE_CHARS.toLocaleString()} 文字だけを取り込みました。`, 'error');
+    if (ex.truncated) showToast(t('import.truncated', { name: file.name, n: formatNumber(fdb.MAX_FILE_CHARS) }), 'error');
     changed();
     return rec;
   } catch (e) {
@@ -202,7 +210,7 @@ export async function importFromDevice(files: File[]) {
     return r;
   }));
   const n = done.filter(Boolean).length;
-  if (n) showToast(`${n} 件のファイルを取り込みました`);
+  if (n) showToast(n === 1 ? t('import.doneOne') : t('import.done', { n: formatNumber(n) }));
 }
 
 /** Read files from the user's device, keep them in the Files tab, and attach them to the next message */
@@ -268,7 +276,7 @@ export function filesInHistory(history: MessageRecord[]): Map<string, { name: st
 registerToolProvider({
   id: 'files',
   tools({ conv, history }) {
-    if (!settings.value.fileTools) return [];
+    if (!fileSettings.value.value.fileTools) return [];
     const scope = new Set(filesInHistory(history).keys());
     return makeFileTools({
       async create(name, text) {
@@ -281,7 +289,7 @@ registerToolProvider({
       get: async (id) => (scope.has(id) ? fdb.getFile(id) : undefined),
       async update(id, text, note) {
         const f = await fdb.getFile(id);
-        if (!f || !scope.has(id)) throw new Error('ファイルが見つかりません。');
+        if (!f || !scope.has(id)) throw new Error(t('tool.notFound'));
         const next = fdb.withVersion(f, text, 'model', note);
         await fdb.putFile(next);
         changed();
@@ -290,7 +298,7 @@ registerToolProvider({
     });
   },
   systemNote({ history }) {
-    if (!settings.value.fileTools) return undefined;
+    if (!fileSettings.value.value.fileTools) return undefined;
     return filesNote([...filesInHistory(history)].map(([id, f]) => ({ id, ...f })));
   }
 });

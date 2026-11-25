@@ -3,6 +3,7 @@
 import type { ModelInfo, ProviderPreset } from '../types';
 import { checkKey, joinUrl } from '../openai-compatible';
 import { builtinBaseUrl, parseCustomProviders, type CustomProviderDef } from '../endpoints';
+import { t as tp } from '../messages';
 
 const env = ((import.meta as any).env ?? {}) as Record<string, string | undefined>;
 
@@ -14,12 +15,18 @@ function model(providerId: string, id: string, name: string, extra: Partial<Mode
 export const anthropicPreset: ProviderPreset = {
   id: 'anthropic',
   label: 'Anthropic',
-  tagline: 'Anthropic の Claude を直接使う。',
+  // Texts are getters so they follow the current language
+  get tagline() {
+    return tp('anthropic.tagline');
+  },
   keyHeader: { name: 'x-api-key' },
   modelsNeedKey: true,
-  keyGuide:
-    'Anthropic Console（console.anthropic.com）の API Keys でキーを作り、Limits でワークスペースの利用上限（spend limit）を設定してください。キーが万一漏れても被害額が上限で止まります。',
-  corsHint: 'ネットワーク接続、または拡張機能が api.anthropic.com をブロックしていないか確認してください。',
+  get keyGuide() {
+    return tp('anthropic.keyGuide');
+  },
+  get corsHint() {
+    return tp('cors.generic', { host: 'api.anthropic.com' });
+  },
   defaults: {
     name: 'Anthropic',
     kind: 'anthropic',
@@ -47,13 +54,22 @@ const GEMINI_SKIP = /embedding|tts|image|imagen|veo|live|native-audio|aqa|learnl
 export const geminiPreset: ProviderPreset = {
   id: 'gemini',
   label: 'Google Gemini',
-  tagline: 'Google の Gemini。無料枠では、送った内容が Google のサービス改善に使われることがあります。',
+  get tagline() {
+    return tp('gemini.tagline');
+  },
   modelsNeedKey: true,
   reasoningResend: 'never',
-  keyGuide:
-    'Google AI Studio（aistudio.google.com）でキーを作ってください。無料枠のキーでは、送った内容が Google のサービス改善に使われ、人が読むこともあります（有料枠では使われません）。有料にする場合は Google Cloud の請求設定で予算を設定してください。',
-  corsHint: 'ネットワーク接続、または拡張機能が generativelanguage.googleapis.com をブロックしていないか確認してください。',
-  copy: { destinationNote: '無料枠のキーでは、送った内容が Google のサービス改善に使われることがあります' },
+  get keyGuide() {
+    return tp('gemini.keyGuide');
+  },
+  get corsHint() {
+    return tp('cors.generic', { host: 'generativelanguage.googleapis.com' });
+  },
+  copy: {
+    get destinationNote() {
+      return tp('gemini.destinationNote');
+    }
+  },
   defaults: { name: 'Gemini', kind: 'openai-compatible', preset: 'gemini', baseUrl: builtinBaseUrl('gemini', env), modelListMode: 'fetch', enabled: false },
   browserAccess: 'direct',
   modelsPath: 'models',
@@ -69,13 +85,23 @@ export const geminiPreset: ProviderPreset = {
 export const deepseekPreset: ProviderPreset = {
   id: 'deepseek',
   label: 'DeepSeek',
-  tagline: 'DeepSeek のモデル。安価。データは中国の事業者のサーバーで処理されます。',
+  get tagline() {
+    return tp('deepseek.tagline');
+  },
   modelsNeedKey: true,
   // Sending reasoning back on a different message is rejected, so send it back only in the middle of tool calls
   reasoningResend: 'tool-turns',
-  keyGuide: 'DeepSeek Platform（platform.deepseek.com）でキーを作ってください。プリペイド式なので、チャージした額が使える上限になります。',
-  corsHint: 'ネットワーク接続、または拡張機能が api.deepseek.com をブロックしていないか確認してください。',
-  copy: { destinationNote: '中国の事業者（DeepSeek）のサーバーで処理されます' },
+  get keyGuide() {
+    return tp('deepseek.keyGuide');
+  },
+  get corsHint() {
+    return tp('cors.generic', { host: 'api.deepseek.com' });
+  },
+  copy: {
+    get destinationNote() {
+      return tp('deepseek.destinationNote');
+    }
+  },
   defaults: { name: 'DeepSeek', kind: 'openai-compatible', preset: 'deepseek', baseUrl: builtinBaseUrl('deepseek', env), modelListMode: 'fetch', enabled: false },
   browserAccess: 'direct',
   modelsPath: 'models',
@@ -92,11 +118,17 @@ const GROQ_SKIP = /whisper|tts|guard|playai|orpheus|distil/;
 export const groqPreset: ProviderPreset = {
   id: 'groq',
   label: 'Groq',
-  tagline: '高速な推論。Llama・Qwen・gpt-oss などのオープンなモデル。',
+  get tagline() {
+    return tp('groq.tagline');
+  },
   modelsNeedKey: true,
   reasoningResend: 'never',
-  keyGuide: 'GroqCloud（console.groq.com）でキーを作ってください。無料枠には回数とトークン数の上限があります。有料にする場合は利用上限を設定してください。',
-  corsHint: 'ネットワーク接続、または拡張機能が api.groq.com をブロックしていないか確認してください。',
+  get keyGuide() {
+    return tp('groq.keyGuide');
+  },
+  get corsHint() {
+    return tp('cors.generic', { host: 'api.groq.com' });
+  },
   defaults: { name: 'Groq', kind: 'openai-compatible', preset: 'groq', baseUrl: builtinBaseUrl('groq', env), modelListMode: 'fetch', enabled: false },
   browserAccess: 'direct',
   modelsPath: 'models',
@@ -119,16 +151,22 @@ export function customPreset(c: CustomProviderDef): ProviderPreset {
   return {
     id: c.id,
     label: c.label,
-    tagline: `${host} の OpenAI 互換 API（ビルド時に追加した接続先）`,
+    get tagline() {
+      return tp('custom.tagline', { host });
+    },
     keyOptional: c.keyOptional,
     modelsNeedKey: !c.publicModels,
     reasoningResend: 'never',
-    keyGuide: c.keyOptional ? 'キーなしでも使えます。キーが必要な場合だけ設定してください。' : `${c.label} の管理画面でキーを作り、可能なら利用上限を設定してください。`,
-    corsHint: `${host} がこのサイトからの接続を許可しているか（CORS）確認してください。Ollama なら環境変数 OLLAMA_ORIGINS にこのサイトのオリジンを入れて起動します。`,
+    get keyGuide() {
+      return c.keyOptional ? tp('custom.keyGuideOptional') : tp('custom.keyGuide', { name: c.label });
+    },
+    get corsHint() {
+      return tp('custom.corsHint', { host });
+    },
     defaults: { name: c.label, kind: 'openai-compatible', preset: c.id, baseUrl: c.baseUrl, modelListMode: 'fetch', enabled: false },
     browserAccess: 'unknown',
     modelsPath: 'models',
-    validateKey: c.keyOptional ? undefined : (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models'), f, `${host} への接続を確認してください。`)
+    validateKey: c.keyOptional ? undefined : (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models'), f, tp('custom.checkConnection', { host }))
   };
 }
 

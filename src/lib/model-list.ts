@@ -1,22 +1,40 @@
 // Filtering and sorting the model list (used by the model picker)
 import type { ModelInfo } from './providers/types';
+import { t } from './messages';
 
 export type ModelSort = 'recommended' | 'name' | 'price' | 'context';
 export type ModelFilter = 'private' | 'reasoning' | 'vision' | 'webSearch' | 'free';
 
+// Getters: the labels follow the current language when read
 export const SORT_LABELS: Record<ModelSort, string> = {
-  recommended: 'おすすめ順',
-  name: '名前順',
-  price: '安い順',
-  context: '文脈が長い順'
+  get recommended() {
+    return t('sort.recommended');
+  },
+  get name() {
+    return t('sort.name');
+  },
+  get price() {
+    return t('sort.price');
+  },
+  get context() {
+    return t('sort.context');
+  }
 };
 
 export const FILTER_LABELS: Record<ModelFilter, string> = {
   private: 'private',
-  reasoning: '思考',
-  vision: '画像',
-  webSearch: '検索',
-  free: '無料'
+  get reasoning() {
+    return t('filter.reasoning');
+  },
+  get vision() {
+    return t('filter.vision');
+  },
+  get webSearch() {
+    return t('filter.webSearch');
+  },
+  get free() {
+    return t('filter.free');
+  }
 };
 
 export const FILTER_ORDER: ModelFilter[] = ['private', 'reasoning', 'vision', 'webSearch', 'free'];

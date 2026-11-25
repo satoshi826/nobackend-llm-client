@@ -89,7 +89,7 @@ interface ImageOutput { images: Blob[]; seed?: number; blurred?: boolean; violat
 ## 5. Keys, CSP and settings
 
 - Providers that are also chat providers (OpenRouter, Gemini, OpenAI once added) reuse the same vault key.
-- Image-only services (Stability, fal, Together) are added like Tavily: a vault key and a section in Settings → チャット → 画像.
+- Image-only services (Stability, fal, Together) are added like Tavily: a vault key and a section in Settings → 機能 → 画像.
 - Each provider's origin goes into `endpoints.ts`, so it reaches the vault CSP `connect-src`. The app CSP needs nothing new, because images come back as base64.
 - In Settings → 画像:
   - choose which image providers are used;

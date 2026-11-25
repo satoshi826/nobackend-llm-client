@@ -7,6 +7,8 @@
 //   - unlocking happens once for the whole vault. If the passphrase is forgotten, "delete all keys" and enter them again
 import { decryptSecret, encryptSecret, MIN_PASSPHRASE_LENGTH, WrongPassphraseError, type EncryptedBlob } from '../src/lib/crypto/passphrase';
 import { ACCOUNT_IDS, accountById, providerConfigOf, type KeyStatus, type VaultState } from '../src/lib/keys/accounts';
+import { formatList, formatNumber } from '../src/lib/i18n';
+import { t } from './messages';
 
 // ---- Storage (IndexedDB) ----
 interface SecretRec {
@@ -147,15 +149,15 @@ export async function allStatus(): Promise<{ keys: Record<string, KeyStatus>; va
 // ---- Saving and deleting keys ----
 export async function saveKey(id: string, key: string): Promise<Result> {
   const account = accountById(id);
-  if (!account) return { ok: false, message: '未対応の接続先です。' };
+  if (!account) return { ok: false, message: t('common.unsupportedProvider') };
   const k = key.trim();
-  if (!k) return { ok: false, message: 'キーを入力してください。' };
+  if (!k) return { ok: false, message: t('store.enterKey') };
   const vs = await vaultState();
-  if (vs.locked) return { ok: false, message: '先にパスフレーズで解錠してください。' };
+  if (vs.locked) return { ok: false, message: t('store.unlockFirst') };
   const cfg = providerConfigOf(id);
   if (cfg && account.preset?.validateKey) {
     const r = await account.preset.validateKey(cfg, (url, init) => keyedFetch(id, url, init ?? {}, k));
-    if (!r.ok) return { ok: false, message: r.error?.message ?? 'キーを確認できませんでした。' };
+    if (!r.ok) return { ok: false, message: r.error?.message ?? t('store.keyCheckFailed') };
   }
   const base = { id, hosts: allowedHosts(id), createdAt: Date.now() };
   if (passphrase !== null) {
@@ -166,7 +168,7 @@ export async function saveKey(id: string, key: string): Promise<Result> {
     await putRec({ ...base, key: k });
   }
   changed();
-  return { ok: true, message: passphrase !== null ? 'キーを暗号化して保存しました。' : 'キーを保存しました。' };
+  return { ok: true, message: passphrase !== null ? t('store.savedEncrypted') : t('store.saved') };
 }
 
 export async function remove(id: string) {
@@ -214,24 +216,24 @@ async function rewriteAll(next: string | null) {
 
 /** Set or change the passphrase (changing requires confirming the current one) */
 export async function setPassphrase(next: string, current?: string): Promise<Result> {
-  if (next.length < MIN_PASSPHRASE_LENGTH) return { ok: false, message: `パスフレーズは ${MIN_PASSPHRASE_LENGTH} 文字以上にしてください。` };
+  if (next.length < MIN_PASSPHRASE_LENGTH) return { ok: false, message: t('pass.tooShort', { min: MIN_PASSPHRASE_LENGTH }) };
   const vs = await vaultState();
-  if (vs.locked) return { ok: false, message: '先に今のパスフレーズで解錠してください。' };
-  if (vs.hasPassphrase && !(await verify(current ?? ''))) return { ok: false, message: '今のパスフレーズが違います。' };
+  if (vs.locked) return { ok: false, message: t('store.unlockCurrentFirst') };
+  if (vs.hasPassphrase && !(await verify(current ?? ''))) return { ok: false, message: t('store.wrongCurrent') };
   await rewriteAll(next);
   broadcast();
   changed();
-  return { ok: true, message: vs.hasPassphrase ? 'パスフレーズを変更しました。' : 'パスフレーズを設定し、保存済みのキーを暗号化しました。' };
+  return { ok: true, message: vs.hasPassphrase ? t('store.changed') : t('store.setDone') };
 }
 
 /** Remove the passphrase (keys are re-saved unencrypted; requires confirming the current one) */
 export async function removePassphrase(current: string): Promise<Result> {
-  if ((await vaultState()).locked) return { ok: false, message: '先に解錠してください。' };
-  if (!(await verify(current))) return { ok: false, message: '今のパスフレーズが違います。' };
+  if ((await vaultState()).locked) return { ok: false, message: t('store.unlockFirstShort') };
+  if (!(await verify(current))) return { ok: false, message: t('store.wrongCurrent') };
   await rewriteAll(null);
   broadcast();
   changed();
-  return { ok: true, message: 'パスフレーズを外しました。キーは暗号化せずに保存されています。' };
+  return { ok: true, message: t('store.removed') };
 }
 
 /** Unlock all keys */
@@ -260,20 +262,20 @@ export async function unlock(pass: string): Promise<Result> {
   broadcast();
   changed();
   return failed
-    ? { ok: true, message: `解錠しました。${failed} 件のキーは別のパスフレーズで暗号化されているため開けませんでした（削除して入れ直してください）。` }
-    : { ok: true, message: '解錠しました。' };
+    ? { ok: true, message: t('unlock.partial', { count: formatNumber(failed) }) }
+    : { ok: true, message: t('unlock.done') };
 }
 
 // ---- Wrapping / unwrapping the app's data key (used to encrypt conversations) with the passphrase ----
 export async function wrapDataKey(raw: string): Promise<EncryptedBlob> {
-  if (passphrase === null) throw new KeyError('auth', 'パスフレーズで解錠されていません。');
+  if (passphrase === null) throw new KeyError('auth', t('store.notUnlocked'));
   return encryptSecret(DATA_KEY_PREFIX + raw, passphrase);
 }
 
 export async function unwrapDataKey(blob: EncryptedBlob): Promise<string> {
-  if (passphrase === null) throw new KeyError('auth', 'パスフレーズで解錠されていません。');
+  if (passphrase === null) throw new KeyError('auth', t('store.notUnlocked'));
   const text = await decryptSecret(blob, passphrase);
-  if (!text.startsWith(DATA_KEY_PREFIX)) throw new KeyError('auth', 'データ鍵ではありません。');
+  if (!text.startsWith(DATA_KEY_PREFIX)) throw new KeyError('auth', t('store.notDataKey'));
   return text.slice(DATA_KEY_PREFIX.length);
 }
 
@@ -317,10 +319,10 @@ export class KeyError extends Error {
  * @param candidate key to verify before saving (defaults to the stored key)
  */
 export async function keyedFetch(id: string, url: string, init: RequestInit, candidate?: string): Promise<Response> {
-  if (!accountById(id)) throw new KeyError('host-mismatch', '未対応の接続先です。');
-  if (!isAllowedUrl(id, url)) throw new KeyError('host-mismatch', `${label(id)} のキーは ${allowedHosts(id).join(', ')} にしか送れません。`);
+  if (!accountById(id)) throw new KeyError('host-mismatch', t('common.unsupportedProvider'));
+  if (!isAllowedUrl(id, url)) throw new KeyError('host-mismatch', t('store.hostMismatch', { name: label(id), hosts: formatList(allowedHosts(id)) }));
   const key = candidate ?? (await keyFor(id));
-  if (!key) throw new KeyError('auth', `${label(id)} のキーが未設定か、ロックされています。`);
+  if (!key) throw new KeyError('auth', t('store.noKey', { name: label(id) }));
   const headers = new Headers(init.headers);
   // Drop auth headers coming from the app and attach the key only to this provider's header
   for (const h of ['authorization', 'cookie', 'proxy-authorization', 'x-api-key', 'x-goog-api-key', 'api-key']) headers.delete(h);

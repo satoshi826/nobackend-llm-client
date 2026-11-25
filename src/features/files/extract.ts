@@ -1,5 +1,7 @@
 // Turning a file the user picked into text the model can read.
 // Text formats are read as-is; PDFs go through pdf.js, which is loaded only when needed.
+import { formatNumber } from '../../lib/i18n';
+import { t } from './messages';
 
 const TEXT_EXT = new Set([
   'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'jsonl', 'xml', 'html', 'htm', 'yaml', 'yml', 'toml', 'ini', 'log',
@@ -26,23 +28,23 @@ export function isTextLike(f: { name: string; type: string }) {
 
 export interface Extracted {
   text: string;
-  /** How the text was obtained (shown in the Files tab) */
+  /** How the text was obtained ('PDF': extracted from a PDF; shown in the Files tab) */
   source?: string;
   truncated: boolean;
 }
 
 export async function extractText(file: File): Promise<Extracted> {
-  if (file.size > MAX_UPLOAD_BYTES) throw new UnsupportedFileError(`ファイルが大きすぎます（上限 ${MAX_UPLOAD_BYTES / 1024 / 1024} MB）。`);
+  if (file.size > MAX_UPLOAD_BYTES) throw new UnsupportedFileError(t('extract.tooBig', { max: formatNumber(MAX_UPLOAD_BYTES / 1024 / 1024) }));
   let text: string;
   let source: string | undefined;
   if (isPdf(file)) {
     text = await pdfToText(await file.arrayBuffer());
-    source = 'PDF から抽出';
-    if (!text.trim()) throw new UnsupportedFileError('この PDF からは文字を取り出せませんでした（画像だけの PDF の可能性があります）。');
+    source = 'PDF';
+    if (!text.trim()) throw new UnsupportedFileError(t('extract.pdfEmpty'));
   } else if (isTextLike(file)) {
     text = await file.text();
   } else {
-    throw new UnsupportedFileError(`「${file.name}」の形式には対応していません。テキスト・Markdown・CSV・JSON・コード・PDF を添付できます。`);
+    throw new UnsupportedFileError(t('extract.unsupported', { name: file.name }));
   }
   const truncated = text.length > MAX_UPLOAD_CHARS;
   return { text: truncated ? text.slice(0, MAX_UPLOAD_CHARS) : text, source, truncated };
@@ -59,7 +61,7 @@ function pdfWorker(url: string): Worker {
     ? tt
         .createPolicy('app-pdf', {
           createScriptURL: (u: string) => {
-            if (u !== url) throw new TypeError('許可されていない Worker URL');
+            if (u !== url) throw new TypeError(t('extract.workerUrl'));
             return u;
           }
         })
@@ -81,7 +83,7 @@ function pdfToText(data: ArrayBuffer): Promise<string> {
     timer = window.setTimeout(() => {
       workerPort?.terminate();
       workerPort = null;
-      reject(new UnsupportedFileError('PDF を読み込めませんでした（時間切れ）。'));
+      reject(new UnsupportedFileError(t('extract.pdfTimeout')));
     }, 60_000);
   });
   return Promise.race([readPdf(data), timeout]).finally(() => clearTimeout(timer));
@@ -92,7 +94,7 @@ async function readPdf(data: ArrayBuffer): Promise<string> {
   const worker = pdfWorker(new URL(workerUrl, location.href).href);
   pdfjs.GlobalWorkerOptions.workerPort = worker;
   const failed = new Promise<never>((_, reject) =>
-    worker.addEventListener('error', () => reject(new UnsupportedFileError('PDF を読む部品を起動できませんでした。')), { once: true })
+    worker.addEventListener('error', () => reject(new UnsupportedFileError(t('extract.pdfWorker'))), { once: true })
   );
   const task = pdfjs.getDocument({
     data: new Uint8Array(data),
@@ -122,7 +124,7 @@ async function readPdf(data: ArrayBuffer): Promise<string> {
       if (line) lines.push(line);
       const body = lines.join('\n').trim();
       if (body) any = true;
-      pages.push(`--- ${i} ページ ---\n${body}`);
+      pages.push(`${t('extract.page', { n: i })}\n${body}`);
       page.cleanup();
     }
     return any ? pages.join('\n\n') : '';

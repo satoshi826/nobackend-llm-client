@@ -1,15 +1,22 @@
-import { dataLock, dataWork, modal, ready, toast } from './state/app';
+import { ready } from './state/app';
+import { uiLang } from './state/settings';
+import { dataLock, dataWork } from './state/lock';
+import { modal, toast } from './state/ui';
 import { LockScreen } from './components/LockScreen';
-import { Lightbox } from './components/ImageView';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
-import { ModelPicker } from './components/ModelPicker';
-import { SettingsModal } from './components/SettingsModal';
+import { lazyComponent } from './components/lazy';
 import { SystemPromptModal } from './components/SystemPromptModal';
 import { cx, Spinner } from './components/ui';
 import { ConfirmDialog } from './components/ConfirmDialog';
-import { mainViews } from './components/extensions';
-import { mainView } from './state/app';
+import { mainViews, overlays } from './components/extensions';
+import { mainView } from './state/ui';
+import { t } from './components/messages';
+
+// Screens that are not on the first screen load their code when first opened (components/lazy.tsx)
+const closeModal = () => (modal.value = null);
+const ModelPicker = lazyComponent(() => import('./components/ModelPicker').then((m) => m.ModelPicker), { overlay: true, onDismiss: closeModal });
+const SettingsModal = lazyComponent(() => import('./components/SettingsModal').then((m) => m.SettingsModal), { overlay: true, onDismiss: closeModal });
 
 /** The chat, or a screen a feature registered (e.g. a file) */
 function MainArea() {
@@ -18,24 +25,39 @@ function MainArea() {
   return view ? <view.Component id={v.id} /> : <ChatView />;
 }
 
+/** The slow background light behind the glass (styles.css .sky-glow) */
+function SkyGlow() {
+  return (
+    <div class="sky-glow" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
+
 export function App() {
+  // Reading the language here re-renders the whole tree when it changes (messages are read during render)
+  void uiLang.value;
   if (!ready.value) {
-    return <div class="grid h-full place-items-center text-sm text-zinc-500">読み込み中…</div>;
+    return <div class="grid h-full place-items-center text-sm text-muted">{t('app.loading')}</div>;
   }
-  const t = toast.value;
+  const toastNow = toast.value;
   if (dataLock.value === 'locked' || dataLock.value === 'lost') {
     return (
-      <div class="h-full">
+      <div class="relative isolate h-full">
+        <SkyGlow />
         <LockScreen />
         <ConfirmDialog />
       </div>
     );
   }
   return (
-    <div class="flex h-full">
+    <div class="relative isolate flex h-full md:gap-3 md:p-3">
+      <SkyGlow />
       {dataWork.value && (
-        <div class="fixed inset-0 z-[60] grid place-items-center bg-white/80 text-sm dark:bg-zinc-950/80" role="status" aria-live="polite">
-          <div class="flex items-center gap-2 rounded-lg bg-white px-4 py-3 shadow-lg dark:bg-zinc-900">
+        <div class="fixed inset-0 z-[60] grid place-items-center bg-scrim text-sm backdrop-blur-sm" role="status" aria-live="polite">
+          <div class="panel rise flex items-center gap-2 rounded-2xl px-4 py-3">
             <Spinner class="size-4" />
             {dataWork.value}
           </div>
@@ -46,18 +68,20 @@ export function App() {
       {modal.value === 'models' && <ModelPicker />}
       {modal.value === 'settings' && <SettingsModal />}
       {modal.value === 'system' && <SystemPromptModal />}
-      <Lightbox />
+      {overlays.map((O, i) => (
+        <O key={i} />
+      ))}
       <ConfirmDialog />
-      {t && (
+      {toastNow && (
         <div
           data-live
-          role={t.kind === 'error' ? 'alert' : 'status'}
+          role={toastNow.kind === 'error' ? 'alert' : 'status'}
           class={cx(
-            'fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 rounded-lg px-4 py-2 text-sm shadow-lg',
-            t.kind === 'error' ? 'bg-rose-600 text-white' : 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+            'panel rise fixed bottom-28 left-1/2 z-[80] -translate-x-1/2 rounded-2xl px-4 py-2.5 text-sm',
+            toastNow.kind === 'error' ? 'text-danger' : 'text-ink-strong'
           )}
         >
-          {t.text}
+          {toastNow.text}
         </div>
       )}
     </div>

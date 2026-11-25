@@ -3,10 +3,11 @@ import * as repo from '../lib/db/repo';
 import { exportAll, importAll } from '../lib/db/export';
 import { saveSettings, settings } from './settings';
 import { loadConversations } from './conversations';
-import { loadSkills } from './skills';
-import { stopAll } from './generation';
+import { loadFeatureData } from './lifecycle';
+import { stopAll } from './runs';
 import { clearAllKeys } from './keys';
 import { decryptSecret, encryptSecret, type EncryptedBlob } from '../lib/crypto/passphrase';
+import { t } from './messages';
 
 /** Backup file encrypted with a password (PBKDF2 + AES-GCM, same scheme as the key vault) */
 export const ENCRYPTED_BACKUP_FORMAT = 'nobackend-llm-client/export-encrypted';
@@ -14,7 +15,7 @@ export const ENCRYPTED_BACKUP_FORMAT = 'nobackend-llm-client/export-encrypted';
 /** Thrown by importFromFile when the file is encrypted and no password was given */
 export class BackupPasswordNeeded extends Error {
   constructor() {
-    super('このバックアップはパスワードで暗号化されています。');
+    super(t('data.passwordNeeded'));
   }
 }
 
@@ -39,7 +40,7 @@ export async function importFromFile(file: File, password?: string) {
   try {
     json = JSON.parse(await file.text());
   } catch {
-    throw new Error('JSON として読み込めませんでした。');
+    throw new Error(t('data.notJson'));
   }
   const wrapped = json as { format?: string; enc?: EncryptedBlob };
   if (wrapped?.format === ENCRYPTED_BACKUP_FORMAT) {
@@ -47,12 +48,12 @@ export async function importFromFile(file: File, password?: string) {
     try {
       json = JSON.parse(await decryptSecret(wrapped.enc as EncryptedBlob, password));
     } catch {
-      throw new Error('パスワードが違うか、ファイルが壊れています。');
+      throw new Error(t('data.badPassword'));
     }
   }
   const r = await importAll(json);
   await loadConversations();
-  await loadSkills();
+  await loadFeatureData();
   return r;
 }
 

@@ -1,6 +1,7 @@
 // Passphrase encryption of API keys (WebCrypto: PBKDF2-SHA256 → AES-GCM-256).
 // Goal: avoid plaintext exposure on disk, in backups, or when someone else gets hold of the device.
 // Note: while unlocked the plaintext is in memory, so this is no defence against XSS (docs/design.md §5.3).
+import { t } from './messages';
 
 export interface EncryptedBlob {
   v: 1;
@@ -37,7 +38,7 @@ async function deriveKey(passphrase: string, salt: Uint8Array<ArrayBuffer>, iter
 }
 
 export async function encryptSecret(plain: string, passphrase: string, iterations = DEFAULT_ITERATIONS): Promise<EncryptedBlob> {
-  if (passphrase.length < MIN_PASSPHRASE_LENGTH) throw new Error(`パスフレーズは ${MIN_PASSPHRASE_LENGTH} 文字以上にしてください。`);
+  if (passphrase.length < MIN_PASSPHRASE_LENGTH) throw new Error(t('passphrase.tooShort', { min: MIN_PASSPHRASE_LENGTH }));
   const salt = crypto.getRandomValues(new Uint8Array(new ArrayBuffer(16)));
   const iv = crypto.getRandomValues(new Uint8Array(new ArrayBuffer(12)));
   const key = await deriveKey(passphrase, salt, iterations);
@@ -47,12 +48,12 @@ export async function encryptSecret(plain: string, passphrase: string, iteration
 
 export class WrongPassphraseError extends Error {
   constructor() {
-    super('パスフレーズが違います。');
+    super(t('passphrase.wrong'));
   }
 }
 
 export async function decryptSecret(blob: EncryptedBlob, passphrase: string): Promise<string> {
-  if (blob?.v !== 1 || blob.kdf !== 'PBKDF2-SHA256') throw new Error('対応していない暗号化形式です。');
+  if (blob?.v !== 1 || blob.kdf !== 'PBKDF2-SHA256') throw new Error(t('passphrase.unsupported'));
   const key = await deriveKey(passphrase, unb64(blob.salt), blob.iter);
   try {
     const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(blob.iv) }, key, unb64(blob.ct));

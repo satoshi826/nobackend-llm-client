@@ -1,33 +1,24 @@
-// Entry point for app state. The UI imports from here (UI-independent lib/ code does not import from here).
+// App startup: settings, models, keys, data lock, then the stored data (conversations and features' data).
+// UI code imports from the specific state module (or a feature's index.ts), not from here.
 import { effect, signal } from '@preact/signals';
 import { loadSettings } from './settings';
+import { loadFeatureSettings } from './feature-settings';
 import { checkLeftoverLocalKeys, connectKeys } from './keys';
 import { loadModels, refreshModelsNeedingKey } from './models';
 import { keyInfos, vaultState } from './keys';
 import { saveSettings, settings } from './settings';
 import { loadConversations, startNewChat } from './conversations';
 import { restoreRoute } from './router';
-import { loadSkills } from './skills';
+import { loadFeatureData } from './lifecycle';
 import { dataLock, initDataLock, setBusyCheck } from './lock';
-import { isStreaming } from './generation';
+import { isStreaming } from './runs';
 
-export * from './settings';
-export * from './ui';
-export * from './keys';
-export * from './models';
-export * from './conversations';
-export * from './generation';
-export * from './data';
-export * from './skills';
-export * from './lock';
-export * from './images';
-export * from './router';
-export * from './tool-registry';
 
 export const ready = signal(false);
 
 export async function init() {
   await loadSettings();
+  await loadFeatureSettings();
   await loadModels();
   await connectKeys();
   await checkLeftoverLocalKeys();
@@ -39,7 +30,7 @@ export async function init() {
     if (loaded) return;
     loaded = true;
     await loadConversations();
-    await loadSkills();
+    await loadFeatureData();
     startNewChat();
     await restoreRoute(openHash);
   };

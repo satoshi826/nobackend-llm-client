@@ -2,32 +2,34 @@
 // Importing this module registers everything with the core through extension points;
 // the core never imports anything from here.
 import { registerComposerAddon, registerMainView, registerSettingsSection, registerSidebarTab, registerToolView, registerUserMessageExtra } from '../../components/extensions';
-import { FilesSettings } from './components/Settings';
+import { lazyComponent } from '../../components/lazy';
 import { AttachButton, AttachmentChips } from './components/Composer';
 import { FilesPanel } from './components/FilesPanel';
-import { FileView } from './components/FileView';
-import { Filer } from './components/Filer';
 import { FileToolDetail, UserAttachments } from './components/Message';
 import { openFiler, pendingAttachments, takeAttachments, uploadFiles } from './state';
-import { FILE_TOOL_NAMES } from './tools';
+import { FILE_TOOL_NAMES, fileToolLabel } from './tools';
+import { t } from './messages';
+import { registerMessageTransform } from '../../lib/chat/request';
+import { attachmentsTransform } from './transform';
 
 export { openFile, openFiler } from './state';
 
-registerSidebarTab({ id: 'files', label: 'ファイル', icon: 'files', Panel: FilesPanel, onSelect: () => openFiler() });
-registerMainView({ kind: 'files', Component: Filer });
-registerMainView({ kind: 'file', Component: FileView });
+registerSidebarTab({ id: 'files', label: () => t('files'), icon: 'files', Panel: FilesPanel, onSelect: () => openFiler() });
+// The file manager and the file screen load their code when first opened
+registerMainView({ kind: 'files', Component: lazyComponent(() => import('./components/Filer').then((m) => m.Filer)) });
+registerMainView({ kind: 'file', Component: lazyComponent(() => import('./components/FileView').then((m) => m.FileView)) });
 registerComposerAddon({
   id: 'files',
+  placement: 'inside',
   Button: AttachButton,
   Above: AttachmentChips,
   hasContent: () => pendingAttachments.value.some((a) => !a.reading),
   collect: async () => ({ attachments: await takeAttachments() }),
   onFiles: (files, conv) => void uploadFiles(files, conv)
 });
-const FILE_TOOL_LABELS: Record<string, string> = { create_file: 'ファイルの作成', append_file: 'ファイルへの追記', edit_file: 'ファイルの編集', read_file: 'ファイルの読み込み' };
 registerToolView({
   names: FILE_TOOL_NAMES,
-  label: (name) => FILE_TOOL_LABELS[name],
+  label: fileToolLabel,
   icon: 'file',
   summary: (p) => {
     const d = p.uiDetails as { name?: string } | undefined;
@@ -36,9 +38,10 @@ registerToolView({
   },
   doneStatus: (p) => {
     const d = p.uiDetails as { version?: number } | undefined;
-    return p.name === 'read_file' ? '読みました' : d?.version ? `版 ${d.version}` : undefined;
+    return p.name === 'read_file' ? t('tool.readDone') : d?.version ? t('version', { v: d.version }) : undefined;
   },
   Detail: FileToolDetail
 });
 registerUserMessageExtra(UserAttachments);
-registerSettingsSection({ id: 'files', tab: 'chat', Component: FilesSettings });
+registerSettingsSection({ id: 'files', tab: 'features', Component: lazyComponent(() => import('./components/Settings').then((m) => m.FilesSettings)) });
+registerMessageTransform(attachmentsTransform);

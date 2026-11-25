@@ -11,7 +11,7 @@ A chat client for LLM APIs that doesn't need a server and doesn't keep logs. It'
 - **Keys are hard to steal**: API keys live only in a separate key vault page and never reach the app itself. The vault attaches a key only to that provider's fixed host. There's a strict CSP with Trusted Types.
 - **Optional passphrase**: encrypts both API keys and conversations at rest. The whole app stays behind a lock screen until you unlock it.
 
-The UI is currently in Japanese only. Design details: [docs/design.md](docs/design.md).
+The UI is available in Japanese, English and Simplified Chinese (automatic, or chosen in Settings → Appearance). Design details: [docs/design.md](docs/design.md).
 
 ## Features
 

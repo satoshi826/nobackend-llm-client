@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ensureHighlighter, isHighlighterReady, renderMarkdown, setSafeHTML } from '../lib/markdown/render';
 import { cx } from './ui';
+import { t } from './messages';
 
 /** Renders Markdown. This component (setSafeHTML) is the only place that inserts HTML into the DOM. */
 export function Markdown({ text, streaming, citations, class: className }: { text: string; streaming?: boolean; citations?: string[]; class?: string }) {
@@ -26,10 +27,10 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
     const code = btn.closest('.code-block')?.querySelector('code')?.textContent ?? '';
     try {
       await navigator.clipboard.writeText(code);
-      btn.textContent = 'コピーしました';
-      setTimeout(() => (btn.textContent = 'コピー'), 1500);
+      btn.textContent = t('md.copied');
+      setTimeout(() => (btn.textContent = t('md.copy')), 1500);
     } catch {
-      btn.textContent = 'コピーできません';
+      btn.textContent = t('md.copyFailed');
     }
   };
 

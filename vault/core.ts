@@ -2,14 +2,16 @@
 import { PASSTHROUGH_HEADERS, type FromVault, type ToVault } from '../src/lib/vault/protocol';
 import { accountById } from '../src/lib/keys/accounts';
 import { allStatus, allowedHosts, clearAll, isAllowedUrl, KeyError, keyedFetch, label, lock, unwrapDataKey, wrapDataKey } from './store';
+import { formatList } from '../src/lib/i18n';
+import { t } from './messages';
 
 export { allowedHosts };
 
 export function validateRequest(req: ToVault & { type: 'fetch' }): string | null {
-  if (!accountById(req.providerId)) return '未対応の接続先です。';
-  if (req.method !== 'GET' && req.method !== 'POST') return '許可されていないメソッドです。';
-  if (!isAllowedUrl(req.providerId, req.url)) return `${label(req.providerId)} のキーは ${allowedHosts(req.providerId).join(', ')} にしか送れません。`;
-  if (req.body !== undefined && typeof req.body !== 'string') return '本文の形式が不正です。';
+  if (!accountById(req.providerId)) return t('common.unsupportedProvider');
+  if (req.method !== 'GET' && req.method !== 'POST') return t('common.methodNotAllowed');
+  if (!isAllowedUrl(req.providerId, req.url)) return t('store.hostMismatch', { name: label(req.providerId), hosts: formatList(allowedHosts(req.providerId)) });
+  if (req.body !== undefined && typeof req.body !== 'string') return t('common.badBody');
   return null;
 }
 
@@ -70,7 +72,7 @@ export async function handle(msg: ToVault, send: (m: FromVault, transfer?: Trans
     if (e instanceof KeyError) send({ type: 'error', id: msg.id, kind: e.kind, message: e.message });
     else {
       const aborted = (e as Error)?.name === 'AbortError';
-      send({ type: 'error', id: msg.id, kind: aborted ? 'aborted' : 'network-or-cors', message: aborted ? '停止しました。' : '接続できませんでした。' });
+      send({ type: 'error', id: msg.id, kind: aborted ? 'aborted' : 'network-or-cors', message: aborted ? t('common.stopped') : t('common.connectFailed') });
     }
   } finally {
     inflight.delete(msg.id);

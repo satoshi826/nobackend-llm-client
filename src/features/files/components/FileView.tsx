@@ -2,15 +2,19 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { currentVersion, extOf } from '../../../lib/db/files';
 import type { FileRecord } from '../../../lib/db/schema';
-import { conversations, openConversation, showChat, showToast, sidebarOpen } from '../../../state/app';
+import { conversations, openConversation, showChat } from '../../../state/conversations';
+import { showToast, sidebarOpen } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { Markdown } from '../../../components/Markdown';
-import { Badge, Button, Icon, Spinner, cx } from '../../../components/ui';
+import { Badge, Button, Icon, Spinner } from '../../../components/ui';
 import { parseDelimited } from '../csv';
 import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, filesVersion, getFile, renameFile, restoreVersion, saveUserVersion } from '../state';
 import { formatChars, typeLabel } from './common';
+import { formatDateTime, formatNumber } from '../../../lib/i18n';
+import { t } from '../messages';
 
-const BY: Record<string, string> = { model: 'モデル', user: 'あなた', upload: '取り込み' };
+const BY_KEYS: Record<string, 'by.model' | 'by.user' | 'by.upload'> = { model: 'by.model', user: 'by.user', upload: 'by.upload' };
+const byLabel = (by: string) => (BY_KEYS[by] ? t(BY_KEYS[by]) : by);
 
 export function FileView({ id = '' }: { id?: string }) {
   const [f, setF] = useState<FileRecord | null | undefined>(undefined);
@@ -31,17 +35,17 @@ export function FileView({ id = '' }: { id?: string }) {
 
   if (f === undefined)
     return (
-      <main class="grid flex-1 place-items-center text-sm text-zinc-500">
+      <main class="grid flex-1 place-items-center text-sm text-muted">
         <Spinner class="size-5" />
       </main>
     );
   if (f === null)
     return (
-      <main class="grid flex-1 place-items-center text-sm text-zinc-500">
+      <main class="grid flex-1 place-items-center text-sm text-muted">
         <div class="text-center">
-          <p>このファイルは見つかりません（削除された可能性があります）。</p>
+          <p>{t('file.notFound')}</p>
           <Button class="mt-3" variant="outline" onClick={closeFileView}>
-            戻る
+            {t('file.back')}
           </Button>
         </div>
       </main>
@@ -73,20 +77,20 @@ export function FileView({ id = '' }: { id?: string }) {
 
   return (
     <main class="flex min-w-0 flex-1 flex-col">
-      <header class="flex flex-wrap items-center gap-1 border-b border-zinc-200 px-2 py-1.5 dark:border-zinc-800">
-        <Button class="md:hidden" aria-label="メニュー" onClick={() => (sidebarOpen.value = true)}>
+      <header class="glass mx-2 mt-2 flex flex-wrap items-center gap-1 rounded-2xl px-2 py-1.5 sm:mx-3 md:mx-0 md:mt-0">
+        <Button class="md:hidden" aria-label={t('menu')} onClick={() => (sidebarOpen.value = true)}>
           <Icon name="menu" />
         </Button>
         {fileReturnsToChat() ? (
-          <Button aria-label="会話に戻る" title="会話に戻る" onClick={closeFileView}>
+          <Button aria-label={t('file.backToChat')} title={t('file.backToChat')} onClick={closeFileView}>
             <Icon name="chevron-left" />
           </Button>
         ) : (
           <>
-            <button type="button" class="rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100" onClick={() => openFiler()}>
-              ファイル
+            <button type="button" class="rounded-lg px-2 py-1 text-sm text-muted hover:bg-glass-strong hover:text-ink-strong" onClick={() => openFiler()}>
+              {t('files')}
             </button>
-            <Icon name="chevron-right" class="size-3.5 shrink-0 text-zinc-400" />
+            <Icon name="chevron-right" class="size-3.5 shrink-0 text-faint" />
           </>
         )}
         {renaming ? (
@@ -99,10 +103,10 @@ export function FileView({ id = '' }: { id?: string }) {
             }}
           >
             <input
-              class="w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              class="w-full rounded-[10px] border border-line-strong bg-sunken px-2 py-1 text-sm text-ink-strong outline-none"
               value={name}
               autoFocus
-              aria-label="ファイル名"
+              aria-label={t('file.name')}
               onInput={(e) => setName((e.target as HTMLInputElement).value)}
               onBlur={() => setRenaming(false)}
               onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
@@ -111,33 +115,32 @@ export function FileView({ id = '' }: { id?: string }) {
         ) : (
           <button
             type="button"
-            class="flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            title="名前を変更"
+            class="flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left hover:bg-glass-strong"
+            title={t('file.rename')}
             onClick={() => {
               setName(f.name);
               setRenaming(true);
             }}
           >
-            <Icon name={f.kind === 'upload' ? 'paperclip' : 'file'} class={cx('size-4 shrink-0', f.kind === 'upload' ? 'text-emerald-600' : 'text-sky-600')} />
-            <span class="truncate font-semibold">{f.name}</span>
+            <Icon name={f.kind === 'upload' ? 'paperclip' : 'file'} class="size-4 shrink-0 text-muted" />
+            <span class="truncate text-sm font-medium text-ink-strong">{f.name}</span>
           </button>
         )}
         <Badge>{typeLabel(f)}</Badge>
-        <span class="hidden text-xs text-zinc-500 tabular-nums sm:inline">{formatChars(shown.text.length)}</span>
+        <span class="hidden text-xs text-muted tabular-nums sm:inline">{formatChars(shown.text.length)}</span>
         <div class="ml-auto flex flex-wrap items-center gap-0.5">
           {f.versions.length > 1 && (
-            <label class="flex items-center gap-1 text-xs text-zinc-500">
+            <label class="flex items-center gap-1 text-xs text-muted">
               <Icon name="history" class="size-3.5" />
               <select
-                class="rounded-md border border-zinc-300 bg-white px-1.5 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
+                class="rounded-[10px] border border-line bg-sunken px-2 py-0.5 text-xs text-ink transition hover:border-line-strong"
                 value={String(shown.v)}
-                aria-label="版"
+                aria-label={t('file.versionLabel')}
                 onChange={(e) => setViewV(Number((e.target as HTMLSelectElement).value))}
               >
                 {[...f.versions].reverse().map((v) => (
                   <option key={v.v} value={v.v}>
-                    版 {v.v}
-                    {v.v === latest.v ? '（最新）' : ''} · {new Date(v.at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {BY[v.by] ?? v.by}
+                    {v.v === latest.v ? t('file.versionLatest', { v: v.v }) : t('version', { v: v.v })} · {formatDateTime(v.at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {byLabel(v.by)}
                     {v.note ? ` · ${v.note}` : ''}
                   </option>
                 ))}
@@ -146,8 +149,8 @@ export function FileView({ id = '' }: { id?: string }) {
           )}
           {!editing && (
             <Button
-              aria-label="編集"
-              title="編集（保存すると新しい版になります）"
+              aria-label={t('file.edit')}
+              title={t('file.editTitle')}
               onClick={() => {
                 setDraft(shown.text);
                 setEditing(true);
@@ -157,21 +160,21 @@ export function FileView({ id = '' }: { id?: string }) {
             </Button>
           )}
           <Button
-            aria-label="コピー"
-            title="内容をコピー"
-            onClick={() => void navigator.clipboard.writeText(shown.text).then(() => showToast('コピーしました'))}
+            aria-label={t('file.copy')}
+            title={t('file.copyTitle')}
+            onClick={() => void navigator.clipboard.writeText(shown.text).then(() => showToast(t('file.copied')))}
           >
             <Icon name="copy" />
           </Button>
-          <Button aria-label="ダウンロード" title="ダウンロード" onClick={() => downloadFile(f, shown)}>
+          <Button aria-label={t('download')} title={t('download')} onClick={() => downloadFile(f, shown)}>
             <Icon name="download" />
           </Button>
-          <Button aria-label="印刷・PDF に保存" title="印刷・PDF に保存（印刷の画面で「PDF に保存」を選びます）" onClick={print}>
+          <Button aria-label={t('file.print')} title={t('file.printTitle')} onClick={print}>
             <Icon name="printer" />
           </Button>
           <Button
-            aria-label="会話で使う"
-            title="入力欄に添付して、チャットに戻る"
+            aria-label={t('useInChat')}
+            title={t('useInChatTitle')}
             onClick={() => {
               void attachExisting(f.id);
               showChat();
@@ -180,16 +183,16 @@ export function FileView({ id = '' }: { id?: string }) {
             <Icon name="paperclip" />
           </Button>
           {conv && (
-            <Button aria-label="元の会話を開く" title={`元の会話「${conv.title}」を開く`} onClick={() => void openConversation(conv.id)}>
+            <Button aria-label={t('file.openSource')} title={t('file.openSourceTitle', { title: conv.title })} onClick={() => void openConversation(conv.id)}>
               <Icon name="chat" />
             </Button>
           )}
           <Button
-            aria-label="削除"
-            title="削除"
-            class="hover:text-rose-600"
+            aria-label={t('delete')}
+            title={t('delete')}
+            class="hover:text-danger"
             onClick={async () => {
-              if (await askConfirm({ title: 'ファイルを削除', message: `「${f.name}」を、すべての版も含めて削除します。元に戻せません。`, confirmLabel: '削除', danger: true })) await deleteFiles([f.id]);
+              if (await askConfirm({ title: t('file.deleteTitle'), message: t('file.deleteMessage', { name: f.name }), confirmLabel: t('delete'), danger: true })) await deleteFiles([f.id]);
             }}
           >
             <Icon name="trash" />
@@ -197,36 +200,36 @@ export function FileView({ id = '' }: { id?: string }) {
         </div>
       </header>
       {isOld && !editing && (
-        <div class="flex flex-wrap items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
-          版 {shown.v} を表示しています（最新は版 {latest.v}）。
+        <div class="flex flex-wrap items-center gap-2 mx-2 mt-2 rounded-2xl border border-warn/40 bg-warn-soft px-4 py-2 sm:mx-3 md:mx-0 text-sm text-warn">
+          {t('file.oldVersion', { v: shown.v, latest: latest.v })}
           <Button
             variant="outline"
             class="py-1! text-xs"
             onClick={async () => {
               await restoreVersion(f.id, shown.v);
               setViewV(null);
-              showToast(`版 ${shown.v} の内容を新しい版として保存しました`);
+              showToast(t('file.restored', { v: shown.v }));
             }}
           >
-            この版に戻す
+            {t('file.restore')}
           </Button>
           <Button class="text-xs" onClick={() => setViewV(null)}>
-            最新を表示
+            {t('file.showLatest')}
           </Button>
         </div>
       )}
-      {f.source && <p class="border-b border-zinc-200 px-4 py-1.5 text-xs text-zinc-500 dark:border-zinc-800">{f.source}したテキストです。表や図の配置は崩れていることがあります。</p>}
+      {f.source?.startsWith('PDF') && <p class="border-b border-line px-4 py-1.5 text-xs text-muted">{t('file.pdfNote')}</p>}
       {editing ? (
         <div class="flex min-h-0 flex-1 flex-col gap-2 p-3">
           <textarea
-            class="min-h-0 w-full flex-1 resize-none rounded-lg border border-zinc-300 bg-white p-3 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            class="glass min-h-0 w-full flex-1 resize-none rounded-[18px] p-4 font-mono text-sm text-ink-strong outline-none focus:border-line-strong"
             value={draft}
-            aria-label="ファイルの内容"
+            aria-label={t('file.content')}
             onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)}
           />
           <div class="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setEditing(false)}>
-              キャンセル
+              {t('cancel')}
             </Button>
             <Button
               variant="primary"
@@ -235,16 +238,16 @@ export function FileView({ id = '' }: { id?: string }) {
                 await saveUserVersion(f.id, draft);
                 setEditing(false);
                 setViewV(null);
-                showToast('新しい版として保存しました');
+                showToast(t('file.savedNew'));
               }}
             >
-              保存
+              {t('save')}
             </Button>
           </div>
         </div>
       ) : (
-        <div class="scroll-thin min-h-0 flex-1 overflow-y-auto">
-          <div ref={body} class="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+        <div class="scroll-thin min-h-0 flex-1 overflow-y-auto px-2 sm:px-3 md:px-0">
+          <div ref={body} class="glass rise mx-auto my-3 w-full max-w-3xl rounded-[22px] px-5 py-6 sm:my-4 sm:px-8">
             <FileBody text={shown.text} ext={ext} />
           </div>
         </div>
@@ -265,7 +268,7 @@ function FileBody({ text, ext }: { text: string; ext: string }) {
             <thead>
               <tr>
                 {head.map((c, i) => (
-                  <th key={i} class="border border-zinc-300 bg-zinc-50 px-2 py-1 text-left font-semibold dark:border-zinc-700 dark:bg-zinc-900">
+                  <th key={i} class="border border-line bg-glass px-2 py-1 text-left font-semibold">
                     {c}
                   </th>
                 ))}
@@ -275,7 +278,7 @@ function FileBody({ text, ext }: { text: string; ext: string }) {
               {rest.map((r, i) => (
                 <tr key={i}>
                   {r.map((c, j) => (
-                    <td key={j} class="border border-zinc-300 px-2 py-1 align-top dark:border-zinc-700">
+                    <td key={j} class="border border-line px-2 py-1 align-top">
                       {c}
                     </td>
                   ))}
@@ -283,7 +286,7 @@ function FileBody({ text, ext }: { text: string; ext: string }) {
               ))}
             </tbody>
           </table>
-          {truncated && <p class="mt-2 text-xs text-zinc-500">先頭 1,000 行だけを表示しています。全体はダウンロードして確認してください。</p>}
+          {truncated && <p class="mt-2 text-xs text-muted">{t('file.csvTruncated', { n: formatNumber(1000) })}</p>}
         </div>
       );
     }

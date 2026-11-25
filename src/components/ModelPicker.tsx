@@ -1,27 +1,17 @@
 import type { ComponentChildren } from 'preact';
 import { useMemo, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
-import {
-  currentConv,
-  enabledProviders,
-  keyInfos,
-  modal,
-  modelsStates,
-  modelPickerTarget,
-  regenerateWith,
-  refreshAllModels,
-  saveSettings,
-  settings,
-  chooseModel,
-  visibleModels,
-  isFavorite,
-  toggleFavorite,
-  providerById
-} from '../state/app';
+import { currentConv } from '../state/conversations';
+import { regenerateWith, chooseModel } from '../state/generation';
+import { keyInfos } from '../state/keys';
+import { enabledProviders, modelsStates, refreshAllModels, visibleModels, isFavorite, toggleFavorite, providerById } from '../state/models';
+import { saveSettings, settings } from '../state/settings';
+import { modal, modelPickerTarget } from '../state/ui';
 import type { ModelInfo } from '../lib/providers/types';
-import { arrangeModels, FILTER_LABELS, FILTER_ORDER, matchesFilter, SORT_LABELS, type ModelFilter, type ModelSort } from '../lib/model-list';
+import { arrangeModels, FILTER_ORDER, matchesFilter, type ModelFilter, type ModelSort } from '../lib/model-list';
 import { PRESETS } from '../lib/providers/registry';
-import { Badge, Button, Icon, Modal, Spinner, cx, formatCtx, formatPrice } from './ui';
+import { Badge, Button, Collapse, Icon, Modal, Spinner, cx, formatCtx, formatPrice } from './ui';
+import { t } from './messages';
 
 function copyOf(providerId: string) {
   return PRESETS[providerId]?.copy ?? {};
@@ -30,18 +20,18 @@ function copyOf(providerId: string) {
 function PrivacyBadge({ m }: { m: ModelInfo }) {
   if (m.privacy === 'private')
     return (
-      <Badge tone="green" title={copyOf(m.providerId).private ?? '提供元がプロンプトを保存しないと明示しているモデル'}>
+      <Badge tone="green" title={copyOf(m.providerId).private ?? t('picker.privateTitle')}>
         <Icon name="lock" class="size-3" />
         private
       </Badge>
     );
   if (m.privacy === 'anonymized')
     return (
-      <Badge tone="amber" title={copyOf(m.providerId).relayed ?? '外部の事業者に中継されるモデル。各社の保持ポリシーに従う'}>
-        外部中継
+      <Badge tone="amber" title={copyOf(m.providerId).relayed ?? t('picker.relayedTitle')}>
+        {t('picker.relayed')}
       </Badge>
     );
-  return <Badge title="保持方針は実際に処理する提供元によって異なります">提供元による</Badge>;
+  return <Badge title={t('picker.byProviderTitle')}>{t('picker.byProvider')}</Badge>;
 }
 
 function ModelRow({ m, selected, onPick, showProvider }: { m: ModelInfo; selected: boolean; onPick(): void; showProvider?: boolean }) {
@@ -51,14 +41,14 @@ function ModelRow({ m, selected, onPick, showProvider }: { m: ModelInfo; selecte
       <button
         type="button"
         onClick={onPick}
-        class={cx('w-full rounded-lg py-2.5 pr-10 pl-3 text-left', selected ? 'bg-zinc-100 dark:bg-zinc-800' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60')}
+        class={cx('w-full rounded-lg py-2.5 pr-10 pl-3 text-left', selected ? 'bg-glass-strong' : 'hover:bg-glass')}
         aria-pressed={selected}
       >
         <div class="flex items-center gap-2">
           <span class="truncate text-sm font-medium">{m.name}</span>
-          {showProvider && <span class="shrink-0 text-xs text-zinc-500">{providerById(m.providerId)?.name}</span>}
-          {selected && <Icon name="check" class="size-4 shrink-0 text-emerald-600" />}
-          <span class="ml-auto shrink-0 text-xs text-zinc-500 tabular-nums" title="100 万トークンあたり 入力 / 出力">
+          {showProvider && <span class="shrink-0 text-xs text-muted">{providerById(m.providerId)?.name}</span>}
+          {selected && <Icon name="check" class="size-4 shrink-0 text-ink-strong" />}
+          <span class="ml-auto shrink-0 text-xs text-muted tabular-nums" title={t('picker.priceTitle')}>
             {formatPrice(m.pricing?.inputPerMTok)} / {formatPrice(m.pricing?.outputPerMTok)}
           </span>
         </div>
@@ -68,37 +58,37 @@ function ModelRow({ m, selected, onPick, showProvider }: { m: ModelInfo; selecte
           {m.capabilities.reasoning && (
             <Badge tone="sky">
               <Icon name="brain" class="size-3" />
-              思考
+              {t('picker.reasoning')}
             </Badge>
           )}
           {m.capabilities.vision && (
             <Badge>
               <Icon name="eye" class="size-3" />
-              画像
+              {t('picker.vision')}
             </Badge>
           )}
           {m.capabilities.webSearch && (
             <Badge>
               <Icon name="globe" class="size-3" />
-              検索
+              {t('picker.search')}
             </Badge>
           )}
-          {m.tags?.includes('most_uncensored') && <Badge tone="rose">制限が最も少ない</Badge>}
-          {m.tags?.includes('default') && <Badge>既定</Badge>}
+          {m.tags?.includes('most_uncensored') && <Badge>{t('picker.uncensored')}</Badge>}
+          {m.tags?.includes('default') && <Badge>{t('picker.default')}</Badge>}
           {m.tags?.includes('free') && (
-            <Badge tone="amber" title="無料モデルは提供元がデータを利用する場合があり、データ収集を拒否する設定では使えないことがあります">
-              無料
+            <Badge title={t('picker.freeTitle')}>
+              {t('picker.free')}
             </Badge>
           )}
-          {m.deprecated && <Badge tone="amber">提供終了予定</Badge>}
+          {m.deprecated && <Badge tone="amber">{t('picker.deprecated')}</Badge>}
         </div>
       </button>
       <button
         type="button"
-        class={cx('absolute top-2 right-2 rounded-md p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700', fav ? 'text-amber-500' : 'text-zinc-400')}
+        class={cx('absolute top-2 right-2 rounded-md p-1 hover:bg-glass-strong', fav ? 'text-ink-strong' : 'text-faint')}
         aria-pressed={fav}
-        aria-label={fav ? `${m.name} のブックマークを外す` : `${m.name} をブックマーク`}
-        title={fav ? 'ブックマークを外す' : 'ブックマーク（上の「ブックマーク」タブにまとまります）'}
+        aria-label={fav ? t('picker.unbookmarkNamed', { name: m.name }) : t('picker.bookmarkNamed', { name: m.name })}
+        title={fav ? t('picker.unbookmark') : t('picker.bookmarkTitle')}
         onClick={() => void toggleFavorite(m.providerId, m.id)}
       >
         <Icon name="star" filled={fav} class="size-4" />
@@ -107,10 +97,13 @@ function ModelRow({ m, selected, onPick, showProvider }: { m: ModelInfo; selecte
   );
 }
 
-const FILTER_TITLES: Partial<Record<ModelFilter, string>> = {
-  private: '提供元がプロンプトを保存しないと明示しているモデルだけ',
-  free: '無料モデルは提供元がデータを利用する場合があります'
-};
+const SORTS: ModelSort[] = ['recommended', 'name', 'price', 'context'];
+
+function filterTitle(f: ModelFilter): string | undefined {
+  if (f === 'private') return t('picker.filterPrivateTitle');
+  if (f === 'free') return t('picker.filterFreeTitle');
+  return undefined;
+}
 
 function FilterChip({ label, count, on, title, onToggle }: { label: string; count: number; on: boolean; title?: string; onToggle(): void }) {
   return (
@@ -122,13 +115,13 @@ function FilterChip({ label, count, on, title, onToggle }: { label: string; coun
       class={cx(
         'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs',
         on
-          ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
-          : 'border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'
+          ? 'border-line-strong bg-accent-soft text-ink-strong'
+          : 'border-line text-muted hover:bg-glass'
       )}
     >
       {on && <Icon name="check" class="size-3" />}
       {label}
-      <span class={cx('tabular-nums', on ? 'opacity-70' : 'text-zinc-400')}>{count}</span>
+      <span class={cx('tabular-nums', on ? 'opacity-70' : 'text-faint')}>{count}</span>
     </button>
   );
 }
@@ -156,16 +149,18 @@ function Section(props: {
     <section>
       <button
         type="button"
-        class="sticky top-0 z-10 flex w-full items-center gap-2 bg-white px-1 py-2 text-left text-sm font-semibold dark:bg-zinc-900"
+        class="sticky top-0 z-10 flex w-full items-center gap-2 bg-glass px-1 py-2 text-left text-sm font-semibold"
         aria-expanded={open}
         onClick={toggle}
         disabled={props.forceOpen}
       >
-        <Icon name="chevron-down" class={cx('size-3.5 shrink-0 text-zinc-400 transition', !open && '-rotate-90')} />
+        <Icon name="chevron-down" class={cx('size-3.5 shrink-0 text-faint transition', !open && '-rotate-90')} />
         {props.title}
-        <span class="ml-auto text-xs font-normal text-zinc-400 tabular-nums">{props.count}</span>
+        <span class="ml-auto text-xs font-normal text-faint tabular-nums">{props.count}</span>
       </button>
-      {open && <div class="pb-2">{props.children}</div>}
+      <Collapse open={open} class="pb-2">
+        {props.children}
+      </Collapse>
     </section>
   );
 }
@@ -205,43 +200,43 @@ export function ModelPicker() {
   );
 
   return (
-    <Modal title={target.kind === 'regenerate' ? '別のモデルで再生成' : 'モデルを選ぶ'} onClose={() => (modal.value = null)}>
+    <Modal title={target.kind === 'regenerate' ? t('picker.titleRegenerate') : t('picker.title')} onClose={() => (modal.value = null)}>
       <div class="space-y-3">
         <div class="flex gap-2">
-          <label class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-sky-500/60 dark:border-zinc-700">
-            <Icon name="search" class="size-4 shrink-0 text-zinc-400" />
-            <input class="w-full bg-transparent outline-none" placeholder="モデル名で検索" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label="モデル名で検索" />
+          <label class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-accent/50">
+            <Icon name="search" class="size-4 shrink-0 text-faint" />
+            <input class="w-full bg-transparent outline-none" placeholder={t('picker.searchPlaceholder')} value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label={t('picker.searchPlaceholder')} />
           </label>
           <select
-            aria-label="並び順"
-            class="rounded-lg border border-zinc-300 bg-transparent px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            aria-label={t('picker.sortLabel')}
+            class="rounded-lg border border-line bg-transparent px-2 text-sm"
             value={sort}
             onChange={(e) => saveSettings({ modelSort: (e.target as HTMLSelectElement).value as ModelSort })}
           >
-            {(Object.keys(SORT_LABELS) as ModelSort[]).map((k) => (
+            {SORTS.map((k) => (
               <option key={k} value={k}>
-                {SORT_LABELS[k]}
+                {t(`picker.sort.${k}`)}
               </option>
             ))}
           </select>
         </div>
         {chips.length > 0 && (
-          <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="絞り込み">
+          <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('picker.filterLabel')}>
             {chips.map(({ f, count }) => (
-              <FilterChip key={f} label={FILTER_LABELS[f]} count={count} on={active.includes(f)} title={FILTER_TITLES[f]} onToggle={() => toggleFilter(f)} />
+              <FilterChip key={f} label={t(`picker.filter.${f}`)} count={count} on={active.includes(f)} title={filterTitle(f)} onToggle={() => toggleFilter(f)} />
             ))}
             {active.length > 0 && (
-              <button type="button" class="px-1 text-xs text-zinc-500 underline-offset-2 hover:underline" onClick={() => saveSettings({ modelFilters: [] })}>
-                解除
+              <button type="button" class="px-1 text-xs text-muted underline-offset-2 hover:underline" onClick={() => saveSettings({ modelFilters: [] })}>
+                {t('picker.clearFilters')}
               </button>
             )}
           </div>
         )}
-        <div class="flex items-center justify-between gap-2 text-xs text-zinc-500">
-          <span>{arranged.length === all.length ? `${all.length} モデル` : `${arranged.length} / ${all.length} モデル`}</span>
+        <div class="flex items-center justify-between gap-2 text-xs text-muted">
+          <span>{arranged.length === all.length ? t('picker.count', { n: all.length }) : t('picker.countFiltered', { shown: arranged.length, total: all.length })}</span>
           <Button class="text-xs" onClick={() => refreshAllModels()} disabled={anyLoading}>
             <Icon name="refresh" class={cx('size-3.5', anyLoading && 'motion-safe:animate-spin')} />
-            {anyLoading ? '取得中…' : '一覧を更新'}
+            {anyLoading ? t('picker.loading') : t('picker.refresh')}
           </Button>
         </div>
 
@@ -253,8 +248,8 @@ export function ModelPicker() {
               count={favList.length}
               title={
                 <>
-                  <Icon name="star" filled class="size-3.5 text-amber-500" />
-                  ブックマーク
+                  <Icon name="star" filled class="size-3.5 text-ink-strong" />
+                  {t('picker.bookmarks')}
                 </>
               }
             >
@@ -277,19 +272,19 @@ export function ModelPicker() {
                 title={
                   <>
                     {p.name}
-                    {noKey && <span class="text-xs font-normal text-amber-600">キー未設定</span>}
-                    {st.loading && <Spinner class="size-3 text-zinc-400" />}
+                    {noKey && <span class="text-xs font-normal text-warn">{t('picker.noKey')}</span>}
+                    {st.loading && <Spinner class="size-3 text-faint" />}
                   </>
                 }
               >
                 <div class="space-y-2">
                   {list.some((m) => m.privacy === 'anonymized') && copy.relayedNote && (
-                    <p class="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">{copy.relayedNote}</p>
+                    <p class="rounded-lg bg-warn-soft p-2.5 text-xs text-warn">{copy.relayedNote}</p>
                   )}
-                  {copy.pickerNote && <p class="rounded-lg bg-zinc-50 p-2.5 text-xs text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">{copy.pickerNote}</p>}
+                  {copy.pickerNote && <p class="rounded-lg bg-glass p-2.5 text-xs text-muted">{copy.pickerNote}</p>}
                   {st.error && (
-                    <p role="alert" class="rounded-lg bg-rose-50 p-2.5 text-xs text-rose-800 dark:bg-rose-950 dark:text-rose-200">
-                      モデル一覧を取得できませんでした: {st.error.message}
+                    <p role="alert" class="rounded-lg bg-danger-soft p-2.5 text-xs text-danger">
+                      {t('picker.loadFailed', { message: st.error.message })}
                       {st.error.hint && <span class="block opacity-80">{st.error.hint}</span>}
                     </p>
                   )}
@@ -298,8 +293,8 @@ export function ModelPicker() {
                   ) : (
                     !st.loading &&
                     !st.error && (
-                      <p class="px-1 py-3 text-sm text-zinc-500">
-                        {st.needsKey ? 'キーを設定するとモデル一覧を取得します（設定の「接続とキー」）' : 'モデルが見つかりません'}
+                      <p class="px-1 py-3 text-sm text-muted">
+                        {st.needsKey ? t('picker.needsKey') : t('picker.noModels')}
                       </p>
                     )
                   )}
@@ -307,7 +302,7 @@ export function ModelPicker() {
               </Section>
             );
           })}
-          {arranged.length === 0 && (searching || active.length > 0) && <p class="py-6 text-center text-sm text-zinc-500">条件に合うモデルがありません</p>}
+          {arranged.length === 0 && (searching || active.length > 0) && <p class="py-6 text-center text-sm text-muted">{t('picker.noMatch')}</p>}
         </div>
       </div>
     </Modal>

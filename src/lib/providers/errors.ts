@@ -1,4 +1,5 @@
 import type { ProviderError } from './types';
+import { t as tp } from './messages';
 
 export class ProviderFailure extends Error {
   constructor(public readonly error: ProviderError) {
@@ -25,36 +26,36 @@ export function classifyError(status: number, body: any, retryAfter?: string | n
   const retryAfterMs = parseRetryAfter(retryAfter);
 
   if (status === 401 && code === 'PRO_ONLY_MODEL') {
-    return { kind: 'model-unavailable', status, message: 'このモデルは有料プランでのみ利用できます。', hint: apiMsg };
+    return { kind: 'model-unavailable', status, message: tp('error.proOnly'), hint: apiMsg };
   }
   switch (true) {
     case status === 401 || status === 403:
-      return { kind: 'auth', status, message: 'API キーが無効か、権限がありません。設定でキーを確認してください。', hint: apiMsg };
+      return { kind: 'auth', status, message: tp('error.auth'), hint: apiMsg };
     case status === 402:
-      return { kind: 'insufficient-balance', status, message: '残高が不足しています。プロバイダーの管理画面で残高を確認してください。', hint: apiMsg };
+      return { kind: 'insufficient-balance', status, message: tp('error.balance'), hint: apiMsg };
     case status === 429:
       return {
         kind: 'rate-limit',
         status,
-        message: retryAfterMs ? `レート制限に達しました。約 ${Math.ceil(retryAfterMs / 1000)} 秒後に再試行してください。` : 'レート制限に達しました。しばらく待ってから再試行してください。',
+        message: retryAfterMs ? tp('error.rateLimitAfter', { seconds: Math.ceil(retryAfterMs / 1000) }) : tp('error.rateLimit'),
         retryAfterMs,
         hint: apiMsg
       };
     case status === 404:
-      return { kind: 'model-unavailable', status, message: 'モデルまたはエンドポイントが見つかりません。モデル一覧を更新してください。', hint: apiMsg };
+      return { kind: 'model-unavailable', status, message: tp('error.notFound'), hint: apiMsg };
     case status >= 400 && status < 500:
-      return { kind: 'bad-request', status, message: `リクエストが拒否されました（${status}）。${apiMsg ?? ''}`.trim() };
+      return { kind: 'bad-request', status, message: tp('error.badRequest', { status, detail: apiMsg ?? '' }).trim() };
     default:
-      return { kind: 'server', status, message: `プロバイダー側でエラーが発生しました（${status}）。時間をおいて再試行してください。`, hint: apiMsg };
+      return { kind: 'server', status, message: tp('error.server', { status }), hint: apiMsg };
   }
 }
 
 /** When fetch itself fails (no response). Browsers report CORS failures only as "Failed to fetch". */
 export function errorFromFetchFailure(err: unknown, corsHint?: string): ProviderError {
-  if (isAbort(err)) return { kind: 'aborted', message: '停止しました。' };
+  if (isAbort(err)) return { kind: 'aborted', message: tp('stream.stopped') };
   return {
     kind: 'network-or-cors',
-    message: '接続できませんでした。ネットワークに問題があるか、接続先がブラウザからのアクセス（CORS）を許可していません。',
+    message: tp('error.network'),
     hint: corsHint
   };
 }

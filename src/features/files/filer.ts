@@ -2,6 +2,8 @@
 import { currentText, extOf } from '../../lib/db/files';
 import type { BlobRecord, FileRecord } from '../../lib/db/schema';
 import type { FilerSort, FilerView } from './state';
+import { locale } from '../../lib/i18n';
+import { t } from './messages';
 
 export type ImageMeta = Omit<BlobRecord, 'blob' | 'enc'>;
 
@@ -18,7 +20,7 @@ export function toItems(files: FileRecord[], images: ImageMeta[], convTitle: (id
       const ext = IMAGE_EXT[im.mime] ?? 'png';
       const d = new Date(im.createdAt);
       const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
-      return { type: 'image', key: `i:${im.id}`, id: im.id, name: `${convTitle(im.conversationId) ?? '画像'} ${stamp}.${ext}`, ext, size: im.size, updatedAt: im.createdAt, conversationId: im.conversationId, messageId: im.messageId };
+      return { type: 'image', key: `i:${im.id}`, id: im.id, name: `${convTitle(im.conversationId) ?? t('imageName')} ${stamp}.${ext}`, ext, size: im.size, updatedAt: im.createdAt, conversationId: im.conversationId, messageId: im.messageId };
     })
   ];
 }
@@ -49,7 +51,7 @@ export function filterItems(items: FilerItem[], o: { view: FilerView; conversati
 }
 
 export function sortItems(items: FilerItem[], sort: FilerSort): FilerItem[] {
-  const byName = (a: FilerItem, b: FilerItem) => a.name.localeCompare(b.name, 'ja');
+  const byName = (a: FilerItem, b: FilerItem) => a.name.localeCompare(b.name, locale());
   const cmp: Record<FilerSort, (a: FilerItem, b: FilerItem) => number> = {
     updated: (a, b) => b.updatedAt - a.updatedAt,
     name: byName,

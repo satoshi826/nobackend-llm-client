@@ -1,4 +1,5 @@
 // External services used by tools (other than LLMs). Keys are kept the same way as for LLM providers (direct mode / key vault).
+import { t } from './messages';
 
 export interface ToolService {
   id: string;
@@ -12,19 +13,28 @@ export interface ToolService {
 const env = ((import.meta as any).env ?? {}) as Record<string, string | undefined>;
 
 export const SERVICES: Record<string, ToolService> = {
+  // label and keyGuide are getters so they follow the current language
   tavily: {
     id: 'tavily',
-    label: 'Tavily（Web 検索）',
+    get label() {
+      return t('tavily.label');
+    },
     baseUrl: env.VITE_TAVILY_BASE_URL || 'https://api.tavily.com',
     keyOptional: false,
-    keyGuide: 'Tavily（tavily.com）でキーを作成してください。無料枠は月 1,000 クレジット（検索 1 回 = 1 クレジット）です。検索語は Tavily に送られます。'
+    get keyGuide() {
+      return t('tavily.keyGuide');
+    }
   },
   jina: {
     id: 'jina',
-    label: 'Jina Reader（ページ本文の取得）',
+    get label() {
+      return t('jina.label');
+    },
     baseUrl: env.VITE_JINA_BASE_URL || 'https://r.jina.ai',
     keyOptional: true,
-    keyGuide: 'キーなしでも使えます（1 分あたり 20 回まで）。キーを設定すると上限が上がります。取得する URL は Jina に送られます。'
+    get keyGuide() {
+      return t('jina.keyGuide');
+    }
   }
 };
 

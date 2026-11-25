@@ -6,6 +6,8 @@ import type { Transport } from '../providers/types';
 import { plainTransport } from '../providers/transport';
 import { VAULT_PROTOCOL, type FromVault, type ToVault } from './protocol';
 import type { KeyStatus, VaultState } from '../keys/accounts';
+import { getLang } from '../i18n';
+import { t } from './messages';
 
 /**
  * URL of the key vault page. That page always stores keys and sends with them; the app never holds keys.
@@ -25,6 +27,7 @@ export const VAULT_SESSION = typeof crypto !== 'undefined' && crypto.randomUUID 
 export function vaultViewUrl(params: Record<string, string>): string {
   const u = new URL(VAULT_URL);
   u.searchParams.set('session', VAULT_SESSION);
+  u.searchParams.set('lang', getLang());
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   return u.toString();
 }
@@ -54,7 +57,7 @@ class VaultConnection {
       iframe.tabIndex = -1;
       iframe.referrerPolicy = 'no-referrer';
       iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
-      const timer = setTimeout(() => reject(new Error('キー金庫に接続できませんでした。')), 15000);
+      const timer = setTimeout(() => reject(new Error(t('connectFailed'))), 15000);
       iframe.addEventListener('load', () => {
         const ch = new MessageChannel();
         this.port = ch.port1;
@@ -92,7 +95,7 @@ class VaultConnection {
       this.results.set(id, resolve);
       this.send(type === 'wrap-data-key' ? { type, id, raw: String(arg) } : { type, id, blob: arg });
     });
-    if (!r.ok) throw new Error(r.message ?? '金庫での処理に失敗しました。');
+    if (!r.ok) throw new Error(r.message ?? t('vaultFailed'));
     return r.value;
   }
 
@@ -163,10 +166,10 @@ class VaultConnection {
     await this.connect();
     const id = `r${++this.seq}`;
     const method = (init.method ?? 'GET').toUpperCase();
-    if (method !== 'GET' && method !== 'POST') throw new ProviderFailure({ kind: 'bad-request', message: '許可されていないメソッドです。' });
+    if (method !== 'GET' && method !== 'POST') throw new ProviderFailure({ kind: 'bad-request', message: t('methodNotAllowed') });
     const headers: [string, string][] = [];
     new Headers(init.headers).forEach((v, k) => headers.push([k, v]));
-    if (init.body !== undefined && init.body !== null && typeof init.body !== 'string') throw new ProviderFailure({ kind: 'bad-request', message: '本文は文字列のみ送れます。' });
+    if (init.body !== undefined && init.body !== null && typeof init.body !== 'string') throw new ProviderFailure({ kind: 'bad-request', message: t('bodyMustBeString') });
     const signal = init.signal;
     if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
     return new Promise<Response>((resolve, reject) => {

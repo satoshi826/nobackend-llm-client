@@ -324,7 +324,7 @@ describe('tool execution loop', () => {
   });
 });
 
-import { fetchUrlTool, webSearchTool } from '../tools/web';
+import { fetchUrlTool, webSearchTool } from '../../features/web/tools';
 describe('web tool argument validation', () => {
   it('rejects an empty query and clamps the count to 1–10', () => {
     expect(() => webSearchTool.prepare({ query: ' ' })).toThrow();

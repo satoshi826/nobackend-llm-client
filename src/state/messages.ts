@@ -1,0 +1,67 @@
+// Text that app state shows to the user (toasts, errors, progress) or hands to the model
+import { defineMessages } from '../lib/i18n';
+
+export const t = defineMessages(
+  {
+    'approval.stopped': '停止しました。',
+    'compact.tooShort': 'まだ圧縮するほど長くありません。',
+    'compact.autoDone': '会話が長くなったため、古い {n} 件を自動で要約しました',
+    'compact.done': '古い {n} 件を要約しました',
+    'compact.failed': '要約できませんでした: {message}',
+    'conv.newChat': '新しいチャット',
+    'data.passwordNeeded': 'このバックアップはパスワードで暗号化されています。',
+    'data.notJson': 'JSON として読み込めませんでした。バックアップのファイルを選んでください。',
+    'data.badPassword': 'パスワードが違うか、ファイルが壊れています。',
+    'gen.setKeyFirst': '先に {name} の API キーを設定してください。',
+    'gen.chooseModel': 'モデルを選んでください。',
+    'lock.failed': '会話の保護を処理できませんでした: {message}',
+    'lock.sealed': '会話を暗号化しました',
+    'lock.unsealing': '会話の暗号化を解除しています…',
+    'lock.unsealingProgress': '会話の暗号化を解除しています… {done} / {total}',
+    'lock.unsealed': '会話の暗号化を解除しました',
+    'lock.sealing': '会話を暗号化しています…',
+    'lock.sealingProgress': '会話を暗号化しています… {done} / {total}'
+  },
+  {
+    en: {
+      'approval.stopped': 'Stopped.',
+      'compact.tooShort': 'The conversation isn’t long enough to compact yet.',
+      'compact.autoDone': 'The conversation got long, so the older messages ({n}) were summarized automatically',
+      'compact.done': 'Summarized the older messages ({n})',
+      'compact.failed': 'Couldn’t summarize: {message}',
+      'conv.newChat': 'New chat',
+      'data.passwordNeeded': 'This backup is encrypted with a password.',
+      'data.notJson': 'Couldn’t read the file as JSON. Choose a backup file.',
+      'data.badPassword': 'The password is wrong, or the file is damaged.',
+      'gen.setKeyFirst': 'Set your {name} API key first.',
+      'gen.chooseModel': 'Choose a model.',
+      'lock.failed': 'Couldn’t update conversation protection: {message}',
+      'lock.sealed': 'Encrypted your conversations',
+      'lock.unsealing': 'Decrypting conversations…',
+      'lock.unsealingProgress': 'Decrypting conversations… {done} / {total}',
+      'lock.unsealed': 'Removed encryption from your conversations',
+      'lock.sealing': 'Encrypting conversations…',
+      'lock.sealingProgress': 'Encrypting conversations… {done} / {total}'
+    },
+    zh: {
+      'approval.stopped': '已停止。',
+      'compact.tooShort': '对话还没有长到需要压缩。',
+      'compact.autoDone': '对话变长了，已自动将较早的{n}条消息总结为摘要',
+      'compact.done': '已将较早的{n}条消息总结为摘要',
+      'compact.failed': '无法生成摘要：{message}',
+      'conv.newChat': '新对话',
+      'data.passwordNeeded': '此备份已用密码加密。',
+      'data.notJson': '无法作为 JSON 读取。请选择备份文件。',
+      'data.badPassword': '密码错误，或文件已损坏。',
+      'gen.setKeyFirst': '请先设置 {name} 的 API 密钥。',
+      'gen.chooseModel': '请选择模型。',
+      'lock.failed': '无法处理对话保护：{message}',
+      'lock.sealed': '已加密对话',
+      'lock.unsealing': '正在解除对话加密…',
+      'lock.unsealingProgress': '正在解除对话加密… {done} / {total}',
+      'lock.unsealed': '已解除对话加密',
+      'lock.sealing': '正在加密对话…',
+      'lock.sealingProgress': '正在加密对话… {done} / {total}'
+    }
+  }
+);

@@ -4,7 +4,11 @@ import { cleanFileName, cleanFiles, currentText, getFile, listFiles, MAX_VERSION
 import { exportAll, importAll } from '../../lib/db/export';
 import { db } from '../../lib/db/schema';
 import type { FileRecord, MessageRecord } from '../../lib/db/schema';
-import { buildRequestMessages, withAttachments } from '../../lib/chat/request';
+import { buildRequestMessages } from '../../lib/chat/request';
+import { attachmentsTransform, withAttachments } from './transform';
+import { registerMessageTransform } from '../../lib/chat/request';
+
+registerMessageTransform(attachmentsTransform);
 import { parseDelimited } from './csv';
 import { filesNote, makeFileTools, READ_CHUNK, type FileToolDeps } from './tools';
 
@@ -142,10 +146,10 @@ describe('file storage and backups', () => {
     await putFile(f);
     expect(currentText((await getFile('file-1'))!)).toBe('two');
     const dump = await exportAll();
-    expect(dump.files?.map((x) => x.id)).toContain('file-1');
+    expect((dump.files as { id: string }[] | undefined)?.map((x) => x.id)).toContain('file-1');
     await db().files.clear();
     const r = await importAll(JSON.parse(JSON.stringify(dump)));
-    expect(r.files).toBe(1);
+    expect(r.tables.files).toBe(1);
     const back = (await listFiles()).find((x) => x.id === 'file-1')!;
     expect(back.versions.map((v) => v.text)).toEqual(['one', 'two']);
   });

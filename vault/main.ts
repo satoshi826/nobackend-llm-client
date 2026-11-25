@@ -7,11 +7,13 @@
 // Every view is opened with ?session=<app page ID>; unlock state is shared only among vault pages with that ID
 // No dependencies. The DOM is built with createElement and textContent only (no innerHTML).
 import { VAULT_PROTOCOL, type ToVault } from '../src/lib/vault/protocol';
+import { detectLang, formatList, getLang, setLang } from '../src/lib/i18n';
 import { MIN_PASSPHRASE_LENGTH } from '../src/lib/crypto/passphrase';
 import { handle } from './core';
 import { allowedHosts, allStatus, clearAll, label as providerLabel, lock, onChange, remove, removePassphrase, saveKey, setPassphrase, status, unlock, vaultState } from './store';
 import { ACCOUNT_IDS as PROVIDER_IDS, accountById } from '../src/lib/keys/accounts';
 import './style.css';
+import { t } from './messages';
 
 // App origins allowed to embed us: the one given at build time (separate-origin hosting) and our own (same-origin hosting)
 const APP_ORIGINS: string[] = [
@@ -27,6 +29,12 @@ const isolated = parentOrigin ? parentOrigin !== location.origin : undefined;
 
 const params = new URLSearchParams(location.search);
 const view = params.get('view') ?? 'transport';
+// The app passes its language; a vault opened on its own follows the browser
+{
+  const l = params.get('lang');
+  setLang(l === 'ja' || l === 'en' || l === 'zh' ? l : detectLang());
+  document.documentElement.lang = getLang();
+}
 if (params.get('theme') === 'dark') document.documentElement.classList.add('dark');
 
 // ---- Connection to the app (MessagePort) ----
@@ -90,20 +98,20 @@ async function run(btn: HTMLButtonElement, busy: string, fn: () => Promise<{ ok:
 }
 
 function passFields(autocomplete: string): { box: HTMLElement; p1: HTMLInputElement; p2: HTMLInputElement; check(): string | null } {
-  const p1 = h('input', { type: 'password', autocomplete, 'aria-label': 'パスフレーズ' });
-  const p2 = h('input', { type: 'password', autocomplete, 'aria-label': 'パスフレーズ（確認）' });
+  const p1 = h('input', { type: 'password', autocomplete, 'aria-label': t('pass.label') });
+  const p2 = h('input', { type: 'password', autocomplete, 'aria-label': t('pass.confirmAria') });
   return {
-    box: h('div', { class: 'grid2' }, h('label', {}, 'パスフレーズ', p1), h('label', {}, '確認用', p2)),
+    box: h('div', { class: 'grid2' }, h('label', {}, t('pass.label'), p1), h('label', {}, t('pass.confirm'), p2)),
     p1,
     p2,
     check: () =>
-      p1.value.length < MIN_PASSPHRASE_LENGTH ? `パスフレーズは ${MIN_PASSPHRASE_LENGTH} 文字以上にしてください。` : p1.value !== p2.value ? 'パスフレーズが確認用と一致しません。' : null
+      p1.value.length < MIN_PASSPHRASE_LENGTH ? t('pass.tooShort', { min: MIN_PASSPHRASE_LENGTH }) : p1.value !== p2.value ? t('pass.mismatch') : null
   };
 }
 
 function unlockForm(note: string): HTMLElement {
-  const pass = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': 'パスフレーズ', 'data-autofocus': true });
-  const btn = h('button', { type: 'submit', class: 'btn primary' }, '解錠');
+  const pass = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': t('pass.label'), 'data-autofocus': true });
+  const btn = h('button', { type: 'submit', class: 'btn primary' }, t('unlock.button'));
   const error = h('p', { class: 'err', role: 'alert' });
   return h(
     'form',
@@ -112,12 +120,12 @@ function unlockForm(note: string): HTMLElement {
       message = null;
       error.textContent = '';
       btn.disabled = true;
-      btn.textContent = '解錠中…';
+      btn.textContent = t('unlock.busy');
       const r = await unlock(pass.value);
       if (r.ok) return show({ ok: true, text: r.message });
       // Keep what was typed so the user can fix it, instead of re-rendering the whole page
       btn.disabled = false;
-      btn.textContent = '解錠';
+      btn.textContent = t('unlock.button');
       error.textContent = r.message;
       pass.focus();
       pass.select();
@@ -127,6 +135,18 @@ function unlockForm(note: string): HTMLElement {
     btn,
     error
   );
+}
+
+/** A translated sentence with one placeholder shown as <code> (one template per sentence, so word order can differ) */
+function withCode(text: string, placeholder: string, code: string): Child[] {
+  const i = text.indexOf(placeholder);
+  if (i < 0) return [text];
+  return [text.slice(0, i), h('code', {}, code), text.slice(i + placeholder.length)];
+}
+
+function registeredLabel(last4: string, encrypted: boolean): string {
+  if (last4) return t(encrypted ? 'key.registeredLast4Encrypted' : 'key.registeredLast4', { last4 });
+  return t(encrypted ? 'key.registeredEncrypted' : 'key.registered');
 }
 
 /** Dangerous action with a confirm button */
@@ -139,7 +159,7 @@ function dangerAction(kind: 'clear-all', label: string, warning: string, action:
   const yes = h('button', { type: 'button', class: 'btn danger' }, label);
   yes.addEventListener('click', () => {
     confirming = null;
-    void run(yes, '処理中…', action);
+    void run(yes, t('common.busy'), action);
   });
   return h(
     'div',
@@ -148,55 +168,55 @@ function dangerAction(kind: 'clear-all', label: string, warning: string, action:
     h('div', { class: 'btns' }, yes, h('button', { type: 'button', class: 'btn outline', onclick: () => {
       confirming = null;
       void render();
-    } }, 'やめる'))
+    } }, t('common.cancel')))
   );
 }
 
 /** Key of one provider (add, replace, delete). Unlock if the vault is locked */
 async function renderKey(id: string): Promise<Node[]> {
-  if (!PROVIDER_IDS.includes(id)) return [h('p', { class: 'muted' }, '未対応の接続先です。')];
+  if (!PROVIDER_IDS.includes(id)) return [h('p', { class: 'muted' }, t('common.unsupportedProvider'))];
   const [st, vs] = await Promise.all([status(id), vaultState()]);
   const name = providerLabel(id);
   const nodes: Node[] = [];
   if (params.get('compact') !== '1')
     nodes.push(
       isolated === false
-        ? h('p', { class: 'badge-line' }, '🔑 キーはこのブラウザ内のキー保管領域に保存されます（アプリと同じオリジン）。キー金庫を別オリジンに置くと、さらに安全になります。')
-        : h('p', { class: 'badge-line' }, '🔒 このフォームはキー金庫（', h('code', {}, location.host), '）の中にあります。入力したキーはアプリ本体には渡りません。')
+        ? h('p', { class: 'badge-line' }, t('key.sameOrigin'))
+        : h('p', { class: 'badge-line' }, ...withCode(t('key.isolated'), '{host}', location.host))
     );
   if (vs.locked) {
-    nodes.push(unlockForm('パスフレーズで解錠（保存済みのすべてのキー）'));
+    nodes.push(unlockForm(t('key.unlockAll')));
     return nodes;
   }
-  if (accountById(id)?.keyOptional && !st.present) nodes.push(h('p', { class: 'muted' }, 'この接続先はキーなしでも使えます（制限付き）。キーを設定すると上限が上がります。'));
+  if (accountById(id)?.keyOptional && !st.present) nodes.push(h('p', { class: 'muted' }, t('key.optional')));
   if (st.present) {
     nodes.push(
       h(
         'div',
         { class: 'card row' },
-        h('div', {}, h('div', { class: 'strong' }, `登録済みのキー${st.last4 ? `: ••••${st.last4}` : ''}${st.encrypted ? '（暗号化済み）' : ''}`), h('div', { class: 'muted' }, `送信先: ${st.hosts.join(', ')}`)),
+        h('div', {}, h('div', { class: 'strong' }, registeredLabel(st.last4, st.encrypted)), h('div', { class: 'muted' }, t('key.hosts', { hosts: formatList(st.hosts) }))),
         h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onclick: async () => {
           await remove(id);
-          show({ ok: true, text: 'キーを削除しました。' });
-        } }, '削除'))
+          show({ ok: true, text: t('key.deleted') });
+        } }, t('common.delete')))
       )
     );
   }
-  const key = h('input', { type: 'password', autocomplete: 'off', spellcheck: 'false', placeholder: `${name} の API キーを貼り付け`, class: 'mono', 'aria-label': `${name} の API キー` });
-  const submit = h('button', { type: 'submit', class: 'btn primary' }, '確認して保存');
+  const key = h('input', { type: 'password', autocomplete: 'off', spellcheck: 'false', placeholder: t('key.placeholder', { name }), class: 'mono', 'aria-label': t('key.label', { name }) });
+  const submit = h('button', { type: 'submit', class: 'btn primary' }, t('key.save'));
   nodes.push(
     h(
       'form',
       { class: 'stack', onsubmit: (e: Event) => {
         e.preventDefault();
-        void run(submit, '確認中…', () => saveKey(id, key.value));
+        void run(submit, t('key.checking'), () => saveKey(id, key.value));
       } },
-      h('label', {}, st.present ? 'キーを差し替える' : `${name} の API キー`, key),
-      h('p', { class: 'muted' }, vs.hasPassphrase ? 'パスフレーズで暗号化して保存します。' : `${isolated === false ? 'このブラウザ' : 'この金庫'}に保存します。暗号化したい場合は、設定の「接続とキー」でパスフレーズを設定してください。`),
+      h('label', {}, st.present ? t('key.replace') : t('key.label', { name }), key),
+      h('p', { class: 'muted' }, vs.hasPassphrase ? t('key.encryptNote') : isolated === false ? t('key.plainNoteBrowser') : t('key.plainNoteVault')),
       submit
     )
   );
-  nodes.push(h('p', { class: 'muted small' }, `キーは ${allowedHosts(id).join(', ')} への通信にだけ付けて送られます。${isolated === false ? '' : 'アプリ本体が乗っ取られても、キーそのものは読み出せません。'}`));
+  nodes.push(h('p', { class: 'muted small' }, t(isolated === false ? 'key.scope' : 'key.scopeIsolated', { hosts: formatList(allowedHosts(id)) })));
   return nodes;
 }
 
@@ -205,45 +225,45 @@ async function renderSecurity(): Promise<Node[]> {
   const vs = await vaultState();
   const setup = params.get('setup') === '1';
   const nodes: Node[] = [];
-  if (setup && vs.hasPassphrase) return [h('p', { class: 'ok' }, '🔒 パスフレーズを設定しました。キーと会話は暗号化して保存されます。')];
+  if (setup && vs.hasPassphrase) return [h('p', { class: 'ok' }, t('security.setupDone'))];
   if (!vs.hasPassphrase) {
     const f = passFields('new-password');
-    const btn = h('button', { type: 'submit', class: 'btn primary' }, setup ? 'パスフレーズを設定して暗号化' : 'パスフレーズを設定');
+    const btn = h('button', { type: 'submit', class: 'btn primary' }, setup ? t('security.setupButton') : t('security.setButton'));
     nodes.push(
       setup
-        ? h('p', { class: 'muted' }, `${MIN_PASSPHRASE_LENGTH} 文字以上。このブラウザでアプリを開くたびに 1 回入力します。`)
-        : h('p', { class: 'muted' }, 'キーと会話は暗号化せずに保存されています。パスフレーズを設定すると、API キーと会話（保存済みのプロンプト・スキルを含む）をすべて暗号化し、アプリを開くたびに 1 回の解錠が必要になります。'),
+        ? h('p', { class: 'muted' }, t('security.setupHint', { min: MIN_PASSPHRASE_LENGTH }))
+        : h('p', { class: 'muted' }, t('security.unencrypted')),
       h(
         'form',
         { class: 'stack', onsubmit: (e: Event) => {
           e.preventDefault();
           const err = f.check();
           if (err) return show({ ok: false, text: err });
-          void run(btn, '暗号化中…', () => setPassphrase(f.p1.value));
+          void run(btn, t('security.encrypting'), () => setPassphrase(f.p1.value));
         } },
         f.box,
         btn
       )
     );
   } else if (vs.locked) {
-    nodes.push(unlockForm('パスフレーズで解錠'), h('p', { class: 'muted' }, 'パスフレーズを忘れた場合は元に戻せません。'));
+    nodes.push(unlockForm(t('security.unlockLabel')), h('p', { class: 'muted' }, t('security.forgotten')));
   } else {
     nodes.push(
       h(
         'div',
         { class: 'card row' },
-        h('div', {}, h('div', { class: 'strong' }, '🔒 キーと会話はパスフレーズで暗号化されています（解錠中）'), h('div', { class: 'muted' }, 'ロックすると、アプリを読み込み直し、もう一度パスフレーズが必要になります。')),
-        h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onclick: () => lock() }, 'ロック'))
+        h('div', {}, h('div', { class: 'strong' }, t('security.unlocked')), h('div', { class: 'muted' }, t('security.lockHint'))),
+        h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onclick: () => lock() }, t('security.lock')))
       )
     );
     const cancel = h('button', { type: 'button', class: 'btn outline', onclick: () => {
       passMode = 'idle';
       void render();
-    } }, 'やめる');
-    const current = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': '今のパスフレーズ' });
+    } }, t('common.cancel'));
+    const current = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': t('pass.current') });
     if (passMode === 'change') {
       const f = passFields('new-password');
-      const btn = h('button', { type: 'submit', class: 'btn primary' }, '変更');
+      const btn = h('button', { type: 'submit', class: 'btn primary' }, t('security.change'));
       nodes.push(
         h(
           'form',
@@ -251,33 +271,33 @@ async function renderSecurity(): Promise<Node[]> {
             e.preventDefault();
             const err = f.check();
             if (err) return show({ ok: false, text: err });
-            void run(btn, '暗号化し直しています…', async () => {
+            void run(btn, t('security.reencrypting'), async () => {
               const r = await setPassphrase(f.p1.value, current.value);
               if (r.ok) passMode = 'idle';
               return r;
             });
           } },
-          h('label', {}, '今のパスフレーズ', current),
-          h('div', { class: 'strong' }, '新しいパスフレーズ'),
+          h('label', {}, t('pass.current'), current),
+          h('div', { class: 'strong' }, t('pass.new')),
           f.box,
           h('div', { class: 'btns' }, btn, cancel)
         )
       );
     } else if (passMode === 'remove') {
-      const btn = h('button', { type: 'submit', class: 'btn danger' }, 'パスフレーズを外す');
+      const btn = h('button', { type: 'submit', class: 'btn danger' }, t('security.remove'));
       nodes.push(
         h(
           'form',
           { class: 'stack card', onsubmit: (e: Event) => {
             e.preventDefault();
-            void run(btn, '復号しています…', async () => {
+            void run(btn, t('security.decrypting'), async () => {
               const r = await removePassphrase(current.value);
               if (r.ok) passMode = 'idle';
               return r;
             });
           } },
-          h('p', {}, 'API キーと会話を暗号化せずに保存し直します。端末のデータやバックアップからの流出に弱くなり、解錠なしで開けるようになります。'),
-          h('label', {}, '今のパスフレーズ', current),
+          h('p', {}, t('security.removeWarning')),
+          h('label', {}, t('pass.current'), current),
           h('div', { class: 'btns' }, btn, cancel)
         )
       );
@@ -289,11 +309,11 @@ async function renderSecurity(): Promise<Node[]> {
           h('button', { type: 'button', class: 'btn outline', onclick: () => {
             passMode = 'change';
             void render();
-          } }, 'パスフレーズを変更'),
+          } }, t('security.changeOpen')),
           h('button', { type: 'button', class: 'btn outline', onclick: () => {
             passMode = 'remove';
             void render();
-          } }, 'パスフレーズを外す')
+          } }, t('security.remove'))
         )
       );
     }
@@ -301,9 +321,9 @@ async function renderSecurity(): Promise<Node[]> {
   if (setup) return nodes;
   nodes.push(
     h('hr', {}),
-    dangerAction('clear-all', 'すべてのキーを削除', `保存されているすべての API キー${vs.hasPassphrase ? 'とパスフレーズを削除します。会話の暗号化も解除されます（会話は残ります）' : 'を削除します'}。元に戻せません。`, async () => {
+    dangerAction('clear-all', t('security.clearAll'), vs.hasPassphrase ? t('security.clearAllWarningPass') : t('security.clearAllWarning'), async () => {
       await clearAll();
-      return { ok: true, message: 'すべてのキーを削除しました。' };
+      return { ok: true, message: t('security.clearedAll') };
     })
   );
   return nodes;
@@ -312,8 +332,8 @@ async function renderSecurity(): Promise<Node[]> {
 /** The app's lock screen: only the unlock form */
 async function renderUnlock(): Promise<Node[]> {
   const vs = await vaultState();
-  if (!vs.locked) return [h('p', { class: 'ok' }, '解錠しました。')];
-  return [unlockForm('パスフレーズ')];
+  if (!vs.locked) return [h('p', { class: 'ok' }, t('unlock.done'))];
+  return [unlockForm(t('pass.label'))];
 }
 
 async function render() {
@@ -332,7 +352,7 @@ if (view === 'keys' || view === 'security' || view === 'unlock') {
   });
   if (window.parent === window) {
     // When opened directly (not embedded), storage is partitioned differently, so do not allow any actions
-    root.replaceChildren(h('p', { class: 'muted' }, 'このページはアプリから埋め込まれて使われます。直接開いても操作できません。'));
+    root.replaceChildren(h('p', { class: 'muted' }, t('common.embedOnly')));
   } else {
     void render();
     new ResizeObserver(postHeight).observe(root);

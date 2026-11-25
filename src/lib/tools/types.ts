@@ -33,6 +33,8 @@ export interface Tool<I = any> {
   description: string;
   parameters: Record<string, unknown>;
   risk: ToolRisk;
+  /** Always ask the user, whatever the settings or "always allow" say (e.g. saving a skill) */
+  alwaysAsk?: boolean;
   /** Summary shown on the approval card (e.g. the search query) */
   summarize(input: I): string;
   /** Repair and validate broken arguments. Throws if there is a problem */

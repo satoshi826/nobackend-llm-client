@@ -1,28 +1,40 @@
+/* Key vault page (shown in a frame inside the app). Same token names and values as the app's
+   "Moonlight" design system (src/styles.css, docs/design-system.md). The page background is
+   transparent so the app's glass shows through the frame. */
 :root {
   color-scheme: light;
-  --fg: #18181b;
-  --muted: #71717a;
-  --border: #d4d4d8;
-  --bg: #ffffff;
-  --input: #ffffff;
-  --primary-bg: #18181b;
-  --primary-fg: #ffffff;
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-strong: rgba(255, 255, 255, 0.9);
+  --sunken: rgba(15, 23, 42, 0.05);
+  --line: rgba(15, 23, 42, 0.1);
+  --line-strong: rgba(15, 23, 42, 0.22);
+  --ink: #1f2433;
+  --ink-strong: #0b0d17;
+  --muted: #545b6e;
+  --accent: #334155;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(51, 65, 85, 0.1);
   --ok: #047857;
-  --err: #be123c;
-  --note: #eff6ff;
+  --danger: #be123c;
+  --danger-soft: rgba(244, 63, 94, 0.12);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 :root.dark {
   color-scheme: dark;
-  --fg: #f4f4f5;
-  --muted: #a1a1aa;
-  --border: #3f3f46;
-  --bg: #18181b;
-  --input: #09090b;
-  --primary-bg: #f4f4f5;
-  --primary-fg: #18181b;
-  --ok: #34d399;
-  --err: #fb7185;
-  --note: #172554;
+  --glass: rgba(255, 255, 255, 0.06);
+  --glass-strong: rgba(255, 255, 255, 0.11);
+  --sunken: rgba(0, 0, 0, 0.25);
+  --line: rgba(255, 255, 255, 0.12);
+  --line-strong: rgba(255, 255, 255, 0.24);
+  --ink: #e7e9f3;
+  --ink-strong: #ffffff;
+  --muted: #a3a8bd;
+  --accent: #cbd5e1;
+  --accent-ink: #0b0d17;
+  --accent-soft: rgba(203, 213, 225, 0.14);
+  --ok: #6ee7b7;
+  --danger: #fda4af;
+  --danger-soft: rgba(244, 63, 94, 0.16);
 }
 * {
   box-sizing: border-box;
@@ -30,9 +42,10 @@
 html,
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font: 14px/1.6 system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  background: transparent;
+  color: var(--ink);
+  font: 14px/1.6 'Inter Variable', system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 #root {
   padding: 2px;
@@ -55,27 +68,35 @@ p {
 }
 .strong {
   font-weight: 600;
+  color: var(--ink-strong);
 }
 .ok {
   color: var(--ok);
 }
 .err {
-  color: var(--err);
+  color: var(--danger);
 }
 .badge-line {
   font-size: 12px;
-  background: var(--note);
-  border-radius: 8px;
-  padding: 6px 10px;
+  color: var(--muted);
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
 }
 code,
 .mono {
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
 }
 .card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 12px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 14px;
+  transition: border-color 200ms var(--ease-out);
+}
+.card:hover {
+  border-color: var(--line-strong);
 }
 .row {
   display: flex;
@@ -85,6 +106,7 @@ code,
 }
 .btns {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   flex-shrink: 0;
 }
@@ -98,6 +120,7 @@ code,
 }
 legend {
   font-weight: 600;
+  color: var(--ink-strong);
   margin-bottom: 4px;
   padding: 0;
 }
@@ -118,6 +141,7 @@ label > input:not([type='radio']) {
 }
 .radio input {
   margin-top: 5px;
+  accent-color: var(--accent);
 }
 .grid2 {
   display: grid;
@@ -128,54 +152,80 @@ label > input:not([type='radio']) {
   display: none;
 }
 input:not([type='radio']) {
-  border: 1px solid var(--border);
-  background: var(--input);
-  color: var(--fg);
-  border-radius: 8px;
-  padding: 7px 10px;
+  border: 1px solid transparent;
+  background: var(--sunken);
+  color: var(--ink-strong);
+  border-radius: 12px;
+  padding: 8px 12px;
   font: inherit;
+  transition: border-color 200ms var(--ease-out), background-color 200ms var(--ease-out);
+}
+input:not([type='radio']):hover {
+  border-color: var(--line);
+}
+input:not([type='radio']):focus {
+  border-color: var(--line-strong);
+  outline: none;
+}
+input::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
 }
 .btn {
-  border-radius: 8px;
-  padding: 7px 12px;
+  border-radius: 10px;
+  padding: 8px 14px;
   font: inherit;
   font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;
+  transition: background-color 200ms var(--ease-out), border-color 200ms var(--ease-out), opacity 200ms, scale 80ms;
+}
+.btn:not(:disabled):active {
+  scale: 0.97;
 }
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 .btn.primary {
-  background: var(--primary-bg);
-  color: var(--primary-fg);
+  background: var(--accent);
+  color: var(--accent-ink);
   align-self: flex-start;
 }
+.btn.primary:not(:disabled):hover {
+  opacity: 0.9;
+}
 .btn.outline {
-  background: transparent;
-  color: var(--fg);
-  border-color: var(--border);
+  background: var(--glass);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.btn.outline:not(:disabled):hover {
+  background: var(--glass-strong);
+  border-color: var(--line-strong);
 }
 .btn.danger {
-  background: var(--err);
-  color: #fff;
-}
-.btns {
-  flex-wrap: wrap;
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 hr {
   border: 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
   margin: 4px 0;
   width: 100%;
 }
 
 /* Visible keyboard focus */
 :where(a, button, input, select, textarea):focus-visible {
-  outline: 2px solid #0ea5e9;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .err:empty {
   display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+  }
 }

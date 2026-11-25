@@ -1,5 +1,6 @@
 // Provider destinations (fixed at build time). Presets, the key vault's allowlist and the CSP destinations are all built from here.
-// Used from both the browser (import.meta.env) and Node (vite config, csp.config.ts), so it depends on no other module.
+// Used from both the browser (import.meta.env) and Node (vite config, csp.config.ts), so it depends on no other module (its messages use only the dependency-free i18n).
+import { t as tp } from './messages';
 
 export type Env = Record<string, string | undefined>;
 
@@ -45,23 +46,23 @@ export function parseCustomProviders(json: string | undefined): CustomProviderDe
   try {
     raw = JSON.parse(json);
   } catch {
-    throw new Error('VITE_CUSTOM_PROVIDERS が JSON として読めません。');
+    throw new Error(tp('custom.notJson'));
   }
-  if (!Array.isArray(raw)) throw new Error('VITE_CUSTOM_PROVIDERS は配列で指定してください。');
+  if (!Array.isArray(raw)) throw new Error(tp('custom.notArray'));
   const seen = new Set<string>();
   return raw.map((r: any, i) => {
     const where = `VITE_CUSTOM_PROVIDERS[${i}]`;
-    if (typeof r?.id !== 'string' || !ID_RE.test(r.id)) throw new Error(`${where}.id は半角の小文字・数字・ハイフンで指定してください。`);
-    if (BUILTIN_BASE_URLS[r.id] || r.id === 'tavily' || r.id === 'jina' || seen.has(r.id)) throw new Error(`${where}.id「${r.id}」は使えません（重複）。`);
+    if (typeof r?.id !== 'string' || !ID_RE.test(r.id)) throw new Error(tp('custom.badId', { where }));
+    if (BUILTIN_BASE_URLS[r.id] || r.id === 'tavily' || r.id === 'jina' || seen.has(r.id)) throw new Error(tp('custom.duplicateId', { where, id: r.id }));
     seen.add(r.id);
     let u: URL;
     try {
       u = new URL(String(r.baseUrl));
     } catch {
-      throw new Error(`${where}.baseUrl が URL ではありません。`);
+      throw new Error(tp('custom.badUrl', { where }));
     }
-    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && isLocal(u.hostname))) throw new Error(`${where}.baseUrl は https（ローカルなら http）にしてください。`);
-    if (u.username || u.password || u.search || u.hash) throw new Error(`${where}.baseUrl に認証情報やクエリは書けません。`);
+    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && isLocal(u.hostname))) throw new Error(tp('custom.insecureUrl', { where }));
+    if (u.username || u.password || u.search || u.hash) throw new Error(tp('custom.urlExtras', { where }));
     return {
       id: r.id,
       label: typeof r.label === 'string' && r.label.trim() ? r.label.trim().slice(0, 40) : r.id,

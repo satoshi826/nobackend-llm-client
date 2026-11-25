@@ -2,7 +2,8 @@
 import { signal } from '@preact/signals';
 
 export type ModalName = 'settings' | 'models' | 'system';
-export type SettingsTab = 'connections' | 'chat' | 'search' | 'skills' | 'usage' | 'privacy';
+/** Core tabs, or the id of a tab a feature registered */
+export type SettingsTab = 'connections' | 'chat' | 'appearance' | 'features' | 'privacy' | (string & {});
 
 export const modal = signal<ModalName | null>(null);
 /** What the main area shows: the chat, or a screen registered by a feature (e.g. { kind: 'files' }, { kind: 'file', id }) */
@@ -38,12 +39,3 @@ export function showToast(text: string, kind: 'info' | 'error' = 'info') {
   clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => (toast.value = null), kind === 'error' ? 6000 : 3500);
 }
-
-/** Image viewer: the images being browsed and which one is shown */
-export interface LightboxItem {
-  blobId: string;
-  conversationId: string;
-  messageId: string;
-}
-/** fromGallery: opened from the file manager (offers to open the image's conversation) */
-export const lightbox = signal<{ items: LightboxItem[]; index: number; fromGallery?: boolean } | null>(null);

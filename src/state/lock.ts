@@ -12,6 +12,7 @@ import type { VaultState } from '../lib/keys/accounts';
 import { vaultState, vaultStatusKnown } from './keys';
 import { settings } from './settings';
 import { showToast } from './ui';
+import { t } from './messages';
 
 /**
  * none: not encrypted / locked: waiting for unlock / unlocked: unlocked
@@ -49,7 +50,7 @@ export async function initDataLock(whenUnlocked: () => Promise<void>) {
     const vs = vaultState.value;
     if (!vaultStatusKnown.value) return;
     // Each time the vault state changes, process the changes one at a time in order
-    busy = busy.then(() => react(vs)).catch((e) => showToast(`会話の保護の処理に失敗しました: ${(e as Error).message}`, 'error'));
+    busy = busy.then(() => react(vs)).catch((e) => showToast(t('lock.failed', { message: (e as Error).message }), 'error'));
   });
   startIdleLock();
 }
@@ -85,7 +86,7 @@ async function react(vs: VaultState) {
     setDataKey(key);
     await finishSealing(true);
     dataLock.value = 'unlocked';
-    showToast('会話を暗号化しました');
+    showToast(t('lock.sealed'));
     return;
   }
   // Passphrase changed -> rewrap the data key with the new passphrase
@@ -95,25 +96,25 @@ async function react(vs: VaultState) {
   }
   // Passphrase removed -> remove conversation encryption (decrypt first, then delete the key)
   if (stored && dek && !vs.hasPassphrase) {
-    dataWork.value = '会話の暗号化を解除しています…';
+    dataWork.value = t('lock.unsealing');
     try {
-      await repo.resealAll(dek, null, (d, t) => (dataWork.value = `会話の暗号化を解除しています… ${d} / ${t}`));
+      await repo.resealAll(dek, null, (d, total) => (dataWork.value = t('lock.unsealingProgress', { done: d, total })));
     } finally {
       dataWork.value = '';
     }
     setDataKey(null);
     await saveStored(null);
     dataLock.value = 'none';
-    showToast('会話の暗号化を解除しました');
+    showToast(t('lock.unsealed'));
   }
 }
 
 /** Finish encrypting the existing data (if any remains) */
 async function finishSealing(first = false) {
   const key = currentDataKey()!;
-  dataWork.value = '会話を暗号化しています…';
+  dataWork.value = t('lock.sealing');
   try {
-    await repo.resealAll(key, key, (d, t) => (dataWork.value = `会話を暗号化しています… ${d} / ${t}`));
+    await repo.resealAll(key, key, (d, total) => (dataWork.value = t('lock.sealingProgress', { done: d, total })));
   } finally {
     dataWork.value = '';
   }

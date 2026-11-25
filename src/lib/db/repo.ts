@@ -2,10 +2,9 @@
 // With a passphrase, the content of conversations, messages, saved prompts and skills is stored encrypted (sealed.ts).
 import { db, type Conversation, type MessageRecord, type SavedPrompt, type ModelRecord, type Skill } from './schema';
 import type { UsageRecord } from '../usage';
-import { currentDataKey, seal, unseal } from './sealed';
+import { currentDataKey, seal, unseal, type SealedTable } from './sealed';
 import type { DataKey } from '../crypto/data';
-import { forgetTemporaryImages, resealImages } from './images';
-import { forgetTemporaryFiles } from './files';
+import { dataTables } from './data-tables';
 
 const memConversations = new Map<string, Conversation>();
 const memMessages = new Map<string, MessageRecord>();
@@ -38,15 +37,14 @@ export async function putConversation(c: Conversation): Promise<void> {
 export async function deleteConversation(id: string): Promise<void> {
   if (memConversations.delete(id)) {
     for (const [k, m] of memMessages) if (m.conversationId === id) memMessages.delete(k);
-    forgetTemporaryImages(id);
-    forgetTemporaryFiles(id);
+    for (const t of dataTables()) await t.onConversationDeleted?.(id, true);
     return;
   }
-  await db().transaction('rw', db().conversations, db().messages, db().blobs, async () => {
+  await db().transaction('rw', db().conversations, db().messages, async () => {
     await db().messages.where('conversationId').equals(id).delete();
-    await db().blobs.where('conversationId').equals(id).delete();
     await db().conversations.delete(id);
   });
+  for (const t of dataTables()) await t.onConversationDeleted?.(id, false);
   for (const [k, m] of searchCache) if (m.conversationId === id) searchCache.delete(k);
 }
 
@@ -157,28 +155,29 @@ export async function getSetting<T>(key: string, fallback: T): Promise<T> {
 export const setSetting = (key: string, value: unknown) => db().settings.put({ key, value });
 
 // ---- Switching encryption on/off (setting / removing the passphrase) ----
-const SEALED_TABLES = ['conversations', 'messages', 'prompts', 'skills', 'files'] as const;
+const CORE_SEALED_TABLES = ['conversations', 'messages', 'prompts', 'skills'] as const;
+
+/** Encrypt / decrypt every row of one sealed table (also used by data tables that store sealed rows) */
+export async function resealTable(t: SealedTable, from: DataKey | null, to: DataKey | null, onProgress?: (done: number, total: number) => void): Promise<void> {
+  const d = db();
+  const rows = await d.table(t).toArray();
+  let done = 0;
+  for (let i = 0; i < rows.length; i += 200) {
+    const out = [];
+    for (const raw of rows.slice(i, i + 200)) out.push(await seal(t, await unseal(raw, from), to));
+    await d.table(t).bulkPut(out);
+    done += out.length;
+    onProgress?.(done, rows.length);
+  }
+}
 
 /**
  * Encrypt (to: a data key) or decrypt (to: null) all stored data in bulk.
  * from is the current key (to open already-encrypted data). If interrupted, running it again processes only the rest.
  */
 export async function resealAll(from: DataKey | null, to: DataKey | null, onProgress?: (done: number, total: number) => void): Promise<void> {
-  const d = db();
-  let total = 0;
-  for (const t of SEALED_TABLES) total += await d.table(t).count();
-  let done = 0;
-  for (const t of SEALED_TABLES) {
-    const rows = await d.table(t).toArray();
-    for (let i = 0; i < rows.length; i += 200) {
-      const out = [];
-      for (const raw of rows.slice(i, i + 200)) out.push(await seal(t, await unseal(raw, from), to));
-      await d.table(t).bulkPut(out);
-      done += out.length;
-      onProgress?.(done, total);
-    }
-  }
-  await resealImages(from, to, onProgress);
+  for (const t of CORE_SEALED_TABLES) await resealTable(t, from, to, onProgress);
+  for (const t of dataTables()) await t.reseal?.(from, to, onProgress);
   clearSearchCache();
 }
 

@@ -2,6 +2,8 @@
 // Files of temporary chats stay in memory. With a passphrase, names and contents are encrypted (sealed.ts).
 import { db, type FileRecord, type FileVersion } from './schema';
 import { seal, unseal } from './sealed';
+import { registerDataTable } from './data-tables';
+import { resealTable } from './repo';
 
 /** Versions kept per file (older ones are dropped) */
 export const MAX_VERSIONS = 30;
@@ -170,3 +172,15 @@ export async function importFiles(files: FileRecord[]): Promise<number> {
   }
   return n;
 }
+
+registerDataTable<FileRecord>({
+  key: 'files',
+  exportRows: () => exportFiles(),
+  clean: (raw) => cleanFiles(raw),
+  importRows: (rows) => importFiles(rows),
+  reseal: (from, to, onProgress) => resealTable('files', from, to, onProgress),
+  // Files outlive the conversation they were made in; only a temporary chat's files go with it
+  onConversationDeleted(id, temporary) {
+    if (temporary) forgetTemporaryFiles(id);
+  }
+});

@@ -34,13 +34,28 @@ for (const [id, p] of Object.entries(PRESETS)) {
     host: hostOf(p.defaults.baseUrl),
     kind: 'llm',
     keyOptional: !!p.keyOptional,
-    keyGuide: p.keyGuide ?? '',
+    // Read through so it follows the current language
+    get keyGuide() {
+      return p.keyGuide ?? '';
+    },
     preset: p,
     keyHeader: p.keyHeader ? { name: p.keyHeader.name, prefix: p.keyHeader.prefix ?? '' } : BEARER
   };
 }
 for (const [id, s] of Object.entries(SERVICES)) {
-  ACCOUNTS[id] = { id, label: s.label, host: hostOf(s.baseUrl), kind: 'tool', keyOptional: s.keyOptional, keyGuide: s.keyGuide, keyHeader: BEARER };
+  ACCOUNTS[id] = {
+    id,
+    get label() {
+      return s.label;
+    },
+    host: hostOf(s.baseUrl),
+    kind: 'tool',
+    keyOptional: s.keyOptional,
+    get keyGuide() {
+      return s.keyGuide;
+    },
+    keyHeader: BEARER
+  };
 }
 
 export const ACCOUNT_IDS = Object.keys(ACCOUNTS);

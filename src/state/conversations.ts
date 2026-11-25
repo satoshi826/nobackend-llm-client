@@ -10,6 +10,7 @@ import { defaultModel, visibleModels } from './models';
 import { mainView, sidebarOpen, sidebarTab } from './ui';
 import { registerRoute, setHash as setRouteHash } from './router';
 import { keyInfos, keyReady, vaultStatusKnown } from './keys';
+import { t } from './messages';
 
 export const conversations = signal<Conversation[]>([]);
 /** ID of the displayed saved conversation (null means a draft) */
@@ -24,7 +25,7 @@ function makeDraft(temporary: boolean): Conversation {
   const m = defaultModel();
   return {
     id: DRAFT_ID,
-    title: '新しいチャット',
+    title: t('conv.newChat'),
     createdAt: now,
     updatedAt: now,
     currentLeafId: null,

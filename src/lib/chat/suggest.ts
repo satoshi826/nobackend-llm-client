@@ -1,0 +1,114 @@
+// Reply suggestions: after an answer, generate a few short replies the user is likely to send next.
+// Sends only the latest exchange (question and answer), not the whole conversation, as a separate small request (keeps the answer itself clean).
+import type { AuthRef, ChatMessage, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
+import type { MessageRecord } from '../db/schema';
+import { getAdapter } from '../providers/registry';
+
+/** Max characters sent per message (long answers keep their tail) */
+const MAX_CHARS = 3000;
+export const SUGGESTION_MAX_LEN = 200;
+
+function textOf(m: MessageRecord): string {
+  return m.parts
+    .filter((p) => p.type === 'text')
+    .map((p) => (p as { text: string }).text)
+    .join('')
+    .trim();
+}
+
+function clip(s: string): string {
+  return s.length > MAX_CHARS ? '…' + s.slice(-MAX_CHARS) : s;
+}
+
+/**
+ * Renders the last `turns` exchanges (user message and assistant answer) as text.
+ * path runs from the start of the conversation to the answer (last element). Compaction nodes and messages without text are skipped.
+ */
+export function recentExchanges(path: MessageRecord[], turns: number): string {
+  const msgs = path.filter((m) => (m.role === 'user' || m.role === 'assistant') && !m.compaction && textOf(m));
+  const out: string[] = [];
+  let users = 0;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    out.unshift(`${m.role === 'user' ? 'ユーザー' : 'アシスタント'}: ${clip(textOf(m))}`);
+    if (m.role === 'user' && ++users >= turns) break;
+  }
+  return out.join('\n\n');
+}
+
+export function suggestionInstruction(count: number): string {
+  return [
+    'あなたは、チャットでユーザーが次に送りそうな返信の候補を作ります。',
+    `与えられた会話の続きとして、ユーザーが次に送りそうなメッセージを ${count} 個考えてください。`,
+    '- ユーザーの立場で書く（アシスタントの立場で書かない）',
+    '- それぞれ 1 文で短く（40 文字程度まで）、互いに違う方向の内容にする',
+    '- ユーザーが使っている言語で書く',
+    '- 出力は JSON の文字列の配列だけ（例: ["…", "…"]）。説明や前置きは書かない'
+  ].join('\n');
+}
+
+export function suggestionMessages(path: MessageRecord[], turns: number, count: number): ChatMessage[] {
+  return [
+    { id: 'sys', role: 'system', parts: [{ type: 'text', text: suggestionInstruction(count) }] },
+    { id: 'u', role: 'user', parts: [{ type: 'text', text: `会話:\n\n${recentExchanges(path, turns)}` }] }
+  ];
+}
+
+/** Extract suggestions from the model output (prefer a JSON array, otherwise fall back to list lines) */
+export function parseSuggestions(text: string, count: number): string[] {
+  let list: unknown[] = [];
+  const a = text.indexOf('[');
+  const b = text.lastIndexOf(']');
+  if (a >= 0 && b > a) {
+    try {
+      const v = JSON.parse(text.slice(a, b + 1));
+      if (Array.isArray(v)) list = v;
+    } catch {
+      /* read it as a list instead */
+    }
+  }
+  if (!list.length) {
+    list = text
+      .split(/\r?\n/)
+      .map((l) => l.replace(/^\s*(?:[-*・•]|\d+[.)．、])\s*/, '').replace(/^["「『]|["」』],?$/g, '').trim())
+      .filter((l) => l && !/^```/.test(l));
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of list) {
+    if (typeof v !== 'string') continue;
+    const s = v.replace(/\s+/g, ' ').trim().slice(0, SUGGESTION_MAX_LEN);
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+    if (out.length >= count) break;
+  }
+  return out;
+}
+
+export interface SuggestOptions {
+  provider: ProviderConfig;
+  preset: ProviderPreset;
+  auth: AuthRef | undefined;
+  transport: Transport;
+  model: string;
+  providerOptions?: Record<string, Record<string, unknown>>;
+  signal: AbortSignal;
+  onUsage?(usage: Usage, costUsd?: number): void;
+}
+
+export async function generateSuggestions(path: MessageRecord[], turns: number, count: number, o: SuggestOptions): Promise<string[]> {
+  let out = '';
+  for await (const ev of getAdapter(o.provider).chat(
+    o.provider,
+    o.preset,
+    o.auth,
+    { model: o.model, messages: suggestionMessages(path, turns, count), params: { maxTokens: 600, temperature: 0.8 }, providerOptions: o.providerOptions, signal: o.signal },
+    o.transport
+  )) {
+    if (ev.type === 'text-delta') out += ev.delta;
+    else if (ev.type === 'usage') o.onUsage?.(ev.usage, ev.costUsd);
+    else if (ev.type === 'error') throw new Error(ev.error.message);
+  }
+  return parseSuggestions(out, count);
+}

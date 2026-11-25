@@ -14,34 +14,34 @@ const req = (over: Partial<{ providerId: string; url: string; method: any; body:
   ...over
 });
 
-describe('キー金庫: 送信依頼の検証', () => {
-  it('許可されたホストは通す', () => {
+describe('key vault: send request validation', () => {
+  it('allows permitted hosts', () => {
     expect(allowedHosts('venice')).toEqual(['api.venice.ai']);
     expect(validateRequest(req())).toBeNull();
   });
-  it('別のホスト・http・認証情報付き URL・未知のプロバイダー・不正なメソッドは拒否', () => {
+  it('rejects other hosts, http, URLs with credentials, unknown providers and invalid methods', () => {
     expect(validateRequest(req({ url: 'https://evil.example/steal' }))).not.toBeNull();
     expect(validateRequest(req({ url: 'http://api.venice.ai/api/v1/chat/completions' }))).not.toBeNull();
     expect(validateRequest(req({ url: 'https://user:pass@api.venice.ai/x' }))).not.toBeNull();
     expect(validateRequest(req({ providerId: 'unknown' }))).not.toBeNull();
     expect(validateRequest(req({ method: 'DELETE' }))).not.toBeNull();
-    // OpenRouter のキーを Venice のホストに送ることもできない
+    // An OpenRouter key cannot be sent to the Venice host either
     expect(validateRequest(req({ providerId: 'openrouter' }))).not.toBeNull();
   });
-  it('キーが未登録なら送信せずエラーを返す', async () => {
+  it('returns an error without sending when no key is stored', async () => {
     const out: FromVault[] = [];
     await handle(req(), (m) => out.push(m));
     expect(out[0]).toMatchObject({ type: 'error', kind: 'auth' });
   });
-  it('拒否されたホストへの依頼は fetch せずにエラー', async () => {
+  it('errors without fetching for a rejected host', async () => {
     const out: FromVault[] = [];
     await handle(req({ url: 'https://evil.example/' }), (m) => out.push(m));
     expect(out[0]).toMatchObject({ type: 'error', kind: 'host-mismatch' });
   });
 });
 
-describe('キー金庫: Web 検索サービス', () => {
-  it('Tavily / Jina のキーはそれぞれのホストにだけ付ける', () => {
+describe('key vault: web search services', () => {
+  it('attaches Tavily / Jina keys only to their own hosts', () => {
     expect(allowedHosts('tavily')).toEqual(['api.tavily.com']);
     expect(allowedHosts('jina')).toEqual(['r.jina.ai']);
     expect(validateRequest(req({ providerId: 'tavily', url: 'https://api.tavily.com/search' }))).toBeNull();

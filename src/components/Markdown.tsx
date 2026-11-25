@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ensureHighlighter, isHighlighterReady, renderMarkdown, setSafeHTML } from '../lib/markdown/render';
 import { cx } from './ui';
 
-/** Markdown を描画する。DOM への HTML 挿入はこのコンポーネント（setSafeHTML）だけが行う。 */
+/** Renders Markdown. This component (setSafeHTML) is the only place that inserts HTML into the DOM. */
 export function Markdown({ text, streaming, citations, class: className }: { text: string; streaming?: boolean; citations?: string[]; class?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [hlReady, setHlReady] = useState(isHighlighterReady());
@@ -16,7 +16,7 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
   useLayoutEffect(() => {
     if (!ref.current) return;
     ref.current.dataset.raw = text;
-    // ストリーミング中はハイライトしない（重い・コードが未完成）
+    // Do not highlight while streaming (expensive, and the code is incomplete)
     setSafeHTML(ref.current, renderMarkdown(text, { highlight: !streaming && hlReady, citations }));
   }, [text, streaming, hlReady, citations?.join('|')]);
 

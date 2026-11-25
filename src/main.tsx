@@ -8,10 +8,10 @@ init().catch((e) => {
   console.error('初期化に失敗しました', e);
 });
 
-// PWA: 本番ビルドのみ Service Worker を登録（アプリ本体だけをキャッシュする）
+// PWA: register the Service Worker only in production builds (it caches only the app itself)
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // Trusted Types 下では register() に TrustedScriptURL が必要。/sw.js 以外は通さない専用ポリシーを使う。
+    // Under Trusted Types, register() needs a TrustedScriptURL. Use a dedicated policy that allows nothing but /sw.js.
     const tt = (window as any).trustedTypes;
     const swUrl = tt?.createPolicy
       ? tt.createPolicy('app-sw', {

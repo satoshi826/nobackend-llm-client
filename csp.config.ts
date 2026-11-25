@@ -1,8 +1,8 @@
-// セキュリティヘッダ（Cloudflare Pages の _headers 形式）を 1 か所で組み立てる。
-// 本体アプリとキー金庫で許可する通信先を分ける（最小権限）:
-//   本体: キーの要らない通信だけ（モデル一覧、キーなしの Jina Reader、キーなしで使う接続先）
-//   金庫: キーを付ける通信（LLM・Tavily・Jina）
-// 接続先の宛先は src/lib/providers/endpoints.ts から作る（ビルド時の VITE_CUSTOM_PROVIDERS も含む）。
+// Builds the security headers (Cloudflare Pages _headers format) in one place.
+// The app and the key vault get separate allowed destinations (least privilege):
+//   app:   only requests that need no key (model lists, keyless Jina Reader, providers used without a key)
+//   vault: requests that carry a key (LLMs, Tavily, Jina)
+// Provider destinations come from src/lib/providers/endpoints.ts (including VITE_CUSTOM_PROVIDERS at build time).
 import { appDirectOrigins, keyedProviderOrigins, type Env } from './src/lib/providers/endpoints';
 
 function origin(url: string | undefined, fallback: string): string {
@@ -17,16 +17,16 @@ export function serviceOrigins(env: Env) {
   return {
     tavily: origin(env.VITE_TAVILY_BASE_URL, 'https://api.tavily.com'),
     jina: origin(env.VITE_JINA_BASE_URL, 'https://r.jina.ai'),
-    /** 本体から直接送る LLM の接続先 */
+    /** LLM providers the app calls directly */
     appProviders: appDirectOrigins(env),
-    /** 金庫がキーを付けて送る LLM の接続先 */
+    /** LLM providers the vault calls with a key attached */
     keyedProviders: keyedProviderOrigins(env)
   };
 }
 
 const COMMON = ['X-Content-Type-Options: nosniff', 'Referrer-Policy: no-referrer', 'Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()'];
 
-/** 本体アプリの CSP。vaultOrigin は別オリジンの金庫（同一オリジンなら 'self' だけ） */
+/** CSP for the app. vaultOrigin is a separate-origin vault (just 'self' when same-origin) */
 export function appCsp(env: Env, vaultOrigin?: string): string {
   const o = serviceOrigins(env);
   return [
@@ -48,7 +48,7 @@ export function appCsp(env: Env, vaultOrigin?: string): string {
   ].join('; ');
 }
 
-/** キー金庫の CSP。appOrigins は金庫を埋め込んでよい本体（同一オリジン配置なら 'self'） */
+/** CSP for the key vault. appOrigins are the apps allowed to embed it ('self' when hosted same-origin) */
 export function vaultCsp(env: Env, appOrigins: string[]): string {
   const o = serviceOrigins(env);
   return [
@@ -66,11 +66,11 @@ export function vaultCsp(env: Env, appOrigins: string[]): string {
 }
 
 /**
- * 本体のデプロイ用 _headers（Cloudflare Pages / Workers の静的アセット共通の形式）。
- * CSP は文書ごとに当てる: 本体のページ（/ と /index.html）と、同一オリジンの金庫（/vault/ 以下）。
- * 「/* に本体の CSP、/vault/* で外す」という書き方は「! ヘッダ」の対応に依存し、
- * 外れないと CSP が 2 つ重なって金庫の通信が止まるため使わない。
- * 本体は # で画面を切り替えるので、ほかのパスで HTML を返すことはない（404）。
+ * _headers for deploying the app (format shared by Cloudflare Pages and Workers static assets).
+ * CSP is applied per document: the app page (/ and /index.html) and the same-origin vault (under /vault/).
+ * Writing "app CSP on /*, removed on /vault/*" would depend on "! Header" support,
+ * and if removal fails the two CSPs stack and block the vault's requests, so we avoid it.
+ * The app switches views via #, so no other path ever returns HTML (404).
  */
 export function appHeadersFile(env: Env): string {
   const vaultOrigin = env.VITE_VAULT_URL ? new URL(env.VITE_VAULT_URL).origin : undefined;
@@ -93,7 +93,7 @@ export function appHeadersFile(env: Env): string {
   ].join('\n');
 }
 
-/** 別オリジンに置く金庫の _headers */
+/** _headers for a vault hosted on a separate origin */
 export function vaultHeadersFile(env: Env): string {
   const appOrigins = (env.VITE_APP_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
   return ['/*', `  Content-Security-Policy: ${vaultCsp(env, appOrigins.length ? appOrigins : ["'self'"])}`, ...COMMON.map((h) => '  ' + h), '  Cross-Origin-Resource-Policy: same-origin', ''].join('\n');

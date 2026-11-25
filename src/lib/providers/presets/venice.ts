@@ -2,7 +2,7 @@ import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
 import { checkKey, joinUrl } from '../openai-compatible';
 import { builtinBaseUrl } from '../endpoints';
 
-// 開発時はモック（scripts/mock-venice.mjs）に向けられるようにする（VITE_VENICE_BASE_URL）
+// In development it can point at the mock (scripts/mock-venice.mjs) via VITE_VENICE_BASE_URL
 const BASE_URL = builtinBaseUrl('venice', (import.meta as any).env ?? {});
 
 const KEY_GUIDE =
@@ -33,7 +33,7 @@ export const venicePreset: ProviderPreset = {
     kind: 'openai-compatible',
     preset: 'venice',
     baseUrl: BASE_URL,
-    // Venice 既定のシステムプロンプトは付けない（設定で切り替え可能）
+    // Do not add Venice's default system prompt (can be toggled in settings)
     extraBody: { venice_parameters: { include_venice_system_prompt: false } },
     modelListMode: 'fetch',
     enabled: true
@@ -81,13 +81,13 @@ export const venicePreset: ProviderPreset = {
       vp.include_search_results_in_stream = vp.include_search_results_in_stream ?? true;
     }
     const out: Record<string, any> = { ...body, venice_parameters: vp };
-    // 同じ会話の要求を同じキャッシュに当てて、送り直す履歴部分を安く・速くする
+    // Route requests of the same conversation to the same cache so the resent history is cheaper and faster
     if (req.cacheKey) out.prompt_cache_key = req.cacheKey;
     return out;
   },
 
   parseExtra(chunk: any, seen: Set<string>): ProviderEvent[] {
-    // 引用の位置はドキュメントで揺れているので、見つかる場所を広く探す
+    // Where citations appear varies across the docs, so search broadly
     const lists = [chunk?.venice_parameters?.web_search_citations, chunk?.web_search_citations, chunk?.choices?.[0]?.delta?.venice_parameters?.web_search_citations];
     const out: ProviderEvent[] = [];
     for (const list of lists) {

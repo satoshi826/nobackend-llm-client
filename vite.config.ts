@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 import { appHeadersFile } from './csp.config';
 
-/** _headers（CSP などのセキュリティヘッダ）を生成する */
+/** Generates _headers (CSP and other security headers) */
 function headersPlugin(env: Record<string, string | undefined>): Plugin {
   return {
     name: 'security-headers',
@@ -23,9 +23,9 @@ export default defineConfig(({ mode }) => {
       target: 'es2022',
       emptyOutDir: true,
       sourcemap: false,
-      modulePreload: { polyfill: false }, // インラインスクリプトを出さない（CSP script-src 'self' のため）
+      modulePreload: { polyfill: false }, // emit no inline script (for CSP script-src 'self')
       rollupOptions: {
-        // 本体と、同一オリジンに置くキー金庫（/vault/）
+        // The app, and the key vault hosted on the same origin (/vault/)
         input: { main: resolve(__dirname, 'index.html'), vault: resolve(__dirname, 'vault/index.html') }
       }
     },

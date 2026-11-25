@@ -1,4 +1,4 @@
-// 会話一覧のサイドバー: 新規 / 検索 / 一覧 / お知らせ / 設定
+// Conversation list sidebar: new / search / list / notices / settings
 import { useEffect, useState } from 'preact/hooks';
 import { searchMessages, type SearchHit } from '../lib/db/repo';
 import type { Conversation } from '../lib/db/schema';
@@ -6,12 +6,12 @@ import {
   abortConversation,
   balances,
   balanceAlerts,
+  dataLock,
+  lockNow,
   providerById,
   clearLeftoverLocalKeys,
   conversations,
-  currentConv,
   currentId,
-  isDraft,
   leftoverLocalKeys,
   openConversation,
   openSettings,
@@ -75,7 +75,7 @@ function Row({ c, snippet }: { c: Conversation; snippet?: string }) {
         </span>
         {live && <span class="ml-auto size-1.5 shrink-0 animate-pulse rounded-full bg-sky-500" aria-label="生成中" />}
       </button>
-      {/* タッチ端末（hover なし）では常に表示 */}
+      {/* Always shown on touch devices (no hover) */}
       <div class="hidden shrink-0 items-center pr-1 group-focus-within:flex group-hover:flex [@media(hover:none)]:flex">
         <Button aria-label={c.pinned ? 'ピン留めを外す' : 'ピン留め'} title={c.pinned ? 'ピン留めを外す' : 'ピン留め'} onClick={() => updateConversation({ pinned: c.pinned ? 0 : 1 }, c.id)} class="px-1!">
           <Icon name="pin" class="size-3.5" />
@@ -108,7 +108,7 @@ function Row({ c, snippet }: { c: Conversation; snippet?: string }) {
   );
 }
 
-/** 気づいてほしいこと（1 か所にまとめて表示） */
+/** Things that need the user's attention (shown together in one place) */
 function Notices() {
   const s = settings.value;
   const backupDays = s.lastBackupAt ? Math.floor((Date.now() - s.lastBackupAt) / 86400_000) : null;
@@ -157,7 +157,7 @@ function Notices() {
 export function Sidebar() {
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<Map<string, SearchHit>>(new Map());
-  // 本文の全文検索（入力が止まってから 200ms 後）
+  // Full-text search of message bodies (200ms after typing stops)
   useEffect(() => {
     if (!q.trim()) {
       setHits(new Map());
@@ -183,7 +183,6 @@ export function Sidebar() {
     if (last && last[0] === g) last[1].push(c);
     else groups.push([g, [c]]);
   }
-  const tempDraft = isDraft.value && !!currentConv.value.temporary;
 
   return (
     <>
@@ -199,16 +198,6 @@ export function Sidebar() {
           <Button variant="outline" class="flex-1 justify-start" onClick={() => startNewChat(false)}>
             <Icon name="plus" />
             新しいチャット
-          </Button>
-          <Button
-            variant="outline"
-            title="一時チャット（保存しない）"
-            aria-label="一時チャット"
-            aria-pressed={tempDraft}
-            class={cx(tempDraft && 'border-sky-400 text-sky-700 dark:text-sky-300')}
-            onClick={() => startNewChat(true)}
-          >
-            <Icon name="ghost" />
           </Button>
         </div>
         <div class="px-2 pb-2">
@@ -242,6 +231,11 @@ export function Sidebar() {
             <Icon name="settings" />
             設定
           </Button>
+          {dataLock.value === 'unlocked' && (
+            <Button aria-label="ロック" title="ロック（会話とキーを隠し、もう一度パスフレーズが必要になります）" onClick={() => void lockNow()}>
+              <Icon name="lock" />
+            </Button>
+          )}
           <span class="ml-auto flex flex-col items-end text-xs text-zinc-500 tabular-nums">
             {Object.entries(balances.value).map(([pid, b]) =>
               b.last ? (

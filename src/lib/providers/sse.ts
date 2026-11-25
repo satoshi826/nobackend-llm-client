@@ -1,7 +1,7 @@
-// Server-Sent Events パーサ（fetch の ReadableStream 用）
-// - チャンク境界でイベントや UTF-8 文字が分割されても正しく扱う
-// - コメント行（": keep-alive"）を無視
-// - 複数行 data を "\n" で連結
+// Server-Sent Events parser (for fetch's ReadableStream)
+// - handles events and UTF-8 characters split across chunk boundaries
+// - ignores comment lines (": keep-alive")
+// - joins multi-line data with "\n"
 
 export interface SSEMessage {
   event?: string;
@@ -30,7 +30,7 @@ export async function* parseSSE(stream: ReadableStream<Uint8Array>, signal?: Abo
       let nl: number;
       while ((nl = indexOfNewline(buffer)) >= 0) {
         let line = buffer.slice(0, nl);
-        // \r\n を 1 つの改行として扱う
+        // Treat \r\n as a single line break
         const skip = buffer[nl] === '\r' && buffer[nl + 1] === '\n' ? 2 : 1;
         buffer = buffer.slice(nl + skip);
         if (line === '') {
@@ -57,7 +57,7 @@ export async function* parseSSE(stream: ReadableStream<Uint8Array>, signal?: Abo
       }
     }
     buffer += decoder.decode();
-    // 末尾に空行がなくても残りの data を出す
+    // Emit the remaining data even without a trailing blank line
     if (buffer.length > 0) {
       for (const line of buffer.split(/\r?\n/)) {
         if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
@@ -73,7 +73,7 @@ export async function* parseSSE(stream: ReadableStream<Uint8Array>, signal?: Abo
 function indexOfNewline(s: string): number {
   const n = s.indexOf('\n');
   const r = s.indexOf('\r');
-  if (n < 0) return r < 0 ? -1 : r === s.length - 1 ? -1 : r; // 末尾の \r は \n を待つ
+  if (n < 0) return r < 0 ? -1 : r === s.length - 1 ? -1 : r; // a trailing \r waits for \n
   if (r < 0) return n;
   return Math.min(n, r);
 }

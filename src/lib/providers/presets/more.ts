@@ -1,5 +1,5 @@
-// Venice / OpenRouter 以外の組み込みの接続先と、ビルド時に足す OpenAI 互換の接続先。
-// どれもモデル一覧の取得にキーが要るので、キー金庫を通して取る（modelsNeedKey）。
+// Built-in providers other than Venice / OpenRouter, and OpenAI-compatible providers added at build time.
+// All of them need a key to fetch the model list, so it is fetched through the key vault (modelsNeedKey).
 import type { ModelInfo, ProviderPreset } from '../types';
 import { checkKey, joinUrl } from '../openai-compatible';
 import { builtinBaseUrl, parseCustomProviders, type CustomProviderDef } from '../endpoints';
@@ -10,7 +10,7 @@ function model(providerId: string, id: string, name: string, extra: Partial<Mode
   return { providerId, id, name, capabilities: {}, privacy: 'unknown', source: 'fetched', ...extra };
 }
 
-// ---- Anthropic（ネイティブの Messages API） ----
+// ---- Anthropic (native Messages API) ----
 export const anthropicPreset: ProviderPreset = {
   id: 'anthropic',
   label: 'Anthropic',
@@ -42,7 +42,7 @@ export const anthropicPreset: ProviderPreset = {
   validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models?limit=1'), f, anthropicPreset.corsHint, cfg.extraHeaders as Record<string, string>)
 };
 
-// ---- Google Gemini（OpenAI 互換のエンドポイント） ----
+// ---- Google Gemini (OpenAI-compatible endpoint) ----
 const GEMINI_SKIP = /embedding|tts|image|imagen|veo|live|native-audio|aqa|learnlm/;
 export const geminiPreset: ProviderPreset = {
   id: 'gemini',
@@ -71,7 +71,7 @@ export const deepseekPreset: ProviderPreset = {
   label: 'DeepSeek',
   tagline: 'DeepSeek のモデル。安価。データは中国の事業者のサーバーで処理されます。',
   modelsNeedKey: true,
-  // 思考を別の発言に送り返すと拒否されるため、ツール呼び出しの途中だけ送り返す
+  // Sending reasoning back on a different message is rejected, so send it back only in the middle of tool calls
   reasoningResend: 'tool-turns',
   keyGuide: 'DeepSeek Platform（platform.deepseek.com）でキーを作ってください。プリペイド式なので、チャージした額が使える上限になります。',
   corsHint: 'ネットワーク接続、または拡張機能が api.deepseek.com をブロックしていないか確認してください。',
@@ -113,7 +113,7 @@ export const groqPreset: ProviderPreset = {
   validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models'), f, groqPreset.corsHint)
 };
 
-// ---- ビルド時に足す OpenAI 互換の接続先（VITE_CUSTOM_PROVIDERS） ----
+// ---- OpenAI-compatible providers added at build time (VITE_CUSTOM_PROVIDERS) ----
 export function customPreset(c: CustomProviderDef): ProviderPreset {
   const host = new URL(c.baseUrl).host;
   return {

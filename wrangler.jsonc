@@ -1,8 +1,8 @@
-// Cloudflare Workers（静的アセットだけ）で配信するための設定。Worker のコードはない。
-// - build.command: デプロイの前に dist/ を作る（ダッシュボードのビルドコマンドが空でも動くように）
-// - _headers（dist/_headers。csp.config.ts から生成）でセキュリティヘッダを付ける
-// - 会話の URL は #/c/<id>（ハッシュ）なので、知らないパスは 404 のまま（index.html にフォールバックしない）
-// name はダッシュボードの Worker 名と同じにすること
+// Config for serving on Cloudflare Workers (static assets only). There is no Worker code.
+// - build.command: build dist/ before deploying (so it works even if the dashboard build command is empty)
+// - security headers come from _headers (dist/_headers, generated from csp.config.ts)
+// - conversation URLs are #/c/<id> (hash), so unknown paths stay 404 (no fallback to index.html)
+// name must match the Worker name in the dashboard
 {
   "name": "nobackend-llm-client",
   "compatibility_date": "2026-11-20",

@@ -7,7 +7,7 @@ const BASE_URL = builtinBaseUrl('openrouter', (import.meta as any).env ?? {});
 const KEY_GUIDE =
   'OpenRouter の管理画面（Keys）でキーを作り、クレジットの上限（credit limit）を設定してください。キーが万一漏れても被害額が上限で止まります。';
 
-/** 1 トークンあたりの文字列価格 → 100 万トークンあたりの USD */
+/** Per-token price string → USD per million tokens */
 function perMTok(v: unknown): number | undefined {
   const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN;
   return Number.isFinite(n) && n >= 0 ? n * 1_000_000 : undefined;
@@ -26,7 +26,7 @@ export const openrouterPreset: ProviderPreset = {
     kind: 'openai-compatible',
     preset: 'openrouter',
     baseUrl: BASE_URL,
-    // 既定で「データを保存・学習に使う提供元」を経由させない
+    // By default, do not route through providers that store or train on data
     extraBody: { provider: { data_collection: 'deny' }, usage: { include: true } },
     modelListMode: 'fetch',
     enabled: false
@@ -41,7 +41,7 @@ export const openrouterPreset: ProviderPreset = {
     const params: string[] = Array.isArray(raw.supported_parameters) ? raw.supported_parameters : [];
     const inputs: string[] = Array.isArray(raw.architecture?.input_modalities) ? raw.architecture.input_modalities : [];
     const outputs: string[] = Array.isArray(raw.architecture?.output_modalities) ? raw.architecture.output_modalities : ['text'];
-    if (!outputs.includes('text')) return null; // 画像生成専用などは除外
+    if (!outputs.includes('text')) return null; // exclude image-generation-only models etc.
     return {
       providerId,
       id: String(raw.id),
@@ -54,11 +54,11 @@ export const openrouterPreset: ProviderPreset = {
         tools: params.includes('tools'),
         reasoning: params.includes('reasoning') || params.includes('include_reasoning'),
         reasoningEffort: params.includes('reasoning') ? ['low', 'medium', 'high'] : undefined,
-        webSearch: false, // Web 検索（plugins）は未対応
+        webSearch: false, // web search (plugins) not supported
         jsonSchema: params.includes('structured_outputs')
       },
       pricing: { inputPerMTok: perMTok(raw.pricing?.prompt), outputPerMTok: perMTok(raw.pricing?.completion), currency: 'USD' },
-      // OpenRouter は複数の提供元へ中継する。保持方針は提供元ごとに異なる
+      // OpenRouter relays to multiple providers. Retention policies differ per provider
       privacy: 'unknown',
       tags: String(raw.id).endsWith(':free') ? ['free'] : [],
       source: 'fetched'
@@ -67,7 +67,7 @@ export const openrouterPreset: ProviderPreset = {
 
   transformRequest(body) {
     const out = { ...body };
-    // OpenRouter は reasoning: { effort } 形式
+    // OpenRouter uses the reasoning: { effort } format
     if (out.reasoning_effort) {
       out.reasoning = { ...(out.reasoning ?? {}), effort: out.reasoning_effort };
       delete out.reasoning_effort;

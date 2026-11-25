@@ -1,8 +1,11 @@
-// キー金庫のエントリ。本体アプリから iframe で埋め込まれる。
-//   ?view=transport          … 画面なし。本体からの送信依頼を中継する
-//   ?view=keys&provider=ID   … 1 つの接続先のキーの登録・差し替え・削除（ロック中なら解錠）
-//   ?view=security           … パスフレーズ（設定・解錠・ロック・変更・解除）と、すべてのキーの削除
-// 依存ライブラリなし。DOM は createElement と textContent だけで組み立てる（innerHTML 不使用）。
+// Key vault entry point. Embedded by the app in an iframe.
+//   ?view=transport          … no UI. Relays send requests from the app
+//   ?view=keys&provider=ID   … add, replace or delete the key of one provider (unlock if locked)
+//   ?view=security           … passphrase (set, unlock, lock, change, remove) and deleting all keys
+//   ?view=security&setup=1   … only the passphrase setup form (used in the first-run guide)
+//   ?view=unlock             … only the unlock form (used on the app's lock screen)
+// Every view is opened with ?session=<app page ID>; unlock state is shared only among vault pages with that ID
+// No dependencies. The DOM is built with createElement and textContent only (no innerHTML).
 import { VAULT_PROTOCOL, type ToVault } from '../src/lib/vault/protocol';
 import { MIN_PASSPHRASE_LENGTH } from '../src/lib/crypto/passphrase';
 import { handle } from './core';
@@ -10,7 +13,7 @@ import { allowedHosts, allStatus, clearAll, label as providerLabel, lock, onChan
 import { ACCOUNT_IDS as PROVIDER_IDS, accountById } from '../src/lib/keys/accounts';
 import './style.css';
 
-// 埋め込みを受け付ける本体のオリジン: ビルド時の指定（別オリジン配置）と、自分自身（同一オリジン配置）
+// App origins allowed to embed us: the one given at build time (separate-origin hosting) and our own (same-origin hosting)
 const APP_ORIGINS: string[] = [
   ...String((import.meta as any).env?.VITE_APP_ORIGIN || '')
     .split(',')
@@ -18,7 +21,7 @@ const APP_ORIGINS: string[] = [
     .filter(Boolean),
   location.origin
 ];
-/** 埋め込んでいる本体のオリジン（Chromium 系のみ取得できる） */
+/** Origin of the embedding app (only available in Chromium-based browsers) */
 const parentOrigin: string | undefined = (location as any).ancestorOrigins?.[0];
 const isolated = parentOrigin ? parentOrigin !== location.origin : undefined;
 
@@ -26,11 +29,11 @@ const params = new URLSearchParams(location.search);
 const view = params.get('view') ?? 'transport';
 if (params.get('theme') === 'dark') document.documentElement.classList.add('dark');
 
-// ---- 本体との接続（MessagePort） ----
+// ---- Connection to the app (MessagePort) ----
 const ports = new Set<MessagePort>();
 
 window.addEventListener('message', (e) => {
-  if (!APP_ORIGINS.includes(e.origin)) return; // 許可した本体オリジン以外は無視
+  if (!APP_ORIGINS.includes(e.origin)) return; // ignore anything but the allowed app origins
   if (e.data?.type !== 'connect' || e.data?.protocol !== VAULT_PROTOCOL || !e.ports[0]) return;
   const port = e.ports[0];
   ports.add(port);
@@ -44,10 +47,10 @@ onChange(() => {
   void allStatus().then((s) => {
     for (const p of ports) p.postMessage({ type: 'status', providers: s.keys, vault: s.vault });
   });
-  if (view === 'keys' || view === 'security') void render();
+  if (view === 'keys' || view === 'security' || view === 'unlock') void render();
 });
 
-// ---- 画面 ----
+// ---- Views ----
 type Child = Node | string | null | undefined | false;
 function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string | boolean | ((e: Event) => void)> = {}, ...children: Child[]): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
@@ -62,12 +65,13 @@ function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, 
 
 const root = document.getElementById('root')!;
 let message: { ok: boolean; text: string } | null = null;
-/** 2 段階の確認中の操作（confirm() を使わない） */
-let confirming: 'clear-all' | 'remove-pass' | null = null;
-let changingPass = false;
+/** Action awaiting the second confirmation step (no confirm()) */
+let confirming: 'clear-all' | null = null;
+/** Whether the passphrase change/remove form is open */
+let passMode: 'idle' | 'change' | 'remove' = 'idle';
 
 function postHeight() {
-  // 文書全体の高さは iframe の高さ以下にならないので、中身（root）の高さを測る（縮むときも追従する）
+  // The document height never drops below the iframe height, so measure the content (root) instead (follows shrinking too)
   const height = Math.ceil(root.getBoundingClientRect().height);
   for (const o of APP_ORIGINS) window.parent.postMessage({ type: 'vault-resize', height }, o);
 }
@@ -110,8 +114,8 @@ function unlockForm(note: string): HTMLElement {
   );
 }
 
-/** 確認ボタン付きの危険な操作 */
-function dangerAction(kind: 'clear-all' | 'remove-pass', label: string, warning: string, action: () => Promise<{ ok: boolean; message: string }>): HTMLElement {
+/** Dangerous action with a confirm button */
+function dangerAction(kind: 'clear-all', label: string, warning: string, action: () => Promise<{ ok: boolean; message: string }>): HTMLElement {
   if (confirming !== kind)
     return h('button', { type: 'button', class: 'btn outline', onclick: () => {
       confirming = kind;
@@ -133,7 +137,7 @@ function dangerAction(kind: 'clear-all' | 'remove-pass', label: string, warning:
   );
 }
 
-/** 1 つの接続先のキー（登録・差し替え・削除）。金庫がロック中なら解錠 */
+/** Key of one provider (add, replace, delete). Unlock if the vault is locked */
 async function renderKey(id: string): Promise<Node[]> {
   if (!PROVIDER_IDS.includes(id)) return [h('p', { class: 'muted' }, '未対応の接続先です。')];
   const [st, vs] = await Promise.all([status(id), vaultState()]);
@@ -181,15 +185,19 @@ async function renderKey(id: string): Promise<Node[]> {
   return nodes;
 }
 
-/** 金庫全体: パスフレーズ（設定・解錠・ロック・変更・解除）と、すべてのキーの削除 */
+/** Whole vault: passphrase (set, unlock, lock, change, remove) and deleting all keys */
 async function renderSecurity(): Promise<Node[]> {
   const vs = await vaultState();
+  const setup = params.get('setup') === '1';
   const nodes: Node[] = [];
+  if (setup && vs.hasPassphrase) return [h('p', { class: 'ok' }, '🔒 パスフレーズを設定しました。キーと会話は暗号化して保存されます。')];
   if (!vs.hasPassphrase) {
     const f = passFields('new-password');
-    const btn = h('button', { type: 'submit', class: 'btn primary' }, 'パスフレーズを設定');
+    const btn = h('button', { type: 'submit', class: 'btn primary' }, setup ? 'パスフレーズを設定して暗号化' : 'パスフレーズを設定');
     nodes.push(
-      h('p', { class: 'muted' }, 'キーは暗号化せずに保存されています。パスフレーズを設定すると、保存済みのキーと今後保存するキーをすべて暗号化します（起動のたびに 1 回解錠が必要になります）。'),
+      setup
+        ? h('p', { class: 'muted' }, `${MIN_PASSPHRASE_LENGTH} 文字以上。このブラウザでアプリを開くたびに 1 回入力します。`)
+        : h('p', { class: 'muted' }, 'キーと会話は暗号化せずに保存されています。パスフレーズを設定すると、API キーと会話（保存済みのプロンプト・スキルを含む）をすべて暗号化し、アプリを開くたびに 1 回の解錠が必要になります。'),
       h(
         'form',
         { class: 'stack', onsubmit: (e: Event) => {
@@ -203,17 +211,22 @@ async function renderSecurity(): Promise<Node[]> {
       )
     );
   } else if (vs.locked) {
-    nodes.push(unlockForm('パスフレーズで解錠'), h('p', { class: 'muted' }, 'パスフレーズを忘れた場合は元に戻せません。下の「すべてのキーを削除」から入れ直してください。'));
+    nodes.push(unlockForm('パスフレーズで解錠'), h('p', { class: 'muted' }, 'パスフレーズを忘れた場合は元に戻せません。'));
   } else {
     nodes.push(
       h(
         'div',
         { class: 'card row' },
-        h('div', {}, h('div', { class: 'strong' }, '🔒 キーはパスフレーズで暗号化されています（解錠中）'), h('div', { class: 'muted' }, 'ロックすると、次に使うときにパスフレーズが必要になります。')),
+        h('div', {}, h('div', { class: 'strong' }, '🔒 キーと会話はパスフレーズで暗号化されています（解錠中）'), h('div', { class: 'muted' }, 'ロックすると、アプリを読み込み直し、もう一度パスフレーズが必要になります。')),
         h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onclick: () => lock() }, 'ロック'))
       )
     );
-    if (changingPass) {
+    const cancel = h('button', { type: 'button', class: 'btn outline', onclick: () => {
+      passMode = 'idle';
+      void render();
+    } }, 'やめる');
+    const current = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': '今のパスフレーズ' });
+    if (passMode === 'change') {
       const f = passFields('new-password');
       const btn = h('button', { type: 'submit', class: 'btn primary' }, '変更');
       nodes.push(
@@ -223,15 +236,34 @@ async function renderSecurity(): Promise<Node[]> {
             e.preventDefault();
             const err = f.check();
             if (err) return show({ ok: false, text: err });
-            changingPass = false;
-            void run(btn, '暗号化し直しています…', () => setPassphrase(f.p1.value));
+            void run(btn, '暗号化し直しています…', async () => {
+              const r = await setPassphrase(f.p1.value, current.value);
+              if (r.ok) passMode = 'idle';
+              return r;
+            });
           } },
+          h('label', {}, '今のパスフレーズ', current),
           h('div', { class: 'strong' }, '新しいパスフレーズ'),
           f.box,
-          h('div', { class: 'btns' }, btn, h('button', { type: 'button', class: 'btn outline', onclick: () => {
-            changingPass = false;
-            void render();
-          } }, 'やめる'))
+          h('div', { class: 'btns' }, btn, cancel)
+        )
+      );
+    } else if (passMode === 'remove') {
+      const btn = h('button', { type: 'submit', class: 'btn danger' }, 'パスフレーズを外す');
+      nodes.push(
+        h(
+          'form',
+          { class: 'stack card', onsubmit: (e: Event) => {
+            e.preventDefault();
+            void run(btn, '復号しています…', async () => {
+              const r = await removePassphrase(current.value);
+              if (r.ok) passMode = 'idle';
+              return r;
+            });
+          } },
+          h('p', {}, 'API キーと会話を暗号化せずに保存し直します。端末のデータやバックアップからの流出に弱くなり、解錠なしで開けるようになります。'),
+          h('label', {}, '今のパスフレーズ', current),
+          h('div', { class: 'btns' }, btn, cancel)
         )
       );
     } else {
@@ -240,17 +272,21 @@ async function renderSecurity(): Promise<Node[]> {
           'div',
           { class: 'btns' },
           h('button', { type: 'button', class: 'btn outline', onclick: () => {
-            changingPass = true;
+            passMode = 'change';
             void render();
           } }, 'パスフレーズを変更'),
-          dangerAction('remove-pass', 'パスフレーズを外す', 'キーを暗号化せずに保存し直します。端末やバックアップからの流出に弱くなります。', removePassphrase)
+          h('button', { type: 'button', class: 'btn outline', onclick: () => {
+            passMode = 'remove';
+            void render();
+          } }, 'パスフレーズを外す')
         )
       );
     }
   }
+  if (setup) return nodes;
   nodes.push(
     h('hr', {}),
-    dangerAction('clear-all', 'すべてのキーを削除', `保存されているすべての API キー${vs.hasPassphrase ? 'とパスフレーズ' : ''}を削除します。元に戻せません。`, async () => {
+    dangerAction('clear-all', 'すべてのキーを削除', `保存されているすべての API キー${vs.hasPassphrase ? 'とパスフレーズを削除します。会話の暗号化も解除されます（会話は残ります）' : 'を削除します'}。元に戻せません。`, async () => {
       await clearAll();
       return { ok: true, message: 'すべてのキーを削除しました。' };
     })
@@ -258,20 +294,27 @@ async function renderSecurity(): Promise<Node[]> {
   return nodes;
 }
 
+/** The app's lock screen: only the unlock form */
+async function renderUnlock(): Promise<Node[]> {
+  const vs = await vaultState();
+  if (!vs.locked) return [h('p', { class: 'ok' }, '解錠しました。')];
+  return [unlockForm('パスフレーズ')];
+}
+
 async function render() {
-  const nodes = view === 'security' ? await renderSecurity() : await renderKey(params.get('provider') ?? '');
+  const nodes = view === 'security' ? await renderSecurity() : view === 'unlock' ? await renderUnlock() : await renderKey(params.get('provider') ?? '');
   if (message) nodes.push(h('p', { class: message.ok ? 'ok' : 'err', role: 'status' }, message.text));
   root.replaceChildren(...nodes);
   postHeight();
 }
 
-if (view === 'keys' || view === 'security') {
-  // Esc は親（本体）に伝えて、開いている画面を閉じてもらう
+if (view === 'keys' || view === 'security' || view === 'unlock') {
+  // Forward Esc to the parent (app) so it closes the open view
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') for (const o of APP_ORIGINS) window.parent.postMessage({ type: 'vault-escape' }, o);
   });
   if (window.parent === window) {
-    // 直接開かれた場合（埋め込みでない）は保存領域が別になるため操作させない
+    // When opened directly (not embedded), storage is partitioned differently, so do not allow any actions
     root.replaceChildren(h('p', { class: 'muted' }, 'このページはアプリから埋め込まれて使われます。直接開いても操作できません。'));
   } else {
     void render();

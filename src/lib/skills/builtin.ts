@@ -1,5 +1,5 @@
-// アプリに同梱する組み込みスキル（読み取り専用。設定でオフにできる）。
-// allowedTools: このスキルを読み込んだ（または指定した）会話でだけ使えるようになるツール
+// Built-in skills shipped with the app (read-only; can be turned off in settings).
+// allowedTools: tools that become available only in conversations that loaded (or picked) this skill
 export interface BuiltinSkill {
   name: string;
   description: string;

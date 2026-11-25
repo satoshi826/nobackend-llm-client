@@ -1,7 +1,7 @@
-// キー金庫と本体アプリのやり取り（MessagePort）。送信依頼を検証し、キーストアにキーを付けて送らせ、応答を流し返す。
+// Messaging between the key vault and the app (MessagePort). Validates send requests, has the key store attach the key and send, and streams the response back.
 import { PASSTHROUGH_HEADERS, type FromVault, type ToVault } from '../src/lib/vault/protocol';
 import { accountById } from '../src/lib/keys/accounts';
-import { allStatus, allowedHosts, clearAll, isAllowedUrl, KeyError, keyedFetch, label, lock } from './store';
+import { allStatus, allowedHosts, clearAll, isAllowedUrl, KeyError, keyedFetch, label, lock, unwrapDataKey, wrapDataKey } from './store';
 
 export { allowedHosts };
 
@@ -29,6 +29,15 @@ export async function handle(msg: ToVault, send: (m: FromVault, transfer?: Trans
   if (msg.type === 'lock') {
     lock();
     send({ type: 'ack', id: msg.id });
+    return;
+  }
+  if (msg.type === 'wrap-data-key' || msg.type === 'unwrap-data-key') {
+    try {
+      const value = msg.type === 'wrap-data-key' ? await wrapDataKey(String(msg.raw)) : await unwrapDataKey(msg.blob as never);
+      send({ type: 'result', id: msg.id, ok: true, value });
+    } catch (e) {
+      send({ type: 'result', id: msg.id, ok: false, message: (e as Error).message });
+    }
     return;
   }
   if (msg.type === 'abort') {

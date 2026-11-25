@@ -2,8 +2,8 @@ import type { Transport } from './types';
 import { ProviderFailure } from './errors';
 
 /**
- * キーを付けない通信（モデル一覧の取得など）。
- * キーが必要な通信はキー金庫経由でしか送れないので、auth を渡されたら拒否する。
+ * Requests without a key (fetching the model list etc.).
+ * Requests that need a key can only go through the key vault, so passing auth is rejected.
  */
 export const plainTransport: Transport = {
   async fetch(url, init, auth) {

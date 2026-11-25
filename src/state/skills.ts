@@ -1,4 +1,4 @@
-// スキルの一覧・編集・取り込み/書き出しと、次の送信に添えるスキル
+// Skill list, editing, import/export, and the skills attached to the next send
 import { computed, signal } from '@preact/signals';
 import * as repo from '../lib/db/repo';
 import type { Skill } from '../lib/db/schema';
@@ -6,9 +6,9 @@ import { parseSkillMd, serializeSkillMd, validateSkill, type SkillDraft } from '
 import { BUILTIN_NAMES, BUILTIN_SKILLS } from '../lib/skills/builtin';
 import { saveSettings, settings } from './settings';
 
-/** ユーザー（とモデル）が作ったスキル */
+/** Skills created by the user (and the model) */
 export const skills = signal<Skill[]>([]);
-/** 組み込みスキル（オフにしたものも含む） */
+/** Built-in skills (including ones turned off) */
 export const builtinSkills: Skill[] = BUILTIN_SKILLS.map((b) => ({
   id: `builtin:${b.name}`,
   name: b.name,
@@ -20,11 +20,11 @@ export const builtinSkills: Skill[] = BUILTIN_SKILLS.map((b) => ({
   builtin: true,
   allowedTools: b.allowedTools
 }));
-/** 使えるスキル（オンの組み込み + ユーザーのスキル） */
+/** Usable skills (enabled built-ins + user skills) */
 export const allSkills = computed(() => [...builtinSkills.filter((s) => !settings.value.disabledBuiltinSkills.includes(s.name)), ...skills.value]);
-/** モデルが一覧から選べるスキル */
+/** Skills the model can choose from the list */
 export const modelSkills = computed(() => allSkills.value.filter((s) => s.modelInvocable));
-/** 次の送信に添えるスキル（ID） */
+/** Skills attached to the next send (IDs) */
 export const attachedSkillIds = signal<string[]>([]);
 export const attachedSkills = computed(() => attachedSkillIds.value.map((id) => allSkills.value.find((s) => s.id === id)).filter((s): s is Skill => !!s));
 
@@ -40,8 +40,8 @@ export async function loadSkills() {
 const byName = (a: Skill, b: Skill) => a.name.localeCompare(b.name);
 
 /**
- * 新規作成（id なし）または更新。名前の重複・内容の不備は例外。
- * by: 'model' は save_skill から作ったとき（新規のときだけ印を付ける）
+ * Create (no id) or update. Throws on a duplicate name or invalid content.
+ * by: 'model' when created from save_skill (marked only when new)
  */
 export async function saveSkill(draft: SkillDraft, id?: string, by?: 'model'): Promise<Skill> {
   const d: SkillDraft = { name: draft.name.trim(), description: draft.description.trim(), body: draft.body, modelInvocable: draft.modelInvocable };
@@ -75,7 +75,7 @@ export interface SkillImportResult {
   errors: string[];
 }
 
-/** SKILL.md（.md）を取り込む。同じ名前のスキルがあれば内容を置き換える */
+/** Import a SKILL.md (.md). If a skill with the same name exists, replace its content */
 export async function importSkillFiles(files: File[]): Promise<SkillImportResult> {
   const res: SkillImportResult = { added: [], updated: [], errors: [] };
   for (const f of files) {
@@ -97,7 +97,7 @@ export function downloadSkill(s: Skill) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  // Claude のスキルはフォルダ名 = スキル名、中身が SKILL.md
+  // In Claude skills the folder name = the skill name, and the content is SKILL.md
   a.download = `${s.name}.SKILL.md`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);

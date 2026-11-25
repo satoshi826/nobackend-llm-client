@@ -1,6 +1,6 @@
-// スキル: 名前・説明・指示本文からなる作業手順書（Claude の Agent Skills の SKILL.md と互換）。
-// - モデルには名前と説明の一覧だけを見せ、必要なときに load_skill ツールで本文を読ませる（段階的な読み込み）
-// - ユーザーが入力欄から指定したスキルは、そのメッセージに本文を添えて送る
+// Skills: work instructions made of a name, a description and a body (compatible with SKILL.md of Claude's Agent Skills).
+// - the model sees only the list of names and descriptions, and reads the body with the load_skill tool when needed (progressive loading)
+// - skills the user picks in the input box are sent with their body attached to that message
 import type { MessageRecord, Skill } from '../db/schema';
 
 export type { Skill } from '../db/schema';
@@ -17,7 +17,7 @@ export interface SkillDraft {
   modelInvocable: boolean;
 }
 
-/** 内容の検証。問題があればメッセージを返す */
+/** Validate the content. Returns a message if there is a problem */
 export function validateSkill(s: SkillDraft): string | null {
   if (!s.name) return '名前を入れてください。';
   if (s.name.length > NAME_MAX || !NAME_RE.test(s.name)) return `名前は半角の小文字・数字・ハイフンで、${NAME_MAX} 文字以内にしてください（例: code-review）。`;
@@ -43,7 +43,7 @@ function unquote(v: string): string {
   return t;
 }
 
-/** YAML フロントマターのうち、スキルに必要な「キー: 値」（1 行・引用符・| と > のブロック）だけを読む */
+/** Reads only the "key: value" pairs a skill needs from YAML front matter (single line, quoted, | and > blocks) */
 function parseFrontmatter(src: string): Record<string, string> {
   const out: Record<string, string> = {};
   const lines = src.split(/\r?\n/);
@@ -64,7 +64,7 @@ function parseFrontmatter(src: string): Record<string, string> {
   return out;
 }
 
-/** SKILL.md を読む。フロントマターがなければ例外 */
+/** Parse a SKILL.md. Throws if there is no front matter */
 export function parseSkillMd(text: string): SkillDraft {
   const src = text.replace(/^﻿/, '');
   const m = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(src);
@@ -85,13 +85,13 @@ export function serializeSkillMd(s: SkillDraft): string {
   return lines.join('\n');
 }
 
-// ---- スキルで使えるようになるツール ----
+// ---- Tools that skills make available ----
 
 /**
- * この会話で使えるようになったツール。
- * - ユーザーが入力欄で指定したスキル（MessageRecord.skills）
- * - モデルが load_skill で読み込めたスキル
- * のうち、allowedTools を持つもの（組み込みの skill-creator → save_skill など）
+ * Tools that became available in this conversation:
+ * - from skills the user picked in the input box (MessageRecord.skills)
+ * - from skills the model loaded with load_skill
+ * whichever of those have allowedTools (e.g. built-in skill-creator → save_skill)
  */
 export function unlockedTools(messages: MessageRecord[], list: Pick<Skill, 'name' | 'allowedTools'>[]): Set<string> {
   const out = new Set<string>();
@@ -105,9 +105,9 @@ export function unlockedTools(messages: MessageRecord[], list: Pick<Skill, 'name
   return out;
 }
 
-// ---- モデルに渡す文 ----
+// ---- Text passed to the model ----
 
-/** システムプロンプトの末尾に付けるスキルの一覧（本文は含めない） */
+/** Skill list appended to the end of the system prompt (without bodies) */
 export function skillCatalog(list: Pick<Skill, 'name' | 'description'>[]): string {
   if (!list.length) return '';
   return [
@@ -128,7 +128,7 @@ export function skillBlock(s: { name: string; body: string }): string {
   return `<skill name="${s.name}">\n${s.body.trim()}\n</skill>`;
 }
 
-/** ユーザーが指定したスキルを、そのメッセージの前に添える */
+/** Prepend the skills the user picked to that message */
 export function withAttachedSkills(text: string, attached: { name: string; body: string }[]): string {
   if (!attached.length) return text;
   const names = attached.map((s) => s.name).join('、');

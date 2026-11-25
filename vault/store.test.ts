@@ -1,9 +1,9 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { encryptSecret } from '../src/lib/crypto/passphrase';
-import { clearAll, lock, removePassphrase, saveKey, setPassphrase, status, unlock, vaultState } from './store';
+import { clearAll, lock, removePassphrase, saveKey, setPassphrase, status, unlock, unwrapDataKey, vaultState, wrapDataKey } from './store';
 
-// tavily / jina は保存時のキー確認（通信）がないので、ストアの動きだけを確かめられる
+// tavily / jina do no key check (network) on save, so only the store's behaviour is exercised
 const PASS = 'correct horse battery';
 
 async function rawPut(rec: unknown) {
@@ -25,26 +25,39 @@ describe('key vault store', () => {
   it('stores plainly without a passphrase, encrypts everything once one is set', { timeout: 30_000 }, async () => {
     expect((await saveKey('tavily', 'tvly-1')).ok).toBe(true);
     expect(await status('tavily')).toMatchObject({ present: true, encrypted: false, locked: false, last4: 'vly-1'.slice(-4) });
-    expect(await vaultState()).toEqual({ hasPassphrase: false, locked: false });
+    expect(await vaultState()).toMatchObject({ hasPassphrase: false, locked: false });
 
     expect((await setPassphrase('short')).ok).toBe(false);
     expect((await setPassphrase(PASS)).ok).toBe(true);
+    const pid1 = (await vaultState()).passphraseId;
+    expect(pid1).toBeTruthy();
     expect(await status('tavily')).toMatchObject({ encrypted: true, locked: false });
-    // パスフレーズ設定後のキーは自動で暗号化
+    // Keys saved after setting a passphrase are encrypted automatically
     await saveKey('jina', 'jina-2');
     expect(await status('jina')).toMatchObject({ encrypted: true, locked: false });
 
     lock();
-    expect(await vaultState()).toEqual({ hasPassphrase: true, locked: true });
+    expect(await vaultState()).toMatchObject({ hasPassphrase: true, locked: true });
     expect(await status('jina')).toMatchObject({ present: true, locked: true });
     expect((await saveKey('jina', 'x')).ok).toBe(false);
     expect((await unlock('wrong passphrase')).ok).toBe(false);
     expect((await unlock(PASS)).ok).toBe(true);
     expect(await status('tavily')).toMatchObject({ locked: false, last4: 'vly-1'.slice(-4) });
 
-    expect((await removePassphrase()).ok).toBe(true);
+    expect((await setPassphrase('another passphrase', 'wrong one!')).ok).toBe(false);
+    // Wrap / unwrap the data key (anything without the marker is refused)
+    const blob = await wrapDataKey('RAWKEY');
+    expect(await unwrapDataKey(blob)).toBe('RAWKEY');
+    await expect(unwrapDataKey(await encryptSecret('not a data key', PASS))).rejects.toThrow();
+    // Changing it renews the ID, so the wrapped data key must be rewrapped with the new passphrase
+    expect((await setPassphrase('another passphrase', PASS)).ok).toBe(true);
+    expect((await vaultState()).passphraseId).not.toBe(pid1);
+    await expect(unwrapDataKey(blob)).rejects.toThrow();
+    expect((await setPassphrase(PASS, 'another passphrase')).ok).toBe(true);
+    expect((await removePassphrase('wrong one!')).ok).toBe(false);
+    expect((await removePassphrase(PASS)).ok).toBe(true);
     expect(await status('jina')).toMatchObject({ encrypted: false, locked: false });
-    expect(await vaultState()).toEqual({ hasPassphrase: false, locked: false });
+    expect(await vaultState()).toMatchObject({ hasPassphrase: false, locked: false });
 
     await clearAll();
     expect((await status('tavily')).present).toBe(false);
@@ -55,9 +68,9 @@ describe('key vault store', () => {
     await rawPut({ id: 'tavily', hosts: ['api.tavily.com'], createdAt: 1, enc: await encryptSecret('tvly-old', PASS) });
     await rawPut({ id: 'jina', hosts: ['r.jina.ai'], createdAt: 1, key: 'jina-plain' });
     lock();
-    expect(await vaultState()).toEqual({ hasPassphrase: true, locked: true });
+    expect(await vaultState()).toMatchObject({ hasPassphrase: true, locked: true });
     expect((await unlock(PASS)).ok).toBe(true);
-    // 平文で残っていたキーも同じパスフレーズで暗号化される
+    // Keys left in plaintext are encrypted with the same passphrase too
     expect(await status('jina')).toMatchObject({ encrypted: true, locked: false });
     lock();
     expect((await unlock(PASS)).ok).toBe(true);

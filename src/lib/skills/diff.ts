@@ -1,4 +1,4 @@
-// 行単位の差分（スキルの更新の確認用）。長い本文でも足りる程度の素朴な LCS。
+// Line-based diff (for reviewing skill updates). A naive LCS that is good enough even for long bodies.
 export interface DiffLine {
   type: 'same' | 'add' | 'del';
   text: string;
@@ -7,7 +7,7 @@ export interface DiffLine {
 export function lineDiff(before: string, after: string): DiffLine[] {
   const a = before.split('\n');
   const b = after.split('\n');
-  // 大きすぎるときは全体の置き換えとして扱う
+  // When too large, treat it as replacing the whole thing
   if (a.length * b.length > 4_000_000) return [...a.map((text) => ({ type: 'del' as const, text })), ...b.map((text) => ({ type: 'add' as const, text }))];
   const n = a.length;
   const m = b.length;

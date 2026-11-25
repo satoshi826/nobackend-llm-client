@@ -1,14 +1,14 @@
-// 開発・検証用の Venice 互換モックサーバー（実際の API は呼ばない）。
-// 使い方: npm run mock  → VITE_VENICE_BASE_URL=http://localhost:8787/api/v1 npm run dev
-// キー "mock-key" だけを有効とみなす。メッセージ内のキーワードで挙動を切り替える:
-//   "思考"  → reasoning_content を流す / "think" → <think> タグ方式
-//   "エラー" → ストリーム途中でエラー / "残高" → 402 / "長文" → 長い出力 / "コード" → コードブロック
-//   "画像"  → 外部画像を含む Markdown（ブロックされるべき）/ "xss" → 危険な HTML を含む出力
+// Venice-compatible mock server for development and testing (never calls the real API).
+// Usage: npm run mock  → VITE_VENICE_BASE_URL=http://localhost:8787/api/v1 npm run dev
+// Only the key "mock-key" is accepted. Keywords in the message switch the behaviour:
+//   "思考"  → streams reasoning_content / "think" → <think> tag style
+//   "エラー" → error mid-stream / "残高" → 402 / "長文" → long output / "コード" → code blocks
+//   "画像"  → Markdown with external images (should be blocked) / "xss" → output containing dangerous HTML
 import http from 'node:http';
 
 const port = Number(process.argv[2] ?? 8787);
 const KEY = 'mock-key';
-// 残高: 応答ごとに費用分だけ減る。「盗用」を含むメッセージでは、他所で使われた想定で余分に $2 減らす
+// Balance: drops by the cost of each response. A message containing "盗用" takes an extra $2, as if the key were used elsewhere
 let balanceUsd = 12.34;
 const COST = 0.000321;
 
@@ -81,7 +81,7 @@ const server = http.createServer(async (req, res) => {
 
   if (path === '/models' && req.method === 'GET') return json(res, 200, { object: 'list', type: 'text', data: models });
 
-  // ---- Anthropic（Messages API）のモック: /anthropic/v1/...。キーは x-api-key: mock-ant ----
+  // ---- Anthropic (Messages API) mock: /anthropic/v1/... Key is x-api-key: mock-ant ----
   if (url.pathname.startsWith('/anthropic/v1/')) {
     if (req.headers['x-api-key'] !== 'mock-ant') return json(res, 401, { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } });
     if (!req.headers['anthropic-version']) return json(res, 400, { type: 'error', error: { type: 'invalid_request_error', message: 'anthropic-version header is required' } });
@@ -103,7 +103,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // ---- Tavily / Jina のモック ----
+  // ---- Tavily / Jina mocks ----
   if (url.pathname === '/tavily/search' && req.method === 'POST') {
     if (req.headers.authorization !== 'Bearer tvly-mock') return json(res, 401, { detail: { error: 'Unauthorized: missing or invalid API key.' } });
     const b = await readBody(req);
@@ -146,9 +146,19 @@ const server = http.createServer(async (req, res) => {
       await sleep(25);
     };
 
-    // ---- ツール呼び出しのモック ----
-    // ツールが渡され、最後の発言がユーザーで「検索」を含む → web_search を呼ぶ
-    // 最後が tool の結果 → 「読んで」を含む依頼で、まだ fetch していなければ fetch_url、そうでなければ引用付きで回答
+    // ---- Reply-suggestion requests (detected by the system prompt) get a JSON array ----
+    if (String(sys ?? '').includes('次に送りそうな')) {
+      const ans = JSON.stringify(['もっと詳しく教えて', '具体例を見せて', '要点を3行でまとめて', 'ほかの方法はある？', '注意点は？'].slice(0, 3));
+      for (const p of chunked(ans)) await send({ content: p });
+      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+      chunk(res, { id, choices: [], usage: { prompt_tokens: 120, completion_tokens: 30 }, cost: { usd: COST / 4, diem: COST / 4 } });
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
+
+    // ---- Tool-call mock ----
+    // Tools are passed and the last message is from the user and contains "検索" → call web_search
+    // Last message is a tool result → if the request contains "読んで" and nothing was fetched yet, call fetch_url; otherwise answer with citations
     const toolNames = (body.tools ?? []).map((t) => t.function?.name);
     const msgs = body.messages ?? [];
     const lastMsg = msgs[msgs.length - 1];
@@ -158,7 +168,7 @@ const server = http.createServer(async (req, res) => {
       res.write('data: [DONE]\n\n');
       res.end();
     };
-    // save_skill（skill-creator を使った会話でだけ渡される）: 「作って」で新規、「直して」で更新
+    // save_skill (only passed in conversations using skill-creator): "作って" creates, "直して" updates
     const userText = String(last).split('\n---\n').pop();
     const lastCallName = [...msgs].reverse().find((m) => m.role === 'assistant' && m.tool_calls?.length)?.tool_calls?.[0]?.function?.name;
     const wantsSave = /作って|直して/.test(userText);
@@ -179,7 +189,7 @@ const server = http.createServer(async (req, res) => {
       res.write('data: [DONE]\n\n');
       return res.end();
     }
-    // load_skill が渡され、ユーザーが「スキル」と書いたら、一覧の先頭のスキルを読み込む
+    // If load_skill is passed and the user wrote "スキル", load the first skill in the list
     if (toolNames.includes('load_skill') && lastMsg?.role === 'user' && last.includes('スキル')) {
       const skillTool = body.tools.find((t) => t.function?.name === 'load_skill');
       const name = skillTool.function.parameters?.properties?.name?.enum?.[0] ?? 'unknown';

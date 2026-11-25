@@ -1,4 +1,4 @@
-// OpenAI 互換 Chat Completions Adapter（Venice / OpenRouter / Gemini / DeepSeek / Groq / Ollama などが乗る）
+// OpenAI-compatible Chat Completions adapter (used by Venice / OpenRouter / Gemini / DeepSeek / Groq / Ollama, etc.)
 import type {
   ChatMessage,
   ChatRequest,
@@ -16,7 +16,7 @@ import { parseSSE } from './sse';
 import { ThinkSplitter } from './think-splitter';
 import { errorFromFetchFailure, errorFromResponse, isAbort, ProviderFailure } from './errors';
 
-/** キーの確認: キー付きで GET して 2xx なら有効 */
+/** Key check: GET with the key; 2xx means valid */
 export async function checkKey(url: string, fetchWithKey: KeyedFetch, corsHint?: string, headers: Record<string, string> = {}): Promise<{ ok: boolean; error?: ProviderError }> {
   let res: Response;
   try {
@@ -34,11 +34,11 @@ export function joinUrl(base: string, path: string): string {
 }
 
 function effectiveBase(cfg: ProviderConfig): string {
-  // プロキシ使用時は「プロキシ URL + 元の base のパス」に送る（プロキシ側が上流へ転送する想定）
+  // With a proxy, send to "proxy URL + path of the original base" (the proxy is expected to forward upstream)
   return cfg.proxyUrl ? cfg.proxyUrl : cfg.baseUrl;
 }
 
-/** 正規化メッセージ → OpenAI 形式 */
+/** Normalized messages → OpenAI format */
 export function toOpenAIMessages(messages: ChatMessage[]): any[] {
   const out: any[] = [];
   for (const m of messages) {
@@ -78,7 +78,7 @@ export function toOpenAIMessages(messages: ChatMessage[]): any[] {
   return out;
 }
 
-/** 思考の送り返しを受け付けない API 向けに reasoning_content を外す */
+/** Strip reasoning_content for APIs that do not accept reasoning being sent back */
 function limitReasoning(msgs: any[], mode: 'always' | 'tool-turns' | 'never'): any[] {
   if (mode === 'always') return msgs;
   return msgs.map((m) => {
@@ -195,7 +195,7 @@ async function* streamChat(
       try {
         chunk = JSON.parse(data);
       } catch {
-        continue; // 壊れたチャンクは無視
+        continue; // ignore broken chunks
       }
       if (chunk?.error) {
         yield* state.closeAll();
@@ -270,7 +270,7 @@ function mapFinish(r: string): 'stop' | 'length' | 'tool-calls' | 'content-filte
   return 'stop';
 }
 
-/** チャンク → ブロック単位イベントへの変換状態 */
+/** State for converting chunks into block-level events */
 class StreamState {
   private nextIndex = 0;
   private open: { kind: 'text' | 'reasoning'; index: number } | null = null;

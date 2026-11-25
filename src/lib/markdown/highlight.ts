@@ -1,4 +1,4 @@
-// highlight.js の遅延ロード用チャンク（よく使う言語だけ登録）
+// Lazy-loaded highlight.js chunk (registers only commonly used languages)
 import hljs from 'highlight.js/lib/core';
 import bash from 'highlight.js/lib/languages/bash';
 import c from 'highlight.js/lib/languages/c';

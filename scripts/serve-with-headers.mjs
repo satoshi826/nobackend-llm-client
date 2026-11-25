@@ -1,6 +1,6 @@
-// ビルド成果物を _headers（Cloudflare Pages 形式）のヘッダ付きで配信する検証用サーバー。
-// CSP・Trusted Types が本番相当で効いた状態で動作確認するために使う。
-// Cloudflare と同じく、一致したルールのヘッダを順に適用し、「! 名前」でそれまでのヘッダを外せる。
+// Test server that serves the build output with the headers from _headers (Cloudflare Pages format).
+// Used to check behaviour with CSP and Trusted Types enforced as in production.
+// Like Cloudflare, applies headers of matching rules in order; "! Name" removes a header set earlier.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -45,7 +45,7 @@ http
       for (const op of r.ops) {
         if (op.detach) headers.delete(op.detach);
         else {
-          // 同じヘッダが複数のルールにあれば、Cloudflare と同じくカンマで連結する
+          // If several rules set the same header, join them with commas like Cloudflare does
           const k = op.name.toLowerCase();
           const prev = headers.get(k);
           headers.set(k, { name: op.name, value: prev ? `${prev.value}, ${op.value}` : op.value });

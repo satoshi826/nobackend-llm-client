@@ -1,10 +1,10 @@
-// ツールが使う外部サービス（LLM 以外）。キーの保管は LLM プロバイダーと同じ仕組み（直接モード / キー金庫）を使う。
+// External services used by tools (other than LLMs). Keys are kept the same way as for LLM providers (direct mode / key vault).
 
 export interface ToolService {
   id: string;
   label: string;
   baseUrl: string;
-  /** キーなしでも使える（制限付き） */
+  /** Usable without a key (with limits) */
   keyOptional: boolean;
   keyGuide: string;
 }

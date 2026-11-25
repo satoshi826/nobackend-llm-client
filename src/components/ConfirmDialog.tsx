@@ -1,4 +1,4 @@
-// ブラウザ標準の confirm()/alert() の代わりに使うアプリ内の確認ダイアログ。
+// In-app confirmation dialog used instead of the browser's native confirm()/alert().
 import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Button, Icon } from './ui';
@@ -8,14 +8,14 @@ interface ConfirmOptions {
   message: string;
   confirmLabel?: string;
   danger?: boolean;
-  /** 入力が一致したときだけ実行できる（取り消せない操作の誤操作防止） */
+  /** Can only be executed when the typed input matches (guards against mistakes on irreversible actions) */
   requireText?: string;
 }
 
 const state = signal<(ConfirmOptions & { resolve(ok: boolean): void }) | null>(null);
 
 export function askConfirm(opts: ConfirmOptions): Promise<boolean> {
-  // 既に開いているものはキャンセル扱いにする
+  // Treat any dialog that is already open as cancelled
   state.value?.resolve(false);
   return new Promise((resolve) => {
     state.value = { ...opts, resolve };
@@ -31,7 +31,7 @@ export function ConfirmDialog() {
   useEffect(() => {
     if (!s) return;
     setTyped('');
-    // 取り消せない操作は既定のフォーカスを「キャンセル」側に置く
+    // For irreversible actions, put the default focus on "Cancel"
     (s.requireText ? inputRef.current : cancelRef.current)?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {

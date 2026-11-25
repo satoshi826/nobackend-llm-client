@@ -1,4 +1,4 @@
-// データ管理（バックアップ・読み込み・全削除）
+// Data management (backup, import, delete all)
 import * as repo from '../lib/db/repo';
 import { exportAll, importAll } from '../lib/db/export';
 import { saveSettings } from './settings';
@@ -32,14 +32,14 @@ export async function importFromFile(file: File) {
   return r;
 }
 
-/** このブラウザ内のアプリのデータを消す（同一オリジンのキー金庫のキーも含む） */
+/** Delete this app's data in this browser (including keys in a same-origin key vault) */
 export async function wipeEverything() {
   stopAll();
-  // 金庫が別オリジンでも消えるよう、まず金庫に削除を頼む
+  // Ask the vault to delete first, so keys are removed even if the vault is on another origin
   try {
     await Promise.race([clearAllKeys(), new Promise((r) => setTimeout(r, 3000))]);
   } catch {
-    /* 金庫に接続できなくても続ける */
+    /* Continue even if the vault cannot be reached */
   }
   await repo.wipeAll();
   await new Promise<void>((resolve) => {

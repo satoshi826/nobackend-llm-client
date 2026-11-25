@@ -1,4 +1,4 @@
-// モデル一覧の絞り込み・並び替え（モデル選択画面で使う）
+// Filtering and sorting the model list (used by the model picker)
 import type { ModelInfo } from './providers/types';
 
 export type ModelSort = 'recommended' | 'name' | 'price' | 'context';
@@ -41,7 +41,7 @@ export function matchesQuery(m: ModelInfo, q: string): boolean {
   return !ql || m.name.toLowerCase().includes(ql) || m.id.toLowerCase().includes(ql);
 }
 
-/** 入力 + 出力の 100 万トークンあたりの価格。不明なら null */
+/** Input + output price per million tokens. null if unknown */
 function priceOf(m: ModelInfo): number | null {
   const i = m.pricing?.inputPerMTok;
   const o = m.pricing?.outputPerMTok;
@@ -50,14 +50,14 @@ function priceOf(m: ModelInfo): number | null {
 
 const privacyRank = (m: ModelInfo) => (m.privacy === 'private' ? 0 : m.privacy === 'anonymized' ? 2 : 1);
 const byName = (a: ModelInfo, b: ModelInfo) => a.name.localeCompare(b.name);
-/** 値のないものは常に末尾 */
+/** Missing values always go last */
 const nullsLast = (a: number | null | undefined, b: number | null | undefined, dir: 1 | -1) =>
   a == null ? (b == null ? 0 : 1) : b == null ? -1 : (a - b) * dir;
 
 export function compareModels(sort: ModelSort): (a: ModelInfo, b: ModelInfo) => number {
   switch (sort) {
     case 'recommended':
-      // private 優先 → 既定モデル → 提供終了予定は後ろ → 名前
+      // private first → default model → models scheduled for retirement last → name
       return (a, b) =>
         privacyRank(a) - privacyRank(b) ||
         Number(!a.tags?.includes('default')) - Number(!b.tags?.includes('default')) ||
@@ -72,7 +72,7 @@ export function compareModels(sort: ModelSort): (a: ModelInfo, b: ModelInfo) => 
   }
 }
 
-/** 絞り込み（すべて満たすもの）と並び替え */
+/** Filter (must match all) and sort */
 export function arrangeModels(list: ModelInfo[], opts: { query: string; filters: ModelFilter[]; sort: ModelSort }): ModelInfo[] {
   return list.filter((m) => matchesQuery(m, opts.query) && opts.filters.every((f) => matchesFilter(m, f))).sort(compareModels(opts.sort));
 }

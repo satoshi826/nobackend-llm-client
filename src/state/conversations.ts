@@ -1,18 +1,18 @@
-// 会話の一覧・表示中の会話・メッセージ。
-// 新しいチャットは「まだ保存していない会話（下書き）」として同じ形で扱い、最初の送信で保存する。
+// Conversation list, the displayed conversation, and its messages.
+// A new chat is treated the same way, as an "unsaved conversation (draft)", and is saved on the first send.
 import { batch, computed, effect, signal } from '@preact/signals';
 import type { Conversation, MessageRecord } from '../lib/db/schema';
 import * as repo from '../lib/db/repo';
-import { pathToLeaf } from '../lib/chat/tree';
+import { pathToLeaf, resolveLeaf } from '../lib/chat/tree';
 import { titleFrom } from '../lib/chat/title';
 import { settings } from './settings';
 import { defaultModel, visibleModels } from './models';
 import { sidebarOpen } from './ui';
 
 export const conversations = signal<Conversation[]>([]);
-/** 表示中の保存済み会話の ID（null なら下書き） */
+/** ID of the displayed saved conversation (null means a draft) */
 export const currentId = signal<string | null>(null);
-/** 表示中の会話のメッセージ（会話ツリー全体） */
+/** Messages of the displayed conversation (the whole conversation tree) */
 export const messages = signal<MessageRecord[]>([]);
 
 const DRAFT_ID = 'draft';
@@ -38,7 +38,7 @@ function makeDraft(temporary: boolean): Conversation {
 
 export const draft = signal<Conversation>(makeDraft(false));
 
-// モデル一覧が後から届いたら、下書きのモデルを埋める
+// When the model list arrives later, fill in the draft's model
 effect(() => {
   const d = draft.peek();
   const vis = visibleModels.value;
@@ -49,7 +49,7 @@ effect(() => {
 });
 
 export const isDraft = computed(() => currentId.value === null);
-/** 表示中の会話（下書きを含む。常に存在する） */
+/** The displayed conversation (including a draft; always present) */
 export const currentConv = computed<Conversation>(() => (currentId.value ? conversations.value.find((c) => c.id === currentId.value) : undefined) ?? draft.value);
 
 export const currentPath = computed<MessageRecord[]>(() => {
@@ -76,12 +76,12 @@ export function startNewChat(temporary = false) {
   setHash(null);
 }
 
-/** 生成中の下書きなど、DB より新しいメッセージ（generation が登録する） */
+/** Messages newer than the DB, such as in-progress drafts (registered by generation) */
 export const liveMessages = new Map<string, MessageRecord>();
 
 export async function openConversation(id: string) {
   const stored = await repo.listMessages(id);
-  // 生成中のものはメモリ上の最新を使い、生成中のまま残ったもの（再読み込みで中断）は「停止」扱い
+  // For in-progress messages use the latest copy in memory; ones left in progress (interrupted by a reload) are treated as stopped
   const list = stored.map((m) => liveMessages.get(m.id) ?? (m.status === 'streaming' ? { ...m, status: 'aborted' as const } : m));
   for (const d of liveMessages.values()) if (d.conversationId === id && !list.some((m) => m.id === d.id)) list.push(d);
   batch(() => {
@@ -90,9 +90,15 @@ export async function openConversation(id: string) {
     sidebarOpen.value = false;
   });
   setHash(id);
+  // Repair a leaf that points at a message that was never written (closed right as a reply started)
+  const conv = conversations.value.find((c) => c.id === id);
+  if (conv) {
+    const leaf = resolveLeaf(list, conv.currentLeafId);
+    if (leaf !== conv.currentLeafId) await updateConversation({ currentLeafId: leaf }, id);
+  }
 }
 
-/** 会話の設定を変える（下書きなら下書きを変える） */
+/** Change the conversation's settings (changes the draft if it is a draft) */
 export async function updateConversation(patch: Partial<Conversation>, id: string | null = currentId.value) {
   if (!id) {
     draft.value = { ...draft.value, ...patch, id: DRAFT_ID };
@@ -110,7 +116,7 @@ export function touchConversation(id: string) {
   void updateConversation({ updatedAt: Date.now() }, id);
 }
 
-/** 下書きなら保存して会話にする */
+/** If it is a draft, save it as a conversation */
 export async function persistDraft(firstText: string): Promise<Conversation> {
   if (!isDraft.value) return currentConv.value;
   const now = Date.now();
@@ -143,7 +149,8 @@ function setHash(id: string | null) {
   if (location.hash !== next) history.replaceState(null, '', next || location.pathname);
 }
 
-export async function restoreFromHash() {
-  const m = /^#\/c\/([\w-]+)$/.exec(location.hash);
+/** Open the conversation named in the URL (pass the hash read before anything resets it) */
+export async function restoreFromHash(hash = location.hash) {
+  const m = /^#\/c\/([\w-]+)$/.exec(hash);
   if (m && conversations.value.some((c) => c.id === m[1])) await openConversation(m[1]);
 }

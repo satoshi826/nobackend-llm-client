@@ -24,11 +24,11 @@ async function collect<T>(it: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe('parseSSE', () => {
-  it('チャンク境界で分割されたイベントと CRLF、コメントを扱う', async () => {
+  it('handles events split across chunk boundaries, CRLF and comments', async () => {
     const msgs = await collect(parseSSE(streamOf(['data: {"a"', ':1}\r\n\r\n: keep-alive\n\nda', 'ta: [DONE]\n\n'])));
     expect(msgs.map((m) => m.data)).toEqual(['{"a":1}', '[DONE]']);
   });
-  it('マルチバイト文字が分割されても壊れない', async () => {
+  it('does not break multibyte characters that are split', async () => {
     const bytes = new TextEncoder().encode('data: こんにちは\n\n');
     const s = new ReadableStream<Uint8Array>({
       start(c) {
@@ -40,21 +40,21 @@ describe('parseSSE', () => {
     const msgs = await collect(parseSSE(s));
     expect(msgs[0].data).toBe('こんにちは');
   });
-  it('末尾に空行がなくても最後の data を出す', async () => {
+  it('emits the last data even without a trailing blank line', async () => {
     const msgs = await collect(parseSSE(streamOf(['data: x'])));
     expect(msgs[0].data).toBe('x');
   });
 });
 
 describe('ThinkSplitter', () => {
-  it('タグが分割されても思考と本文を分離する', () => {
+  it('separates reasoning and text even when tags are split', () => {
     const s = new ThinkSplitter();
     const segs = [...s.push('<thi'), ...s.push('nk>考え'), ...s.push('中</th'), ...s.push('ink>答え'), ...s.flush()];
     const merged: Record<string, string> = { text: '', reasoning: '' };
     for (const g of segs) merged[g.kind] += g.text;
     expect(merged).toEqual({ text: '答え', reasoning: '考え中' });
   });
-  it('タグに似た文字列は本文として残す', () => {
+  it('keeps tag-like strings as text', () => {
     const s = new ThinkSplitter();
     const segs = [...s.push('a < b <th'), ...s.push('e end'), ...s.flush()];
     expect(segs.map((x) => x.text).join('')).toBe('a < b <the end');
@@ -81,7 +81,7 @@ function fakeTransport(body: string[] | (() => Response), capture?: { url?: stri
 const sse = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`;
 
 describe('openAICompatibleAdapter.chat', () => {
-  it('reasoning_content → content → usage(choices 空) を正しくイベント化する', async () => {
+  it('turns reasoning_content → content → usage (empty choices) into the right events', async () => {
     const capture: { url?: string; init?: RequestInit } = {};
     const t = fakeTransport(
       [
@@ -108,7 +108,7 @@ describe('openAICompatibleAdapter.chat', () => {
     expect(capture.url).toBe('https://api.venice.ai/api/v1/chat/completions');
   });
 
-  it('<think> タグ方式の思考も分離する', async () => {
+  it('also separates <think>-tag reasoning', async () => {
     const t = fakeTransport([sse({ choices: [{ delta: { content: '<think>ふむ</think>' } }] }), sse({ choices: [{ delta: { content: '結論' }, finish_reason: 'stop' }] })]);
     const evs = await collect(openAICompatibleAdapter.chat(cfg, venicePreset, cred, { model: 'm', messages: [], signal: new AbortController().signal }, t));
     const r = evs.filter((e) => e.type === 'reasoning-delta').map((e: any) => e.delta).join('');
@@ -117,7 +117,7 @@ describe('openAICompatibleAdapter.chat', () => {
     expect(x).toBe('結論');
   });
 
-  it('ストリーム内エラーを error イベントにする', async () => {
+  it('turns in-stream errors into error events', async () => {
     const t = fakeTransport([sse({ choices: [{ delta: { content: 'a' } }] }), sse({ error: { message: 'overloaded', retry_after: 3 } })]);
     const evs = await collect(openAICompatibleAdapter.chat(cfg, venicePreset, cred, { model: 'm', messages: [], signal: new AbortController().signal }, t));
     const last = evs[evs.length - 1] as any;
@@ -125,7 +125,7 @@ describe('openAICompatibleAdapter.chat', () => {
     expect(last.error.retryAfterMs).toBe(3000);
   });
 
-  it('tool_calls の断片を蓄積して tool-call-end で JSON にする', async () => {
+  it('accumulates tool_calls fragments and parses JSON at tool-call-end', async () => {
     const t = fakeTransport([
       sse({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'web_search', arguments: '{"q":' } }] } }] }),
       sse({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"猫"}' } }] }, finish_reason: 'tool_calls' }] })
@@ -136,13 +136,13 @@ describe('openAICompatibleAdapter.chat', () => {
     expect(evs[evs.length - 1]).toEqual({ type: 'done', reason: 'tool-calls' });
   });
 
-  it('HTTP 402 を insufficient-balance に分類する', async () => {
+  it('classifies HTTP 402 as insufficient-balance', async () => {
     const t = fakeTransport(() => new Response(JSON.stringify({ error: 'Insufficient balance' }), { status: 402 }));
     const evs = await collect(openAICompatibleAdapter.chat(cfg, venicePreset, cred, { model: 'm', messages: [], signal: new AbortController().signal }, t));
     expect((evs[0] as any).error.kind).toBe('insufficient-balance');
   });
 
-  it('Venice の引用を source イベントにする（重複除去）', async () => {
+  it('turns Venice citations into source events (deduplicated)', async () => {
     const cit = { venice_parameters: { web_search_citations: [{ title: 'A', url: 'https://a.example/', content: 'x' }, { url: 'javascript:alert(1)' }] } };
     const t = fakeTransport([sse(cit), sse(cit), sse({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] })]);
     const evs = await collect(openAICompatibleAdapter.chat(cfg, venicePreset, cred, { model: 'm', messages: [], signal: new AbortController().signal }, t));
@@ -151,11 +151,11 @@ describe('openAICompatibleAdapter.chat', () => {
   });
 });
 
-describe('キーを付ける通信', () => {
-  it('キー金庫を通さない通信（plainTransport）はキーの指定を拒否する', async () => {
+describe('requests with keys', () => {
+  it('requests not going through the key vault (plainTransport) reject a key reference', async () => {
     await expect(plainTransport.fetch('https://api.venice.ai/api/v1/chat/completions', { method: 'POST' }, { keyId: 'venice' })).rejects.toThrow();
   });
-  it('Adapter はキーの値を扱わず、どのキーを付けるかだけを Transport に渡す', async () => {
+  it('the Adapter never handles key values and only tells the Transport which key to attach', async () => {
     let seen: unknown;
     const t: Transport = {
       async fetch(_url, _init, auth) {
@@ -169,7 +169,7 @@ describe('キーを付ける通信', () => {
 });
 
 describe('Venice mapModel', () => {
-  it('model_spec を ModelInfo に写像する', () => {
+  it('maps model_spec to ModelInfo', () => {
     const m = venicePreset.mapModel!(
       {
         id: 'venice-uncensored',
@@ -191,7 +191,7 @@ describe('Venice mapModel', () => {
 });
 
 describe('toOpenAIMessages', () => {
-  it('ツール結果を tool メッセージに変換する', () => {
+  it('converts tool results into tool messages', () => {
     const out = toOpenAIMessages([
       {
         id: 'a',
@@ -205,16 +205,16 @@ describe('toOpenAIMessages', () => {
 });
 
 describe('classifyError', () => {
-  it('PRO_ONLY_MODEL を model-unavailable に', () => {
+  it('maps PRO_ONLY_MODEL to model-unavailable', () => {
     expect(classifyError(401, { error: { code: 'PRO_ONLY_MODEL' } }).kind).toBe('model-unavailable');
   });
-  it('429 の retry-after を読む', () => {
+  it('reads retry-after on 429', () => {
     expect(classifyError(429, null, '5').retryAfterMs).toBe(5000);
   });
 });
 
-describe('プロンプトキャッシュ', () => {
-  it('Venice にはキャッシュキーを送り、キャッシュに当たったトークン数を読む', async () => {
+describe('prompt cache', () => {
+  it('sends a cache key to Venice and reads the cached token count', async () => {
     const capture: { url?: string; init?: RequestInit } = {};
     const t = fakeTransport(
       [sse({ choices: [{ delta: { content: 'x' }, finish_reason: 'stop' }] }), sse({ choices: [], usage: { prompt_tokens: 100, completion_tokens: 1, prompt_tokens_details: { cached_tokens: 80 } } })],

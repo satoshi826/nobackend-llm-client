@@ -1,4 +1,4 @@
-// ツールの型（docs/design.md §9.3）
+// Tool types (docs/design.md §9.3)
 import type { AuthRef, ToolDefinition, Transport } from '../providers/types';
 
 export type ToolRisk = 'read' | 'write' | 'exec' | 'network';
@@ -11,11 +11,11 @@ export interface ToolSource {
 }
 
 export interface ToolResult {
-  /** モデルに渡す内容 */
+  /** Content passed to the model */
   content: string;
-  /** 画面表示用（モデルには渡さない） */
+  /** For display only (not passed to the model) */
   details?: unknown;
-  /** 出典として表示するもの */
+  /** Items shown as sources */
   sources?: ToolSource[];
   isError?: boolean;
 }
@@ -23,7 +23,7 @@ export interface ToolResult {
 export interface ToolContext {
   signal: AbortSignal;
   transport: Transport;
-  /** 外部サービスのキーの指定（キー未設定・ロック中なら undefined＝キーなしで送る） */
+  /** Key reference for the external service (undefined when no key is set or it is locked, i.e. send without a key) */
   authFor(serviceId: string): AuthRef | undefined;
 }
 
@@ -33,9 +33,9 @@ export interface Tool<I = any> {
   description: string;
   parameters: Record<string, unknown>;
   risk: ToolRisk;
-  /** 承認カードに出す要約（例: 検索語） */
+  /** Summary shown on the approval card (e.g. the search query) */
   summarize(input: I): string;
-  /** 壊れた引数の修復・検証。問題があれば例外 */
+  /** Repair and validate broken arguments. Throws if there is a problem */
   prepare(raw: unknown): I;
   execute(input: I, ctx: ToolContext): Promise<ToolResult>;
 }

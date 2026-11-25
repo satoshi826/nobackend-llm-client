@@ -9,7 +9,7 @@ const BUILTIN: ProviderPreset[] = [venicePreset, openrouterPreset, anthropicPres
 
 export const PRESETS: Record<string, ProviderPreset> = Object.fromEntries([...BUILTIN, ...customPresets].map((p) => [p.id, p]));
 
-/** 画面に出す順番（組み込み → ビルド時に足したもの） */
+/** Display order (built-in → added at build time) */
 export const PRESET_ORDER: string[] = [...BUILTIN, ...customPresets].map((p) => p.id);
 
 export function getPreset(id: string): ProviderPreset {

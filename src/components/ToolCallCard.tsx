@@ -1,8 +1,8 @@
-// ツール呼び出しの表示（実行中・結果・エラー・拒否）と、承認待ちのときの承認カード。
+// Tool call display (running, result, error, denied), and the approval card while awaiting approval.
 import { useState } from 'preact/hooks';
 import type { Part } from '../lib/providers/types';
 import { pendingApprovals, resolveApproval } from '../state/app';
-import { Button, Icon, cx } from './ui';
+import { Button, Icon, Shimmer, Spinner, cx } from './ui';
 import { SkillApproval } from './SkillApproval';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
@@ -110,10 +110,14 @@ export function ToolCallCard({ p, live }: { p: ToolPart; live: boolean }) {
         onClick={() => hasDetails && setOpen(!open)}
         aria-expanded={hasDetails ? open : undefined}
       >
-        <Icon name={ICON[p.name as keyof typeof ICON] ?? 'wrench'} class={cx('size-3.5 shrink-0', live && p.state === 'input-available' && 'animate-pulse')} />
+        {live && (p.state === 'input-available' || p.state === 'input-streaming') ? (
+          <Spinner class="size-3.5 text-sky-600 dark:text-sky-400" />
+        ) : (
+          <Icon name={ICON[p.name as keyof typeof ICON] ?? 'wrench'} class="size-3.5 shrink-0" />
+        )}
         <span class="shrink-0 font-medium">{LABEL[p.name] ?? p.name}</span>
         <span class="min-w-0 truncate text-zinc-500">{summary(p)}</span>
-        <span class={cx('ml-auto shrink-0', tone)}>{status}</span>
+        <span class={cx('ml-auto shrink-0', tone)}>{live && (p.state === 'input-available' || p.state === 'input-streaming') ? <Shimmer>{status}</Shimmer> : status}</span>
         {hasDetails && <Icon name="chevron-down" class={cx('size-3.5 shrink-0 transition', open && 'rotate-180')} />}
       </button>
       {open && (

@@ -29,7 +29,7 @@ describe('Anthropic adapter', () => {
     expect(r.messages[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'weather?' }] });
     expect(r.messages[1].content[1]).toEqual({ type: 'tool_use', id: 't1', name: 'web_search', input: { query: 'x' } });
     expect(r.messages[2].content[0]).toEqual({ type: 'tool_result', tool_use_id: 't1', content: 'sunny' });
-    // 続く assistant / user はそれぞれ 1 つにまとまる
+    // Consecutive assistant / user messages are each merged into one
     expect(r.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant', 'user']);
     expect(r.messages[4].content[0]).toMatchObject({ tool_use_id: 't2', is_error: true });
   });

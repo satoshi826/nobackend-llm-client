@@ -5,8 +5,8 @@ import type { ProviderConfig } from './types';
 
 const cfg: ProviderConfig = { id: 'openrouter', ...openrouterPreset.defaults };
 
-describe('OpenRouter プリセット', () => {
-  it('モデル情報を写像する（価格は 100 万トークンあたりに換算）', () => {
+describe('OpenRouter preset', () => {
+  it('maps model info (prices converted to per million tokens)', () => {
     const m = openrouterPreset.mapModel!(
       {
         id: 'meta-llama/llama-4:free',
@@ -24,10 +24,10 @@ describe('OpenRouter プリセット', () => {
     expect(m.privacy).toBe('unknown');
     expect(m.tags).toContain('free');
   });
-  it('テキストを出力しないモデルは除外', () => {
+  it('excludes models that do not output text', () => {
     expect(openrouterPreset.mapModel!({ id: 'x/img', architecture: { output_modalities: ['image'] } }, 'openrouter')).toBeNull();
   });
-  it('既定でデータ収集を拒否し、reasoning_effort を reasoning.effort に変換する', () => {
+  it('denies data collection by default and converts reasoning_effort to reasoning.effort', () => {
     const body = buildChatBody(cfg, openrouterPreset, {
       model: 'm',
       messages: [],

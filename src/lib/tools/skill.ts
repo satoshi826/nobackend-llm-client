@@ -1,4 +1,4 @@
-// load_skill: システムプロンプトの一覧にあるスキルの本文を読み込むツール（ブラウザ内で完結。外部に送らない）
+// load_skill: a tool that loads the body of a skill listed in the system prompt (runs entirely in the browser; nothing is sent out)
 import type { Skill } from '../db/schema';
 import { skillBlock, validateSkill, type SkillDraft } from '../skills/skill';
 import type { Tool } from './types';
@@ -32,7 +32,7 @@ export function makeSkillTool(list: Pick<Skill, 'name' | 'body'>[]): Tool<{ name
 }
 
 export const SAVE_SKILL = 'save_skill';
-/** 設定や「常に許可」に関係なく、毎回ユーザーの確認を求めるツール */
+/** Tools that always ask the user for confirmation, regardless of settings or "always allow" */
 export const ALWAYS_ASK = new Set([SAVE_SKILL]);
 
 export interface SaveSkillInput {
@@ -47,7 +47,7 @@ export interface SaveSkillDeps {
   save(draft: SkillDraft, id: string | undefined): Promise<unknown>;
 }
 
-/** save_skill: スキルを作る・直す（必ずユーザーの承認を経る） */
+/** save_skill: create or fix a skill (always goes through user approval) */
 export function makeSaveSkillTool(deps: SaveSkillDeps): Tool<SaveSkillInput> {
   return {
     name: SAVE_SKILL,

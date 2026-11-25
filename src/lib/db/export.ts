@@ -1,6 +1,9 @@
-// JSON エクスポート / インポート。API キーは既定で含めない。
+// JSON export / import. API keys are not included by default.
 import { db, SCHEMA_VERSION, type Conversation, type MessageRecord, type SavedPrompt, type Skill } from './schema';
 import { validateSkill } from '../skills/skill';
+import { seal, unseal } from './sealed';
+
+const openAll = <T extends object>(rows: T[]) => Promise.all(rows.map((r) => unseal(r)));
 
 export const EXPORT_FORMAT = 'nobackend-llm-client/export';
 
@@ -11,7 +14,7 @@ export interface ExportFile {
   conversations: Conversation[];
   messages: MessageRecord[];
   prompts: SavedPrompt[];
-  /** v3 から */
+  /** Since v3 */
   skills?: Skill[];
   settings: { key: string; value: unknown }[];
 }
@@ -22,11 +25,12 @@ export async function exportAll(): Promise<ExportFile> {
     format: EXPORT_FORMAT,
     version: SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
-    conversations: await d.conversations.toArray(),
-    messages: await d.messages.toArray(),
-    prompts: await d.prompts.toArray(),
-    skills: await d.skills.toArray(),
-    // 接続設定・キーは含めない（インポートで baseUrl を差し替えられる攻撃を避ける）
+    // Data stored encrypted is decrypted on export too (backup files are not encrypted)
+    conversations: await openAll(await d.conversations.toArray()),
+    messages: await openAll(await d.messages.toArray()),
+    prompts: await openAll(await d.prompts.toArray()),
+    skills: await openAll(await d.skills.toArray()),
+    // Connection settings and keys are excluded (avoids attacks that swap baseUrl via import)
     settings: (await d.settings.toArray()).filter((s) => !String(s.key).startsWith('secret'))
   };
 }
@@ -39,21 +43,26 @@ export interface ImportResult {
   skipped: number;
 }
 
-/** 形式を検証してからマージ（同じ ID は上書きしない＝スキップ）。 */
+/** Validate the format, then merge (existing IDs are not overwritten, i.e. skipped). */
 export async function importAll(raw: unknown): Promise<ImportResult> {
   const f = validate(raw);
   const d = db();
   const res: ImportResult = { conversations: 0, messages: 0, prompts: 0, skills: 0, skipped: 0 };
+  // Encrypt up front, outside the transaction (awaiting inside would close the transaction)
+  const conversations = await Promise.all(f.conversations.map((c) => seal('conversations', { ...c, temporary: undefined })));
+  const messages = await Promise.all(f.messages.map((m) => seal('messages', m)));
+  const prompts = await Promise.all(f.prompts.map((p) => seal('prompts', p)));
+  const skills = await Promise.all((f.skills ?? []).map((s) => seal('skills', s)));
   await d.transaction('rw', [d.conversations, d.messages, d.prompts, d.skills], async () => {
-    for (const c of f.conversations) {
+    for (const c of conversations) {
       if (await d.conversations.get(c.id)) {
         res.skipped++;
         continue;
       }
-      await d.conversations.put({ ...c, temporary: undefined });
+      await d.conversations.put(c);
       res.conversations++;
     }
-    for (const m of f.messages) {
+    for (const m of messages) {
       if (await d.messages.get(m.id)) {
         res.skipped++;
         continue;
@@ -61,7 +70,7 @@ export async function importAll(raw: unknown): Promise<ImportResult> {
       await d.messages.put(m);
       res.messages++;
     }
-    for (const p of f.prompts) {
+    for (const p of prompts) {
       if (await d.prompts.get(p.id)) {
         res.skipped++;
         continue;
@@ -69,8 +78,8 @@ export async function importAll(raw: unknown): Promise<ImportResult> {
       await d.prompts.put(p);
       res.prompts++;
     }
-    // スキルは名前が一意。同じ ID か同じ名前があれば手元のものを残す
-    for (const s of f.skills ?? []) {
+    // Skill names are unique. If one with the same ID or name exists, keep the local one
+    for (const s of skills) {
       if ((await d.skills.get(s.id)) || (await d.skills.where('name').equals(s.name).count())) {
         res.skipped++;
         continue;
@@ -116,7 +125,7 @@ export function validate(raw: unknown): ExportFile {
       groupId: isStr(m.groupId) ? m.groupId : undefined,
       createdAt: typeof m.createdAt === 'number' ? m.createdAt : Date.now(),
       role: m.role,
-      // テキスト系パーツだけ受け入れる（file/tool は参照先がないため）
+      // Accept only text-like parts (file/tool parts have nothing to refer to)
       parts: m.parts.filter((p: any) => (p?.type === 'text' || p?.type === 'reasoning') && isStr(p.text)).map((p: any) => ({ type: p.type, text: p.text, state: 'done' as const })),
       status: 'done' as const,
       meta: m.meta && typeof m.meta === 'object' ? { model: isStr((m.meta as any).model) ? (m.meta as any).model : undefined } : undefined,
@@ -128,7 +137,7 @@ export function validate(raw: unknown): ExportFile {
         ? m.skills.filter((s: any) => s && isStr(s.name) && isStr(s.body)).map((s: any) => ({ name: s.name, body: s.body }))
         : undefined
     } as MessageRecord))
-    // 圧縮ノード以外の system メッセージは受け付けない（会話の途中に指示を紛れ込ませないため）
+    // Reject system messages other than compaction nodes (so instructions cannot be slipped into a conversation)
     .filter((m) => m.role !== 'system' || !!m.compaction);
   const prompts = (Array.isArray(f.prompts) ? f.prompts : [])
     .filter((p) => p && isStr(p.id) && isStr(p.name) && isStr(p.content))

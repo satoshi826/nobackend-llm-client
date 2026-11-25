@@ -1,6 +1,6 @@
-// 本体アプリ側のキー金庫クライアント。
-// 画面に出ない iframe（view=transport）を 1 つ置き、MessageChannel で送信依頼を出す。
-// 応答は ReadableStream に詰め直して Response として返すので、既存の Adapter / SSE パーサはそのまま使える。
+// Key vault client on the app side.
+// Places one invisible iframe (view=transport) and sends requests over a MessageChannel.
+// Responses are repacked into a ReadableStream and returned as a Response, so the existing Adapters / SSE parser work unchanged.
 import { ProviderFailure } from '../providers/errors';
 import type { Transport } from '../providers/types';
 import { plainTransport } from '../providers/transport';
@@ -8,19 +8,23 @@ import { VAULT_PROTOCOL, type FromVault, type ToVault } from './protocol';
 import type { KeyStatus, VaultState } from '../keys/accounts';
 
 /**
- * キー金庫ページの URL。キーの保存・送信は常にこのページが行い、本体アプリはキーを持たない。
- * - 未指定: 本体と同じオリジンの /vault/（デプロイ 1 つで動く。XSS からの隔離はない）
- * - VITE_VAULT_URL 指定: 別オリジンの金庫（例: https://vault.example.com/index.html）。本体で XSS が起きてもキーは読めない
+ * URL of the key vault page. That page always stores keys and sends with them; the app never holds keys.
+ * - unset: /vault/ on the app's own origin (works with a single deployment; no isolation from XSS)
+ * - VITE_VAULT_URL set: a vault on a separate origin (e.g. https://vault.example.com/index.html). Keys stay unreadable even if the app suffers XSS
  */
-// /vault/index.html は Cloudflare などで /vault/ にリダイレクトされるので、最初から /vault/ を開く
+// /vault/index.html gets redirected to /vault/ by Cloudflare and others, so open /vault/ directly
 const SAME_ORIGIN_PATH = '/vault/';
 export const VAULT_URL: string = (import.meta as any).env?.VITE_VAULT_URL || (typeof location !== 'undefined' ? new URL(SAME_ORIGIN_PATH, location.origin).toString() : SAME_ORIGIN_PATH);
 export const VAULT_ORIGIN = typeof location !== 'undefined' ? new URL(VAULT_URL, location.origin).origin : '';
-/** キー金庫が本体と別オリジンにあるか（XSS からキーを隔離できているか） */
+/** Whether the key vault is on a different origin from the app (i.e. keys are isolated from XSS) */
 export const vaultIsolated = typeof location !== 'undefined' && VAULT_ORIGIN !== location.origin;
+
+/** ID of this page (one app page). The vault's unlock state is shared only within this ID */
+export const VAULT_SESSION = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2);
 
 export function vaultViewUrl(params: Record<string, string>): string {
   const u = new URL(VAULT_URL);
+  u.searchParams.set('session', VAULT_SESSION);
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   return u.toString();
 }
@@ -37,6 +41,7 @@ class VaultConnection {
   private pending = new Map<string, Pending>();
   private statusListeners = new Set<(s: Record<string, KeyStatus>, v: VaultState) => void>();
   private acks = new Map<string, () => void>();
+  private results = new Map<string, (r: { ok: boolean; value?: unknown; message?: string }) => void>();
   private seq = 0;
 
   connect(): Promise<void> {
@@ -77,7 +82,21 @@ class VaultConnection {
     this.send({ type: 'status' });
   }
 
-  /** 金庫への操作（すべてのキーの削除・ロック）。終わるまで待つ */
+  /** Wrap / unwrap the data key with the passphrase (the vault must be unlocked) */
+  async dataKey(type: 'wrap-data-key', raw: string): Promise<unknown>;
+  async dataKey(type: 'unwrap-data-key', blob: unknown): Promise<string>;
+  async dataKey(type: 'wrap-data-key' | 'unwrap-data-key', arg: unknown): Promise<unknown> {
+    await this.connect();
+    const id = `d${++this.seq}`;
+    const r = await new Promise<{ ok: boolean; value?: unknown; message?: string }>((resolve) => {
+      this.results.set(id, resolve);
+      this.send(type === 'wrap-data-key' ? { type, id, raw: String(arg) } : { type, id, blob: arg });
+    });
+    if (!r.ok) throw new Error(r.message ?? '金庫での処理に失敗しました。');
+    return r.value;
+  }
+
+  /** Vault operations (delete all keys, lock). Waits until done */
   async command(type: 'clear-all' | 'lock'): Promise<void> {
     await this.connect();
     const id = `c${++this.seq}`;
@@ -95,6 +114,11 @@ class VaultConnection {
     if (m.type === 'ack') {
       this.acks.get(m.id)?.();
       this.acks.delete(m.id);
+      return;
+    }
+    if (m.type === 'result') {
+      this.results.get(m.id)?.(m);
+      this.results.delete(m.id);
       return;
     }
     const p = this.pending.get(m.id);
@@ -118,7 +142,7 @@ class VaultConnection {
         try {
           p.controller?.close();
         } catch {
-          /* 既に閉じている */
+          /* already closed */
         }
         this.pending.delete(m.id);
         break;
@@ -156,8 +180,8 @@ class VaultConnection {
 export const vault = new VaultConnection();
 
 /**
- * 金庫モードの Transport。キーが必要な通信（credential.kind === 'vault'）は金庫に依頼し、
- * キーの要らない通信（モデル一覧など）は本体から直接送る。
+ * Transport in vault mode. Requests that need a key (credential.kind === 'vault') go through the vault;
+ * requests that need none (model lists etc.) are sent directly from the app.
  */
 export const vaultTransport: Transport = {
   fetch(url, init, auth) {

@@ -1,6 +1,6 @@
-// API キーを預かる接続先の一覧（LLM プロバイダー + ツールの外部サービス）。
-// キー金庫はここに載っている接続先のキーだけを、ここに書かれたホスト宛てにだけ付けて送る。
-// 本体アプリからは変更できない（ビルド時に固定）。
+// Accounts whose API keys we hold (LLM providers + external services used by tools).
+// The key vault attaches keys only for accounts listed here, and only to the hosts listed here.
+// The app cannot change this (fixed at build time).
 import { PRESETS } from '../providers/registry';
 import { SERVICES } from '../tools/services';
 import type { ProviderConfig, ProviderPreset } from '../providers/types';
@@ -8,15 +8,15 @@ import type { ProviderConfig, ProviderPreset } from '../providers/types';
 export interface Account {
   id: string;
   label: string;
-  /** キーを付けてよいホスト */
+  /** Hosts the key may be attached to */
   host: string;
   kind: 'llm' | 'tool';
-  /** キーなしでも使える（制限付き） */
+  /** Usable without a key (with limits) */
   keyOptional: boolean;
   keyGuide: string;
-  /** キーの確認方法（LLM プロバイダーのみ） */
+  /** How to verify the key (LLM providers only) */
   preset?: ProviderPreset;
-  /** キーを付けるヘッダ（既定: Authorization: Bearer） */
+  /** Header the key goes in (default: Authorization: Bearer) */
   keyHeader: { name: string; prefix: string };
 }
 
@@ -54,10 +54,10 @@ export function providerConfigOf(id: string): ProviderConfig | undefined {
   return p ? { id, ...p.defaults } : undefined;
 }
 
-/** キーの状態（金庫が本体に知らせる内容。キーそのものは含まない） */
+/** Key status (what the vault tells the app; never the key itself) */
 export interface KeyStatus {
   present: boolean;
-  /** パスフレーズで暗号化して保存されている */
+  /** Stored encrypted with the passphrase */
   encrypted: boolean;
   locked: boolean;
   hosts: string[];
@@ -66,10 +66,12 @@ export interface KeyStatus {
 
 export const EMPTY_KEY_STATUS: KeyStatus = { present: false, encrypted: false, locked: false, hosts: [], last4: '' };
 
-/** 金庫全体の状態（パスフレーズは金庫に 1 つ） */
+/** State of the whole vault (the vault has a single passphrase) */
 export interface VaultState {
   hasPassphrase: boolean;
   locked: boolean;
+  /** ID that changes every time the passphrase is set or changed (tells the app to rewrap its data key). Not a secret */
+  passphraseId: string | null;
 }
 
-export const EMPTY_VAULT_STATE: VaultState = { hasPassphrase: false, locked: false };
+export const EMPTY_VAULT_STATE: VaultState = { hasPassphrase: false, locked: false, passphraseId: null };

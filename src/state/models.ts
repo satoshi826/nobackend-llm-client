@@ -1,4 +1,4 @@
-// 接続先（LLM プロバイダー）とモデル一覧
+// Providers (LLM providers) and model lists
 import { batch, computed, signal } from '@preact/signals';
 import * as repo from '../lib/db/repo';
 import type { ModelInfo, ProviderConfig, ProviderError } from '../lib/providers/types';
@@ -14,15 +14,15 @@ import { saveSettings, settings } from './settings';
 type ModelsState = { loading: boolean; error: ProviderError | null; fetchedAt: number | null; needsKey?: boolean };
 const EMPTY_MODELS_STATE: ModelsState = { loading: false, error: null, fetchedAt: null };
 
-/** 接続先はプリセットから決まる（保存しない） */
+/** Providers are determined by presets (not stored) */
 export const providers = signal<ProviderConfig[]>(PRESET_ORDER.map((id) => providerConfigOf(id)!));
 export const models = signal<ModelInfo[]>([]);
 export const modelsStates = signal<Record<string, ModelsState>>({});
 
-/** 使う接続先（設定で有効にした順ではなく、画面の並び順） */
+/** Providers in use (in on-screen order, not the order they were enabled in settings) */
 export const enabledProviders = computed(() => providers.value.filter((p) => settings.value.enabledProviders.includes(p.id)));
 
-/** 選べるモデル（有効な接続先で提供中のもの） */
+/** Selectable models (those offered by enabled providers) */
 export const visibleModels = computed(() => {
   const enabled = new Set(enabledProviders.value.map((p) => p.id));
   return models.value.filter((m) => enabled.has(m.providerId) && !m.offline);
@@ -46,7 +46,7 @@ function sortModels(list: ModelInfo[]): ModelInfo[] {
   return [...list].sort(compareModels('recommended'));
 }
 
-/** 保存済みの一覧を読み、古ければ取り直す */
+/** Read the stored list and refetch it if stale */
 export async function loadModels() {
   const cached: ModelInfo[] = [];
   const states: Record<string, ModelsState> = {};
@@ -70,14 +70,14 @@ export async function refreshModels(providerId: string) {
   if (!cfg) return;
   const setState = (st: ModelsState) => (modelsStates.value = { ...modelsStates.value, [providerId]: st });
   const preset = getPreset(cfg.preset);
-  // モデル一覧にキーが要る接続先は、キーを設定するまで取らない
+  // For providers whose model list requires a key, do not fetch until a key is set
   if (preset.modelsNeedKey && !keyReady(providerId)) {
     setState({ ...(modelsStates.value[providerId] ?? EMPTY_MODELS_STATE), loading: false, error: null, needsKey: true });
     return;
   }
   setState({ ...(modelsStates.value[providerId] ?? EMPTY_MODELS_STATE), loading: true, error: null, needsKey: false });
   try {
-    // 公開されているモデル一覧はキーを付けずに取る。キーが要るものは金庫に付けてもらう
+    // Public model lists are fetched without a key. For ones that need a key, have the vault attach it
     const list = preset.modelsNeedKey
       ? await getAdapter(cfg).listModels(cfg, preset, vaultTransport, authFor(providerId))
       : await getAdapter(cfg).listModels(cfg, preset, plainTransport);
@@ -96,7 +96,7 @@ export async function refreshAllModels() {
   await Promise.all(enabledProviders.value.map((p) => refreshModels(p.id)));
 }
 
-/** キーが使えるようになった接続先で、まだモデル一覧がなければ取る（キーが要る接続先） */
+/** For a provider whose key just became usable, fetch the model list if there is none yet (providers that require a key) */
 export function refreshModelsNeedingKey() {
   for (const p of enabledProviders.value) {
     const st = modelsStates.value[p.id];
@@ -112,7 +112,7 @@ export async function setProviderEnabled(id: string, enabled: boolean) {
   if (enabled && !modelsStates.value[id]?.fetchedAt) void refreshModels(id);
 }
 
-/** 新しいチャットで使うモデル: 最後に使ったもの → 最初の有効な接続先の既定モデル → その先頭 */
+/** Model for a new chat: the last used one -> the first enabled provider's default model -> its first model */
 export function defaultModel(): { providerId: string; modelId: string } {
   const s = settings.value;
   const vis = visibleModels.value;
@@ -123,4 +123,17 @@ export function defaultModel(): { providerId: string; modelId: string } {
     if (m) return { providerId: m.providerId, modelId: m.id };
   }
   return { providerId: enabledProviders.value[0]?.id ?? '', modelId: '' };
+}
+
+// ---- Bookmarked models ----
+export const modelKey = (providerId: string, modelId: string) => `${providerId}|${modelId}`;
+
+export function isFavorite(providerId: string, modelId: string): boolean {
+  return settings.value.favoriteModels.includes(modelKey(providerId, modelId));
+}
+
+export async function toggleFavorite(providerId: string, modelId: string) {
+  const k = modelKey(providerId, modelId);
+  const cur = settings.value.favoriteModels;
+  await saveSettings({ favoriteModels: cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k] });
 }

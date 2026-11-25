@@ -6,7 +6,7 @@ export class ProviderFailure extends Error {
   }
 }
 
-/** HTTP エラー応答を ProviderError に正規化する。本文やヘッダの内容は表示用メッセージにだけ使い、ログには出さない。 */
+/** Normalize an HTTP error response into a ProviderError. Body and header contents are used only for the displayed message and never logged. */
 export async function errorFromResponse(res: Response, corsHint?: string): Promise<ProviderError> {
   let body: any = null;
   try {
@@ -49,7 +49,7 @@ export function classifyError(status: number, body: any, retryAfter?: string | n
   }
 }
 
-/** fetch 自体が失敗した場合（応答なし）。ブラウザは CORS 失敗も "Failed to fetch" としか返さない。 */
+/** When fetch itself fails (no response). Browsers report CORS failures only as "Failed to fetch". */
 export function errorFromFetchFailure(err: unknown, corsHint?: string): ProviderError {
   if (isAbort(err)) return { kind: 'aborted', message: '停止しました。' };
   return {

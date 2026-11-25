@@ -1,4 +1,4 @@
-// save_skill の承認カード: 下書きの全文を見せて編集でき、既存スキルの更新なら変更点を出す。「常に許可」はない。
+// Approval card for save_skill: shows the full draft for editing, and the changes when updating an existing skill. There is no "Always allow".
 import { useMemo, useState } from 'preact/hooks';
 import type { Part } from '../lib/providers/types';
 import { allSkills, resolveApproval } from '../state/app';

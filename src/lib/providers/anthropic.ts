@@ -1,7 +1,7 @@
-// Anthropic Messages API の Adapter（OpenAI 互換ではないので別実装）。
-// - キーは金庫が x-api-key ヘッダで付ける（preset.keyHeader）
-// - ブラウザから直接呼ぶため anthropic-dangerous-direct-browser-access ヘッダが要る（preset の extraHeaders）
-// - 拡張思考（extended thinking）は使わない（ツール呼び出しと組み合わせると、署名付きの思考ブロックを送り返す必要があるため）
+// Adapter for the Anthropic Messages API (not OpenAI-compatible, so a separate implementation).
+// - the vault attaches the key in the x-api-key header (preset.keyHeader)
+// - calling directly from the browser needs the anthropic-dangerous-direct-browser-access header (preset extraHeaders)
+// - extended thinking is not used (combined with tool calls it would require sending signed thinking blocks back)
 import type { ChatMessage, ChatRequest, ModelInfo, ProviderAdapter, ProviderEvent, Part } from './types';
 import { parseSSE } from './sse';
 import { classifyError, errorFromFetchFailure, errorFromResponse, isAbort, ProviderFailure } from './errors';
@@ -16,14 +16,14 @@ function toolResultText(t: ToolPart): string {
   return typeof t.modelOutput === 'string' ? t.modelOutput : JSON.stringify(t.modelOutput ?? null);
 }
 
-/** 正規化メッセージ → Anthropic の system と messages */
+/** Normalized messages → Anthropic system and messages */
 export function toAnthropic(messages: ChatMessage[]): { system: string; messages: any[] } {
   const system: string[] = [];
   const out: any[] = [];
   const push = (role: 'user' | 'assistant', blocks: any[]) => {
     if (!blocks.length) return;
     const last = out[out.length - 1];
-    // 同じ役割が続いたら 1 つにまとめる
+    // Merge consecutive messages with the same role
     if (last?.role === role) last.content.push(...blocks);
     else out.push({ role, content: blocks });
   };
@@ -55,7 +55,7 @@ export function toAnthropic(messages: ChatMessage[]): { system: string; messages
 export function buildAnthropicBody(req: ChatRequest): Record<string, any> {
   const { system, messages } = toAnthropic(req.messages);
   const p = req.params ?? {};
-  // プロンプトキャッシュ: システムプロンプトと、最後のメッセージの末尾に区切りを置く
+  // Prompt cache: put breakpoints after the system prompt and at the end of the last message
   const last = messages[messages.length - 1];
   if (last?.content?.length) last.content[last.content.length - 1] = { ...last.content[last.content.length - 1], cache_control: { type: 'ephemeral' } };
   const body: Record<string, any> = {
@@ -120,7 +120,7 @@ export const anthropicAdapter: ProviderAdapter = {
       return;
     }
     yield { type: 'start' };
-    // ブロックの番号（Anthropic の index）→ このアプリのブロック
+    // Block number (Anthropic's index) → this app's block
     const blocks = new Map<number, { kind: 'text' | 'reasoning' | 'tool'; args: string }>();
     let usage = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 };
     let stop: string | undefined;

@@ -1,6 +1,6 @@
-// キーの登録・解錠・削除の画面。中身はキー金庫のページ（iframe）で、入力したキーは本体アプリに渡らない。
-// - KeyPanel: 1 つの接続先のキー（金庫がロック中なら解錠）
-// - VaultSecurityPanel: 金庫全体のパスフレーズと、すべてのキーの削除
+// Screens for registering, unlocking, and deleting keys. The content is the key vault page (iframe), so typed keys never reach the main app.
+// - KeyPanel: the key for one provider (unlocks it if the vault is locked)
+// - VaultSecurityPanel: the vault-wide passphrase, and deleting all keys
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { VAULT_ORIGIN, vaultViewUrl } from '../lib/vault/client';
 import { accountById } from '../lib/keys/accounts';
@@ -16,7 +16,7 @@ function VaultFrame({ params, title }: { params: Record<string, string>; title: 
     const onMsg = (e: MessageEvent) => {
       if (e.origin !== VAULT_ORIGIN || e.source !== ref.current?.contentWindow) return;
       if (e.data?.type === 'vault-resize' && typeof e.data.height === 'number') setHeight(Math.min(1200, Math.max(100, e.data.height + 4)));
-      // フレーム内で Esc が押されたら、開いている設定画面を閉じる
+      // When Esc is pressed inside the frame, close the open settings screen
       if (e.data?.type === 'vault-escape') modal.value = null;
     };
     window.addEventListener('message', onMsg);
@@ -39,8 +39,8 @@ function VaultFrame({ params, title }: { params: Record<string, string>; title: 
 }
 
 /**
- * キーの設定フォーム + 安全に使うための案内。
- * compact: 設定画面の中など、保管場所の説明が別にある場所で使う
+ * Key setup form + guidance for using it safely.
+ * compact: for places such as inside settings, where the storage location is explained elsewhere
  */
 export function KeyPanel({ accountId, showGuide = true, compact }: { accountId: string; showGuide?: boolean; compact?: boolean }) {
   const guide = accountById(accountId)?.keyGuide;
@@ -60,7 +60,12 @@ export function KeyPanel({ accountId, showGuide = true, compact }: { accountId: 
   );
 }
 
-/** パスフレーズ（設定・解錠・ロック・変更・解除）と、すべてのキーの削除 */
-export function VaultSecurityPanel() {
-  return <VaultFrame params={{ view: 'security' }} title="キーの保護" />;
+/** Passphrase (set, unlock, lock, change, remove) and deleting all keys */
+export function VaultSecurityPanel({ setup }: { setup?: boolean } = {}) {
+  return <VaultFrame params={{ view: 'security', ...(setup ? { setup: '1' } : {}) }} title="キーの保護" />;
+}
+
+/** Frame with only the unlock form, used on the main app's lock screen */
+export function VaultUnlockPanel() {
+  return <VaultFrame params={{ view: 'unlock' }} title="解錠" />;
 }

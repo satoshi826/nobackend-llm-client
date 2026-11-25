@@ -1,5 +1,5 @@
-// Provider 層の型定義（docs/design.md §3.3）
-// この層は UI・DB に依存しない。
+// Type definitions for the provider layer (docs/design.md §3.3)
+// This layer does not depend on UI or DB.
 
 export type AdapterKind = 'openai-compatible' | 'anthropic' | 'gemini';
 
@@ -7,7 +7,7 @@ export interface ProviderConfig {
   id: string;
   name: string;
   kind: AdapterKind;
-  preset: string; // プリセット ID（registry.ts）
+  preset: string; // preset ID (registry.ts)
   baseUrl: string;
   extraHeaders?: Record<string, string>;
   extraBody?: Record<string, unknown>;
@@ -74,7 +74,7 @@ export type Part =
 
 export interface Usage {
   inputTokens?: number;
-  /** 入力のうちプロンプトキャッシュに当たった分 */
+  /** Part of the input that hit the prompt cache */
   cachedInputTokens?: number;
   outputTokens?: number;
   reasoningTokens?: number;
@@ -109,7 +109,7 @@ export interface ChatRequest {
   params?: ChatParams;
   tools?: ToolDefinition[];
   providerOptions?: Record<string, Record<string, unknown>>;
-  /** プロンプトキャッシュの振り分けキー（同じ会話の要求を同じキャッシュに当てる） */
+  /** Prompt cache routing key (routes requests of the same conversation to the same cache) */
   cacheKey?: string;
   signal: AbortSignal;
 }
@@ -149,23 +149,23 @@ export interface ProviderError {
 }
 
 /**
- * 「どのキーを付けて送るか」の指定。キーそのものは本体アプリに存在しない。
- * キーはキー金庫（別ページ）が保持し、許可されたホスト宛てのときだけ金庫が付けて送る。
+ * Says which key to attach when sending. The key itself never exists in the app.
+ * Keys are held by the key vault (a separate page), which attaches them only for allowed hosts.
  */
 export interface AuthRef {
-  /** 接続先 ID（LLM プロバイダーのプリセット ID、または tavily / jina） */
+  /** Account ID (an LLM provider preset ID, or tavily / jina) */
   keyId: string;
 }
 
-/** 通信の抽象。auth を指定した通信はキー金庫が代行し、指定のない通信はそのまま送る。 */
+/** Network abstraction. Requests with auth are delegated to the key vault; others are sent as is. */
 export interface Transport {
   fetch(url: string, init: RequestInit, auth?: AuthRef): Promise<Response>;
 }
 
-/** キーを付けて送る関数（キー金庫の中でだけ作られる。キーの確認に使う） */
+/** Function that sends with the key attached (only created inside the key vault; used to verify keys) */
 export type KeyedFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
-/** 接続先だけの設定（真偽値。設定 > 接続とキー に出す） */
+/** Provider-specific setting (boolean; shown under Settings > Connections and keys) */
 export interface ProviderSetting {
   key: string;
   label: string;
@@ -175,50 +175,50 @@ export interface ProviderSetting {
 
 export interface RequestOptionsContext {
   purpose: 'chat' | 'summary';
-  /** 接続先の内蔵 Web 検索（features.builtInWebSearch のときだけ 'off' 以外になる） */
+  /** Provider's built-in web search (only something other than 'off' when features.builtInWebSearch) */
   webSearch: 'off' | 'auto' | 'on';
-  /** ProviderSetting の値 */
+  /** Values of ProviderSetting */
   settings: Record<string, boolean>;
 }
 
 export interface ProviderPreset {
   id: string;
   label: string;
-  /** 接続先を選ぶ画面に出す一言 */
+  /** One-liner shown on the provider picker */
   tagline?: string;
-  /** キーを付けるヘッダ（既定: Authorization: Bearer <key>）。キー金庫が使う */
+  /** Header the key goes in (default: Authorization: Bearer <key>). Used by the key vault */
   keyHeader?: { name: string; prefix?: string };
-  /** キーなしでも使える（ローカルの Ollama など） */
+  /** Usable without a key (e.g. local Ollama) */
   keyOptional?: boolean;
-  /** モデル一覧の取得にキーが要る（金庫を通して取る） */
+  /** Fetching the model list needs a key (fetched through the vault) */
   modelsNeedKey?: boolean;
   /**
-   * 前回までの思考（reasoning_content）を送り返してよいか。
-   * always: 設定どおり / tool-turns: ツール呼び出しを含む発言だけ / never: 送らない（受け付けない API）
+   * Whether earlier reasoning (reasoning_content) may be sent back.
+   * always: per the setting / tool-turns: only messages that contain tool calls / never: not sent (API rejects it)
    */
   reasoningResend?: 'always' | 'tool-turns' | 'never';
   features?: {
-    /** 接続先自身が Web 検索を持つ（追加のキー不要） */
+    /** The provider has its own web search (no extra key needed) */
     builtInWebSearch?: boolean;
   };
   settings?: ProviderSetting[];
-  /** 要求に付ける接続先固有のオプション（transformRequest に req.providerOptions[preset.id] として渡る） */
+  /** Provider-specific request options (passed to transformRequest as req.providerOptions[preset.id]) */
   requestOptions?(ctx: RequestOptionsContext): Record<string, unknown> | undefined;
-  /** キー金庫が本体に返してよい応答ヘッダ（残高など） */
+  /** Response headers the key vault may return to the app (balance etc.) */
   responseHeaders?: string[];
-  /** 画面の説明文 */
+  /** Descriptive text for the UI */
   copy?: {
-    /** privacy: 'private' のモデルの説明 */
+    /** Description of privacy: 'private' models */
     private?: string;
-    /** privacy: 'anonymized'（外部事業者へ中継）のモデルの説明 */
+    /** Description of privacy: 'anonymized' models (relayed to third-party vendors) */
     relayed?: string;
-    /** 一覧に中継モデルがあるときの注意書き */
+    /** Notice shown when the list contains relayed models */
     relayedNote?: string;
-    /** モデル選択画面の注意書き */
+    /** Notice on the model picker */
     pickerNote?: string;
-    /** 通信先の一覧（プライバシー）での、この接続先の補足 */
+    /** Extra note on this provider in the list of destinations (privacy) */
     destinationNote?: string;
-    /** 通信先の一覧に足す行 */
+    /** Rows added to the list of destinations */
     extraDestinations?: [string, string][];
   };
   defaults: Omit<ProviderConfig, 'id'>;
@@ -227,17 +227,17 @@ export interface ProviderPreset {
   mapModel?(raw: any, providerId: string): ModelInfo | null;
   transformRequest?(body: Record<string, any>, req: ChatRequest): Record<string, any>;
   parseExtra?(chunk: any, seen: Set<string>): ProviderEvent[];
-  /** 応答ヘッダから残高などを読む（返してもらうヘッダは responseHeaders に書く） */
+  /** Read the balance etc. from response headers (headers to return are listed in responseHeaders) */
   readHeaders?(headers: Headers): ProviderEvent[];
-  /** キーの確認（キー金庫の中で、候補のキーを付ける fetch を渡して呼ぶ） */
+  /** Verify a key (called inside the key vault with a fetch that attaches the candidate key) */
   validateKey?(cfg: ProviderConfig, fetchWithKey: KeyedFetch): Promise<{ ok: boolean; error?: ProviderError }>;
-  /** キーの作り方・安全な設定の案内 */
+  /** Guide on creating a key and configuring it safely */
   keyGuide?: string;
   corsHint?: string;
 }
 
 export interface ProviderAdapter {
-  /** auth: モデル一覧にキーが要る接続先（preset.modelsNeedKey）のときだけ渡す */
+  /** auth: passed only for providers whose model list needs a key (preset.modelsNeedKey) */
   listModels(cfg: ProviderConfig, preset: ProviderPreset, transport: Transport, auth?: AuthRef): Promise<ModelInfo[]>;
   chat(cfg: ProviderConfig, preset: ProviderPreset, auth: AuthRef | undefined, req: ChatRequest, transport: Transport): AsyncIterable<ProviderEvent>;
 }

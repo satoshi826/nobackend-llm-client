@@ -1,4 +1,4 @@
-// キーの状態。キーそのものはキー金庫（別ページ）にだけあり、本体は「設定済みか・ロック中か」だけを知る。
+// Key state. The keys themselves live only in the key vault (a separate page); the main app only knows whether each is set and whether it is locked.
 import { signal } from '@preact/signals';
 import { vault, vaultIsolated } from '../lib/vault/client';
 import { EMPTY_KEY_STATUS, EMPTY_VAULT_STATE, type KeyStatus, type VaultState } from '../lib/keys/accounts';
@@ -6,20 +6,22 @@ import type { AuthRef } from '../lib/providers/types';
 import { showToast } from './ui';
 
 export const keyInfos = signal<Record<string, KeyStatus>>({});
-/** 金庫全体の状態（パスフレーズの有無・ロック中か） */
+/** State of the whole vault (whether a passphrase is set, whether it is locked) */
 export const vaultState = signal<VaultState>(EMPTY_VAULT_STATE);
+/** Whether the vault's state has been received at least once (until then vaultState is a placeholder) */
+export const vaultStatusKnown = signal(false);
 
 export function keyStatus(id: string): KeyStatus {
   return keyInfos.value[id] ?? EMPTY_KEY_STATUS;
 }
 
-/** キーが使える状態（設定済み・解錠済み） */
+/** Whether the key is usable (set and unlocked) */
 export function keyReady(id: string): boolean {
   const s = keyStatus(id);
   return s.present && !s.locked;
 }
 
-/** 通信にキーを付けてもらう指定（キーが使えないときは undefined＝キーなしで送る） */
+/** Directive asking the vault to attach the key to a request (undefined when no key is usable, i.e. send without a key) */
 export function authFor(id: string): AuthRef | undefined {
   return keyReady(id) ? { keyId: id } : undefined;
 }
@@ -31,6 +33,7 @@ export async function connectKeys() {
     vault.onStatus((st, v) => {
       keyInfos.value = st;
       vaultState.value = v;
+      vaultStatusKnown.value = true;
     });
   }
   try {
@@ -40,7 +43,7 @@ export async function connectKeys() {
   }
 }
 
-/** すべての API キーを削除する（金庫に頼む。別オリジンの金庫は本体から直接消せないため） */
+/** Delete all API keys (asks the vault, because the main app cannot delete a cross-origin vault's keys directly) */
 export async function clearAllKeys() {
   await vault.command('clear-all');
 }
@@ -49,7 +52,7 @@ export async function lockKeys() {
   await vault.command('lock');
 }
 
-// ---- 別オリジンの金庫に移った後、本体オリジンに残っている古いキー ----
+// ---- Old keys left on the main app's origin after moving to a cross-origin vault ----
 const LOCAL_KEY_DB = 'key-vault';
 export const leftoverLocalKeys = signal(false);
 

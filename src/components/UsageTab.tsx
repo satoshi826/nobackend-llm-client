@@ -1,4 +1,4 @@
-// 設定 > 使用量: この端末で記録したトークン数と費用を、日・接続先・モデルごとに集計する
+// Settings > Usage: tokens and cost recorded on this device, aggregated by day, provider, and model
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import * as repo from '../lib/db/repo';
 import { summarizeUsage, type UsageRecord, type UsageTotals } from '../lib/usage';
@@ -25,7 +25,7 @@ function sinceOf(r: Range): number | null {
 const fmtUsd = (n: number) => (n >= 1 ? `$${n.toFixed(2)}` : n > 0 ? `$${n.toFixed(4)}` : '$0');
 const fmtTok = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 10_000 ? `${Math.round(n / 1000)}k` : n.toLocaleString());
 
-/** 費用の表示（推定を含むなら「約」、分からない記録があれば注記） */
+/** Cost display ("approx." if it includes estimates; a note if some records have unknown cost) */
 function Cost({ t }: { t: UsageTotals }) {
   if (t.requests > 0 && t.unknownCost === t.requests) return <span class="text-zinc-400">—</span>;
   return (
@@ -46,7 +46,7 @@ function Stat({ label, children }: { label: string; children: preact.ComponentCh
   );
 }
 
-/** 日ごとの棒グラフ（1 系列。棒にマウスを乗せると値） */
+/** Daily bar chart (single series; hover a bar to see its value) */
 function DailyBars({ days, metric }: { days: { day: string; totals: UsageTotals }[]; metric: 'cost' | 'tokens' }) {
   const [hover, setHover] = useState<number | null>(null);
   const val = (t: UsageTotals) => (metric === 'cost' ? t.costUsd : t.inputTokens + t.outputTokens);

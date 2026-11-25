@@ -1,6 +1,6 @@
-// キー金庫のビルド設定。本体とは別のサイト（別オリジン）に配置する前提で dist-vault/ に出力する。
-//   VITE_APP_ORIGIN : 金庫を埋め込んでよい本体のオリジン（カンマ区切り可）。例: https://app.example.com
-// 金庫用の _headers（CSP）もここで生成する。
+// Build config for the key vault. Outputs to dist-vault/, assuming it is hosted on a separate site (separate origin) from the app.
+//   VITE_APP_ORIGIN : origin(s) of the app allowed to embed the vault (comma-separated). e.g. https://app.example.com
+// Also generates the vault's _headers (CSP).
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { resolve } from 'node:path';
 import { vaultHeadersFile } from './csp.config';

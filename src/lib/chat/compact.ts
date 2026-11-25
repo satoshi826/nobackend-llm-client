@@ -1,26 +1,26 @@
-// 会話の圧縮（古い部分を要約に置き換える）。
-// - 元の履歴は消さない。圧縮ノード（compaction）を会話ツリーの末尾に足し、送信時だけ要約に置き換える（runner.buildRequestMessages）
-// - 直近のやり取りは要約せずにそのまま残す（細部が必要になりやすいため）
-// - 前回の圧縮がある場合は「前回の要約 + その後の会話」をまとめ直す
+// Conversation compaction (replaces the older part with a summary).
+// - The original history is never deleted. A compaction node is appended to the conversation tree and replaced by the summary only when sending (runner.buildRequestMessages)
+// - The most recent exchanges are kept verbatim, not summarized (their details are the most likely to be needed)
+// - If there was a previous compaction, re-summarize "previous summary + the conversation since"
 import type { MessageRecord } from '../db/schema';
 import type { AuthRef, ChatMessage, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
 import { getAdapter } from '../providers/registry';
 import { estimateTokens, inputBudget, messageTokens } from './context';
 import { buildRequestMessages } from './request';
 
-/** 要約せずに残す直近のメッセージ数 */
+/** Number of most recent messages kept without summarizing */
 export const KEEP_RECENT = 4;
 
 export interface CompactionPlan {
-  /** 要約に含める前回の要約（あれば） */
+  /** Previous summary to include in the new one (if any) */
   previousSummary: string | null;
-  /** 新たに要約するメッセージ */
+  /** Messages to summarize this time */
   toSummarize: MessageRecord[];
-  /** ここ（このメッセージ）までを要約で置き換える */
+  /** Everything up to (and including) this message is replaced by the summary */
   coversUntilId: string;
 }
 
-/** path（root → 末尾の経路）から圧縮の範囲を決める。圧縮するほどの長さがなければ null */
+/** Decide the compaction range from path (root → tail). null if the conversation is not long enough to compact */
 export function planCompaction(path: MessageRecord[], keepRecent = KEEP_RECENT): CompactionPlan | null {
   let start = 0;
   let previousSummary: string | null = null;
@@ -36,7 +36,7 @@ export function planCompaction(path: MessageRecord[], keepRecent = KEEP_RECENT):
   const candidates = path.slice(start).filter((m) => !m.compaction && m.parts.some((p) => p.type === 'text' && p.text.trim()));
   if (candidates.length <= keepRecent) return null;
   let cut = candidates.length - keepRecent;
-  // 残す部分がユーザーの発言から始まるよう、境界をずらす
+  // Shift the boundary so the kept part starts with a user message
   while (cut > 0 && candidates[cut].role !== 'user') cut--;
   if (cut <= 0) return null;
   const toSummarize = candidates.slice(0, cut);
@@ -66,7 +66,7 @@ export function buildTranscript(plan: CompactionPlan, maxTokens?: number | null)
     lines.push(`【${m.role === 'user' ? 'ユーザー' : 'アシスタント'}】\n${text}`);
   }
   let body = lines.join('\n\n');
-  // 要約に使うモデルの文脈長を超えそうなら、古い側を切る（前回の要約があるので古い側ほど失ってよい）
+  // If it may exceed the summarizing model's context length, cut the old end (the previous summary covers it, so older parts are the safest to lose)
   if (maxTokens && estimateTokens(body) > maxTokens) {
     while (lines.length > 1 && estimateTokens(lines.join('\n\n')) > maxTokens) lines.shift();
     body = '（ここより前は長すぎるため省略）\n\n' + lines.join('\n\n');
@@ -83,11 +83,11 @@ export interface SummarizeOptions {
   contextLength?: number;
   providerOptions?: Record<string, Record<string, unknown>>;
   signal: AbortSignal;
-  /** 要約にかかったトークン数と費用（使用量の記録用） */
+  /** Tokens and cost spent on summarizing (for usage tracking) */
   onUsage?(usage: Usage, costUsd?: number): void;
 }
 
-/** 要約を生成する（思考は捨てて本文だけを集める） */
+/** Generate the summary (discard reasoning and collect only the text) */
 export async function summarize(plan: CompactionPlan, o: SummarizeOptions): Promise<string> {
   const budget = inputBudget(o.contextLength, 4096);
   const transcript = buildTranscript(plan, budget ? budget - estimateTokens(SUMMARY_INSTRUCTION) - 200 : null);
@@ -112,7 +112,7 @@ export async function summarize(plan: CompactionPlan, o: SummarizeOptions): Prom
   return out;
 }
 
-/** いまの経路を送ったときの概算入力トークン数（圧縮を考慮） */
+/** Estimated input tokens if the current path were sent (taking compaction into account) */
 export function estimateRequestTokens(path: MessageRecord[], systemPrompt: string): number {
   return buildRequestMessages(path, systemPrompt).reduce((n, m) => n + messageTokens(m), 0);
 }

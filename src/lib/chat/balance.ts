@@ -1,5 +1,5 @@
-// 残高の監視: このアプリで使った分（cost）以上に残高が減っていたら、
-// キーが他所で使われている可能性があるとして警告する（docs/design.md §5.3-7）。
+// Balance monitoring: if the balance dropped by more than what this app spent (cost),
+// warn that the key may be in use elsewhere (docs/design.md §5.3-7).
 
 export interface BalanceReading {
   usd: number;
@@ -8,15 +8,15 @@ export interface BalanceReading {
 
 export interface BalanceState {
   last: BalanceReading | null;
-  /** last 以降にこのアプリで確定した費用の合計 */
+  /** Total cost this app has settled since last */
   spentSinceLast: number;
-  /** 説明のつかない減少（累計） */
+  /** Unexplained decrease (cumulative) */
   unexplainedUsd: number;
 }
 
 export const initialBalanceState = (): BalanceState => ({ last: null, spentSinceLast: 0, unexplainedUsd: 0 });
 
-/** 応答ヘッダの残高は「その応答の課金前」の値と考える。直前までの自分の費用を差し引いて残る減少を「説明のつかない減少」とする。 */
+/** The balance in a response header is taken as the value before that response was billed. Whatever decrease remains after subtracting our own costs so far counts as an "unexplained decrease". */
 export function observeBalance(s: BalanceState, usd: number, at = Date.now(), tolerance = 0.01): BalanceState {
   if (!s.last) return { last: { usd, at }, spentSinceLast: 0, unexplainedUsd: s.unexplainedUsd };
   const drop = s.last.usd - usd;

@@ -17,7 +17,7 @@ export interface Conversation {
   pinned: 0 | 1;
   folderId?: string;
   tags: string[];
-  /** 一時チャット。true の会話は DB に書かない（メモリのみ） */
+  /** Temporary chat. Conversations with true are never written to the DB (memory only) */
   temporary?: boolean;
 }
 
@@ -30,28 +30,30 @@ export interface MessageRecord extends ChatMessage {
   createdAt: number;
   status: MessageStatus;
   error?: { kind: string; message: string; hint?: string };
-  /** 圧縮ノード: coversUntilId までの会話を summary に置き換えて送る */
+  /** Compaction node: the conversation up to coversUntilId is replaced by summary when sending */
   compaction?: { summary: string; coversUntilId: string; count: number; model?: string; auto?: boolean };
-  /** ユーザーが入力欄から指定したスキル（送信時点の本文を保存。再生成でも同じ内容を送る） */
+  /** Reply suggestions (made after an answer; encrypted along with the conversation) */
+  suggestions?: string[];
+  /** Skills the user picked in the input box (body saved as of sending, so regeneration sends the same content) */
   skills?: { name: string; body: string }[];
 }
 
-/** スキル（SKILL.md 互換の作業手順書） */
+/** Skill (SKILL.md-compatible work instructions) */
 export interface Skill {
   id: string;
-  /** 小文字・数字・ハイフン。一意 */
+  /** Lowercase letters, digits and hyphens. Unique */
   name: string;
   description: string;
   body: string;
-  /** モデルが一覧から選んで読み込めるか（false ならユーザーが指定したときだけ使う） */
+  /** Whether the model may pick and load it from the list (if false, used only when the user picks it) */
   modelInvocable: boolean;
   createdAt: number;
   updatedAt: number;
-  /** モデルが save_skill で作ったスキル（ユーザーが作ったものは省略） */
+  /** Skill created by the model via save_skill (omitted for user-created ones) */
   createdBy?: 'model';
-  // 以下は組み込みスキルだけが持つ（保存しない）
+  // Only built-in skills have the following (not stored)
   builtin?: boolean;
-  /** このスキルを読み込んだ会話でだけ使えるようになるツール */
+  /** Tools that become available only in conversations that loaded this skill */
   allowedTools?: string[];
 }
 
@@ -99,11 +101,11 @@ export class AppDB extends Dexie {
       secrets: 'id',
       settings: 'key'
     });
-    // v2: キーはキー金庫（別ページ）が保管するので secrets を廃止。接続先はプリセットから決まるので providers も廃止
+    // v2: secrets removed since keys are kept by the key vault (a separate page). providers removed too since connections come from presets
     this.version(2).stores({ secrets: null, providers: null });
-    // v3: スキル
+    // v3: skills
     this.version(3).stores({ skills: 'id, name, updatedAt' });
-    // v4: 使用量の記録（会話を消しても残る）。既存の回答の usage から作り直す
+    // v4: usage records (survive deleting conversations). Rebuilt from the usage of existing answers
     this.version(4)
       .stores({ usage: 'id, at, providerId' })
       .upgrade(async (tx) => {
@@ -137,7 +139,7 @@ export function db(): AppDB {
   return _db;
 }
 
-/** テスト用 */
+/** For tests */
 export function setDB(d: AppDB) {
   _db = d;
 }

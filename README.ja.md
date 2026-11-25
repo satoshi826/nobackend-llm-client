@@ -1,0 +1,146 @@
+# nobackend-llm-client
+
+[English](README.md) | **日本語** | [简体中文](README.zh-CN.md)
+
+> 自分の API キーで、サーバーなしに、ブラウザだけで動く LLM チャット。
+
+サーバーを持たず、ログも残さない LLM チャットクライアントです。規制の少ないモデルやオープンなモデルを使いたいけれど、SaaS に会話を残したくない人のためのものです。自分でサーバーを運用したり、ローカルで LLM を動かしたりする必要はありません。
+
+- **サーバーなし**: 静的ファイルだけで動きます。ブラウザから、あなたのキーで LLM の提供元の API に直接つなぎます。アカウント登録・解析ツール・外部スクリプトはありません。
+- **データは手元だけ**: 会話と設定は、ブラウザの中（IndexedDB）にだけ保存します。
+- **キーを盗まれにくく**: API キーは別ページの「キー金庫」だけが持ち、アプリ本体には渡りません。金庫は、ビルド時に決まった各提供元のホスト宛てにだけキーを付けます。厳格な CSP と Trusted Types も使っています。
+- **パスフレーズ（任意）**: 設定すると、API キーと会話の両方を暗号化して保存し、解錠するまでアプリ全体をロック画面で隠します。
+
+画面は今のところ日本語のみです。設計の詳細は [docs/design.md](docs/design.md)（英語）を見てください。
+
+## できること
+
+- **接続先**: Venice、OpenRouter、Anthropic、Google Gemini、DeepSeek、Groq と、ビルド時に足す OpenAI 互換の接続先（Ollama など）。特別扱いの接続先はなく、最初に使う接続先を選びます。
+- **モデル一覧**: ブックマーク（接続先をまたいで☆を付けたモデル）、並び替え（おすすめ・名前・価格・文脈長）と絞り込み（private・思考・画像・検索・無料）ができ、価格と能力も表示します。
+- **チャット**: ストリーミング、思考の表示、Markdown とコードのハイライト、会話ツリー（再生成・編集・別のモデルで再生成）、どこにも保存しない一時チャット（最初のメッセージの前に、チャットのヘッダーで切り替え）。
+- **返信候補**: 最新の回答の下に、次に送りそうな短い返信を出します。押すと入力欄に入ります。候補の数、参考にする直前のやり取りの回数、使うモデルを設定できます。
+- **Web 検索**: 接続先の内蔵検索（Venice）、またはツール（Tavily で検索、Jina Reader でページ本文を取得。どちらも実行前に承認）。
+- **スキル**: SKILL.md 互換の手順書です。モデルは必要なときだけ本文を読み込み、`/名前` で自分で指定することもできます。会話の中で「スキルにして」と頼むと、モデルが下書きを作り、あなたの承認のあとで保存します。
+- **長い会話**: 会話の圧縮（手動・自動）、プロンプトキャッシュ、文脈長の安全装置。
+- **使用量**: トークン数と費用を、日・接続先・モデルごとに集計します。記録はこのブラウザの中だけです。Venice は残高が急に減ったときに警告します。
+- **データ**: 全文検索、JSON のバックアップと読み込み、全データ削除、PWA、ダークモード、モバイル表示。
+
+## 使い方（開発）
+
+```bash
+npm install
+npm test          # 単体テスト（Vitest）
+npm run dev       # http://localhost:5173
+```
+
+### 実際の API を使わずに試す（モックサーバー）
+
+```bash
+npm run mock      # Venice / Anthropic / Tavily / Jina 互換のモック（:8787）
+VITE_VENICE_BASE_URL=http://localhost:8787/api/v1 \
+VITE_ANTHROPIC_BASE_URL=http://localhost:8787/anthropic/v1 \
+VITE_TAVILY_BASE_URL=http://localhost:8787/tavily \
+VITE_JINA_BASE_URL=http://localhost:8787/jina \
+npm run dev
+```
+
+**モックのキー**: Venice は `mock-key`、Anthropic は `mock-ant`、Tavily は `tvly-mock`。
+
+**メッセージ中のキーワード**でモックの動きが変わります。
+
+- 全般: `思考` / `think`、`コード`、`長文`、`エラー`、`残高`、`画像`、`xss`、`盗用`
+- ツール方式の Web 検索: `検索`、`読んで`
+- スキル: `スキル` で一覧の先頭のスキルを読み込む
+- skill-creator を使った会話: `作って` / `直して` で save_skill を呼ぶ
+
+### 本番と同じヘッダで確かめる
+
+```bash
+npm run build
+node scripts/serve-with-headers.mjs dist 4173   # dist/_headers を当てて配信
+npx wrangler dev --local                         # または Cloudflare のローカル実行環境
+```
+
+## デプロイ（GitHub 連携で Cloudflare Workers）
+
+静的ファイルだけを配る Worker として動かします（`wrangler.jsonc`。Worker のコードはありません）。キー金庫は同じサイトの `/vault/` で配信します。
+
+1. このリポジトリを GitHub に push する。
+2. Cloudflare のダッシュボードで Workers & Pages → Create → **Import a repository** を開き、リポジトリを選ぶ。
+3. プロジェクトを設定する。
+   - **Project name**: `wrangler.jsonc` の `name`（`nobackend-llm-client`）と同じにする。
+   - **Build command**: `npm run build`。`wrangler.jsonc` でも実行されるので、空のままでも動きます。
+   - **Deploy command**: `npx wrangler deploy`（既定のまま）。
+   - **環境変数**: なし。Node 22 は `.node-version` で指定しています。`VITE_*_BASE_URL` は**設定しないでください**（モック用です）。
+4. 以後は `main` への push のたびに `https://<名前>.<アカウント>.workers.dev` へデプロイされます。
+
+**Cloudflare 側でオフにする機能**: Web Analytics、Rocket Loader、Email Address Obfuscation、Zaraz。どれもスクリプトを差し込むため CSP で止まり、「外部スクリプトなし」の方針にも反します。
+
+**確認**: 各ページに CSP が 1 つずつ付き、金庫のページには金庫用の CSP（`connect-src` に LLM の API）が付いていることを確かめます。
+
+```bash
+curl -sI https://<サイト>/ | grep -i content-security-policy
+curl -sI https://<サイト>/vault/ | grep -i content-security-policy
+```
+
+そのあとサイトを開き、開発者ツールのコンソールに CSP のエラーが出ていないかを見ます。利用上限付きのキーで、キーの保存 → チャット → パスフレーズの設定と解錠、まで一通り試してください。
+
+Cloudflare Pages でも配信できます（ビルドコマンド `npm run build`、出力ディレクトリ `dist`）。`_headers` はどちらでも同じように効きます。
+
+**データはオリジンごと**: 会話とキーは、開いた URL ごとに別々に保存されます。お試し用ビルドから本番へ、`workers.dev` から独自ドメインへ、などと移るときは、先に「設定 → プライバシーとデータ」でバックアップを書き出し、移った先で読み込んでください。キーは入れ直しになります。
+
+### キー金庫を別オリジンに置く（独自ドメインがあればおすすめ）
+
+金庫を別オリジンに置くと、アプリ本体で XSS が起きてもキーは読めません。
+
+```bash
+# 金庫のサイト（dist-vault/ を配信）
+VITE_APP_ORIGIN=https://app.example.com npm run build:vault
+# 本体のサイト（金庫のオリジンは frame-src に自動で入る）
+VITE_VAULT_URL=https://vault.example.com/ npm run build
+```
+
+同じ独自ドメインのサブドメインに置いてください。`*.workers.dev` や `*.pages.dev` の 2 つのサイトは別サイト扱いになり、金庫の保存領域が制限されることがあります。また、本体のプレビュー用 URL からは別オリジンの金庫を埋め込めません。
+
+### ビルド時に接続先を足す
+
+`VITE_CUSTOM_PROVIDERS` に、OpenAI 互換の接続先を JSON の配列で指定します。接続先の一覧・金庫の送り先・CSP に自動で入ります。
+
+```bash
+VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localhost:11434/v1","keyOptional":true}]' npm run build
+```
+
+| 項目 | 意味 |
+|---|---|
+| `id` | 半角の小文字・数字・ハイフン |
+| `baseUrl` | https（http はローカルのみ） |
+| `keyOptional` | キーなしで使える |
+| `publicModels` | モデル一覧をキーなしで取れる |
+
+指定が不正だとビルドが止まります。接続先がこのサイトからの通信（CORS）を許可している必要があり、Ollama なら `OLLAMA_ORIGINS=https://<サイト>` を付けて起動します。キーの送り先をビルド時に固定しているので、画面から接続先を足すことはできません。
+
+## パスフレーズ（キーと会話の保護）
+
+保存方法を選ぶ必要はありません。
+
+- **パスフレーズがなければ**、キーも会話もそのまま保存します。
+- **パスフレーズを設定すると**:
+  - API キー・会話・保存済みのプロンプト・スキルを暗号化します。
+  - 解錠するまで、アプリ全体をロック画面で隠します。
+  - タブごと、読み込み直すたびに解錠が必要です。
+  - サイドバーのボタンでロックでき、操作がないときの自動ロックも設定できます。
+- **設定のしかた**: 最初のキーを保存した直後に、設定するかを一度だけ案内します（「あとで」で飛ばせます）。設定の「接続とキー」から、いつでも設定・変更・解除できます。変更と解除には今のパスフレーズが必要です。
+- **忘れると元に戻せません。** ロック画面から、すべて削除してやり直すことだけができます。
+- **JSON のバックアップは暗号化されません。** 保管に気をつけてください。
+
+## API キーの安全な使い方
+
+**利用上限のあるキー**を使ってください。万一漏れても、被害額は上限で止まります。
+
+- **Venice**: **INFERENCE** タイプのキーを作り、1 日の利用上限と有効期限を設定します。`modelPrivacy: PRIVATE_ONLY` にすると、外部の事業者へ中継されるモデルを使えなくなります。
+- **OpenRouter**: キーにクレジットの上限を設定します。
+- **Anthropic**: Console でワークスペースの利用上限を設定します。
+- **Gemini**: 無料枠では、送った内容が Google のサービス改善に使われることがあります（有料枠では使われません）。
+- **DeepSeek**: プリペイド式なので、チャージした額が上限です。データは中国の事業者のサーバーで処理されます。
+- **Groq**: 無料枠には回数とトークン数の上限があります。有料にする場合は利用上限を設定してください。
+- **Tavily**（ツール方式の Web 検索）: 利用上限を設定します。

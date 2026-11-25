@@ -1,5 +1,5 @@
-// 本文中の <think>…</think> を思考として分離するインクリメンタルなステートマシン。
-// タグがチャンク境界で分割されても正しく扱う。
+// Incremental state machine that splits <think>…</think> in the text out as reasoning.
+// Handles tags split across chunk boundaries correctly.
 
 export interface Segment {
   kind: 'text' | 'reasoning';
@@ -26,7 +26,7 @@ export class ThinkSplitter {
         this.inThink = !this.inThink;
         continue;
       }
-      // 末尾がタグの途中かもしれない部分は保留
+      // Hold back a tail that may be the start of a tag
       const keep = partialSuffix(s, tag);
       const emit = s.slice(0, s.length - keep);
       if (emit) out.push({ kind: this.inThink ? 'reasoning' : 'text', text: emit });

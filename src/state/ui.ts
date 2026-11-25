@@ -1,4 +1,4 @@
-// 画面の状態（モーダル・トースト・サイドバー）
+// Screen state (modals, toasts, sidebar)
 import { signal } from '@preact/signals';
 
 export type ModalName = 'settings' | 'models' | 'system';
@@ -7,9 +7,13 @@ export type SettingsTab = 'connections' | 'chat' | 'search' | 'skills' | 'usage'
 export const modal = signal<ModalName | null>(null);
 export const settingsTab = signal<SettingsTab>('connections');
 export const sidebarOpen = signal(false);
+/** Text in the input box (filled when a reply suggestion is clicked) */
+export const composerText = signal('');
+/** Signal to move focus to the input box (moves each time the value changes) */
+export const composerFocus = signal(0);
 export const toast = signal<{ text: string; kind: 'info' | 'error' } | null>(null);
 
-/** モデル選択画面の用途: 会話のモデル変更 or 別のモデルで再生成 */
+/** Purpose of the model picker: change the conversation's model, or regenerate with another model */
 export type ModelPickerTarget = { kind: 'conversation' } | { kind: 'regenerate'; assistantId: string };
 export const modelPickerTarget = signal<ModelPickerTarget>({ kind: 'conversation' });
 

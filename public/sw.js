@@ -1,10 +1,10 @@
-// Service Worker: アプリ本体（同一オリジンの静的ファイル）だけをキャッシュしてオフライン起動を可能にする。
-// - API など別オリジンへの通信には一切関与しない（会話内容はキャッシュしない）
-// - ページ（index.html）はネットワーク優先 → 失敗時のみキャッシュ（更新をすぐ反映するため）
-// - /assets/ はファイル名にハッシュが付くのでキャッシュ優先
-// - 本体のページ（/）だけを扱う。金庫（/vault/）のページには関与しない
-// - /index.html は配信元によって / へリダイレクトされるので、キャッシュの鍵は / に統一する
-//   （リダイレクトされた応答をページの表示に使うとブラウザが拒否するため）
+// Service Worker: caches only the app itself (same-origin static files) so it can start offline.
+// - never touches requests to other origins such as APIs (conversation content is never cached)
+// - the page (index.html) is network-first, falling back to cache only on failure (so updates apply immediately)
+// - /assets/ is cache-first since file names carry a hash
+// - handles only the app page (/). Leaves the vault page (/vault/) alone
+// - /index.html gets redirected to / by the host, so the cache key is always /
+//   (browsers refuse to render a page from a redirected response)
 const CACHE = 'app-shell-v2';
 const SHELL = ['/', '/favicon.svg', '/manifest.webmanifest'];
 
@@ -25,10 +25,10 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // 外部（API 等）は素通し
+  if (url.origin !== self.location.origin) return; // external (APIs etc.) passes through
 
   if (req.mode === 'navigate') {
-    if (url.pathname !== '/' && url.pathname !== '/index.html') return; // 金庫など、本体以外のページは素通し
+    if (url.pathname !== '/' && url.pathname !== '/index.html') return; // pages other than the app (e.g. the vault) pass through
     event.respondWith(
       fetch(req)
         .then((res) => {

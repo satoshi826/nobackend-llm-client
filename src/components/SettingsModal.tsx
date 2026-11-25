@@ -1,4 +1,4 @@
-// 設定（タブ: 接続とキー / チャット / Web 検索 / スキル / 使用量 / プライバシーとデータ）
+// Settings (tabs: Connections & keys / Chat / Web search / Skills / Usage / Privacy & data)
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
@@ -73,7 +73,7 @@ function KeyBadge({ id }: { id: string }) {
   return <Badge>{accountById(id)?.keyOptional ? 'キーなしで利用' : 'キー未設定'}</Badge>;
 }
 
-/** 開閉できるキー設定の行 */
+/** Collapsible key settings row */
 function AccountRow(props: { id: string; title: string; host: string; open: boolean; onToggle(): void; right?: ComponentChildren; children: ComponentChildren }) {
   return (
     <div class="rounded-lg border border-zinc-200 dark:border-zinc-800">
@@ -91,7 +91,7 @@ function AccountRow(props: { id: string; title: string; host: string; open: bool
   );
 }
 
-/** 接続先のキーと、その接続先だけの設定 */
+/** A provider's key and its provider-specific settings */
 function ProviderDetails({ id }: { id: string }) {
   const preset = getPreset(providerById(id)!.preset);
   const values = providerSettingsOf(id, preset.settings);
@@ -119,8 +119,24 @@ function ConnectionsTab() {
           ? 'API キーはアプリ本体とは別のオリジンに保管されます。アプリ本体で問題が起きても、キーそのものは読み出せません。'
           : 'API キーはこのブラウザ内のキー保管ページに保存され、アプリ本体の画面には渡りません。キー金庫を別オリジンに置くとさらに安全です（README の「キー金庫」）。'}
       </div>
-      <Section title="キーの保護">
+      <Section title="パスフレーズ（キーと会話の保護）">
         <VaultSecurityPanel />
+        {vaultState.value.hasPassphrase && (
+          <label class="flex items-center justify-between gap-3 text-sm">
+            <span>
+              操作がないときに自動でロック
+              <span class="block text-xs text-zinc-500">回答の生成中はロックしません</span>
+            </span>
+            <select class={selectCls} value={String(settings.value.autoLockMinutes)} onChange={(e) => saveSettings({ autoLockMinutes: Number((e.target as HTMLSelectElement).value) })}>
+              {[0, 5, 15, 30, 60].map((m) => (
+                <option key={m} value={m}>
+                  {m ? `${m} 分` : 'しない'}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <p class="text-xs text-zinc-500">パスフレーズを設定すると、API キー・会話・保存済みのプロンプト・スキルを暗号化します。アプリはタブごと・読み込み直すたびに解錠が必要です。バックアップ（JSON）は暗号化されないので、保管に気をつけてください。</p>
       </Section>
       <Section title="LLM の接続先">
         <div class="space-y-2">
@@ -184,6 +200,48 @@ function ChatTab() {
           />
         </label>
         <p class="text-xs text-zinc-500">接続先だけの設定（Venice 既定のシステムプロンプトなど）は「接続とキー」の各接続先にあります。</p>
+      </Section>
+      <Section title="返信候補">
+        <Toggle
+          checked={s.replySuggestions}
+          onChange={(v) => saveSettings({ replySuggestions: v })}
+          title="回答のあとに返信候補を出す"
+          desc="直前のやり取りから、次に送りそうな返信を作ります。押すと入力欄に入ります。回答ごとに小さな依頼が 1 回増えます（費用は「使用量」に「返信候補」として残ります）。"
+        />
+        <div class={cx('grid gap-3 sm:grid-cols-2', !s.replySuggestions && 'opacity-50')}>
+          <label class="flex items-center justify-between gap-3 text-sm">
+            候補の数
+            <select disabled={!s.replySuggestions} class={selectCls} value={String(s.suggestionCount)} onChange={(e) => saveSettings({ suggestionCount: Number((e.target as HTMLSelectElement).value) })}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n} 個
+                </option>
+              ))}
+            </select>
+          </label>
+          <label class="flex items-center justify-between gap-3 text-sm">
+            参考にするやり取り
+            <select disabled={!s.replySuggestions} class={selectCls} value={String(s.suggestionTurns)} onChange={(e) => saveSettings({ suggestionTurns: Number((e.target as HTMLSelectElement).value) })}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  直前 {n} 回分
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label class={cx('block text-sm', !s.replySuggestions && 'opacity-50')}>
+          返信候補に使うモデル
+          <select disabled={!s.replySuggestions} class={cx(selectCls, 'mt-1 block w-full py-1.5')} value={s.suggestionModel} onChange={(e) => saveSettings({ suggestionModel: (e.target as HTMLSelectElement).value })}>
+            <option value="">会話と同じモデル</option>
+            {choices.map((m) => (
+              <option key={m.providerId + m.id} value={`${m.providerId}|${m.id}`}>
+                {providerById(m.providerId)?.name} / {m.name}
+                {m.pricing?.inputPerMTok != null ? `（入力 ${m.pricing.inputPerMTok.toFixed(2)}/M）` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
       </Section>
       <Section title="会話の長さと費用">
         <p class="text-xs text-zinc-500">

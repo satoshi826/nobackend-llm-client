@@ -1,9 +1,9 @@
-// 接続先の宛先（ビルド時に決まる）。プリセット・キー金庫の許可先・CSP の通信先は、すべてここから作る。
-// ブラウザ（import.meta.env）と Node（vite の設定、csp.config.ts）の両方から使うので、他のモジュールに依存しない。
+// Provider destinations (fixed at build time). Presets, the key vault's allowlist and the CSP destinations are all built from here.
+// Used from both the browser (import.meta.env) and Node (vite config, csp.config.ts), so it depends on no other module.
 
 export type Env = Record<string, string | undefined>;
 
-/** 組み込みの接続先の既定 URL（VITE_<ID>_BASE_URL で差し替え可能。開発時のモック用） */
+/** Default URLs of the built-in providers (overridable with VITE_<ID>_BASE_URL, for mocks during development) */
 export const BUILTIN_BASE_URLS: Record<string, { env: string; url: string }> = {
   venice: { env: 'VITE_VENICE_BASE_URL', url: 'https://api.venice.ai/api/v1' },
   openrouter: { env: 'VITE_OPENROUTER_BASE_URL', url: 'https://openrouter.ai/api/v1' },
@@ -19,16 +19,16 @@ export function builtinBaseUrl(id: string, env: Env): string {
 }
 
 /**
- * ビルド時に足す OpenAI 互換の接続先（VITE_CUSTOM_PROVIDERS に JSON 配列で指定）。
- * 例: [{"id":"ollama","label":"Ollama","baseUrl":"http://localhost:11434/v1","keyOptional":true}]
+ * OpenAI-compatible providers added at build time (VITE_CUSTOM_PROVIDERS, as a JSON array).
+ * e.g. [{"id":"ollama","label":"Ollama","baseUrl":"http://localhost:11434/v1","keyOptional":true}]
  */
 export interface CustomProviderDef {
   id: string;
   label: string;
   baseUrl: string;
-  /** キーなしで使える（ローカルの Ollama など） */
+  /** Usable without a key (e.g. local Ollama) */
   keyOptional?: boolean;
-  /** モデル一覧をキーなしで取れる */
+  /** Model list can be fetched without a key */
   publicModels?: boolean;
 }
 
@@ -38,7 +38,7 @@ function isLocal(host: string): boolean {
   return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
 }
 
-/** 不正な指定は例外（ビルドを止めて気づけるように） */
+/** Invalid entries throw (so the build stops and it gets noticed) */
 export function parseCustomProviders(json: string | undefined): CustomProviderDef[] {
   if (!json || !json.trim()) return [];
   let raw: unknown;
@@ -72,14 +72,14 @@ export function parseCustomProviders(json: string | undefined): CustomProviderDe
   });
 }
 
-/** 金庫を通さずに本体から直接送ることがある接続先（キーなしのモデル一覧・キーなしの接続先） */
+/** Providers the app may call directly without the vault (keyless model lists, keyless providers) */
 export function appDirectOrigins(env: Env): string[] {
   const out = [builtinBaseUrl('venice', env), builtinBaseUrl('openrouter', env)].map((u) => new URL(u).origin);
   for (const c of parseCustomProviders(env.VITE_CUSTOM_PROVIDERS)) if (c.publicModels || c.keyOptional) out.push(new URL(c.baseUrl).origin);
   return [...new Set(out)];
 }
 
-/** キーを付けて送る接続先（金庫の通信先） */
+/** Providers called with a key attached (the vault's destinations) */
 export function keyedProviderOrigins(env: Env): string[] {
   const out = Object.keys(BUILTIN_BASE_URLS).map((id) => new URL(builtinBaseUrl(id, env)).origin);
   for (const c of parseCustomProviders(env.VITE_CUSTOM_PROVIDERS)) out.push(new URL(c.baseUrl).origin);

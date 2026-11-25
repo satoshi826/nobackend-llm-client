@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { decryptSecret, encryptSecret, WrongPassphraseError } from './passphrase';
 
-describe('パスフレーズ暗号化', () => {
-  it('暗号化して同じパスフレーズで復号できる', async () => {
+describe('passphrase encryption', () => {
+  it('encrypts and decrypts with the same passphrase', async () => {
     const blob = await encryptSecret('sk-test-123', 'correct horse', 1000);
     expect(blob.ct).not.toContain('sk-test');
     expect(await decryptSecret(blob, 'correct horse')).toBe('sk-test-123');
   });
-  it('違うパスフレーズでは WrongPassphraseError', async () => {
+  it('throws WrongPassphraseError for a different passphrase', async () => {
     const blob = await encryptSecret('sk-test-123', 'correct horse', 1000);
     await expect(decryptSecret(blob, 'wrong pass')).rejects.toBeInstanceOf(WrongPassphraseError);
   });
-  it('短すぎるパスフレーズは拒否', async () => {
+  it('rejects a passphrase that is too short', async () => {
     await expect(encryptSecret('x', 'short', 1000)).rejects.toThrow();
   });
-  it('毎回ソルトと IV が変わる', async () => {
+  it('uses a new salt and IV every time', async () => {
     const a = await encryptSecret('k', 'passphrase1', 1000);
     const b = await encryptSecret('k', 'passphrase1', 1000);
     expect(a.salt).not.toBe(b.salt);

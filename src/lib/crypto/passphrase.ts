@@ -1,6 +1,6 @@
-// パスフレーズによる API キーの暗号化（WebCrypto: PBKDF2-SHA256 → AES-GCM-256）。
-// 目的: ディスク上・バックアップ・他人に端末を触られた場合の平文露出を防ぐ。
-// 注意: 解錠中はメモリ上に平文があるため、XSS 対策にはならない（docs/design.md §5.3）。
+// Passphrase encryption of API keys (WebCrypto: PBKDF2-SHA256 → AES-GCM-256).
+// Goal: avoid plaintext exposure on disk, in backups, or when someone else gets hold of the device.
+// Note: while unlocked the plaintext is in memory, so this is no defence against XSS (docs/design.md §5.3).
 
 export interface EncryptedBlob {
   v: 1;

@@ -1,4 +1,4 @@
-// 送信・回答の生成・再生成・編集・停止、ツールの承認、圧縮、残高の監視
+// Sending, generating / regenerating / editing / stopping answers, tool approval, compaction, balance monitoring
 import { computed, signal } from '@preact/signals';
 import type { Conversation, MessageRecord } from '../lib/db/schema';
 import type { Usage } from '../lib/providers/types';
@@ -14,6 +14,7 @@ import { ALWAYS_ASK, makeSaveSkillTool, makeSkillTool } from '../lib/tools/skill
 import { unlockedTools, withSkillCatalog } from '../lib/skills/skill';
 import type { Tool } from '../lib/tools/types';
 import { makeUsageRecord } from '../lib/usage';
+import { generateSuggestions } from '../lib/chat/suggest';
 import type { Skill } from '../lib/db/schema';
 import { vaultTransport as transport } from '../lib/vault/client';
 import { settings, saveSettings, providerSettingsOf } from './settings';
@@ -24,7 +25,7 @@ import { openSettings, showToast } from './ui';
 import { accountById } from '../lib/keys/accounts';
 import { allSkills, attachedSkillIds, attachedSkills, modelSkills, saveSkill } from './skills';
 
-// ---- 生成中の状態 ----
+// ---- Generation state ----
 export const streamingConv = signal<Set<string>>(new Set());
 export const isStreaming = computed(() => (currentId.value ? streamingConv.value.has(currentId.value) : false));
 export const compactingConv = signal<string | null>(null);
@@ -45,7 +46,7 @@ export function stopAll() {
   for (const c of controllers.values()) c.abort();
 }
 
-// ストリーミング中の更新は requestAnimationFrame ごとにまとめて反映する
+// Batch streaming updates and apply them once per requestAnimationFrame
 let pendingFlush = 0;
 const pendingUpdates = new Map<string, MessageRecord>();
 function scheduleMessageUpdate(m: MessageRecord) {
@@ -60,17 +61,17 @@ function flushUpdates() {
   messages.value = messages.value.map((m) => ups.get(m.id) ?? m);
 }
 
-// ---- 残高（応答ヘッダで残高を返す接続先のみ）: このアプリで使った分以上に減ったら警告 ----
+// ---- Balance (only providers that return it in response headers): warn if it drops more than this app spent ----
 export const balances = signal<Record<string, BalanceState>>({});
 export const BALANCE_ALERT_USD = 0.5;
-/** 説明のつかない減少があった接続先 */
+/** Providers whose balance dropped by an unexplained amount */
 export const balanceAlerts = computed(() => Object.entries(balances.value).filter(([, b]) => b.unexplainedUsd >= BALANCE_ALERT_USD));
 
 function updateBalance(providerId: string, fn: (b: BalanceState) => BalanceState) {
   balances.value = { ...balances.value, [providerId]: fn(balances.value[providerId] ?? initialBalanceState()) };
 }
 
-/** 接続先固有の要求オプション（プリセットが決める） */
+/** Provider-specific request options (decided by the preset) */
 function providerOptionsFor(providerId: string, purpose: 'chat' | 'summary', webSearch: 'off' | 'auto' | 'on' = 'off') {
   const cfg = providerById(providerId);
   if (!cfg) return undefined;
@@ -79,21 +80,21 @@ function providerOptionsFor(providerId: string, purpose: 'chat' | 'summary', web
   return opts ? { [preset.id]: opts } : undefined;
 }
 
-/** 使用量を記録する（一時チャットは記録しない） */
-function recordUsage(o: { id: string; providerId: string; model: string; kind: 'chat' | 'summary'; usage?: Usage; costUsd?: number; temporary?: boolean }) {
+/** Record usage (temporary chats are not recorded) */
+function recordUsage(o: { id: string; providerId: string; model: string; kind: 'chat' | 'summary' | 'suggest'; usage?: Usage; costUsd?: number; temporary?: boolean }) {
   if (o.temporary) return;
   const r = makeUsageRecord({ ...o, at: Date.now() }, modelOf(o.providerId, o.model)?.pricing);
   if (r) void repo.addUsage(r).catch(() => {});
 }
 
-// ---- Web 検索 ----
+// ---- Web search ----
 /**
- * この会話で Web 検索をどう行うか。
- * - 'tools': ツール呼び出し対応モデル + Tavily のキー（内蔵検索がある接続先では、設定で「ツール」を選んだとき）
- * - 'builtin': 接続先の内蔵検索（features.builtInWebSearch）
- * - null: 使えない
+ * How web search is done in this conversation.
+ * - 'tools': a tool-calling model + a Tavily key (on providers with built-in search, when "tools" is chosen in settings)
+ * - 'builtin': the provider's built-in search (features.builtInWebSearch)
+ * - null: unavailable
  */
-/** このモデルに一覧を見せるスキル（ツール呼び出しに対応したモデルのみ） */
+/** Skills listed to this model (only for models that support tool calling) */
 export function skillsFor(providerId: string, modelId: string): Skill[] {
   return modelOf(providerId, modelId)?.capabilities.tools ? modelSkills.value : [];
 }
@@ -109,7 +110,7 @@ export function searchModeFor(providerId: string, modelId: string): 'tools' | 'b
   return toolsReady ? 'tools' : null;
 }
 
-// ---- ツールの承認待ち ----
+// ---- Pending tool approvals ----
 export const pendingApprovals = signal<Record<string, { toolName: string }>>({});
 const approvalResolvers = new Map<string, (d: ApprovalDecision) => void>();
 
@@ -128,14 +129,14 @@ function waitForApproval(req: ApprovalRequest): Promise<ApprovalDecision> {
   });
 }
 
-/** 承認カードからの回答。「常に許可」はそのツールの設定を allow にする */
+/** Answer from the approval card. "Always allow" sets that tool's setting to allow */
 export async function resolveApproval(toolCallId: string, d: ApprovalDecision) {
   const p = pendingApprovals.value[toolCallId];
   if (d.approved && d.always && p && !ALWAYS_ASK.has(p.toolName)) await saveSettings({ toolPermissions: { ...settings.value.toolPermissions, [p.toolName]: 'allow' } });
   approvalResolvers.get(toolCallId)?.(d);
 }
 
-// ---- 文脈の使用量と圧縮 ----
+// ---- Context usage and compaction ----
 export const contextUsage = computed<{ tokens: number; limit: number | null; ratio: number | null }>(() => {
   const conv = currentConv.value;
   const tokens = estimateRequestTokens(currentPath.value, withSkillCatalog(conv.systemPrompt, skillsFor(conv.providerId, conv.modelId)));
@@ -148,7 +149,57 @@ function parseModelRef(ref: string): { providerId: string; modelId: string } | n
   return i > 0 ? { providerId: ref.slice(0, i), modelId: ref.slice(i + 1) } : null;
 }
 
-/** 古い部分を要約して圧縮ノードを追加する（元の履歴は消さない）。圧縮したら true */
+// ---- Reply suggestions ----
+/** ID of the answer whose reply suggestions are being generated */
+export const suggestingFor = signal<string | null>(null);
+let suggestCtrl: AbortController | null = null;
+
+/** Cancel in-progress reply suggestions (on send, or when the user starts typing) */
+export function cancelSuggestions() {
+  suggestCtrl?.abort();
+  suggestCtrl = null;
+  suggestingFor.value = null;
+}
+
+/** After an answer, generate reply suggestions and save them on the answer (shows nothing on failure) */
+async function suggestReplies(conv: Conversation, final: MessageRecord, history: MessageRecord[]) {
+  const s = settings.value;
+  if (!s.replySuggestions || final.status !== 'done') return;
+  if (!final.parts.some((p) => p.type === 'text' && p.text.trim())) return;
+  const ref = parseModelRef(s.suggestionModel) ?? { providerId: conv.providerId, modelId: conv.modelId };
+  const cfg = providerById(ref.providerId);
+  if (!cfg || !ref.modelId || !(keyReady(cfg.id) || accountById(cfg.id)?.keyOptional)) return;
+  cancelSuggestions();
+  const ctrl = new AbortController();
+  suggestCtrl = ctrl;
+  suggestingFor.value = final.id;
+  try {
+    const list = await generateSuggestions([...history, final], Math.max(1, s.suggestionTurns), Math.max(1, s.suggestionCount), {
+      provider: cfg,
+      preset: getPreset(cfg.preset),
+      auth: authFor(cfg.id),
+      transport,
+      model: ref.modelId,
+      providerOptions: providerOptionsFor(cfg.id, 'summary'),
+      signal: ctrl.signal,
+      onUsage: (usage, costUsd) => recordUsage({ id: repo.newId(), providerId: cfg.id, model: ref.modelId, kind: 'suggest', usage, costUsd, temporary: conv.temporary })
+    });
+    if (ctrl.signal.aborted || !list.length) return;
+    const latest = messages.value.find((m) => m.id === final.id) ?? final;
+    const updated: MessageRecord = { ...latest, suggestions: list };
+    await putMessage(updated, conv);
+    if (messages.value.some((m) => m.id === final.id)) messages.value = messages.value.map((m) => (m.id === final.id ? updated : m));
+  } catch {
+    /* Reply suggestions are only an aid, so failures are not reported */
+  } finally {
+    if (suggestCtrl === ctrl) {
+      suggestCtrl = null;
+      suggestingFor.value = null;
+    }
+  }
+}
+
+/** Summarize the older part and add a compaction node (the original history is kept). Returns true if compacted */
 export async function compactConversation(auto = false): Promise<boolean> {
   const conv = currentConv.value;
   if (!currentId.value || streamingConv.value.has(conv.id)) return false;
@@ -203,8 +254,8 @@ export async function compactConversation(auto = false): Promise<boolean> {
   }
 }
 
-// ---- 送信と生成 ----
-/** キーが使えない場合は設定を開いて false */
+// ---- Sending and generation ----
+/** If no key is usable, open settings and return false */
 function ensureKey(providerId: string): boolean {
   if (keyReady(providerId) || accountById(providerId)?.keyOptional) return true;
   openSettings('connections');
@@ -213,6 +264,7 @@ function ensureKey(providerId: string): boolean {
 }
 
 export async function sendMessage(text: string) {
+  cancelSuggestions();
   const attached = attachedSkills.value.map((s) => ({ name: s.name, body: s.body }));
   if (!text.trim() && !attached.length) return;
   const cur = currentConv.value;
@@ -221,7 +273,7 @@ export async function sendMessage(text: string) {
     showToast('モデルを選んでください。', 'error');
     return;
   }
-  // 自動圧縮: 送ろうとしている入力が文脈長の閾値を超えそうなら、先に古い部分を要約する
+  // Auto-compaction: if the input about to be sent is likely to exceed the context-length threshold, summarize the older part first
   if (currentId.value && settings.value.autoCompact) {
     const u = contextUsage.value;
     if (u.limit && (u.tokens + estimateTokens(text)) / u.limit >= settings.value.compactThreshold) await compactConversation(true);
@@ -243,8 +295,9 @@ export async function sendMessage(text: string) {
   await generateReply(conv.id, user.id);
 }
 
-/** parentUserId の子としてアシスタントの回答を生成する（再生成もこれを使う） */
+/** Generate an assistant answer as a child of parentUserId (also used for regeneration) */
 async function generateReply(convId: string, parentUserId: string) {
+  cancelSuggestions();
   const conv = conversations.value.find((c) => c.id === convId);
   const cfg = conv ? providerById(conv.providerId) : undefined;
   if (!conv || !cfg || streamingConv.value.has(convId)) return;
@@ -260,6 +313,9 @@ async function generateReply(convId: string, parentUserId: string) {
   };
   const history = pathToLeaf(new Map(messages.value.map((m) => [m.id, m])), parentUserId);
   messages.value = [...messages.value, draft];
+  // Write the (empty) reply before pointing the conversation at it, so closing the tab right now
+  // cannot leave the conversation pointing at a message that does not exist
+  await putMessage(draft, conv);
   await updateConversation({ currentLeafId: draft.id, updatedAt: Date.now() }, conv.id);
 
   const ctrl = new AbortController();
@@ -270,7 +326,7 @@ async function generateReply(convId: string, parentUserId: string) {
   const search = webOn ? searchModeFor(cfg.id, conv.modelId) : null;
   const skillList = skillsFor(cfg.id, conv.modelId);
   const tools = [...(search === 'tools' ? WEB_TOOLS : []), ...(skillList.length ? [makeSkillTool(skillList)] : [])];
-  // スキルを読み込んだ（指定した）会話でだけ使えるツール。skill-creator なら save_skill と、全スキルを読める load_skill
+  // Tools available only in conversations that loaded (specified) a skill. For skill-creator: save_skill, and load_skill that can read all skills
   const toolsCapable = !!model?.capabilities.tools;
   const dynamicTools = (turn: MessageRecord): Tool[] => {
     if (!toolsCapable) return [];
@@ -323,6 +379,7 @@ async function generateReply(convId: string, parentUserId: string) {
     recordUsage({ id: final.id, providerId: cfg.id, model: conv.modelId, kind: 'chat', usage: final.meta?.usage, costUsd: final.meta?.costUsd, temporary: conv.temporary });
     if (final.meta?.costUsd && balances.value[cfg.id]) updateBalance(cfg.id, (b) => recordSpend(b, final.meta!.costUsd!));
     if (final.status === 'error' && final.error) showToast(final.error.message, 'error');
+    void suggestReplies(conv, final, history);
   } finally {
     liveMessages.delete(draft.id);
     controllers.delete(conv.id);
@@ -338,7 +395,7 @@ export async function regenerate(assistantId: string) {
   await generateReply(currentId.value, m.parentId);
 }
 
-/** 別のモデルで再生成: 会話のモデルを切り替えたうえで、同じ質問への回答を新しい版として追加する */
+/** Regenerate with another model: switch the conversation's model, then add an answer to the same question as a new version */
 export async function regenerateWith(assistantId: string, providerId: string, modelId: string) {
   if (!ensureKey(providerId)) return;
   await updateConversation({ providerId, modelId });
@@ -346,7 +403,7 @@ export async function regenerateWith(assistantId: string, providerId: string, mo
   await regenerate(assistantId);
 }
 
-/** ユーザーメッセージを編集 → 兄弟として新しいメッセージを作り、回答を生成 */
+/** Edit a user message: create a new message as a sibling and generate an answer */
 export async function editUserMessage(userId: string, newText: string) {
   const conv = currentConv.value;
   const orig = messages.value.find((x) => x.id === userId);
@@ -358,7 +415,7 @@ export async function editUserMessage(userId: string, newText: string) {
   await generateReply(conv.id, user.id);
 }
 
-/** 兄弟ノードの切り替え（< 1/3 >） */
+/** Switch between sibling nodes (< 1/3 >) */
 export async function switchSibling(msgId: string, dir: -1 | 1) {
   const all = messages.value;
   const m = all.find((x) => x.id === msgId);
@@ -368,7 +425,7 @@ export async function switchSibling(msgId: string, dir: -1 | 1) {
   if (target) await updateConversation({ currentLeafId: deepestLatestLeaf(all, target.id) });
 }
 
-/** 会話のモデルを変える（新しいチャットの既定にもなる） */
+/** Change the conversation's model (also becomes the default for new chats) */
 export async function chooseModel(providerId: string, modelId: string) {
   await updateConversation({ providerId, modelId } as Partial<Conversation>);
   await saveSettings({ lastProviderId: providerId, lastModelId: modelId });

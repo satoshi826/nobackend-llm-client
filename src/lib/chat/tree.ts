@@ -1,11 +1,11 @@
-// 会話ツリーのユーティリティ（UI・DB 非依存）
+// Conversation tree utilities (independent of UI and DB)
 export interface TreeNode {
   id: string;
   parentId: string | null;
   createdAt: number;
 }
 
-/** leaf から root までの経路（root が先頭） */
+/** Path from leaf to root (root first) */
 export function pathToLeaf<T extends TreeNode>(byId: Map<string, T>, leafId: string | null): T[] {
   const out: T[] = [];
   const seen = new Set<string>();
@@ -24,7 +24,7 @@ export function childrenOf<T extends TreeNode>(all: Iterable<T>, parentId: strin
   return out.sort((a, b) => a.createdAt - b.createdAt);
 }
 
-/** あるノードから、最新の子を辿り続けた末端 */
+/** The leaf reached from a node by always following the newest child */
 export function deepestLatestLeaf<T extends TreeNode>(all: T[], startId: string): string {
   let cur = startId;
   const seen = new Set<string>();
@@ -39,4 +39,16 @@ export function deepestLatestLeaf<T extends TreeNode>(all: T[], startId: string)
 
 export function siblingsOf<T extends TreeNode>(all: T[], node: T): T[] {
   return childrenOf(all, node.parentId);
+}
+
+/**
+ * The leaf to show for a conversation. If the saved leaf no longer exists (e.g. the tab was closed
+ * after the leaf was switched to a new reply but before that reply was written), fall back to the
+ * newest message and follow its newest children.
+ */
+export function resolveLeaf<T extends TreeNode>(all: T[], leafId: string | null): string | null {
+  if (leafId && all.some((m) => m.id === leafId)) return leafId;
+  if (all.length === 0) return null;
+  const newest = all.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
+  return deepestLatestLeaf(all, newest.id);
 }

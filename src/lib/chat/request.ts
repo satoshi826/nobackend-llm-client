@@ -1,21 +1,21 @@
-// 送信するメッセージの組み立て（履歴・圧縮・同じターン内のツール呼び出し）
+// Builds the messages to send (history, compaction, tool calls within the same turn)
 import type { ChatMessage, Part } from '../providers/types';
 import type { MessageRecord } from '../db/schema';
 import { withAttachedSkills } from '../skills/skill';
 
 export interface BuildOptions {
-  /** 前回までの思考（reasoning_content など）をモデルに送り返す。同じプロバイダー・モデルの発言のみ */
+  /** Send earlier reasoning (reasoning_content etc.) back to the model. Only for messages from the same provider and model */
   resendReasoning?: boolean;
   providerId?: string;
   model?: string;
 }
 
 /**
- * 履歴 → プロバイダーに送るメッセージ。
- * - 思考の本文（reasoning パーツ）は送らない
- * - vendorState（reasoning_content など）は resendReasoning が有効で、同じモデルの発言のときだけ送り返す
- * - 圧縮ノード（compaction）があれば、最後の圧縮で要約した範囲を要約文に置き換える
- *   （要約はシステムプロンプトの末尾に付ける。複数の system メッセージを嫌う API があるため）
+ * History → messages sent to the provider.
+ * - reasoning text (reasoning parts) is never sent
+ * - vendorState (reasoning_content etc.) is sent back only when resendReasoning is on and the message is from the same model
+ * - if there are compaction nodes, the range summarized by the last one is replaced by the summary
+ *   (the summary is appended to the system prompt, since some APIs dislike multiple system messages)
  */
 export function buildRequestMessages(history: MessageRecord[], systemPrompt: string, opts: BuildOptions = {}): ChatMessage[] {
   let sys = systemPrompt.trim();
@@ -40,7 +40,7 @@ export function buildRequestMessages(history: MessageRecord[], systemPrompt: str
     if (m.compaction) continue;
     if (m.role === 'assistant' && m.status === 'error' && !m.parts.some((p) => p.type === 'text' && p.text)) continue;
     let parts = m.parts.filter((p) => p.type === 'text' || p.type === 'tool');
-    // ユーザーが指定したスキルは、そのメッセージの本文の前に添える
+    // Skills the user picked are prepended to that message's text
     if (m.role === 'user' && m.skills?.length) {
       const text = parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
       parts = [{ type: 'text', text: withAttachedSkills(text, m.skills) }];
@@ -53,8 +53,8 @@ export function buildRequestMessages(history: MessageRecord[], systemPrompt: str
 }
 
 /**
- * このターン内のステップ（step-start で区切られる）を、送信用のアシスタント発言とツール結果に変換する。
- * 同じターン内の思考は、ツール呼び出しの続きに必要なモデルがあるため vendorState として送り返す。
+ * Converts the steps of this turn (separated by step-start) into assistant messages and tool results for sending.
+ * Reasoning within the same turn is sent back as vendorState, since some models need it to continue after a tool call.
  */
 export function turnMessages(msg: MessageRecord): ChatMessage[] {
   const out: ChatMessage[] = [];

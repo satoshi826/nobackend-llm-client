@@ -7,7 +7,7 @@ export function cx(...xs: (string | false | null | undefined)[]): string {
 
 type IconName =
   | 'menu' | 'plus' | 'settings' | 'send' | 'stop' | 'copy' | 'refresh' | 'edit' | 'trash' | 'pin' | 'chevron-left'
-  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book';
+  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star';
 
 const PATHS: Record<IconName, string> = {
   menu: 'M4 6h16M4 12h16M4 18h16',
@@ -40,12 +40,13 @@ const PATHS: Record<IconName, string> = {
   key: 'M14 10a4 4 0 1 0-3.5 4L13 16.5V19h2.5v-2.5H18l1-1-3.6-3.6A4 4 0 0 0 14 10ZM8 10h.01',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   upload: 'M12 20V9M7 14l5-5 5 5M5 4h14',
-  book: 'M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2V5ZM4 20a2 2 0 0 0 2 2h13v-4M8 7h7'
+  book: 'M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2V5ZM4 20a2 2 0 0 0 2 2h13v-4M8 7h7',
+  star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.9L12 3.5Z'
 };
 
-export function Icon({ name, class: className = 'size-4' }: { name: IconName; class?: string }) {
+export function Icon({ name, class: className = 'size-4', filled }: { name: IconName; class?: string; filled?: boolean }) {
   return (
-    <svg class={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <svg class={className} viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d={PATHS[name]} />
     </svg>
   );
@@ -123,4 +124,30 @@ export function formatPrice(n?: number): string {
 export function formatCtx(n?: number): string {
   if (!n) return '';
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M` : `${Math.round(n / 1000)}K`;
+}
+
+/** Small spinning ring for work in progress (static when the user prefers reduced motion) */
+export function Spinner({ class: className = 'size-3.5' }: { class?: string }) {
+  return (
+    <svg class={cx(className, 'shrink-0 motion-safe:animate-spin')} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+    </svg>
+  );
+}
+
+/** Text with a moving highlight, for "working on it" labels */
+export function Shimmer({ children, class: className }: { children: ComponentChildren; class?: string }) {
+  return <span class={cx('text-shimmer', className)}>{children}</span>;
+}
+
+/** Three bouncing dots */
+export function Dots() {
+  return (
+    <span class="typing-dots" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </span>
+  );
 }

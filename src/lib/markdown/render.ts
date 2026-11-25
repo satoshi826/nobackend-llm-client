@@ -1,8 +1,8 @@
-// Markdown → サニタイズ済み HTML（TrustedHTML）。
-// - 生 HTML は描画しない（エスケープして表示）
-// - 外部画像は読み込まず、リンクに置き換える（画像 URL による情報持ち出し対策）
-// - リンクは新しいタブ + noopener noreferrer
-// - DOM に入れるのはこのモジュールの setSafeHTML() だけ（Trusted Types ポリシー app-md）
+// Markdown → sanitized HTML (TrustedHTML).
+// - raw HTML is never rendered (shown escaped)
+// - external images are not loaded but replaced with links (prevents data exfiltration via image URLs)
+// - links open in a new tab + noopener noreferrer
+// - only this module's setSafeHTML() puts HTML into the DOM (Trusted Types policy app-md)
 import { Marked, type Tokens } from 'marked';
 import DOMPurify from 'dompurify';
 
@@ -10,7 +10,7 @@ type Highlighter = (code: string, lang: string) => string | null;
 let highlighter: Highlighter | null = null;
 let loading: Promise<void> | null = null;
 
-/** highlight.js を必要になったときだけ読み込む */
+/** Load highlight.js only when needed */
 export function ensureHighlighter(): Promise<void> {
   if (highlighter) return Promise.resolve();
   if (!loading) {
@@ -35,7 +35,7 @@ function makeMarked(highlight: boolean): Marked {
         return escapeHtml(token.text);
       },
       link(this: any, token: Tokens.Link) {
-        // DOMPurify のフックに加えて、ここでも安全なスキーム以外を落とす（多層防御）
+        // Besides the DOMPurify hook, drop anything but safe schemes here too (defence in depth)
         const inner = this.parser.parseInline(token.tokens);
         const href = token.href ?? '';
         if (!/^(https?:|mailto:|#)/i.test(href)) return `<span>${inner}</span>`;
@@ -65,7 +65,7 @@ function makeMarked(highlight: boolean): Marked {
 const markedPlain = makeMarked(false);
 const markedHl = makeMarked(true);
 
-// DOMPurify の設定: リンクを安全化
+// DOMPurify config: make links safe
 let hooked = false;
 function setupPurify() {
   if (hooked) return;
@@ -90,7 +90,7 @@ const PURIFY_CONFIG = {
   FORBID_ATTR: ['style', 'id', 'name']
 };
 
-/** Venice の引用マーカー ^1^ / ^1,2^ を出典へのリンクに変換する */
+/** Convert Venice citation markers ^1^ / ^1,2^ into links to the sources */
 export function linkCitations(src: string, citations: string[]): string {
   if (!citations.length) return src;
   return src.replace(/\^(\d{1,2}(?:\s*,\s*\d{1,2})*)\^/g, (_m, nums: string) =>
@@ -100,7 +100,7 @@ export function linkCitations(src: string, citations: string[]): string {
         const i = Number(n.trim());
         const url = citations[i - 1];
         if (!url || !/^https?:\/\//i.test(url)) return `[${i}]`;
-        // encodeURIComponent は括弧を符号化しないので明示的に置換する
+        // encodeURIComponent does not encode parentheses, so replace them explicitly
         const safe = url.replace(/[()\s<>]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
         return `[\\[${i}\\]](${safe})`;
       })
@@ -111,7 +111,7 @@ export function linkCitations(src: string, citations: string[]): string {
 export function renderMarkdown(src: string, opts: { highlight: boolean; citations?: string[] }): string {
   setupPurify();
   if (opts.citations?.length) src = linkCitations(src, opts.citations);
-  // DOMPurify が使えない環境では素通しで返されてしまうため、その場合は全部エスケープする
+  // Where DOMPurify is unavailable it returns the input untouched, so escape everything in that case
   if (!DOMPurify.isSupported) return `<pre class="md-fallback">${escapeHtml(src)}</pre>`;
   const html = (opts.highlight ? markedHl : markedPlain).parse(src, { async: false }) as string;
   return DOMPurify.sanitize(html, PURIFY_CONFIG) as unknown as string;
@@ -125,7 +125,7 @@ function getPolicy(): TTPolicy | null {
   if (policy !== undefined) return policy;
   const tt = (globalThis as any).trustedTypes;
   if (tt?.createPolicy) {
-    // ポリシーに渡ってくるのは renderMarkdown 済みの文字列だけだが、念のためここでも再度サニタイズする
+    // Only strings already passed through renderMarkdown reach the policy, but sanitize again here just in case
     policy = tt.createPolicy('app-md', {
       createHTML: (s: string) => DOMPurify.sanitize(s, PURIFY_CONFIG) as unknown as string
     });
@@ -135,16 +135,16 @@ function getPolicy(): TTPolicy | null {
   return policy ?? null;
 }
 
-/** アプリ内で innerHTML を使ってよい唯一の関数 */
+/** The only function in the app allowed to use innerHTML */
 export function setSafeHTML(el: HTMLElement, sanitizedHtml: string): void {
   try {
     const p = getPolicy();
     (el as any).innerHTML = p ? p.createHTML(sanitizedHtml) : DOMPurify.sanitize(sanitizedHtml, PURIFY_CONFIG);
-    // DOMPurify は内部の解析に失敗すると空文字を返すため、本文があるのに空ならテキスト表示にする
+    // DOMPurify returns an empty string when its internal parsing fails, so fall back to plain text if the result is empty despite having content
     if (!el.innerHTML && el.dataset.raw) throw new Error('sanitized output was empty');
   } catch (e) {
-    // Trusted Types の設定ミス等で挿入できない場合でも、内容はテキストとして必ず表示する
-    console.error('[markdown] HTML を挿入できなかったためテキスト表示に切り替えます', e);
+    // Even if insertion fails (e.g. a Trusted Types misconfiguration), always show the content as text
+    console.error('[markdown] Could not insert HTML; falling back to plain text', e);
     el.textContent = el.dataset.raw ?? '';
   }
 }

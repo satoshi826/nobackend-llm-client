@@ -1,4 +1,4 @@
-// 設定 > スキル: 一覧・作成・編集・SKILL.md の取り込み/書き出し
+// Settings > Skills: list, create, edit, import/export SKILL.md
 import { useRef, useState } from 'preact/hooks';
 import { builtinSkills, downloadSkill, importSkillFiles, removeSkill, saveSkill, setBuiltinEnabled, setModelInvocable, settings, showToast, skills } from '../state/app';
 import type { Skill } from '../lib/db/schema';
@@ -81,7 +81,7 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
   );
 }
 
-/** 組み込みスキル（読み取り専用。オン/オフだけ） */
+/** Built-in skills (read-only; can only be turned on/off) */
 function BuiltinRow({ s }: { s: Skill }) {
   const on = !settings.value.disabledBuiltinSkills.includes(s.name);
   const [open, setOpen] = useState(false);

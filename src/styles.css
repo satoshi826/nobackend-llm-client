@@ -52,7 +52,7 @@ body {
 .md .md-fallback { @apply whitespace-pre-wrap; }
 .md input[type='checkbox'] { @apply mr-1.5 align-middle; }
 
-/* ---- highlight.js（GitHub 風・明暗両対応） ---- */
+/* ---- highlight.js (GitHub style, light and dark) ---- */
 .hljs-comment, .hljs-quote { @apply text-zinc-500 italic; }
 .hljs-keyword, .hljs-selector-tag, .hljs-type, .hljs-doctag { @apply text-rose-700 dark:text-rose-400; }
 .hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string { @apply text-emerald-700 dark:text-emerald-400; }
@@ -65,10 +65,46 @@ body {
 .hljs-emphasis { @apply italic; }
 .hljs-strong { @apply font-bold; }
 
-/* ストリーミング中のカーソル */
+/* Caret shown while streaming */
 .streaming-caret::after {
   content: '▍';
   @apply ml-0.5 animate-pulse text-zinc-400;
 }
 
 .scroll-thin { scrollbar-width: thin; }
+
+/* Moving highlight over "in progress" text */
+@keyframes text-shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+.text-shimmer {
+  --shimmer-base: var(--color-zinc-400);
+  --shimmer-peak: var(--color-zinc-800);
+  background-image: linear-gradient(90deg, var(--shimmer-base) 30%, var(--shimmer-peak) 50%, var(--shimmer-base) 70%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: text-shimmer 1.8s linear infinite;
+}
+.dark .text-shimmer {
+  --shimmer-base: var(--color-zinc-500);
+  --shimmer-peak: var(--color-zinc-100);
+}
+
+/* Three bouncing dots */
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+.typing-dots { display: inline-flex; gap: 3px; vertical-align: middle; }
+.typing-dots span { width: 5px; height: 5px; border-radius: 9999px; background: currentColor; animation: typing-dot 1.2s ease-in-out infinite; }
+.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer { animation: none; color: var(--color-zinc-500); background: none; }
+  .typing-dots span { animation: none; opacity: 0.7; }
+}

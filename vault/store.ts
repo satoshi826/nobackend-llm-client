@@ -1,14 +1,14 @@
-// キーストア: キーの保存・暗号化・解錠と、キーを付けた送信。キー金庫のページの中でだけ動く。
-// 同じページを本体と同じオリジンに置くか別オリジンに置くかは、デプロイ時に決める（コードは同じ）。
+// Key store: saving, encrypting and unlocking keys, and sending requests with keys attached. Runs only inside the key vault page.
+// Whether that page shares the app's origin or lives on a separate one is decided at deploy time (same code).
 //
-// 保存のルール（選択肢なし）:
-//   - 金庫にパスフレーズがなければ、キーはそのまま保存する
-//   - パスフレーズがあれば、すべてのキーを暗号化して保存する（後から設定したら保存済みのキーも暗号化し直す）
-//   - 解錠は金庫全体で 1 回。パスフレーズを忘れたら「すべてのキーを削除」して入れ直す
+// Storage rules (not configurable):
+//   - if the vault has no passphrase, keys are stored as is
+//   - with a passphrase, all keys are stored encrypted (setting one later re-encrypts the stored keys)
+//   - unlocking happens once for the whole vault. If the passphrase is forgotten, "delete all keys" and enter them again
 import { decryptSecret, encryptSecret, MIN_PASSPHRASE_LENGTH, WrongPassphraseError, type EncryptedBlob } from '../src/lib/crypto/passphrase';
 import { ACCOUNT_IDS, accountById, providerConfigOf, type KeyStatus, type VaultState } from '../src/lib/keys/accounts';
 
-// ---- 保存領域（IndexedDB） ----
+// ---- Storage (IndexedDB) ----
 interface SecretRec {
   id: string;
   key?: string;
@@ -16,13 +16,17 @@ interface SecretRec {
   hosts: string[];
   createdAt: number;
 }
-/** パスフレーズの確認用（既知の文字列を暗号化したもの）。キーと同じストアに予約 ID で置く */
+/** Passphrase check value (a known string, encrypted). Kept in the same store as the keys under a reserved ID */
 const META_ID = '__passphrase__';
 const CHECK_TEXT = 'nbl-vault-passphrase-check';
 interface MetaRec {
   id: typeof META_ID;
   check: EncryptedBlob;
+  /** Passphrase ID (renewed every time it is set or changed) */
+  pid?: string;
 }
+/** Marker for wrapping the app's data key (so the app cannot get other ciphertexts decrypted) */
+const DATA_KEY_PREFIX = 'nbl-data-key:';
 
 let dbp: Promise<IDBDatabase> | null = null;
 function openDB(): Promise<IDBDatabase> {
@@ -55,24 +59,31 @@ async function allRecs(): Promise<SecretRec[]> {
   return all.filter((r): r is SecretRec => r.id !== META_ID);
 }
 
-// ---- メモリ上の状態（解錠済みのキーとパスフレーズ）と、金庫ページ同士の共有 ----
+// ---- In-memory state (unlocked keys and passphrase) and sharing between vault pages ----
 const mem = new Map<string, string>();
 let passphrase: string | null = null;
 const listeners = new Set<() => void>();
 const bc: BroadcastChannel | null = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('key-vault') : null;
+/**
+ * ID of each app page (the app appends it to the vault URL). Unlock state is shared only among vault pages with the same ID.
+ * Other tabs and reloaded pages get a different ID, so each one has to be unlocked when opened.
+ */
+const SESSION = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('session') ?? '') : '';
 
 function emit() {
   for (const l of listeners) l();
 }
 
-/** 自分の状態を他の金庫ページ（同じオリジンの iframe）に伝える */
+/** Broadcast our state to the other vault pages (same-origin iframes) */
 function broadcast() {
-  bc?.postMessage({ type: 'sync', pass: passphrase, keys: [...mem] });
+  bc?.postMessage({ type: 'sync', session: SESSION, pass: passphrase, keys: [...mem] });
 }
 
 if (bc) {
   bc.onmessage = (e) => {
     const d = e.data;
+    // Storage changes (changed) go to every page; unlock state (hello / sync) only among pages of the same app page
+    if (d?.type !== 'changed' && d?.session !== SESSION) return;
     if (d?.type === 'hello') {
       if (passphrase !== null || mem.size) broadcast();
       else bc.postMessage({ type: 'changed' });
@@ -85,10 +96,10 @@ if (bc) {
     } else if (d?.type !== 'changed') return;
     emit();
   };
-  bc.postMessage({ type: 'hello' });
+  bc.postMessage({ type: 'hello', session: SESSION });
 }
 
-/** 保存内容だけが変わった（メモリの状態は同じ） */
+/** Only the stored contents changed (in-memory state is the same) */
 function changed() {
   bc?.postMessage({ type: 'changed' });
   emit();
@@ -101,7 +112,7 @@ export function onChange(fn: () => void): () => void {
 
 type Result = { ok: boolean; message: string };
 
-// ---- 状態 ----
+// ---- State ----
 export function allowedHosts(id: string): string[] {
   const a = accountById(id);
   return a ? [a.host] : [];
@@ -112,8 +123,9 @@ export function label(id: string): string {
 }
 
 export async function vaultState(): Promise<VaultState> {
-  const has = !!(await getMeta()) || (await allRecs()).some((r) => r.enc);
-  return { hasPassphrase: has, locked: has && passphrase === null };
+  const meta = await getMeta();
+  const has = !!meta || (await allRecs()).some((r) => r.enc);
+  return { hasPassphrase: has, locked: has && passphrase === null, passphraseId: has ? (meta?.pid ?? 'legacy') : null };
 }
 
 export async function status(id: string): Promise<KeyStatus> {
@@ -132,7 +144,7 @@ export async function allStatus(): Promise<{ keys: Record<string, KeyStatus>; va
   return { keys, vault: await vaultState() };
 }
 
-// ---- キーの保存・削除 ----
+// ---- Saving and deleting keys ----
 export async function saveKey(id: string, key: string): Promise<Result> {
   const account = accountById(id);
   if (!account) return { ok: false, message: '未対応の接続先です。' };
@@ -164,7 +176,7 @@ export async function remove(id: string) {
   changed();
 }
 
-/** すべてのキーとパスフレーズを消す（パスフレーズを忘れたときもこれ） */
+/** Delete all keys and the passphrase (also the way out when the passphrase is forgotten) */
 export async function clearAll() {
   await idb<unknown>('readwrite', (s) => s.clear());
   mem.clear();
@@ -173,7 +185,7 @@ export async function clearAll() {
   changed();
 }
 
-// ---- パスフレーズ ----
+// ---- Passphrase ----
 async function verify(pass: string): Promise<boolean> {
   const meta = await getMeta();
   if (!meta) return false;
@@ -184,48 +196,52 @@ async function verify(pass: string): Promise<boolean> {
   }
 }
 
-/** 保存済みのすべてのキーを、新しいパスフレーズで暗号化し直す（null なら平文に戻す） */
+/** Re-encrypt all stored keys with a new passphrase (null turns them back into plaintext) */
 async function rewriteAll(next: string | null) {
   for (const r of await allRecs()) {
     const key = r.key ?? mem.get(r.id);
-    if (key === undefined) continue; // 解錠できなかった古いキーはそのまま
+    if (key === undefined) continue; // old keys that could not be unlocked stay as they are
     await putRec(next === null ? { id: r.id, hosts: r.hosts, createdAt: r.createdAt, key } : { id: r.id, hosts: r.hosts, createdAt: r.createdAt, enc: await encryptSecret(key, next) });
     if (next === null) mem.delete(r.id);
     else mem.set(r.id, key);
   }
+  const meta = await getMeta();
   if (next === null) await delRec(META_ID);
-  else await putRec({ id: META_ID, check: await encryptSecret(CHECK_TEXT, next) });
+  // Keep the ID when re-aligning with the same passphrase (the app's data key need not be rewrapped)
+  else await putRec({ id: META_ID, check: await encryptSecret(CHECK_TEXT, next), pid: meta?.pid && next === passphrase ? meta.pid : crypto.randomUUID() });
   passphrase = next;
 }
 
-/** パスフレーズを設定・変更する（設定済みなら解錠している必要がある） */
-export async function setPassphrase(next: string): Promise<Result> {
+/** Set or change the passphrase (changing requires confirming the current one) */
+export async function setPassphrase(next: string, current?: string): Promise<Result> {
   if (next.length < MIN_PASSPHRASE_LENGTH) return { ok: false, message: `パスフレーズは ${MIN_PASSPHRASE_LENGTH} 文字以上にしてください。` };
   const vs = await vaultState();
   if (vs.locked) return { ok: false, message: '先に今のパスフレーズで解錠してください。' };
+  if (vs.hasPassphrase && !(await verify(current ?? ''))) return { ok: false, message: '今のパスフレーズが違います。' };
   await rewriteAll(next);
   broadcast();
   changed();
   return { ok: true, message: vs.hasPassphrase ? 'パスフレーズを変更しました。' : 'パスフレーズを設定し、保存済みのキーを暗号化しました。' };
 }
 
-/** パスフレーズを外す（キーは暗号化せずに保存し直す） */
-export async function removePassphrase(): Promise<Result> {
+/** Remove the passphrase (keys are re-saved unencrypted; requires confirming the current one) */
+export async function removePassphrase(current: string): Promise<Result> {
   if ((await vaultState()).locked) return { ok: false, message: '先に解錠してください。' };
+  if (!(await verify(current))) return { ok: false, message: '今のパスフレーズが違います。' };
   await rewriteAll(null);
   broadcast();
   changed();
   return { ok: true, message: 'パスフレーズを外しました。キーは暗号化せずに保存されています。' };
 }
 
-/** すべてのキーを解錠する */
+/** Unlock all keys */
 export async function unlock(pass: string): Promise<Result> {
   const meta = await getMeta();
   const recs = await allRecs();
   if (meta) {
     if (!(await verify(pass))) return { ok: false, message: new WrongPassphraseError().message };
   }
-  // 以前の形式（キーごとのパスフレーズ）: このパスフレーズで開けるものを開き、金庫全体のパスフレーズとして採用する
+  // Legacy format (per-key passphrases): open whatever this passphrase can open, and adopt it as the vault-wide passphrase
   let opened = 0;
   let failed = 0;
   for (const r of recs) {
@@ -239,13 +255,26 @@ export async function unlock(pass: string): Promise<Result> {
   }
   if (!meta && opened === 0) return { ok: false, message: new WrongPassphraseError().message };
   passphrase = pass;
-  // 平文のまま残っているキー・確認用データがなければ、このパスフレーズでそろえる
+  // If keys remain in plaintext or there is no check value yet, bring everything in line with this passphrase
   if (!meta || recs.some((r) => r.key)) await rewriteAll(pass);
   broadcast();
   changed();
   return failed
     ? { ok: true, message: `解錠しました。${failed} 件のキーは別のパスフレーズで暗号化されているため開けませんでした（削除して入れ直してください）。` }
     : { ok: true, message: '解錠しました。' };
+}
+
+// ---- Wrapping / unwrapping the app's data key (used to encrypt conversations) with the passphrase ----
+export async function wrapDataKey(raw: string): Promise<EncryptedBlob> {
+  if (passphrase === null) throw new KeyError('auth', 'パスフレーズで解錠されていません。');
+  return encryptSecret(DATA_KEY_PREFIX + raw, passphrase);
+}
+
+export async function unwrapDataKey(blob: EncryptedBlob): Promise<string> {
+  if (passphrase === null) throw new KeyError('auth', 'パスフレーズで解錠されていません。');
+  const text = await decryptSecret(blob, passphrase);
+  if (!text.startsWith(DATA_KEY_PREFIX)) throw new KeyError('auth', 'データ鍵ではありません。');
+  return text.slice(DATA_KEY_PREFIX.length);
 }
 
 export function lock() {
@@ -260,7 +289,7 @@ async function keyFor(id: string): Promise<string | undefined> {
   return mem.get(id) ?? (await getRec(id))?.key;
 }
 
-// ---- キーを付けた送信 ----
+// ---- Sending with keys attached ----
 export function isAllowedUrl(id: string, url: string): boolean {
   let u: URL;
   try {
@@ -284,8 +313,8 @@ export class KeyError extends Error {
 }
 
 /**
- * 許可されたホスト宛てのときだけ、キーを付けて送る。
- * @param candidate 保存前のキーの確認用（省略時は保存済みのキー）
+ * Attaches the key and sends only when the URL is on an allowed host.
+ * @param candidate key to verify before saving (defaults to the stored key)
  */
 export async function keyedFetch(id: string, url: string, init: RequestInit, candidate?: string): Promise<Response> {
   if (!accountById(id)) throw new KeyError('host-mismatch', '未対応の接続先です。');
@@ -293,7 +322,7 @@ export async function keyedFetch(id: string, url: string, init: RequestInit, can
   const key = candidate ?? (await keyFor(id));
   if (!key) throw new KeyError('auth', `${label(id)} のキーが未設定か、ロックされています。`);
   const headers = new Headers(init.headers);
-  // 本体から来た認証系のヘッダは捨て、この接続先のヘッダにだけキーを付ける
+  // Drop auth headers coming from the app and attach the key only to this provider's header
   for (const h of ['authorization', 'cookie', 'proxy-authorization', 'x-api-key', 'x-goog-api-key', 'api-key']) headers.delete(h);
   const kh = accountById(id)!.keyHeader;
   headers.set(kh.name, `${kh.prefix}${key}`);

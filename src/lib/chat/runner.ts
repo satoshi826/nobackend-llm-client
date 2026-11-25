@@ -1,4 +1,4 @@
-// 実行ループ: 「生成 → ツール実行（必要なら承認）→ 結果を渡して再生成」を上限ステップまで繰り返す（§9）。
+// Execution loop: repeats "generate → run tools (with approval if needed) → regenerate with the results" up to the step limit (§9).
 import type { AuthRef, ChatParams, ProviderConfig, ProviderEvent, ProviderPreset, Transport } from '../providers/types';
 import type { Part } from '../providers/types';
 import { getAdapter } from '../providers/registry';
@@ -14,7 +14,7 @@ export { buildRequestMessages, turnMessages } from './request';
 export interface RunOptions {
   provider: ProviderConfig;
   preset: ProviderPreset;
-  /** 付けるキー（キー金庫が付ける） */
+  /** Key to attach (the key vault attaches it) */
   auth: AuthRef | undefined;
   transport: Transport;
   model: string;
@@ -29,18 +29,18 @@ export interface RunOptions {
   persist(m: MessageRecord): Promise<void>;
   maxSteps?: number;
   persistIntervalMs?: number;
-  /** モデルの文脈長。分かっていれば、超えないよう古いメッセージを省いて送る */
+  /** The model's context length. If known, old messages are dropped so it is not exceeded */
   contextLength?: number;
   maxOutputTokens?: number;
-  /** 前回までの思考を送り返すか（ユーザー設定） */
+  /** Whether to send earlier reasoning back (user setting) */
   resendReasoning?: boolean;
-  /** プロンプトキャッシュの振り分けキー（会話 ID） */
+  /** Prompt cache routing key (conversation ID) */
   cacheKey?: string;
-  /** 使えるツール（空ならツールなし＝1 ステップで終わる） */
+  /** Available tools (empty means no tools, i.e. a single step) */
   tools?: Tool[];
   /**
-   * ステップごとに足すツール（同じ名前なら tools を置き換える）。
-   * スキルを読み込んだ直後のステップから、そのスキル用のツールを使えるようにするため
+   * Tools added per step (replacing a tool in tools with the same name).
+   * Lets a skill's tools become available from the step right after the skill is loaded
    */
   dynamicTools?(turn: MessageRecord): Tool[];
   toolContext?: Omit<ToolContext, 'signal'>;
@@ -48,7 +48,7 @@ export interface RunOptions {
   requestApproval?(req: ApprovalRequest): Promise<ApprovalDecision>;
 }
 
-/** ツール承認の依頼（UI がユーザーに確認して答える） */
+/** Tool approval request (the UI asks the user and answers) */
 export interface ApprovalRequest {
   toolCallId: string;
   tool: Tool;
@@ -57,10 +57,10 @@ export interface ApprovalRequest {
 }
 export interface ApprovalDecision {
   approved: boolean;
-  /** 「常に許可」 */
+  /** "Always allow" */
   always?: boolean;
   reason?: string;
-  /** ユーザーが編集した引数 */
+  /** Arguments edited by the user */
   input?: unknown;
 }
 
@@ -101,7 +101,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
     try {
       for await (let ev of adapter.chat(o.provider, o.preset, o.auth, req, o.transport)) {
         if (ev.type === 'usage') {
-          // ステップをまたいで合計する
+          // Sum across steps
           total.inputTokens += ev.usage.inputTokens ?? 0;
           total.outputTokens += ev.usage.outputTokens ?? 0;
           total.reasoningTokens += ev.usage.reasoningTokens ?? 0;
@@ -145,18 +145,18 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
         failed = true;
       } else applyEvent(msg, { type: 'done', reason: 'stop' }, blocks);
     }
-    // 途中で止まったパーツを確定させる
+    // Finalize parts that were cut off midway
     for (const p of msg.parts) if ((p.type === 'text' || p.type === 'reasoning') && p.state === 'streaming') p.state = 'done';
     if (failed || o.signal.aborted) break;
 
-    // ---- ツールの実行 ----
+    // ---- Running tools ----
     const calls = msg.parts.slice(segStart).filter((p): p is Extract<Part, { type: 'tool' }> => p.type === 'tool');
     if (calls.length === 0 || tools.length === 0) break;
     msg.status = 'streaming';
     let stop = false;
     for (const call of calls) {
       if (o.signal.aborted) break;
-      if (call.state === 'output-error') continue; // 引数の解析失敗はそのままモデルに返す
+      if (call.state === 'output-error') continue; // argument parse failures go back to the model as is
       const tool = tools.find((t) => t.name === call.name);
       if (!tool) {
         call.state = 'output-error';

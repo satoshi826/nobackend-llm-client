@@ -1,13 +1,13 @@
-// ProviderEvent を下書きメッセージ（パーツ）に反映する
+// Applies ProviderEvents to the draft message (parts)
 import type { Part, ProviderEvent } from '../providers/types';
 import type { MessageRecord } from '../db/schema';
 
 export interface BlockMap {
-  /** ProviderEvent の index → parts 配列の位置 */
+  /** ProviderEvent index → position in the parts array */
   [index: number]: number;
 }
 
-/** 1 イベントを下書きメッセージに反映する（純粋関数的に書き換える） */
+/** Apply one event to the draft message (mutates the message; otherwise written like a pure function) */
 export function applyEvent(msg: MessageRecord, ev: ProviderEvent, blocks: BlockMap): void {
   switch (ev.type) {
     case 'text-start':

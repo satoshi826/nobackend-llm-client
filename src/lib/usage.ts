@@ -1,24 +1,24 @@
-// 使用量と費用の記録・集計（この端末の中だけ）。
-// 会話を消しても記録は残る。一時チャットは記録しない（どこにも残さない約束のため）。
+// Recording and aggregating usage and cost (on this device only).
+// Records survive deleting conversations. Temporary chats are not recorded (they promise to leave nothing behind).
 import type { ModelInfo, Usage } from './providers/types';
 
 export interface UsageRecord {
   id: string;
-  /** 記録した時刻（ms） */
+  /** Time of recording (ms) */
   at: number;
   providerId: string;
   model: string;
-  kind: 'chat' | 'summary';
+  kind: 'chat' | 'summary' | 'suggest';
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
   reasoningTokens: number;
-  /** 接続先が返した費用。返らないときはモデルの単価から推定（costEstimated） */
+  /** Cost reported by the provider. If not reported, estimated from the model's prices (costEstimated) */
   costUsd?: number;
   costEstimated?: boolean;
 }
 
-/** 単価からの推定（キャッシュに当たった入力の割引は考えない＝多めに見積もる） */
+/** Estimate from prices (ignores cache-hit discounts on input, i.e. errs on the high side) */
 export function estimateCost(u: Usage, pricing: ModelInfo['pricing'] | undefined): number | undefined {
   if (!pricing || (pricing.inputPerMTok == null && pricing.outputPerMTok == null)) return undefined;
   return ((u.inputTokens ?? 0) * (pricing.inputPerMTok ?? 0) + (u.outputTokens ?? 0) * (pricing.outputPerMTok ?? 0)) / 1_000_000;
@@ -51,9 +51,9 @@ export interface UsageTotals {
   cachedInputTokens: number;
   outputTokens: number;
   costUsd: number;
-  /** 費用に推定が含まれる */
+  /** The cost includes estimates */
   estimated: boolean;
-  /** 費用が分からない記録の数（単価も不明） */
+  /** Number of records with unknown cost (prices unknown too) */
   unknownCost: number;
 }
 
@@ -69,7 +69,7 @@ function add(t: UsageTotals, r: UsageRecord) {
   if (r.costEstimated) t.estimated = true;
 }
 
-/** その端末のタイムゾーンでの日付（YYYY-MM-DD） */
+/** Date in the device's time zone (YYYY-MM-DD) */
 export function localDay(ms: number): string {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -77,15 +77,15 @@ export function localDay(ms: number): string {
 
 export interface UsageSummary {
   total: UsageTotals;
-  /** 期間内のすべての日（記録のない日も 0 で入る。古い順） */
+  /** Every day in the period (days without records are 0; oldest first) */
   byDay: { day: string; totals: UsageTotals }[];
   byProvider: { providerId: string; totals: UsageTotals }[];
   byModel: { providerId: string; model: string; totals: UsageTotals }[];
 }
 
 /**
- * since から now までを集計する。since が null なら記録の最初の日から。
- * 並びは費用の多い順（同じならリクエスト数）。
+ * Aggregates from since to now. If since is null, from the first recorded day.
+ * Sorted by cost, highest first (ties broken by request count).
  */
 export function summarizeUsage(records: UsageRecord[], since: number | null, now = Date.now()): UsageSummary {
   const list = records.filter((r) => (since === null || r.at >= since) && r.at <= now);
@@ -104,7 +104,7 @@ export function summarizeUsage(records: UsageRecord[], since: number | null, now
     if (!mod.has(k)) mod.set(k, { providerId: r.providerId, model: r.model, totals: zero() });
     add(mod.get(k)!.totals, r);
   }
-  // 期間内の日を、記録のない日も含めて並べる（長すぎる期間は記録のある範囲だけ）
+  // List the days in the period, including days without records (for very long periods, only the range that has records)
   const start = since ?? (list.length ? Math.min(...list.map((r) => r.at)) : now);
   const byDay: UsageSummary['byDay'] = [];
   const cur = new Date(start);

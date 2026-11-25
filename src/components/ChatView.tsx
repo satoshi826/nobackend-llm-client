@@ -1,4 +1,4 @@
-// メインの会話画面: ヘッダー / （キー設定 or 空の画面 or メッセージ一覧）/ 入力欄
+// Main conversation screen: header / (key setup, empty screen, or message list) / input box
 import { useEffect, useRef, useState } from 'preact/hooks';
 import {
   compactConversation,
@@ -25,17 +25,24 @@ import {
   attachedSkillIds,
   toggleAttachedSkill,
   openSettings,
+  composerText,
+  composerFocus,
+  cancelSuggestions,
+  suggestingFor,
+  startNewChat,
   enabledProviders,
   providers,
   setProviderEnabled,
-  hostOfProvider as hostOf
+  hostOfProvider as hostOf,
+  settings,
+  saveSettings
 } from '../state/app';
 import { getPreset, PRESETS } from '../lib/providers/registry';
 import { MessageItem } from './MessageItem';
-import { KeyPanel } from './KeyPanel';
-import { Badge, Button, Icon, cx } from './ui';
+import { KeyPanel, VaultSecurityPanel } from './KeyPanel';
+import { Badge, Button, Icon, Spinner, cx } from './ui';
 
-/** プリセットの説明文（接続先ごと） */
+/** Preset descriptions (per provider) */
 function copyOf(providerId: string) {
   const cfg = providerById(providerId);
   return cfg ? (getPreset(cfg.preset).copy ?? {}) : {};
@@ -62,7 +69,7 @@ function PrivacyBadge() {
   return null;
 }
 
-/** 文脈の使用率と、手動の圧縮ボタン */
+/** Context usage and the manual compaction button */
 function ContextMeter() {
   const u = contextUsage.value;
   const pct = u.ratio != null ? Math.round(u.ratio * 100) : null;
@@ -76,7 +83,7 @@ function ContextMeter() {
       onClick={() => compactConversation()}
       class={cx('text-xs', tone)}
     >
-      <Icon name="compress" class={cx('size-4', busy && 'animate-pulse')} />
+      {busy ? <Spinner class="size-4" /> : <Icon name="compress" class="size-4" />}
       <span class="tabular-nums">{busy ? '要約中…' : pct != null ? `${pct}%` : `${Math.round(u.tokens / 1000)}K`}</span>
     </Button>
   );
@@ -101,11 +108,24 @@ function Header() {
         <PrivacyBadge />
         <Icon name="chevron-down" class="size-3.5 shrink-0 text-zinc-400" />
       </button>
-      {conv.temporary && (
-        <Badge tone="sky" title="この会話は保存されません。タブを閉じるか別の会話を開くと消えます。">
-          <Icon name="ghost" class="size-3" />
-          <span class="hidden whitespace-nowrap sm:inline">一時チャット</span>
-        </Badge>
+      {isDraft.value ? (
+        // Before the first message, the new chat can be switched to/from a temporary (unsaved) chat here
+        <Button
+          aria-pressed={!!conv.temporary}
+          title={conv.temporary ? '一時チャット: この会話は保存されません（押すと通常のチャットに戻す）' : '一時チャットにする（保存しない）'}
+          class={cx('text-xs', conv.temporary && 'bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300')}
+          onClick={() => startNewChat(!conv.temporary)}
+        >
+          <Icon name="ghost" class="size-4" />
+          <span class="hidden whitespace-nowrap sm:inline">一時チャット{conv.temporary ? ': オン' : ''}</span>
+        </Button>
+      ) : (
+        conv.temporary && (
+          <Badge tone="sky" title="この会話は保存されません。タブを閉じるか別の会話を開くと消えます。">
+            <Icon name="ghost" class="size-3" />
+            <span class="hidden whitespace-nowrap sm:inline">一時チャット</span>
+          </Badge>
+        )
       )}
       <div class="ml-auto flex items-center gap-0.5">
         {!isDraft.value && <ContextMeter />}
@@ -118,7 +138,7 @@ function Header() {
   );
 }
 
-/** 入力欄の「スキル」ボタンと、指定できるスキルの一覧 */
+/** The input box's "Skills" button and the list of skills that can be specified */
 function SkillMenu({ onClose }: { onClose(): void }) {
   const list = allSkills.value;
   const ids = attachedSkillIds.value;
@@ -178,12 +198,16 @@ function SkillMenu({ onClose }: { onClose(): void }) {
 
 function Composer() {
   const conv = currentConv.value;
-  const [text, setText] = useState('');
+  const text = composerText.value;
+  const setText = (v: string) => (composerText.value = v);
+  useEffect(() => {
+    if (composerFocus.value) ref.current?.focus();
+  }, [composerFocus.value]);
   const [menu, setMenu] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const streaming = isStreaming.value;
   const attached = attachedSkills.value;
-  // タッチ端末では Enter は改行（送信はボタン）
+  // On touch devices Enter inserts a newline (send via the button)
   const touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
   useEffect(() => {
@@ -197,7 +221,7 @@ function Composer() {
     ref.current?.focus();
   }, [conv.id]);
 
-  // 「/名前」でスキルを指定する
+  // Specify a skill with "/name"
   const slash = /^\/([a-z0-9-]*)$/.exec(text);
   const suggestions = slash ? allSkills.value.filter((s) => s.name.startsWith(slash[1]) && !attachedSkillIds.value.includes(s.id)).slice(0, 6) : [];
   const pickSuggestion = (id: string) => {
@@ -266,7 +290,12 @@ function Composer() {
           placeholder={touch ? 'メッセージを入力' : 'メッセージを入力（Enter で送信、Shift+Enter で改行、/ でスキル）'}
           aria-label="メッセージ"
           class="block max-h-60 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[15px] outline-none placeholder:text-zinc-400"
-          onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
+          onInput={(e) => {
+            const v = (e.target as HTMLTextAreaElement).value;
+            // Once the user starts typing, in-progress reply suggestions are no longer needed
+            if (v && !text) cancelSuggestions();
+            setText(v);
+          }}
           onKeyDown={(e) => {
             if (suggestions.length && (e.key === 'Tab' || (e.key === 'Enter' && !e.isComposing))) {
               e.preventDefault();
@@ -332,7 +361,8 @@ function MessageList() {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const last = path[path.length - 1];
-  const lastLen = last ? last.parts.reduce((n, p) => n + ('text' in p ? (p as { text: string }).text.length : 0), 0) + last.parts.length : 0;
+  // Also scroll to the bottom when reply suggestions are added
+  const lastLen = last ? last.parts.reduce((n, p) => n + ('text' in p ? (p as { text: string }).text.length : 0), 0) + last.parts.length + (last.suggestions?.length ?? 0) + (suggestingFor.value === last.id ? 1 : 0) : 0;
 
   useEffect(() => {
     const el = scroller.current;
@@ -349,8 +379,8 @@ function MessageList() {
       }}
     >
       <div class="mx-auto max-w-3xl px-4 py-4">
-        {path.map((m) => (
-          <MessageItem key={m.id} m={m} />
+        {path.map((m, i) => (
+          <MessageItem key={m.id} m={m} isLast={i === path.length - 1} />
         ))}
       </div>
     </div>
@@ -372,7 +402,7 @@ function EmptyState() {
   );
 }
 
-/** 最初に使う接続先を選ぶ画面（有効な接続先がないとき） */
+/** Screen for choosing the first provider to use (when no provider is enabled) */
 function ProviderChooser() {
   const choose = async (id: string) => {
     await setProviderEnabled(id, true);
@@ -416,7 +446,37 @@ function ProviderChooser() {
   );
 }
 
-/** 選んでいる接続先のキーが未設定・ロック中のときの画面 */
+/** Prompt to set a passphrase after the first key is saved (skippable) */
+function PassphrasePrompt() {
+  const skip = () => void saveSettings({ passphrasePrompted: true });
+  return (
+    <div class="scroll-thin flex-1 overflow-y-auto">
+      <div class="mx-auto max-w-lg px-5 py-10">
+        <div class="mb-4 grid size-12 place-items-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/60">
+          <Icon name="lock" class="size-6 text-emerald-700 dark:text-emerald-300" />
+        </div>
+        <h1 class="text-2xl font-semibold">キーと会話をパスフレーズで守りますか？</h1>
+        <p class="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">キーを保存しました。パスフレーズを設定すると、API キーと会話（保存済みのプロンプト・スキルも）を暗号化して保存します。</p>
+        <ul class="mt-3 space-y-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+          <li>・ 解錠するまで、会話の一覧も中身も表示されません。端末のデータが漏れても読み出せません</li>
+          <li>・ アプリを開くたび（タブごと・読み込み直すたび）に 1 回入力します</li>
+          <li>・ 忘れると元に戻せません。会話も読めなくなります</li>
+        </ul>
+        <div class="mt-6">
+          <VaultSecurityPanel setup />
+        </div>
+        <div class="mt-4 flex items-center gap-3">
+          <Button variant="outline" onClick={skip}>
+            あとで
+          </Button>
+          <span class="text-xs text-zinc-500">設定の「接続とキー」からいつでも設定できます。</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Screen shown when the selected provider's key is unset or locked */
 function KeySetup({ providerId }: { providerId: string }) {
   const p = providerById(providerId);
   const locked = vaultState.value.locked;
@@ -459,15 +519,33 @@ function KeySetup({ providerId }: { providerId: string }) {
 export function ChatView() {
   const provs = enabledProviders.value;
   const conv = currentConv.value;
-  // 会話の接続先（下書きでモデル一覧がまだ届いていなければ、最初の有効な接続先）
+  // The conversation's provider (for a draft whose model list has not arrived yet, the first enabled provider)
   const providerId = provs.some((p) => p.id === conv.providerId) || !isDraft.value ? conv.providerId : (provs[0]?.id ?? '');
   const st = keyStatus(providerId);
   const keyOptional = !!PRESETS[providerById(providerId)?.preset ?? '']?.keyOptional;
-  const body = provs.length === 0 ? 'choose' : (!st.present && !keyOptional) || st.locked ? 'key' : 'chat';
+  const vs = vaultState.value;
+  const body =
+    provs.length === 0
+      ? 'choose'
+      : (!st.present && !keyOptional) || st.locked
+        ? 'key'
+        : st.present && !vs.hasPassphrase && !settings.value.passphrasePrompted
+          ? 'passphrase'
+          : 'chat';
   return (
     <main class="flex h-full min-w-0 flex-1 flex-col">
-      {body !== 'choose' && <Header />}
-      {body === 'choose' ? <ProviderChooser /> : body === 'key' ? <KeySetup providerId={providerId} /> : isDraft.value ? <EmptyState /> : <MessageList />}
+      {body !== 'choose' && body !== 'passphrase' && <Header />}
+      {body === 'choose' ? (
+        <ProviderChooser />
+      ) : body === 'key' ? (
+        <KeySetup providerId={providerId} />
+      ) : body === 'passphrase' ? (
+        <PassphrasePrompt />
+      ) : isDraft.value ? (
+        <EmptyState />
+      ) : (
+        <MessageList />
+      )}
       {body === 'chat' && <Composer />}
     </main>
   );

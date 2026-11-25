@@ -34,7 +34,7 @@ Status: direction chosen 2026-11-25 (A. Glass, Moonlight variant). Mock-ups: the
 | `--warn` / `--warn-soft` | `#fcd34d` / `rgba(251,191,36,.14)` | relayed, caution |
 | `--danger` / `--danger-soft` | `#fda4af` / `rgba(244,63,94,.16)` | errors, destructive actions |
 
-Dark is the default theme. The light theme uses the same token names with light values (`:root` in `src/styles.css`): ground `#eceef4`, white glass, slate accent `#334155`.
+**Dark only for now**: the light theme is not offered (`DARK_ONLY` in `state/settings.ts`; the theme picker is hidden and the stored setting is kept). When it comes back, it uses the same token names with light values (`:root` in `src/styles.css`): ground `#eceef4`, white glass, slate accent `#334155`.
 
 ### 2.2 Glass
 
@@ -101,7 +101,7 @@ See [specs/i18n.md](specs/i18n.md) (wording rules for all three languages).
 ## 7. Decisions (2026-11-25)
 
 - Applied to every screen; dark is the default theme.
-- Composer: attach inside on the left; model and send inside on the right (the model moved out of the header); 画像 / Web 検索 / スキル as chips below the box. Placeholder is just 「メッセージを入力」.
+- Composer: one line by default (attach | text | send), floating over the messages with a darker glass (`glass-deep`); 画像 / スキル as chips below the box with the model on the right of that row (the model moved out of the header). Placeholder is just 「メッセージを入力」. Web search has no chip (on by default, off in settings).
 - Header: conversation title, temporary chat, context meter, 指示.
 - No "relayed" badge on answers or in the composer (the model picker still shows it where models are chosen); "private" keeps its lock.
 - Regenerate and "regenerate with another model" are one control.

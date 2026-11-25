@@ -134,8 +134,11 @@ export function applyLanguage() {
   document.documentElement.lang = l;
 }
 
+/** Dark only for now: the light theme is not offered (the stored setting is kept for when it comes back) */
+export const DARK_ONLY = true;
+
 export function applyTheme() {
   const t = settings.value.theme;
-  const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const dark = DARK_ONLY || t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.classList.toggle('dark', dark);
 }

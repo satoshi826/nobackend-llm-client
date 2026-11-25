@@ -31,13 +31,13 @@ export function MessageList() {
   return (
     <div
       ref={scroller}
-      class="scroll-thin flex-1 overflow-y-auto"
+      class="chat-scroll scroll-thin flex-1 overflow-y-auto"
       onScroll={(e) => {
         const el = e.currentTarget as HTMLDivElement;
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
       }}
     >
-      <div class="mx-auto max-w-3xl px-4 py-4">
+      <div class="mx-auto max-w-3xl px-4" style={{ paddingTop: 'calc(var(--chat-top, 0px) + 1rem)', paddingBottom: 'calc(var(--chat-bottom, 0px) + 1rem)' }}>
         {path.map((m, i) => (
           <MessageItem key={m.id} m={m} isLast={i === path.length - 1} />
         ))}

@@ -35,7 +35,8 @@ const view = params.get('view') ?? 'transport';
   setLang(l === 'ja' || l === 'en' || l === 'zh' ? l : detectLang());
   document.documentElement.lang = getLang();
 }
-if (params.get('theme') === 'dark') document.documentElement.classList.add('dark');
+// Dark unless the app asks for light (the app is dark only for now)
+document.documentElement.classList.toggle('dark', params.get('theme') !== 'light');
 
 // ---- Connection to the app (MessagePort) ----
 const ports = new Set<MessagePort>();

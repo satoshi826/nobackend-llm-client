@@ -1,7 +1,7 @@
 // The input box. Everything beyond typing and sending (attachments, skills, web search, image mode, ...)
 // comes from composer add-ons that features register (components/extensions.ts).
-// Layout: inside the box = 'inside' add-ons (attach) on the left, the model and send on the right;
-// below the box = a row of chips for the other add-ons.
+// Layout: inside the box, one line by default = 'inside' add-ons (attach) | text | send;
+// below the box = a row of chips for the other add-ons, and the model on the right.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { currentConv } from '../../state/conversations';
 import { modelOf, providerById } from '../../state/models';
@@ -93,11 +93,12 @@ export function Composer() {
   const Slot = modelSlots.find((s) => s.when(conv))?.Component;
 
   return (
-    <div class="mx-auto w-full max-w-3xl px-3 pb-3 sm:px-4">
+    <div class="mx-auto w-full max-w-3xl px-3 pb-3 sm:px-4 md:pb-1">
       <div
         ref={boxRef}
+        data-composer-box
         class={cx(
-          'glass-float relative rounded-[22px] transition-colors duration-200 focus-within:border-line-strong',
+          'glass-deep relative rounded-[22px] transition-colors duration-200 focus-within:border-line-strong',
           dragging && 'border-accent! ring-2 ring-accent/40'
         )}
         onDragOver={(e) => {
@@ -114,13 +115,16 @@ export function Composer() {
         }}
       >
         {addons.map((a) => a.Above && <a.Above key={a.id} conv={conv} api={api} />)}
-        <textarea
+        {/* One line by default: attach | text | send; the text grows upward and the buttons stay at the bottom */}
+        <div class="flex items-end gap-1 p-1.5">
+          {inside.map((a) => a.Button && <a.Button key={a.id} conv={conv} />)}
+          <textarea
           ref={ref}
           rows={1}
           value={text}
           placeholder={placeholder}
           aria-label={t('composer.label')}
-          class="block max-h-60 w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] text-ink-strong outline-none placeholder:text-faint"
+          class={cx('block max-h-60 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-6 text-ink-strong outline-none placeholder:text-faint', inside.length ? 'px-1' : 'px-2.5')}
           onPaste={(e) => {
             const files = [...(e.clipboardData?.files ?? [])];
             if (files.length && takeFiles(files)) e.preventDefault();
@@ -139,25 +143,22 @@ export function Composer() {
             }
           }}
         />
-        <div class="flex items-center gap-1 px-2 pb-2">
-          {inside.map((a) => a.Button && <a.Button key={a.id} conv={conv} />)}
-          <div class="ml-auto flex min-w-0 items-center gap-1">
-            {Slot ? <Slot conv={conv} /> : <ModelButton />}
-            {streaming ? (
-              <Button variant="primary" aria-label={t('composer.stop')} onClick={() => stopGeneration()} class="rounded-full! p-2!">
-                <Icon name="stop" class="size-4" />
-              </Button>
-            ) : (
-              <Button variant="primary" aria-label={t('composer.send')} disabled={!canSend} onClick={() => void submit()} class="rounded-full! p-2!">
-                <Icon name="send" class="size-4" />
-              </Button>
-            )}
-          </div>
+          {streaming ? (
+            <Button variant="primary" aria-label={t('composer.stop')} onClick={() => stopGeneration()} class="shrink-0 rounded-full! p-2!">
+              <Icon name="stop" class="size-4" />
+            </Button>
+          ) : (
+            <Button variant="primary" aria-label={t('composer.send')} disabled={!canSend} onClick={() => void submit()} class="shrink-0 rounded-full! p-2!">
+              <Icon name="send" class="size-4" />
+            </Button>
+          )}
         </div>
       </div>
-      {below.length > 0 && (
-        <div class="mt-2 flex flex-wrap items-center gap-1.5 px-1">{below.map((a) => a.Button && <a.Button key={a.id} conv={conv} />)}</div>
-      )}
+      {/* Below the box: the features' chips, and the model on the right */}
+      <div class="mt-2 flex flex-wrap items-center gap-1.5 px-1">
+        {below.map((a) => a.Button && <a.Button key={a.id} conv={conv} />)}
+        <div class="ml-auto flex min-w-0 items-center">{Slot ? <Slot conv={conv} /> : <ModelButton />}</div>
+      </div>
     </div>
   );
 }

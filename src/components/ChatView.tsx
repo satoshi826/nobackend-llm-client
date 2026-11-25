@@ -1,4 +1,8 @@
-// Main conversation screen: header / (onboarding, empty screen, or message list) / input box
+// Main conversation screen: (onboarding, empty screen, or message list) with the header and the input box
+// floating over it. Both are translucent glass, so messages scroll on underneath them; their heights are
+// measured into --chat-top / --chat-bottom, which the content uses as padding. --chat-fade is the space
+// under the input box (the chip row): messages fade out there, since the chips have gaps between them.
+import { useLayoutEffect, useRef } from 'preact/hooks';
 import { currentConv, isDraft } from '../state/conversations';
 import { keyStatus, vaultState } from '../state/keys';
 import { enabledProviders, providerById } from '../state/models';
@@ -25,21 +29,50 @@ export function ChatView() {
         : st.present && !vs.hasPassphrase && !settings.value.passphrasePrompted
           ? 'passphrase'
           : 'chat';
+  const main = useRef<HTMLElement>(null);
+  const top = useRef<HTMLDivElement>(null);
+  const bottom = useRef<HTMLDivElement>(null);
+  const hasHeader = body !== 'choose' && body !== 'passphrase';
+  const hasComposer = body === 'chat';
+  useLayoutEffect(() => {
+    const el = main.current;
+    if (!el) return;
+    const measure = () => {
+      el.style.setProperty('--chat-top', `${top.current?.offsetHeight ?? 0}px`);
+      el.style.setProperty('--chat-bottom', `${bottom.current?.offsetHeight ?? 0}px`);
+      const box = bottom.current?.querySelector('[data-composer-box]');
+      const fade = box ? Math.max(0, el.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom) : 0;
+      el.style.setProperty('--chat-fade', `${Math.round(fade)}px`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (top.current) ro.observe(top.current);
+    if (bottom.current) ro.observe(bottom.current);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasHeader, hasComposer]);
+  const list = body === 'chat' && !isDraft.value;
   return (
-    <main class="flex h-full min-w-0 flex-1 flex-col">
-      {body !== 'choose' && body !== 'passphrase' && <Header />}
-      {body === 'choose' ? (
-        <ProviderChooser />
-      ) : body === 'key' ? (
-        <KeySetup providerId={providerId} />
-      ) : body === 'passphrase' ? (
-        <PassphrasePrompt />
-      ) : isDraft.value ? (
-        <EmptyState />
+    <main ref={main} class="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+      {list ? (
+        // The list scrolls under the header and the input box (its content is padded by their heights)
+        // One list per conversation: opening a conversation starts at its bottom (no scroll state carried over)
+        <MessageList key={conv.id} />
       ) : (
-        <MessageList />
+        <div class="flex min-h-0 flex-1 flex-col" style={{ paddingTop: 'var(--chat-top)', paddingBottom: 'var(--chat-bottom)' }}>
+          {body === 'choose' ? <ProviderChooser /> : body === 'key' ? <KeySetup providerId={providerId} /> : body === 'passphrase' ? <PassphrasePrompt /> : <EmptyState />}
+        </div>
       )}
-      {body === 'chat' && <Composer />}
+      {hasHeader && (
+        <div ref={top} class="pointer-events-none absolute inset-x-0 top-0 z-20 [&>*]:pointer-events-auto">
+          <Header />
+        </div>
+      )}
+      {hasComposer && (
+        <div ref={bottom} class="pointer-events-none absolute inset-x-0 bottom-0 z-20 [&>*]:pointer-events-auto">
+          <Composer />
+        </div>
+      )}
     </main>
   );
 }

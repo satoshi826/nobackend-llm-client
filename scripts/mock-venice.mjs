@@ -203,6 +203,42 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       const ev = (o) => res.write(`event: ${o.type}\ndata: ${JSON.stringify(o)}\n\n`);
       ev({ type: 'message_start', message: { usage: { input_tokens: 20, cache_read_input_tokens: 30, cache_creation_input_tokens: 0, output_tokens: 1 } } });
+      // Web search (server tool): with the web_search tool and "天気" / "検索" in the message.
+      // "一時停止" pauses the turn (pause_turn) once; the continuation request ends with the paused assistant content.
+      const searching = (b.tools ?? []).some((t) => t.type === 'web_search_20250305') && /天気|検索|weather|search/i.test(text);
+      const continuing = b.messages.at(-1)?.role === 'assistant';
+      if (searching && !continuing) {
+        const q = text.slice(0, 30);
+        ev({ type: 'content_block_start', index: 0, content_block: { type: 'server_tool_use', id: 'srvtoolu_mock1', name: 'web_search', input: {} } });
+        ev({ type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: JSON.stringify({ query: q }) } });
+        ev({ type: 'content_block_stop', index: 0 });
+        await sleep(600);
+        const results = [1, 2, 3].map((i) => ({ type: 'web_search_result', url: `https://news.example.com/mock-${i}`, title: `モックの検索結果 ${i}: ${q}`, encrypted_content: 'ENC' + i, page_age: null }));
+        ev({ type: 'content_block_start', index: 1, content_block: { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_mock1', content: results } });
+        ev({ type: 'content_block_stop', index: 1 });
+        if (text.includes('一時停止')) {
+          ev({ type: 'message_delta', delta: { stop_reason: 'pause_turn' }, usage: { output_tokens: 5, server_tool_use: { web_search_requests: 1 } } });
+          ev({ type: 'message_stop' });
+          return res.end();
+        }
+        ev({ type: 'content_block_start', index: 2, content_block: { type: 'text', text: '' } });
+        for (const p of chunked('検索した結果、モックでは晴れの予報です。')) { ev({ type: 'content_block_delta', index: 2, delta: { type: 'text_delta', text: p } }); await sleep(15); }
+        ev({ type: 'content_block_delta', index: 2, delta: { type: 'citations_delta', citation: { type: 'web_search_result_location', url: results[0].url, title: results[0].title, encrypted_index: 'IDX1', cited_text: '晴れの予報' } } });
+        ev({ type: 'content_block_stop', index: 2 });
+        ev({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 30, server_tool_use: { web_search_requests: 1 } } });
+        ev({ type: 'message_stop' });
+        return res.end();
+      }
+      if (continuing) {
+        const paused = b.messages.at(-1).content;
+        const ok = paused.some((c) => c.type === 'server_tool_use') && paused.some((c) => c.type === 'web_search_tool_result' && c.content?.[0]?.encrypted_content === 'ENC1');
+        ev({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
+        ev({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: ok ? '（一時停止のあと続けました）検索結果によると晴れです。' : '一時停止した内容が送り返されていません' } });
+        ev({ type: 'content_block_stop', index: 0 });
+        ev({ type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 12 } });
+        ev({ type: 'message_stop' });
+        return res.end();
+      }
       ev({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
       const ans = 'Anthropic モックの応答です。system: ' + (b.system ? 'あり' : 'なし') + ' / max_tokens: ' + b.max_tokens + ' / あなた: ' + text.slice(0, 40);
       for (const p of chunked(ans)) { ev({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: p } }); await sleep(15); }
@@ -211,6 +247,105 @@ const server = http.createServer(async (req, res) => {
       ev({ type: 'message_stop' });
       return res.end();
     }
+  }
+
+  // ---- Gemini (native API) mock: /gemini/v1beta/... Key is x-goog-api-key: mock-gem ----
+  if (url.pathname.startsWith('/gemini/v1beta/')) {
+    if (req.headers['x-goog-api-key'] !== 'mock-gem') return json(res, 401, { error: { code: 401, message: 'API key not valid', status: 'UNAUTHENTICATED' } });
+    if (url.pathname === '/gemini/v1beta/models')
+      return json(res, 200, {
+        models: [
+          { name: 'models/gemini-3-mock', displayName: 'Gemini 3 Mock', inputTokenLimit: 1000000, outputTokenLimit: 65536, supportedGenerationMethods: ['generateContent'], thinking: true },
+          { name: 'models/gemini-2.5-flash-image-mock', displayName: 'Gemini Image Mock', inputTokenLimit: 32768, outputTokenLimit: 8192, supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/text-embedding-mock', displayName: 'Embedding', supportedGenerationMethods: ['embedContent'] }
+        ]
+      });
+    const m = /^\/gemini\/v1beta\/models\/([^:]+):streamGenerateContent$/.exec(url.pathname);
+    if (m && req.method === 'POST') {
+      const b = await readBody(req);
+      const last = b.contents.at(-1);
+      const text = (last?.parts ?? []).map((p) => p.text ?? '').join('');
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      const send = (o) => res.write(`data: ${JSON.stringify(o)}\n\n`);
+      const searching = (b.tools ?? []).some((t) => t.google_search) && /天気|検索|weather|search/i.test(text);
+      if (b.generationConfig?.thinkingConfig?.includeThoughts) send({ candidates: [{ content: { role: 'model', parts: [{ text: '考えています（モック）', thought: true }] } }] });
+      await sleep(300);
+      const ans = searching ? 'Google 検索によると、モックでは晴れです。' : b.generationConfig?.responseModalities?.includes('IMAGE') ? 'モックの画像を作りました。' : 'Gemini（ネイティブ API）モックの応答です。あなた: ' + text.slice(0, 40);
+      for (const p of chunked(ans)) {
+        send({ candidates: [{ content: { role: 'model', parts: [{ text: p }] } }] });
+        await sleep(15);
+      }
+      if (b.generationConfig?.responseModalities?.includes('IMAGE'))
+        send({ candidates: [{ content: { role: 'model', parts: [{ inlineData: { mimeType: 'image/png', data: makePng(384, 256, colourFor(text.length + 5)).toString('base64') }, thoughtSignature: 'SIG-IMG' }] } }] });
+      send({
+        candidates: [
+          {
+            finishReason: 'STOP',
+            ...(searching
+              ? { groundingMetadata: { webSearchQueries: [text.slice(0, 30)], groundingChunks: [1, 2].map((i) => ({ web: { uri: `https://search.example.com/g-${i}`, title: `Google モック結果 ${i}` } })) } }
+              : {})
+          }
+        ],
+        usageMetadata: { promptTokenCount: 40, candidatesTokenCount: ans.length, thoughtsTokenCount: 12 }
+      });
+      return res.end();
+    }
+    const g = /^\/gemini\/v1beta\/models\/([^:]+):generateContent$/.exec(url.pathname);
+    if (g && req.method === 'POST') {
+      const b = await readBody(req);
+      await sleep(700);
+      const text = (b.contents?.at(-1)?.parts ?? []).map((p) => p.text ?? '').join('');
+      const [w, h] = (b.generationConfig?.imageConfig?.aspectRatio ?? '1:1').split(':').map(Number);
+      const size = 320;
+      return json(res, 200, {
+        candidates: [{ content: { role: 'model', parts: [{ inlineData: { mimeType: 'image/png', data: makePng(w >= h ? size : Math.round((size * w) / h), h >= w ? size : Math.round((size * h) / w), colourFor(text.length + 9)).toString('base64') } }] }, finishReason: 'STOP' }]
+      });
+    }
+    return json(res, 404, { error: { code: 404, message: 'not found' } });
+  }
+
+  // ---- OpenRouter mock: /openrouter/api/v1/... Key is Authorization: Bearer mock-or ----
+  if (url.pathname.startsWith('/openrouter/api/v1/')) {
+    const p = url.pathname.slice('/openrouter/api/v1'.length);
+    if (p === '/images/models') return json(res, 200, { data: [
+      { id: 'mock/seedream', name: 'Mock Seedream', architecture: { input_modalities: ['text'], output_modalities: ['image'] }, supported_parameters: { resolution: { type: 'enum', values: ['1K', '2K'] }, seed: { type: 'boolean' }, aspect_ratio: { type: 'enum', values: ['1:1', '16:9', '9:16'] } } },
+      { id: 'mock/flux', name: 'Mock Flux', architecture: { input_modalities: ['text'], output_modalities: ['image'] }, supported_parameters: {} }
+    ] });
+    const ep = /^\/images\/models\/(.+)\/endpoints$/.exec(p);
+    if (ep) return json(res, 200, { id: ep[1], endpoints: [{ provider_name: 'Mock', provider_slug: 'mock', provider_tag: 'mock', supported_parameters: {}, allowed_passthrough_parameters: [], supports_streaming: false, pricing: [{ billable: 'output_image', unit: 'image', cost_usd: ep[1].includes('seedream') ? 0.03 : 0.05 }] }] });
+    if (p === '/models') return json(res, 200, { data: [{ id: 'mock/chat', name: 'Mock OR Chat', architecture: { input_modalities: ['text'], output_modalities: ['text'] }, supported_parameters: ['tools'], pricing: { prompt: '0.000001', completion: '0.000002' }, context_length: 32000 }] });
+    if (req.headers.authorization !== 'Bearer mock-or') return json(res, 401, { error: { message: 'No auth credentials found', code: 401 } });
+    if (p === '/key') return json(res, 200, { data: { label: 'mock', limit: 10, usage: 1 } });
+    if (p === '/images' && req.method === 'POST') {
+      const b = await readBody(req);
+      await sleep(700);
+      const [w, h] = (b.aspect_ratio ?? '1:1').split(':').map(Number);
+      return json(res, 200, { created: 1, data: [{ b64_json: makePng(w >= h ? 320 : Math.round((320 * w) / h), h >= w ? 320 : Math.round((320 * h) / w), colourFor((Number(b.seed) || 3) + 1)).toString('base64'), media_type: 'image/png' }], usage: { cost: String(b.model).includes('seedream') ? 0.03 : 0.05 } });
+    }
+    return json(res, 404, { error: { message: 'not found' } });
+  }
+
+  // ---- OpenAI mock: /openai/v1/... Key is Authorization: Bearer mock-oai ----
+  if (url.pathname.startsWith('/openai/v1/')) {
+    if (req.headers.authorization !== 'Bearer mock-oai') return json(res, 401, { error: { message: 'Incorrect API key provided', type: 'invalid_request_error' } });
+    const p = url.pathname.slice('/openai/v1'.length);
+    if (p === '/models') return json(res, 200, { object: 'list', data: ['gpt-mock-4o', 'gpt-image-1', 'dall-e-3', 'text-embedding-3-small', 'whisper-1'].map((id) => ({ id, object: 'model' })) });
+    if (p === '/images/generations' && req.method === 'POST') {
+      const b = await readBody(req);
+      await sleep(700);
+      const [w, h] = String(b.size ?? '1024x1024').split('x').map((n) => Math.round(Number(n) / 4));
+      return json(res, 200, { created: 1, data: Array.from({ length: Math.max(1, Number(b.n) || 1) }, (_, i) => ({ b64_json: makePng(w, h, colourFor(i + 21)).toString('base64') })) });
+    }
+    if (p === '/chat/completions' && req.method === 'POST') {
+      const b = await readBody(req);
+      const text = (b.messages?.at(-1)?.content ?? '').toString();
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      for (const c of chunked('OpenAI モックの応答です。あなた: ' + text.slice(0, 40))) { chunk(res, { choices: [{ delta: { content: c } }] }); await sleep(15); }
+      chunk(res, { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 20, completion_tokens: 10 } });
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
+    return json(res, 404, { error: { message: 'not found' } });
   }
 
   // ---- Tavily / Jina mocks ----

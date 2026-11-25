@@ -187,13 +187,13 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
   const ref = useRef<HTMLDivElement>(null);
   useDialog(ref, { onClose });
   return (
-    <div class="fixed inset-0 z-40 flex items-end justify-center bg-scrim backdrop-blur-[2px] sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div class="backdrop fixed inset-0 z-40 flex items-end justify-center sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        class={cx('panel rise flex max-h-[92dvh] w-full flex-col rounded-t-[22px] sm:rounded-[22px]', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}
+        class={cx('frosted rise-glass flex max-h-[92dvh] w-full flex-col rounded-t-[22px] sm:rounded-[22px]', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}
       >
         <div class="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 class="font-semibold text-ink-strong">{title}</h2>

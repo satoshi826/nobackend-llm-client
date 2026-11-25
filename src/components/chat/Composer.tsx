@@ -50,6 +50,7 @@ export function Composer() {
   const text = composerText.value;
   const setText = (v: string) => (composerText.value = v);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const streaming = isStreaming.value;
   // On touch devices Enter inserts a newline (send via the button)
@@ -70,7 +71,7 @@ export function Composer() {
 
   const active = activeComposerMode(conv);
   const addons = visibleComposerAddons(conv);
-  const api: ComposerApi = { text, setText, focus: () => ref.current?.focus() };
+  const api: ComposerApi = { text, setText, focus: () => ref.current?.focus(), box: boxRef.current };
   const canSend = !!text.trim() || (!active && addons.some((a) => a.hasContent?.()));
 
   const submit = async () => {
@@ -94,6 +95,7 @@ export function Composer() {
   return (
     <div class="mx-auto w-full max-w-3xl px-3 pb-3 sm:px-4">
       <div
+        ref={boxRef}
         class={cx(
           'glass-float relative rounded-[22px] transition-colors duration-200 focus-within:border-line-strong',
           dragging && 'border-accent! ring-2 ring-accent/40'

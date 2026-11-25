@@ -1,6 +1,13 @@
 # Spec: image generation from more than one provider
 
-Status: proposal (2026-11-25). Research notes: [image-provider-research.md](image-provider-research.md). It is meant to land together with step 1 of the [architecture migration](architecture.md#5-migration-plan-for-existing-features), moving images into `features/images`.
+Status: phase 1 implemented 2026-11-25 (Venice, OpenRouter, Gemini, OpenAI in `features/images/providers/`). Research notes: [image-provider-research.md](image-provider-research.md). Related: [web-and-images.md](web-and-images.md).
+
+Decisions made while implementing phase 1:
+- **One default image model** (Settings → 機能 → 画像), used by the `generate_image` tool and image mode. Image mode's bar can choose another model for one conversation (`Conversation.imageModel`, "provider|model"); choosing the default again clears it. Models are listed per provider whose key is set.
+- **Options per model** (`ImageModelInfo.options`): seed, negative prompt, style and prompt enhancement are shown only when the model has them; "same settings again" needs a seed. OpenAI's quality takes the resolution menu (`resolutionLabel: 'quality'`).
+- **Edits, upscale and background removal** stay on Venice (the others do not offer them).
+- **Cost**: OpenRouter prices come from `/images/models/{id}/endpoints` (loaded when the model is in use) and the request's `usage.cost` is recorded as spend; Gemini and OpenAI use dated price tables; otherwise "費用不明".
+- OpenAI is also a chat provider now (Chat Completions, same key).
 
 ## 1. Goal
 

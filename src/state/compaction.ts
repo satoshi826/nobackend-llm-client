@@ -52,7 +52,7 @@ export async function compactConversation(auto = false): Promise<boolean> {
       model: ref.modelId,
       contextLength: modelOf(ref.providerId, ref.modelId)?.contextLength,
       providerOptions: providerOptionsFor(cfg.id, 'summary'),
-      onUsage: (usage, costUsd) => recordUsage({ id: repo.newId(), providerId: cfg.id, model: ref.modelId, kind: 'summary', usage, costUsd, temporary: conv.temporary }),
+      onUsage: (usage, costUsd) => recordUsage({ id: repo.newId(), conversationId: conv.id, providerId: cfg.id, model: ref.modelId, kind: 'summary', usage, costUsd, temporary: conv.temporary }),
       signal: ctrl.signal
     });
     const node: MessageRecord = {

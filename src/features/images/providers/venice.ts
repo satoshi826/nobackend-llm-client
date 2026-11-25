@@ -1,34 +1,16 @@
 // Venice image API (https://docs.venice.ai/api-reference/endpoint/image/generate and friends).
 // Requests that need the key go through the transport with an AuthRef (the vault attaches the key).
 // Images come back as base64 / raw bytes, so no new host has to be allowed by the CSP.
-import type { AuthRef, ProviderConfig, ProviderError, Transport } from '../../../lib/providers/types';
+import type { AuthRef, ProviderConfig, Transport } from '../../../lib/providers/types';
 import { classifyError, errorFromFetchFailure, ProviderFailure } from '../../../lib/providers/errors';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { t } from '../messages';
+import { ImageApiError, aspectsOf, DEFAULT_ASPECTS, type ImageModelInfo } from './common';
 
-export interface ImageModelInfo {
-  providerId: string;
-  id: string;
-  name: string;
-  privacy: 'private' | 'anonymized' | 'unknown';
-  traits: string[];
-  constraints: {
-    promptCharacterLimit?: number;
-    steps?: { default?: number; max?: number };
-    widthHeightDivisor?: number;
-    aspectRatios?: string[];
-    defaultAspectRatio?: string;
-    resolutions?: string[];
-    defaultResolution?: string;
-  };
-  /** USD per image; resolutions overrides generation when present */
-  pricing: { generation?: number; resolutions?: Record<string, number> };
-  offline?: boolean;
-  deprecated?: boolean;
-}
+export { ImageApiError, aspectsOf, DEFAULT_ASPECTS, type ImageModelInfo };
+import { t } from '../messages';
 
 export function mapImageModel(raw: any, providerId = 'venice'): ImageModelInfo | null {
   if (!raw?.id) return null;
@@ -54,17 +36,10 @@ export function mapImageModel(raw: any, providerId = 'venice'): ImageModelInfo |
       resolutions: Array.isArray(c.resolutions) ? c.resolutions.map(String) : undefined,
       defaultResolution: typeof c.defaultResolution === 'string' ? c.defaultResolution : undefined
     },
-    pricing: { generation: typeof p.generation?.usd === 'number' ? p.generation.usd : undefined, resolutions: Object.keys(resolutions).length ? resolutions : undefined },
+    pricing: { generation: typeof p.generation?.usd === 'number' ? p.generation.usd : undefined, resolutions: Object.keys(resolutions).length ? resolutions : undefined, source: 'api' },
     offline: !!spec.offline,
     deprecated: !!spec.deprecation
   };
-}
-
-/** Aspect ratios offered for models that take width/height instead of aspect_ratio */
-export const DEFAULT_ASPECTS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
-
-export function aspectsOf(m: ImageModelInfo | undefined): string[] {
-  return m?.constraints.aspectRatios?.length ? m.constraints.aspectRatios : DEFAULT_ASPECTS;
 }
 
 /** width/height for an aspect ratio: long edge 1024 (exact-canvas models allow at most 1280 per side), rounded to the divisor */
@@ -110,16 +85,6 @@ export function buildGenerateBody(p: ImageParams, m: ImageModelInfo | undefined)
     Object.assign(body, sizeFor(aspect, m?.constraints.widthHeightDivisor ?? 8));
   }
   return body;
-}
-
-/** Error from the image API, with the alternatives Venice suggests after a content-policy rejection */
-export class ImageApiError extends Error {
-  constructor(
-    public readonly error: ProviderError,
-    public readonly suggestion?: { prompt?: string; model?: string }
-  ) {
-    super(error.message);
-  }
 }
 
 async function imageError(res: Response): Promise<ImageApiError> {
@@ -235,7 +200,7 @@ export async function removeBackground(cfg: ProviderConfig, auth: AuthRef | unde
   return imageToImage(cfg, auth, transport, 'image/background-remove', { image: await blobToBase64(source) }, 'image/png', signal);
 }
 
-/** Venice as an image provider (the only one for now) */
+/** Venice as an image provider (generate, plus upscale, edit and background removal) */
 export const veniceImageProvider: ImageProvider = {
   id: 'venice',
   label: 'Venice',

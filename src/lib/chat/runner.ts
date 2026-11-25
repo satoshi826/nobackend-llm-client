@@ -47,6 +47,12 @@ export interface RunOptions {
   toolContext?: Omit<ToolContext, 'signal'>;
   permissionFor?(tool: Tool): Permission;
   requestApproval?(req: ApprovalRequest): Promise<ApprovalDecision>;
+  /** Use the provider's own web search for this reply (docs/specs/web-and-images.md §2) */
+  webSearch?: 'auto' | 'on';
+  /** Ask for images in the reply (models that output images) */
+  imageOutput?: boolean;
+  /** Store a generated image from the reply; returns the file part to add (without it, images are dropped) */
+  saveImage?(data: string, mimeType: string): Promise<Extract<Part, { type: 'file' }> | null>;
 }
 
 /** Tool approval request (the UI asks the user and answers) */
@@ -74,7 +80,10 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
   const maxSteps = o.maxSteps ?? (baseTools.length || o.dynamicTools ? 8 : 1);
   const interval = o.persistIntervalMs ?? 1500;
   let lastPersist = Date.now();
-  const total = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0, cost: 0, hasCost: false };
+  const total = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedInputTokens: 0, webSearches: 0, cost: 0, hasCost: false };
+  // A provider may pause a long server-side turn (pause_turn); it is continued a few times at most
+  let pauses = 0;
+  let steps = maxSteps;
   const callCounts = new Map<string, number>();
   const base = fitToContext(
     buildRequestMessages(o.history, o.systemPrompt, { resendReasoning: o.resendReasoning, providerId: o.provider.id, model: o.model }),
@@ -82,7 +91,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
   );
   if (base.dropped > 0) msg.meta = { ...msg.meta, truncated: base.dropped };
 
-  for (let step = 0; step < maxSteps; step++) {
+  for (let step = 0; step < steps; step++) {
     const blocks: BlockMap = {};
     const extra = o.dynamicTools?.(msg) ?? [];
     const tools = [...baseTools.filter((t) => !extra.some((x) => x.name === t.name)), ...extra];
@@ -95,6 +104,8 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
       tools: tools.length ? tools.map(toDefinition) : undefined,
       providerOptions: o.providerOptions,
       cacheKey: o.cacheKey,
+      webSearch: o.webSearch,
+      imageOutput: o.imageOutput,
       signal: o.signal
     };
     let sawTerminal = false;
@@ -107,6 +118,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
           total.outputTokens += ev.usage.outputTokens ?? 0;
           total.reasoningTokens += ev.usage.reasoningTokens ?? 0;
           total.cachedInputTokens += ev.usage.cachedInputTokens ?? 0;
+          total.webSearches += ev.usage.webSearches ?? 0;
           if (ev.costUsd !== undefined) {
             total.cost += ev.costUsd;
             total.hasCost = true;
@@ -117,10 +129,15 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
               inputTokens: total.inputTokens,
               outputTokens: total.outputTokens,
               reasoningTokens: total.reasoningTokens || undefined,
-              cachedInputTokens: total.cachedInputTokens || undefined
+              cachedInputTokens: total.cachedInputTokens || undefined,
+              webSearches: total.webSearches || undefined
             },
             costUsd: total.hasCost ? total.cost : undefined
           };
+        }
+        if (ev.type === 'image') {
+          const part = await o.saveImage?.(ev.data, ev.mimeType).catch(() => null);
+          if (part) msg.parts.push(part);
         }
         applyEvent(msg, ev, blocks);
         o.onEvent?.(ev);
@@ -149,6 +166,13 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
     // Finalize parts that were cut off midway
     for (const p of msg.parts) if ((p.type === 'text' || p.type === 'reasoning') && p.state === 'streaming') p.state = 'done';
     if (failed || o.signal.aborted) break;
+    // A paused server-side turn: send it back as is to continue (no tools to run)
+    if (msg.meta?.finishReason === 'pause' && pauses < 5) {
+      pauses++;
+      steps++;
+      msg.status = 'streaming';
+      continue;
+    }
 
     // ---- Running tools ----
     const calls = msg.parts.slice(segStart).filter((p): p is Extract<Part, { type: 'tool' }> => p.type === 'tool');
@@ -243,6 +267,9 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
     if (step === maxSteps - 1) msg.meta = { ...msg.meta, finishReason: 'limit' };
   }
   if (msg.status === 'streaming') msg.status = 'done';
+  // The provider's raw blocks were only needed while the turn ran
+  msg.parts = msg.parts.filter((p) => p.type !== 'provider-content');
+  for (const p of msg.parts) if (p.type === 'server-tool' && p.state === 'running') p.state = msg.error ? 'error' : 'done';
   o.onUpdate(msg);
   await o.persist(msg);
   return msg;

@@ -126,6 +126,8 @@ export function clearSearchCache() {
 export const addUsage = (r: UsageRecord) => db().usage.put(r);
 export const listUsage = (since: number | null) => (since === null ? db().usage.orderBy('at').toArray() : db().usage.where('at').aboveOrEqual(since).toArray());
 export const clearUsage = () => db().usage.clear();
+/** Usage of one conversation (the log is small; filtered in memory, no index needed) */
+export const usageForConversation = (conversationId: string) => db().usage.filter((r) => r.conversationId === conversationId).toArray();
 
 // ---- skills ----
 export const listSkills = async () => Promise.all((await db().skills.orderBy('name').toArray()).map((s) => unseal(s)));

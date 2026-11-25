@@ -75,7 +75,7 @@ export const DEFAULT_SETTINGS: Settings = {
   suggestionCount: 3,
   suggestionTurns: 2,
   suggestionModel: '',
-  toolPermissions: { web_search: 'ask', fetch_url: 'ask', load_skill: 'allow', generate_image: 'ask', create_file: 'allow', append_file: 'allow', edit_file: 'allow', read_file: 'allow' }
+  toolPermissions: { web_search: 'allow', fetch_url: 'ask', load_skill: 'allow', generate_image: 'ask', create_file: 'allow', append_file: 'allow', edit_file: 'allow', read_file: 'allow' }
 };
 
 export const settings = signal<Settings>(DEFAULT_SETTINGS);

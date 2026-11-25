@@ -72,7 +72,8 @@ export function turnMessages(msg: MessageRecord): ChatMessage[] {
   const out: ChatMessage[] = [];
   let seg: Part[] = [];
   const flush = () => {
-    if (seg.some((p) => p.type === 'tool')) {
+    if (seg.some((p) => p.type === 'tool' || p.type === 'provider-content')) {
+      const raw = seg.find((p): p is Extract<Part, { type: 'provider-content' }> => p.type === 'provider-content');
       const reasoning = seg
         .filter((p) => p.type === 'reasoning')
         .map((p) => (p as { text: string }).text)
@@ -81,7 +82,7 @@ export function turnMessages(msg: MessageRecord): ChatMessage[] {
         id: `${msg.id}-s${out.length}`,
         role: 'assistant',
         parts: seg.filter((p) => p.type === 'text' || p.type === 'tool'),
-        vendorState: reasoning ? { reasoning_content: reasoning } : undefined
+        vendorState: reasoning || raw ? { ...(reasoning ? { reasoning_content: reasoning } : {}), ...(raw ? { providerContent: raw } : {}) } : undefined
       });
     }
     seg = [];

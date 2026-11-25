@@ -13,6 +13,7 @@ export const t = defineMessages(
     'stream.emptyBody': '応答の本文が空でした。もう一度試してください。',
     'stream.error': 'ストリームの途中でエラーが発生しました: {message}',
     'stream.unknownError': '不明なエラー',
+    'gemini.blocked': '入力が Gemini の安全フィルターで止められました（{reason}）。内容を変えて試してください。',
     'stream.disconnected': '受信中に接続が切れました。もう一度試してください。',
 
     // ---- HTTP errors ----
@@ -49,6 +50,7 @@ export const t = defineMessages(
     'venice.private': 'Venice がホストし、プロンプトを保存しないモデル',
     'venice.relayed': 'Venice が匿名化して Claude・Gemini などの外部事業者に中継するモデル。各社の保持ポリシーに従います。',
     'venice.relayedNote': '「外部中継」のモデルは、Venice が匿名化したうえで Claude・Gemini などの外部事業者に送ります。プロンプトの保持や検閲は各社の方針に従います。',
+    'venice.searchNote': '検索語は Venice 経由で検索事業者に送られます。',
     'venice.searchProviders': 'Venice の検索提供元',
     'venice.searchProvidersWhat': 'Venice 内蔵の Web 検索をオンにしたときの検索語（Venice 経由）',
     'venice.thirdParties': '外部 AI 事業者',
@@ -60,14 +62,20 @@ export const t = defineMessages(
     'openrouter.destinationNote': '実際に処理する提供元へ中継されます（データ収集する提供元は既定で除外）',
 
     'anthropic.tagline': 'Anthropic の Claude を直接使う。',
+    'anthropic.searchNote': '検索は Anthropic が行います。1,000 回あたり 10 ドルが追加でかかります（1 回の返答で最大 5 回）。',
     'anthropic.keyGuide':
       'Anthropic Console（console.anthropic.com）の API Keys でキーを作り、Limits でワークスペースの利用上限（spend limit）を設定してください。キーが万一漏れても被害額が上限で止まります。',
 
+    'openrouter.searchNote': '検索は OpenRouter が行います（既定は Exa。モデルの提供元が検索を持つ場合はそれを使用）。1 回あたり約 0.7 セントが追加でかかります。',
     'gemini.tagline': 'Google の Gemini。無料枠では、送った内容が Google のサービス改善に使われることがあります。',
     'gemini.keyGuide':
       'Google AI Studio（aistudio.google.com）でキーを作ってください。無料枠のキーでは、送った内容が Google のサービス改善に使われ、人が読むこともあります（有料枠では使われません）。有料にする場合は Google Cloud の請求設定で予算を設定してください。',
+    'gemini.searchNote': 'Gemini 3 以降のモデルで Google 検索を使います。無料枠（月 5,000 回）を超えると 1,000 回あたり 14 ドルかかります。',
     'gemini.destinationNote': '無料枠のキーでは、送った内容が Google のサービス改善に使われることがあります',
 
+    'openai.tagline': 'OpenAI の GPT と画像生成（GPT Image）を直接使う。',
+    'openai.keyGuide': 'OpenAI Platform（platform.openai.com）の API keys でキーを作り、Limits で月の利用上限（budget）を設定してください。キーを「Restricted」にして必要な権限だけにするとさらに安全です。',
+    'openai.destinationNote': 'API の送信内容は不正利用の監視のため最大 30 日保持されます（学習には使われません）',
     'deepseek.tagline': 'DeepSeek のモデル。安価。データは中国の事業者のサーバーで処理されます。',
     'deepseek.keyGuide': 'DeepSeek Platform（platform.deepseek.com）でキーを作ってください。プリペイド式なので、チャージした額が使える上限になります。',
     'deepseek.destinationNote': '中国の事業者（DeepSeek）のサーバーで処理されます',
@@ -75,6 +83,7 @@ export const t = defineMessages(
     'groq.tagline': '高速な推論。Llama・Qwen・gpt-oss などのオープンなモデル。',
     'groq.keyGuide': 'GroqCloud（console.groq.com）でキーを作ってください。無料枠には回数とトークン数の上限があります。有料にする場合は利用上限を設定してください。',
 
+    'groq.searchNote': 'gpt-oss のモデルで、Groq のブラウザ検索（Exa）を使います。',
     'custom.tagline': '{host} の OpenAI 互換 API（ビルド時に追加した接続先）',
     'custom.keyGuideOptional': 'キーなしでも使えます。キーが必要な場合だけ設定してください。',
     'custom.keyGuide': '{name} の管理画面でキーを作り、可能なら利用上限を設定してください。',
@@ -90,6 +99,7 @@ export const t = defineMessages(
       'stream.emptyBody': 'The response body was empty. Try again.',
       'stream.error': 'An error occurred during the stream: {message}',
       'stream.unknownError': 'Unknown error',
+      'gemini.blocked': "Gemini's safety filter stopped the input ({reason}). Change it and try again.",
       'stream.disconnected': 'The connection was lost while receiving. Try again.',
 
       'error.proOnly': 'This model is only available on a paid plan. Choose another model.',
@@ -123,6 +133,7 @@ export const t = defineMessages(
       'venice.private': "Models hosted by Venice that don't store prompts",
       'venice.relayed': "Models that Venice anonymizes and relays to third parties such as Claude and Gemini. Each company's retention policy applies.",
       'venice.relayedNote': "Venice anonymizes requests to relayed models and sends them to third parties such as Claude and Gemini. Prompt retention and censorship follow each company's policy.",
+      'venice.searchNote': 'Queries go to a search company through Venice.',
       'venice.searchProviders': "Venice's search providers",
       'venice.searchProvidersWhat': "Search terms when Venice's built-in web search is on (via Venice)",
       'venice.thirdParties': 'Third-party AI companies',
@@ -134,14 +145,20 @@ export const t = defineMessages(
       'openrouter.destinationNote': 'Relayed to the upstream provider that processes the request (providers that collect data are excluded by default)',
 
       'anthropic.tagline': "Use Anthropic's Claude directly.",
+      'anthropic.searchNote': 'Anthropic runs the search. It adds $10 per 1,000 searches (at most 5 per reply).',
       'anthropic.keyGuide':
         'In the Anthropic Console (console.anthropic.com), create a key under API Keys and set a workspace spend limit under Limits. If the key ever leaks, the damage stops at the limit.',
 
+      'openrouter.searchNote': "OpenRouter runs the search (Exa by default, or the model provider's own search when it has one). Each search adds about 0.7 cents.",
       'gemini.tagline': "Google's Gemini. On the free tier, what you send may be used to improve Google's services.",
       'gemini.keyGuide':
         "Create a key in Google AI Studio (aistudio.google.com). With a free-tier key, what you send is used to improve Google's services and may be read by people (not on the paid tier). If you switch to paid, set a budget in Google Cloud billing.",
+      'gemini.searchNote': 'Uses Google Search on Gemini 3 and later models. Beyond the free allowance (5,000 per month) it costs $14 per 1,000 searches.',
       'gemini.destinationNote': "With a free-tier key, what you send may be used to improve Google's services",
 
+      'openai.tagline': "Use OpenAI's GPT models and image generation (GPT Image) directly.",
+      'openai.keyGuide': 'In the OpenAI Platform (platform.openai.com), create a key under API keys and set a monthly budget under Limits. A "Restricted" key with only the permissions you need is safer still.',
+      'openai.destinationNote': 'What you send to the API is kept for up to 30 days for abuse monitoring (not used for training)',
       'deepseek.tagline': "DeepSeek's models. Low cost. Data is processed on servers of a company in China.",
       'deepseek.keyGuide': 'Create a key on the DeepSeek Platform (platform.deepseek.com). It is prepaid, so the amount you top up is your spending limit.',
       'deepseek.destinationNote': 'Processed on servers of a company in China (DeepSeek)',
@@ -149,6 +166,7 @@ export const t = defineMessages(
       'groq.tagline': 'Fast inference. Open models such as Llama, Qwen and gpt-oss.',
       'groq.keyGuide': 'Create a key in GroqCloud (console.groq.com). The free tier limits requests and tokens. If you switch to paid, set a spending limit.',
 
+      'groq.searchNote': "Uses Groq's browser search (Exa) on the gpt-oss models.",
       'custom.tagline': 'OpenAI-compatible API at {host} (provider added at build time)',
       'custom.keyGuideOptional': 'Works without a key. Set one only if it is required.',
       'custom.keyGuide': 'Create a key in the {name} dashboard and set a spending limit if you can.',
@@ -163,6 +181,7 @@ export const t = defineMessages(
       'stream.emptyBody': '响应正文为空。请重试。',
       'stream.error': '流式传输过程中发生错误：{message}',
       'stream.unknownError': '未知错误',
+      'gemini.blocked': '输入被 Gemini 的安全过滤器拦截（{reason}）。请修改内容后重试。',
       'stream.disconnected': '接收过程中连接中断。请重试。',
 
       'error.proOnly': '此模型仅限付费套餐使用。请选择其他模型。',
@@ -196,6 +215,7 @@ export const t = defineMessages(
       'venice.private': '由 Venice 托管、不保存提示词的模型',
       'venice.relayed': '由 Venice 匿名化后中转给 Claude、Gemini 等外部厂商的模型。遵循各厂商的数据保留政策。',
       'venice.relayedNote': '“外部中转”模型会由 Venice 匿名化后发送给 Claude、Gemini 等外部厂商。提示词的保留和审查遵循各厂商的政策。',
+      'venice.searchNote': '搜索词会经由 Venice 发送给搜索服务商。',
       'venice.searchProviders': 'Venice 的搜索提供方',
       'venice.searchProvidersWhat': '开启 Venice 内置网页搜索时的搜索词（经由 Venice）',
       'venice.thirdParties': '外部 AI 厂商',
@@ -207,14 +227,20 @@ export const t = defineMessages(
       'openrouter.destinationNote': '会中转给实际处理请求的提供方（默认排除收集数据的提供方）',
 
       'anthropic.tagline': '直接使用 Anthropic 的 Claude。',
+      'anthropic.searchNote': '搜索由 Anthropic 执行。每 1,000 次搜索额外收费 10 美元（每次回复最多 5 次）。',
       'anthropic.keyGuide':
         '请在 Anthropic Console（console.anthropic.com）的 API Keys 中创建密钥，并在 Limits 中设置工作区的用量上限（spend limit）。即使密钥泄露，损失也会止于上限。',
 
+      'openrouter.searchNote': '搜索由 OpenRouter 执行（默认使用 Exa；模型的提供方有自带搜索时使用其搜索）。每次搜索约额外收费 0.7 美分。',
       'gemini.tagline': 'Google 的 Gemini。使用免费额度时，发送的内容可能会被用于改进 Google 的服务。',
       'gemini.keyGuide':
         '请在 Google AI Studio（aistudio.google.com）创建密钥。使用免费额度的密钥时，发送的内容会被用于改进 Google 的服务，也可能被人工查看（付费额度不会）。如改为付费，请在 Google Cloud 的结算设置中设置预算。',
+      'gemini.searchNote': '在 Gemini 3 及更新的模型上使用 Google 搜索。超出免费额度（每月 5,000 次）后，每 1,000 次收费 14 美元。',
       'gemini.destinationNote': '使用免费额度的密钥时，发送的内容可能会被用于改进 Google 的服务',
 
+      'openai.tagline': '直接使用 OpenAI 的 GPT 模型和图像生成（GPT Image）。',
+      'openai.keyGuide': '请在 OpenAI Platform（platform.openai.com）的 API keys 中创建密钥，并在 Limits 中设置每月预算。使用仅含所需权限的“Restricted”密钥更安全。',
+      'openai.destinationNote': '发送给 API 的内容会为监控滥用保留最多 30 天（不会用于训练）',
       'deepseek.tagline': 'DeepSeek 的模型。价格低廉。数据在中国企业的服务器上处理。',
       'deepseek.keyGuide': '请在 DeepSeek Platform（platform.deepseek.com）创建密钥。采用预付费方式，充值金额即为可用上限。',
       'deepseek.destinationNote': '在中国企业（DeepSeek）的服务器上处理',
@@ -222,6 +248,7 @@ export const t = defineMessages(
       'groq.tagline': '高速推理。提供 Llama、Qwen、gpt-oss 等开放模型。',
       'groq.keyGuide': '请在 GroqCloud（console.groq.com）创建密钥。免费额度对请求次数和 token 数有上限。如改为付费，请设置用量上限。',
 
+      'groq.searchNote': '在 gpt-oss 模型上使用 Groq 的浏览器搜索（Exa）。',
       'custom.tagline': '{host} 的 OpenAI 兼容 API（构建时添加的服务商）',
       'custom.keyGuideOptional': '无需密钥即可使用。仅在需要时设置密钥。',
       'custom.keyGuide': '请在 {name} 的管理后台创建密钥，并尽量设置用量上限。',

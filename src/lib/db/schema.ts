@@ -21,6 +21,8 @@ export interface Conversation {
   temporary?: boolean;
   /** Image mode: messages sent from the input box are image prompts */
   imageMode?: boolean;
+  /** Image model chosen for this conversation in image mode ("provider|model"; none = the default) */
+  imageModel?: string;
 }
 
 /** What an image request asks for (saved on the user message so it can be regenerated) */

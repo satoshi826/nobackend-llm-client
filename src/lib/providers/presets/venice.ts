@@ -13,7 +13,13 @@ export const venicePreset: ProviderPreset = {
   get tagline() {
     return tp('venice.tagline');
   },
-  features: { builtInWebSearch: true },
+  // Venice's own web search (venice_parameters.enable_web_search, set in requestOptions)
+  nativeWebSearch: {
+    supports: (_id, m) => m?.capabilities.webSearch !== false,
+    get note() {
+      return tp('venice.searchNote');
+    }
+  },
   settings: [
     {
       key: 'includeSystemPrompt',

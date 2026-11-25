@@ -2,6 +2,10 @@
 // - the vault attaches the key in the x-api-key header (preset.keyHeader)
 // - calling directly from the browser needs the anthropic-dangerous-direct-browser-access header (preset extraHeaders)
 // - extended thinking is not used (combined with tool calls it would require sending signed thinking blocks back)
+// - web search is Anthropic's server tool (docs/specs/web-and-images.md §2.2). The basic version is used:
+//   the dynamic-filtering versions add code execution blocks and a container to echo back.
+//   A step that used server tools is kept verbatim (provider-content) and sent back as is while the turn runs
+//   (required after pause_turn); later turns send only the answer text.
 import type { ChatMessage, ChatRequest, ModelInfo, ProviderAdapter, ProviderEvent, Part } from './types';
 import { parseSSE } from './sse';
 import { classifyError, errorFromFetchFailure, errorFromResponse, isAbort, ProviderFailure } from './errors';
@@ -10,6 +14,9 @@ import { t as tp } from './messages';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
 export const ANTHROPIC_DEFAULT_MAX_TOKENS = 8192;
+/** Searches per request at most (each one is billed) */
+const MAX_SEARCHES = 5;
+const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: MAX_SEARCHES };
 
 function toolResultText(t: ToolPart): string {
   if (t.state === 'output-denied') return tp('tool.denied', { reason: t.approval?.reason ?? '' }).trim();
@@ -42,9 +49,14 @@ export function toAnthropic(messages: ChatMessage[]): { system: string; messages
       continue;
     }
     const tools = m.parts.filter((p): p is ToolPart => p.type === 'tool');
-    const blocks: any[] = text.trim() ? [{ type: 'text', text }] : [];
-    for (const t of tools) blocks.push({ type: 'tool_use', id: t.toolCallId, name: t.name, input: t.input && typeof t.input === 'object' ? t.input : {} });
-    push('assistant', blocks);
+    // A step that used server tools goes back exactly as received
+    const raw = (m.vendorState?.providerContent as { provider?: string; content?: unknown[] } | undefined)?.content;
+    if (Array.isArray(raw) && raw.length) push('assistant', structuredClone(raw));
+    else {
+      const blocks: any[] = text.trim() ? [{ type: 'text', text }] : [];
+      for (const t of tools) blocks.push({ type: 'tool_use', id: t.toolCallId, name: t.name, input: t.input && typeof t.input === 'object' ? t.input : {} });
+      push('assistant', blocks);
+    }
     const results = tools
       .filter((t) => t.state === 'output-available' || t.state === 'output-error' || t.state === 'output-denied')
       .map((t) => ({ type: 'tool_result', tool_use_id: t.toolCallId, content: toolResultText(t), ...(t.state !== 'output-available' ? { is_error: true } : {}) }));
@@ -53,12 +65,16 @@ export function toAnthropic(messages: ChatMessage[]): { system: string; messages
   return { system: system.join('\n\n'), messages: out };
 }
 
+/** Block types a cache breakpoint may be put on */
+const CACHEABLE = new Set(['text', 'tool_use', 'tool_result']);
+
 export function buildAnthropicBody(req: ChatRequest): Record<string, any> {
   const { system, messages } = toAnthropic(req.messages);
   const p = req.params ?? {};
   // Prompt cache: put breakpoints after the system prompt and at the end of the last message
   const last = messages[messages.length - 1];
-  if (last?.content?.length) last.content[last.content.length - 1] = { ...last.content[last.content.length - 1], cache_control: { type: 'ephemeral' } };
+  const lastBlock = last?.content?.[last.content.length - 1];
+  if (lastBlock && CACHEABLE.has(lastBlock.type)) last.content[last.content.length - 1] = { ...lastBlock, cache_control: { type: 'ephemeral' } };
   const body: Record<string, any> = {
     model: req.model,
     max_tokens: p.maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS,
@@ -69,16 +85,31 @@ export function buildAnthropicBody(req: ChatRequest): Record<string, any> {
   if (p.temperature !== undefined) body.temperature = Math.min(1, p.temperature);
   if (p.topP !== undefined) body.top_p = p.topP;
   if (p.stop?.length) body.stop_sequences = p.stop;
-  if (req.tools?.length) body.tools = req.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters }));
+  const tools: any[] = (req.tools ?? []).map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters }));
+  if (req.webSearch) tools.push(WEB_SEARCH_TOOL);
+  if (tools.length) body.tools = tools;
   return body;
 }
 
-function mapStop(r: string | undefined): 'stop' | 'length' | 'tool-calls' | 'content-filter' {
+function mapStop(r: string | undefined): 'stop' | 'length' | 'tool-calls' | 'content-filter' | 'pause' {
   if (r === 'max_tokens') return 'length';
   if (r === 'tool_use') return 'tool-calls';
   if (r === 'refusal') return 'content-filter';
+  if (r === 'pause_turn') return 'pause';
   return 'stop';
 }
+
+/** The search query out of a server_tool_use input */
+function queryOf(input: unknown): string | undefined {
+  const q = (input as { query?: unknown } | null)?.query;
+  return typeof q === 'string' ? q : undefined;
+}
+
+type Block =
+  | { kind: 'text' | 'reasoning'; raw: any }
+  | { kind: 'tool'; args: string; raw: any }
+  | { kind: 'server-tool'; args: string; raw: any }
+  | { kind: 'other'; raw: any };
 
 export const anthropicAdapter: ProviderAdapter = {
   async listModels(cfg, preset, transport, auth): Promise<ModelInfo[]> {
@@ -121,23 +152,32 @@ export const anthropicAdapter: ProviderAdapter = {
       return;
     }
     yield { type: 'start' };
-    // Block number (Anthropic's index) → this app's block
-    const blocks = new Map<number, { kind: 'text' | 'reasoning' | 'tool'; args: string }>();
-    let usage = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 };
+    // Block number (Anthropic's index) → this app's block, and every block as received (for provider-content)
+    const blocks = new Map<number, Block>();
+    const content: any[] = [];
+    let usedServerTools = false;
+    let usage = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, webSearches: 0 };
     let stop: string | undefined;
-    const closeAll = function* (): Generator<ProviderEvent> {
-      for (const [index, b] of blocks) {
-        if (b.kind === 'tool') {
-          let input: unknown = {};
-          let parseError: string | undefined;
-          try {
-            input = b.args ? JSON.parse(b.args) : {};
-          } catch (e) {
-            parseError = String(e);
-          }
-          yield { type: 'tool-call-end', index, input, parseError };
-        } else yield { type: b.kind === 'text' ? 'text-end' : 'reasoning-end', index };
+    const parseArgs = (args: string): { input: unknown; parseError?: string } => {
+      try {
+        return { input: args ? JSON.parse(args) : {} };
+      } catch (e) {
+        return { input: {}, parseError: String(e) };
       }
+    };
+    const finish = function* (index: number, b: Block): Generator<ProviderEvent> {
+      if (b.kind === 'tool') {
+        const { input, parseError } = parseArgs(b.args);
+        b.raw.input = input;
+        yield { type: 'tool-call-end', index, input, parseError };
+      } else if (b.kind === 'server-tool') {
+        const { input } = parseArgs(b.args);
+        b.raw.input = input;
+        yield { type: 'server-tool', id: String(b.raw.id), name: String(b.raw.name), query: queryOf(input), state: 'running' };
+      } else if (b.kind === 'text' || b.kind === 'reasoning') yield { type: b.kind === 'text' ? 'text-end' : 'reasoning-end', index };
+    };
+    const closeAll = function* (): Generator<ProviderEvent> {
+      for (const [index, b] of blocks) yield* finish(index, b);
       blocks.clear();
     };
     try {
@@ -152,23 +192,36 @@ export const anthropicAdapter: ProviderAdapter = {
           case 'message_start': {
             const u = d.message?.usage ?? {};
             const cached = (u.cache_read_input_tokens ?? 0) as number;
-            usage = { inputTokens: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + cached, cachedInputTokens: cached, outputTokens: u.output_tokens ?? 0 };
+            usage = { ...usage, inputTokens: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + cached, cachedInputTokens: cached, outputTokens: u.output_tokens ?? 0 };
             break;
           }
           case 'content_block_start': {
-            const cb = d.content_block ?? {};
+            const cb = structuredClone(d.content_block ?? {});
             const index = Number(d.index);
+            content[index] = cb;
             if (cb.type === 'tool_use') {
-              blocks.set(index, { kind: 'tool', args: '' });
+              blocks.set(index, { kind: 'tool', args: '', raw: cb });
               yield { type: 'tool-call-start', index, toolCallId: String(cb.id), name: String(cb.name) };
+            } else if (cb.type === 'server_tool_use') {
+              usedServerTools = true;
+              blocks.set(index, { kind: 'server-tool', args: '', raw: cb });
+              yield { type: 'server-tool', id: String(cb.id), name: String(cb.name), state: 'running' };
+            } else if (cb.type === 'web_search_tool_result') {
+              usedServerTools = true;
+              blocks.set(index, { kind: 'other', raw: cb });
+              const id = String(cb.tool_use_id);
+              if (Array.isArray(cb.content)) {
+                for (const r of cb.content) if (r?.type === 'web_search_result' && typeof r.url === 'string') yield { type: 'source', url: r.url, title: r.title };
+                yield { type: 'server-tool', id, name: 'web_search', state: 'done', resultCount: cb.content.length };
+              } else yield { type: 'server-tool', id, name: 'web_search', state: 'error', error: String(cb.content?.error_code ?? 'error') };
             } else if (cb.type === 'thinking') {
-              blocks.set(index, { kind: 'reasoning', args: '' });
+              blocks.set(index, { kind: 'reasoning', raw: cb });
               yield { type: 'reasoning-start', index };
             } else if (cb.type === 'text') {
-              blocks.set(index, { kind: 'text', args: '' });
+              blocks.set(index, { kind: 'text', raw: cb });
               yield { type: 'text-start', index };
               if (cb.text) yield { type: 'text-delta', index, delta: cb.text };
-            }
+            } else blocks.set(index, { kind: 'other', raw: cb });
             break;
           }
           case 'content_block_delta': {
@@ -176,11 +229,20 @@ export const anthropicAdapter: ProviderAdapter = {
             const delta = d.delta ?? {};
             const b = blocks.get(index);
             if (!b) break;
-            if (delta.type === 'text_delta' && delta.text) yield { type: 'text-delta', index, delta: delta.text };
-            else if (delta.type === 'thinking_delta' && delta.thinking) yield { type: 'reasoning-delta', index, delta: delta.thinking };
-            else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+            if (delta.type === 'text_delta' && delta.text) {
+              b.raw.text = (b.raw.text ?? '') + delta.text;
+              yield { type: 'text-delta', index, delta: delta.text };
+            } else if (delta.type === 'thinking_delta' && delta.thinking) {
+              b.raw.thinking = (b.raw.thinking ?? '') + delta.thinking;
+              yield { type: 'reasoning-delta', index, delta: delta.thinking };
+            } else if (delta.type === 'signature_delta' && delta.signature) b.raw.signature = (b.raw.signature ?? '') + delta.signature;
+            else if (delta.type === 'citations_delta' && delta.citation) {
+              const c = delta.citation;
+              (b.raw.citations ??= []).push(c);
+              if (typeof c.url === 'string') yield { type: 'source', url: c.url, title: c.title, snippet: c.cited_text };
+            } else if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string' && (b.kind === 'tool' || b.kind === 'server-tool')) {
               b.args += delta.partial_json;
-              yield { type: 'tool-call-delta', index, argsDelta: delta.partial_json };
+              if (b.kind === 'tool') yield { type: 'tool-call-delta', index, argsDelta: delta.partial_json };
             }
             break;
           }
@@ -189,22 +251,16 @@ export const anthropicAdapter: ProviderAdapter = {
             const b = blocks.get(index);
             if (!b) break;
             blocks.delete(index);
-            if (b.kind === 'tool') {
-              let input: unknown = {};
-              let parseError: string | undefined;
-              try {
-                input = b.args ? JSON.parse(b.args) : {};
-              } catch (e) {
-                parseError = String(e);
-              }
-              yield { type: 'tool-call-end', index, input, parseError };
-            } else yield { type: b.kind === 'text' ? 'text-end' : 'reasoning-end', index };
+            yield* finish(index, b);
             break;
           }
-          case 'message_delta':
+          case 'message_delta': {
             stop = d.delta?.stop_reason ?? stop;
-            if (typeof d.usage?.output_tokens === 'number') usage.outputTokens = d.usage.output_tokens;
+            const u = d.usage ?? {};
+            if (typeof u.output_tokens === 'number') usage.outputTokens = u.output_tokens;
+            if (typeof u.server_tool_use?.web_search_requests === 'number') usage.webSearches = u.server_tool_use.web_search_requests;
             break;
+          }
           case 'error': {
             yield* closeAll();
             const e = d.error ?? {};
@@ -226,7 +282,12 @@ export const anthropicAdapter: ProviderAdapter = {
       yield { type: 'error', error: { kind: 'aborted', message: tp('stream.stopped') } };
       return;
     }
-    yield { type: 'usage', usage: { inputTokens: usage.inputTokens, cachedInputTokens: usage.cachedInputTokens || undefined, outputTokens: usage.outputTokens } };
+    // A step with server tools is sent back exactly as received while the turn runs
+    if (usedServerTools) yield { type: 'provider-content', provider: 'anthropic', content: content.filter(Boolean) };
+    yield {
+      type: 'usage',
+      usage: { inputTokens: usage.inputTokens, cachedInputTokens: usage.cachedInputTokens || undefined, outputTokens: usage.outputTokens, webSearches: usage.webSearches || undefined }
+    };
     yield { type: 'done', reason: mapStop(stop) };
   }
 };

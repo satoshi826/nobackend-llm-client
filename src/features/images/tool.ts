@@ -12,7 +12,7 @@ export interface ImageToolInput {
 }
 
 export interface ImageToolRun {
-  (input: ImageToolInput, signal: AbortSignal): Promise<{ blobIds: string[]; model: string; blurred: boolean }>;
+  (input: ImageToolInput, signal: AbortSignal): Promise<{ blobIds: string[]; model: string; blurred: boolean; request?: Record<string, unknown> }>;
 }
 
 export function makeImageTool(run: ImageToolRun): Tool<ImageToolInput> {
@@ -46,7 +46,8 @@ export function makeImageTool(run: ImageToolRun): Tool<ImageToolInput> {
       const r = await run(input, ctx.signal);
       return {
         content: t(r.blurred ? 'tool.resultBlurred' : 'tool.result', { n: r.blobIds.length, model: r.model }),
-        details: { blobIds: r.blobIds, model: r.model, blurred: r.blurred }
+        // request: what was sent and what it cost (shown in full on the card)
+        details: { blobIds: r.blobIds, model: r.model, blurred: r.blurred, request: r.request }
       };
     }
   };

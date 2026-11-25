@@ -105,24 +105,45 @@ body {
 }
 
 /* ---- Glass surfaces ---- */
+/* backdrop-filter: the -webkit- form first, the standard one last. The CSS minifier treats them as one
+   property and keeps only the last declaration, so the standard one must come last or Chrome gets no blur. */
 @utility glass {
   background-color: var(--glass);
   border: 1px solid var(--line);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(36px) saturate(140%);
+  backdrop-filter: blur(36px) saturate(140%);
 }
 @utility glass-float {
   background-color: var(--glass);
   border: 1px solid var(--line);
-  backdrop-filter: blur(24px) saturate(150%);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  backdrop-filter: blur(40px) saturate(150%);
   box-shadow: var(--shadow-float);
 }
-/* Opaque panels for surfaces that sit over moving content (dialogs, menus) */
+/*
+ * Behind a dialog or drawer: neither darkened nor blurred (it only catches clicks). It must not have a
+ * backdrop-filter either: that would make it the backdrop root, and the frosted dialog inside could not blur the page.
+ */
+@utility backdrop {
+  background-color: transparent;
+}
+
+/* Dialog windows: frosted glass — translucent, with what shows through strongly blurred */
+@utility frosted {
+  background-color: color-mix(in srgb, var(--bg) 58%, transparent);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-float);
+  -webkit-backdrop-filter: blur(48px) saturate(160%);
+  backdrop-filter: blur(48px) saturate(160%);
+}
+
+/* Nearly opaque panels for surfaces that sit over content (menus, toasts); what shows through is strongly blurred */
 @utility panel {
   background-color: color-mix(in srgb, var(--bg) 82%, var(--glass-strong));
   border: 1px solid var(--line);
   box-shadow: var(--shadow-float);
+  -webkit-backdrop-filter: blur(48px) saturate(150%);
+  backdrop-filter: blur(48px) saturate(150%);
 }
 
 /* ---- Background light: slow, desaturated blobs (static with reduced motion) ---- */
@@ -146,6 +167,12 @@ body {
   to { opacity: 1; transform: none; }
 }
 .rise { animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+/* Frosted windows rise without fading: while an element is translucent its backdrop blur does not apply */
+@keyframes rise-glass {
+  from { transform: translateY(12px) scale(0.98); }
+  to { transform: none; }
+}
+.rise-glass { animation: rise-glass 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 
 /* ---- Markdown ---- */
 .md {
@@ -162,6 +189,8 @@ body {
 .md ol { @apply list-decimal pl-6; }
 .md li + li { @apply mt-1; }
 .md li > p { @apply m-0; }
+/* Long unbroken strings (URLs, JSON) wrap instead of overflowing the answer */
+.md { overflow-wrap: break-word; }
 .md a { @apply text-accent-text underline decoration-line-strong underline-offset-2 hover:decoration-accent; }
 .md blockquote { @apply border-l-2 border-line-strong pl-4 text-muted; }
 .md hr { @apply border-line; }
@@ -349,7 +378,7 @@ details[open] > summary::before { rotate: 45deg; }
 @media (prefers-reduced-motion: reduce) {
   .text-shimmer { animation: none; color: var(--muted); background: none; }
   .typing-dots span { animation: none; opacity: 0.7; }
-  .sky-glow span, .rise, .pop, .fade-in, [role='menu'], [role='listbox'] { animation: none !important; }
+  .sky-glow span, .rise, .rise-glass, .pop, .fade-in, [role='menu'], [role='listbox'] { animation: none !important; }
   *, *::before, *::after, ::details-content { transition-duration: 0.01ms !important; }
   :where(button, summary, [role='tab']):active { scale: none !important; }
 }

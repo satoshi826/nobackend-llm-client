@@ -56,7 +56,7 @@ export function App() {
     <div class="relative isolate flex h-full md:gap-3 md:p-3">
       <SkyGlow />
       {dataWork.value && (
-        <div class="fixed inset-0 z-[60] grid place-items-center bg-scrim text-sm backdrop-blur-sm" role="status" aria-live="polite">
+        <div class="backdrop fixed inset-0 z-[60] grid place-items-center text-sm" role="status" aria-live="polite">
           <div class="panel rise flex items-center gap-2 rounded-2xl px-4 py-3">
             <Spinner class="size-4" />
             {dataWork.value}

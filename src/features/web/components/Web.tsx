@@ -1,29 +1,6 @@
-// Web search in the input box and in tool cards
-import type { Conversation } from '../../../lib/db/schema';
-import { updateConversation } from '../../../state/conversations';
-import { providerById } from '../../../state/models';
+// Web search results in tool cards
 import type { ToolPart } from '../../../components/extensions';
-import { Chip, Icon } from '../../../components/ui';
-import { searchModeFor } from '../state';
 import { t } from '../messages';
-
-export function WebSearchButton({ conv }: { conv: Conversation }) {
-  const mode = searchModeFor(conv.providerId, conv.modelId);
-  const on = conv.webSearch !== 'off';
-  const pname = providerById(conv.providerId)?.name ?? '';
-  const title =
-    mode === 'builtin'
-      ? t('button.builtin', { provider: pname })
-      : mode === 'tools'
-        ? t('button.tools')
-        : t('button.unavailable');
-  return (
-    <Chip aria-pressed={on} on={on && !!mode} disabled={!mode} title={title} onClick={() => updateConversation({ webSearch: on ? 'off' : 'auto' })}>
-      <Icon name="globe" class="size-3.5" />
-      {on && mode ? t('button.on') : t('webSearch')}
-    </Chip>
-  );
-}
 
 /** Search results under a web_search card (collapsed) */
 export function SearchResults({ p }: { p: ToolPart }) {

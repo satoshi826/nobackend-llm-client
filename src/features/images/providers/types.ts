@@ -1,8 +1,8 @@
-// Image providers: one adapter per service (Venice today; OpenRouter, Gemini, OpenAI, ... later, see
-// docs/specs/image-providers.md). The image state calls providers only through this interface.
+// Image providers: one adapter per service (Venice, OpenRouter, Gemini, OpenAI; see docs/specs/image-providers.md).
+// The image state calls providers only through this interface.
 import type { ImageParams } from '../../../lib/db/schema';
 import type { AuthRef, ProviderConfig, Transport } from '../../../lib/providers/types';
-import type { ImageModelInfo } from './venice';
+import type { ImageModelInfo } from './common';
 
 export type { ImageModelInfo };
 
@@ -19,6 +19,8 @@ export interface GeneratedImages {
   /** Variants dropped by the provider's content policy */
   violations?: number;
   enhancedPrompt?: string;
+  /** Cost the provider reported for this request (recorded as spend, not an estimate) */
+  costUsd?: number;
 }
 
 export interface ImageProvider {
@@ -26,8 +28,12 @@ export interface ImageProvider {
   label: string;
   /** Vault account holding the key (an LLM provider id or a service id) */
   account: string;
-  /** Image models (public lists are fetched without a key) */
-  listModels(config: ProviderConfig, transport: Transport): Promise<ImageModelInfo[]>;
+  /** Image models. auth is set for providers whose list needs the key (keyedList) */
+  listModels(config: ProviderConfig, transport: Transport, auth?: AuthRef): Promise<ImageModelInfo[]>;
+  /** The model list needs the key (fetched through the key vault) */
+  keyedList?: boolean;
+  /** Prices fetched separately for one model (OpenRouter); returns the model with pricing filled in */
+  loadPricing?(model: ImageModelInfo, config: ProviderConfig, transport: Transport): Promise<ImageModelInfo>;
   listStyles?(ctx: ImageCallContext): Promise<string[]>;
   generate(p: ImageParams, model: ImageModelInfo | undefined, ctx: ImageCallContext): Promise<GeneratedImages>;
   upscale?(source: Blob, scale: 2 | 4, ctx: ImageCallContext): Promise<Blob>;

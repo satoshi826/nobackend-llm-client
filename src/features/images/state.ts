@@ -1,7 +1,7 @@
 // Image generation: image mode in the input box, jobs (generate / upscale / edit / background removal),
 // regeneration, the image viewer's state, and the generate_image tool for chat models.
 // Providers are reached only through the ImageProvider interface (Venice is the only one for now).
-import { computed, signal } from '@preact/signals';
+import { computed, effect, signal } from '@preact/signals';
 import * as repo from '../../lib/db/repo';
 import type { Conversation, ImageParams, ImageResult, MessageRecord } from '../../lib/db/schema';
 import type { Part } from '../../lib/providers/types';
@@ -12,19 +12,31 @@ import { vaultTransport as transport } from '../../lib/vault/client';
 import { authFor, keyReady } from '../../state/keys';
 import { defineFeatureSettings, pickLegacy } from '../../state/feature-settings';
 import { openSettings, showToast } from '../../state/ui';
+import { replyImagesVersion } from '../../state/media';
+import { recordUsage } from '../../state/request-helpers';
 import { conversations, currentConv, currentId, messages, persistDraft, putMessage, updateConversation } from '../../state/conversations';
 import { beginRun, endRun } from '../../state/runs';
 import { cancelSuggestions } from '../../state/suggestions';
 import { resetProviderBalanceBaseline } from '../../state/balance';
 import { registerToolProvider, registerUserRequestHandler } from '../../state/tool-registry';
-import { ImageApiError, veniceImageProvider, type ImageModelInfo } from './providers/venice';
-import { imageProviderOf, registerImageProvider, type ImageCallContext, type ImageProvider } from './providers/types';
+import { veniceImageProvider } from './providers/venice';
+import { openrouterImageProvider } from './providers/openrouter';
+import { geminiImageProvider } from './providers/gemini';
+import { openaiImageProvider } from './providers/openai';
+import { ImageApiError, hasOption, type ImageModelInfo } from './providers/common';
+import { imageProviderList, imageProviderOf, registerImageProvider, type ImageCallContext, type ImageProvider } from './providers/types';
 import { makeImageTool, type ImageToolInput } from './tool';
 import { t } from './messages';
 
+// Image providers in menu order (docs/specs/image-providers.md). A provider is offered once its key is set.
 registerImageProvider(veniceImageProvider);
+registerImageProvider(openrouterImageProvider);
+registerImageProvider(geminiImageProvider);
+registerImageProvider(openaiImageProvider);
 
 export interface ImageDefaults {
+  /** The default image model (Settings → 機能 → 画像): used by the generate_image tool and image mode */
+  providerId: string;
   model: string;
   aspectRatio: string;
   resolution: string;
@@ -38,7 +50,7 @@ const DEFAULT_IMAGE_SETTINGS = {
   /** Format images are saved in */
   imageFormat: 'webp' as 'webp' | 'png' | 'jpeg',
   /** Last-used options (the image bar starts from these) */
-  imageDefaults: { model: '', aspectRatio: '1:1', resolution: '', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '' } as ImageDefaults,
+  imageDefaults: { providerId: '', model: '', aspectRatio: '1:1', resolution: '', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '' } as ImageDefaults,
   /** Let chat models create images with the generate_image tool */
   imageTool: false
 };
@@ -47,8 +59,8 @@ export const imageSettings = defineFeatureSettings('images', DEFAULT_IMAGE_SETTI
   return p.imageDefaults ? { ...p, imageDefaults: { ...DEFAULT_IMAGE_SETTINGS.imageDefaults, ...p.imageDefaults } } : p;
 });
 
-/** The provider used for new requests (the only one for now; see docs/specs/image-providers.md) */
-export const IMAGE_PROVIDER = 'venice';
+/** Upscale, background removal and edits run on Venice (the other providers do not offer them) */
+export const EDIT_PROVIDER = 'venice';
 
 function providerFor(id: string): ImageProvider {
   const p = imageProviderOf(id);
@@ -75,59 +87,116 @@ export const imageModelsError = signal<string | null>(null);
 export const imageStyles = signal<string[]>([]);
 /** Bumped whenever images are added or deleted (lists of images reload on it) */
 export const imagesVersion = signal(0);
+// Images stored by chat replies (native image output) refresh the same lists
+effect(() => {
+  if (replyImagesVersion.value) imagesVersion.value = imagesVersion.peek() + 1;
+});
 
-/** Image generation needs the Venice key */
-export const imageReady = computed(() => keyReady(IMAGE_PROVIDER));
+/** Image providers whose key is set (generation needs it, so only their models are offered) */
+export const readyImageProviders = computed(() => imageProviderList().filter((p) => keyReady(p.account)));
+/** Image generation needs the key of at least one image provider */
+export const imageReady = computed(() => readyImageProviders.value.length > 0);
 
-const CACHE_KEY = 'cache:imageModels';
+const cacheKey = (id: string) => `cache:imageModels:${id}`;
 let loading: Promise<void> | null = null;
 
-/** Image models (public list, cached for 6 hours) */
+/** Image models of every provider whose key is set (each list cached for 6 hours) */
 export function loadImageModels(force = false): Promise<void> {
   if (loading) return loading;
   loading = (async () => {
-    const cached = await repo.getSetting<{ at: number; list: ImageModelInfo[] } | null>(CACHE_KEY, null);
-    if (cached && !force) imageModels.value = cached.list;
-    if (cached && !force && Date.now() - cached.at < 6 * 3600_000) return;
-    try {
-      const list = await providerFor(IMAGE_PROVIDER).listModels(providerConfigOf(IMAGE_PROVIDER)!, plainTransport);
-      imageModels.value = list;
-      imageModelsError.value = null;
-      await repo.setSetting(CACHE_KEY, { at: Date.now(), list });
-    } catch (e) {
-      imageModelsError.value = (e as Error).message;
-    }
+    const errors: string[] = [];
+    const lists = await Promise.all(
+      readyImageProviders.value.map(async (p) => {
+        const cached = await repo.getSetting<{ at: number; list: ImageModelInfo[] } | null>(cacheKey(p.id), null);
+        if (cached && !force && Date.now() - cached.at < 6 * 3600_000) return cached.list;
+        try {
+          const list = await p.listModels(providerConfigOf(p.account)!, p.keyedList ? transport : plainTransport, p.keyedList ? authFor(p.account) : undefined);
+          await repo.setSetting(cacheKey(p.id), { at: Date.now(), list });
+          return list;
+        } catch (e) {
+          errors.push(`${p.label}: ${(e as Error).message}`);
+          return cached?.list ?? [];
+        }
+      })
+    );
+    imageModels.value = lists.flat();
+    imageModelsError.value = errors.length ? errors.join(' / ') : null;
   })().finally(() => (loading = null));
   return loading;
 }
 
 export async function loadImageStyles() {
-  if (imageStyles.value.length || !imageReady.value) return;
+  if (imageStyles.value.length || !keyReady(EDIT_PROVIDER)) return;
   try {
-    imageStyles.value = (await providerFor(IMAGE_PROVIDER).listStyles?.(callContext(IMAGE_PROVIDER))) ?? [];
+    imageStyles.value = (await providerFor(EDIT_PROVIDER).listStyles?.(callContext(EDIT_PROVIDER))) ?? [];
   } catch {
     /* styles are optional */
   }
 }
 
-export function imageModelOf(id: string | undefined): ImageModelInfo | undefined {
-  return imageModels.value.find((m) => m.id === id);
+export function imageModelOf(providerId: string | undefined, id: string | undefined): ImageModelInfo | undefined {
+  return imageModels.value.find((m) => m.id === id && (!providerId || m.providerId === providerId));
 }
 
-/** The model the image bar uses: last used, else Venice's default, else the first one */
-export const currentImageModel = computed(() => {
+/** "provider|model" (how a model choice is stored on a conversation) */
+export const modelRef = (m: { providerId: string; id: string }) => `${m.providerId}|${m.id}`;
+function byRef(ref: string | undefined): ImageModelInfo | undefined {
+  const i = ref?.indexOf('|') ?? -1;
+  return ref && i > 0 ? imageModelOf(ref.slice(0, i), ref.slice(i + 1)) : undefined;
+}
+
+/** The default model: the one chosen in settings, else Venice's default, else the first one */
+export const defaultImageModel = computed(() => {
   const list = imageModels.value;
-  return list.find((m) => m.id === imageSettings.value.value.imageDefaults.model) ?? list.find((m) => m.traits.includes('default')) ?? list[0];
+  const d = imageSettings.value.value.imageDefaults;
+  return imageModelOf(d.providerId || undefined, d.model || undefined) ?? list.find((m) => m.traits.includes('default')) ?? list[0];
 });
+
+/** The model for a conversation: its own choice in image mode, else the default */
+export function imageModelFor(conv: Conversation | undefined): ImageModelInfo | undefined {
+  return byRef(conv?.imageModel) ?? defaultImageModel.value;
+}
+
+/** The model the image bar (and the tool, in the current conversation) uses */
+export const currentImageModel = computed(() => imageModelFor(currentConv.value));
 
 export async function setImageDefaults(patch: Partial<ImageDefaults>) {
   await imageSettings.save({ imageDefaults: { ...imageSettings.value.value.imageDefaults, ...patch } });
 }
 
+/** Choose the model for the current conversation only (the image bar); the default clears the choice */
+export async function setConversationImageModel(m: ImageModelInfo) {
+  const isDefault = defaultImageModel.value && modelRef(defaultImageModel.value) === modelRef(m);
+  await updateConversation({ imageModel: isDefault ? undefined : modelRef(m) });
+  await setImageDefaults({ resolution: '' });
+}
+
+/** Choose the default model (settings) */
+export async function setDefaultImageModel(m: ImageModelInfo) {
+  await setImageDefaults({ providerId: m.providerId, model: m.id, resolution: '' });
+}
+
+// Prices some providers list per model (OpenRouter) are fetched when the model is in use
+const pricingAsked = new Set<string>();
+effect(() => {
+  for (const m of [currentImageModel.value, defaultImageModel.value]) {
+    if (!m || pricingAsked.has(modelRef(m))) continue;
+    const p = imageProviderOf(m.providerId);
+    if (!p?.loadPricing || m.pricing.generation !== undefined || m.pricing.resolutions) continue;
+    pricingAsked.add(modelRef(m));
+    void p
+      .loadPricing(m, providerConfigOf(p.account)!, plainTransport)
+      .then((priced) => {
+        if (priced !== m) imageModels.value = imageModels.peek().map((x) => (modelRef(x) === modelRef(m) ? priced : x));
+      })
+      .catch(() => {});
+  }
+});
+
 const randomSeed = () => Math.floor(Math.random() * 999_999_999);
 
-function ensureImageKey(): boolean {
-  if (imageReady.value) return true;
+function ensureImageKey(providerId?: string): boolean {
+  if (providerId ? keyReady(imageProviderOf(providerId)?.account ?? providerId) : imageReady.value) return true;
   openSettings('connections');
   showToast(t('bar.needKey'), 'error');
   return false;
@@ -142,26 +211,32 @@ export async function setImageMode(on: boolean) {
   }
 }
 
-/** Parameters for a new request from the image bar */
-export function paramsFromBar(prompt: string): ImageParams {
+/** Parameters for a new request with a conversation's model and the bar's options (options the model lacks are left out) */
+export function paramsFor(conv: Conversation | undefined, prompt: string): ImageParams {
   const d = imageSettings.value.value.imageDefaults;
-  const m = currentImageModel.value;
+  const m = imageModelFor(conv);
   const seed = d.seed.trim() ? Number(d.seed) : undefined;
+  const aspects = m?.constraints.aspectRatios;
   return {
     op: 'generate',
-    providerId: IMAGE_PROVIDER,
+    providerId: m?.providerId ?? EDIT_PROVIDER,
     model: m?.id ?? '',
     prompt,
-    negativePrompt: d.negativePrompt || undefined,
-    aspectRatio: d.aspectRatio || undefined,
-    resolution: d.resolution || undefined,
+    negativePrompt: hasOption(m, 'negativePrompt') ? d.negativePrompt || undefined : undefined,
+    aspectRatio: (aspects?.length && !aspects.includes(d.aspectRatio) ? (m?.constraints.defaultAspectRatio ?? aspects[0]) : d.aspectRatio) || undefined,
+    resolution: (m?.constraints.resolutions?.includes(d.resolution) ? d.resolution : m?.constraints.defaultResolution) || undefined,
     variants: Math.min(4, Math.max(1, d.variants)),
-    style: d.style || undefined,
-    seed: Number.isFinite(seed) ? seed : undefined,
-    enhancePrompt: d.enhancePrompt || undefined,
+    style: hasOption(m, 'styles') ? d.style || undefined : undefined,
+    seed: hasOption(m, 'seed') && Number.isFinite(seed) ? seed : undefined,
+    enhancePrompt: hasOption(m, 'enhance') ? d.enhancePrompt || undefined : undefined,
     safeMode: false,
     format: imageSettings.value.value.imageFormat
   };
+}
+
+/** Parameters for a new request from the image bar (the current conversation) */
+export function paramsFromBar(prompt: string): ImageParams {
+  return paramsFor(currentConv.value, prompt);
 }
 
 /** Send an image prompt from the input box */
@@ -169,6 +244,7 @@ export async function sendImagePrompt(prompt: string) {
   if (!prompt.trim() || !ensureImageKey()) return;
   if (!imageModels.value.length) await loadImageModels();
   const p = paramsFromBar(prompt.trim());
+  if (!ensureImageKey(p.providerId)) return;
   if (!p.model) {
     showToast(t('err.modelsFailed'), 'error');
     return;
@@ -196,13 +272,13 @@ async function addUserRequest(conv: Conversation, p: ImageParams, text: string) 
 
 /** Upscale / remove the background of / edit an image already in the current conversation */
 export async function imageAction(op: 'upscale' | 'remove-bg' | 'edit', sourceBlobId: string, opts: { scale?: 2 | 4; prompt?: string } = {}) {
-  if (!ensureImageKey() || !currentId.value) return;
+  if (!ensureImageKey(EDIT_PROVIDER) || !currentId.value) return;
   const conv = currentConv.value;
   const text = op === 'upscale' ? t('request.upscaleText', { scale: opts.scale ?? 2 }) : op === 'remove-bg' ? t('request.removeBgText') : (opts.prompt ?? '').trim();
   if (!text) return;
   const p: ImageParams = {
     op,
-    providerId: IMAGE_PROVIDER,
+    providerId: EDIT_PROVIDER,
     model: '',
     prompt: op === 'edit' ? text : '',
     variants: 1,
@@ -255,12 +331,12 @@ async function storeImages(conv: Conversation, messageId: string, blobs: Blob[])
 }
 
 /** Call the provider for one job */
-async function call(p: ImageParams, signal: AbortSignal): Promise<{ blobs: Blob[]; result: Partial<ImageResult> }> {
+async function call(p: ImageParams, signal: AbortSignal): Promise<{ blobs: Blob[]; result: Partial<ImageResult>; costUsd?: number }> {
   const provider = providerFor(p.providerId);
   const ctx = callContext(p.providerId, signal);
   if (p.op === 'generate') {
-    const r = await provider.generate(p, imageModelOf(p.model), ctx);
-    return { blobs: r.images, result: { seed: p.seed, blurred: r.blurred || undefined, violations: r.violations || undefined, enhancedPrompt: r.enhancedPrompt } };
+    const r = await provider.generate(p, imageModelOf(p.providerId, p.model), ctx);
+    return { blobs: r.images, result: { seed: p.seed, blurred: r.blurred || undefined, violations: r.violations || undefined, enhancedPrompt: r.enhancedPrompt }, costUsd: r.costUsd };
   }
   const source = p.sourceBlobId ? await getImage(p.sourceBlobId) : null;
   if (!source) throw new ImageApiError({ kind: 'bad-request', message: t('err.noSource') });
@@ -272,34 +348,27 @@ async function call(p: ImageParams, signal: AbortSignal): Promise<{ blobs: Blob[
 
 /** What a request costs (estimate; undefined when unknown) */
 export function estimateCost(p: ImageParams): number | undefined {
-  return imageProviderOf(p.providerId)?.estimateCost(p, imageModelOf(p.model));
+  return imageProviderOf(p.providerId)?.estimateCost(p, imageModelOf(p.providerId, p.model));
 }
 
-/** Who sees the prompt for the current image model (header badge, tool approval card) */
+/** Who sees the prompt for a model (input box, tool approval card) */
+export function privacyLabelOf(m: ImageModelInfo | undefined) {
+  return (m && imageProviderOf(m.providerId)?.privacyLabel(m)) ?? { tone: 'zinc' as const, label: '', title: '' };
+}
+
+/** Who sees the prompt for the current image model */
 export function currentPrivacyLabel() {
-  return providerFor(IMAGE_PROVIDER).privacyLabel(currentImageModel.value);
+  return privacyLabelOf(currentImageModel.value);
 }
 
-function recordImageUsage(conv: Conversation, p: ImageParams, count: number) {
-  if (conv.temporary) return;
-  const est = imageProviderOf(p.providerId)?.estimateCost({ ...p, variants: count }, imageModelOf(p.model));
-  void repo
-    .addUsage({
-      id: repo.newId(),
-      at: Date.now(),
-      providerId: p.providerId,
-      model: p.model || p.op,
-      kind: 'image',
-      inputTokens: 0,
-      cachedInputTokens: 0,
-      outputTokens: 0,
-      reasoningTokens: 0,
-      ...(est !== undefined ? { costUsd: est, costEstimated: true } : {})
-    })
-    .catch(() => {});
+/** Record an image job: the cost the provider reported, else the estimate (also counted in the conversation's total) */
+function recordImageUsage(conv: Conversation, p: ImageParams, count: number, reported?: number): number | undefined {
+  const est = reported ?? imageProviderOf(p.providerId)?.estimateCost({ ...p, variants: count }, imageModelOf(p.providerId, p.model));
+  recordUsage({ id: repo.newId(), conversationId: conv.id, providerId: p.providerId, model: p.model || p.op, kind: 'image', costUsd: est, costEstimated: reported === undefined, temporary: conv.temporary });
   // Image prices are estimates (and some are unknown): restart the balance comparison instead of
   // adding a guess, so the "unexplained drop" alert is not triggered by our own image spend
   resetProviderBalanceBaseline(p.providerId);
+  return est;
 }
 
 export async function runImageJob(convId: string, userMsgId: string, override: Partial<ImageParams> = {}) {
@@ -307,8 +376,9 @@ export async function runImageJob(convId: string, userMsgId: string, override: P
   const user = messages.value.find((m) => m.id === userMsgId);
   if (!conv || !user?.imageRequest || !ensureImageKey()) return;
   const p: ImageParams = { ...user.imageRequest, ...override };
-  // Always send a seed so "same settings again" can reproduce the picture
-  if (p.op === 'generate' && p.seed === undefined) p.seed = randomSeed();
+  if (!ensureImageKey(p.providerId)) return;
+  // Send a seed (when the model takes one) so "same settings again" can reproduce the picture
+  if (p.op === 'generate' && p.seed === undefined && hasOption(imageModelOf(p.providerId, p.model), 'seed')) p.seed = randomSeed();
   const draft: MessageRecord = {
     id: repo.newId(),
     conversationId: conv.id,
@@ -326,12 +396,12 @@ export async function runImageJob(convId: string, userMsgId: string, override: P
   const ctrl = beginRun(conv.id);
   let final: MessageRecord = draft;
   try {
-    const { blobs, result } = await call(p, ctrl.signal);
+    const { blobs, result, costUsd } = await call(p, ctrl.signal);
     if (!blobs.length)
       throw new ImageApiError({ kind: 'bad-request', message: result.violations ? t('err.policy') : t('err.noImage') });
     const parts = await storeImages(conv, draft.id, blobs);
     final = { ...draft, parts, status: 'done', image: { params: p, ...result } };
-    recordImageUsage(conv, p, blobs.length);
+    recordImageUsage(conv, p, blobs.length, costUsd);
   } catch (e) {
     if (ctrl.signal.aborted) final = { ...draft, status: 'aborted' };
     else {
@@ -394,16 +464,29 @@ registerUserRequestHandler({
 });
 
 // ---- generate_image tool (chat models) ----
+/** The request the generate_image tool makes for an input (shown in full on its card before and after running) */
+export function toolParams(conv: Conversation | undefined, input: Partial<ImageToolInput>): ImageParams {
+  const base = paramsFor(conv, input.prompt ?? '');
+  const m = imageModelFor(conv);
+  const aspect = input.aspect_ratio && (!m?.constraints.aspectRatios?.length || m.constraints.aspectRatios.includes(input.aspect_ratio)) ? input.aspect_ratio : base.aspectRatio;
+  return { ...base, variants: 1, negativePrompt: hasOption(m, 'negativePrompt') ? input.negative_prompt : undefined, aspectRatio: aspect, seed: hasOption(m, 'seed') ? randomSeed() : undefined, enhancePrompt: false };
+}
+
 async function runImageTool(conv: Conversation, messageId: string, input: ImageToolInput, signal: AbortSignal) {
   if (!imageModels.value.length) await loadImageModels();
-  const base = paramsFromBar(input.prompt);
-  const p: ImageParams = { ...base, variants: 1, negativePrompt: input.negative_prompt, aspectRatio: input.aspect_ratio ?? base.aspectRatio, seed: randomSeed(), enhancePrompt: false };
+  const p = toolParams(conv, input);
   if (!p.model) throw new Error(t('err.modelsFailed'));
-  const r = await providerFor(p.providerId).generate(p, imageModelOf(p.model), callContext(p.providerId, signal));
+  const model = imageModelOf(p.providerId, p.model);
+  const r = await providerFor(p.providerId).generate(p, model, callContext(p.providerId, signal));
   if (!r.images.length) throw new Error(r.violations ? t('err.policy') : t('err.noImage'));
   const parts = await storeImages(conv, messageId, r.images);
-  recordImageUsage(conv, p, r.images.length);
-  return { blobIds: parts.map((x) => x.blobId), model: imageModelOf(p.model)?.name ?? p.model, blurred: !!r.blurred };
+  const cost = recordImageUsage(conv, p, r.images.length, r.costUsd);
+  return {
+    blobIds: parts.map((x) => x.blobId),
+    model: model?.name ?? p.model,
+    blurred: !!r.blurred,
+    request: { provider: imageProviderOf(p.providerId)?.label ?? p.providerId, prompt: p.prompt, negativePrompt: p.negativePrompt, aspectRatio: p.aspectRatio, resolution: p.resolution, costUsd: cost, costEstimated: r.costUsd === undefined }
+  };
 }
 
 // Chat models can create images when the user turned it on (needs the image provider's key)

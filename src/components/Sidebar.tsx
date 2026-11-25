@@ -190,7 +190,7 @@ export function Sidebar() {
 
   return (
     <>
-      {sidebarOpen.value && <div data-dialog-backdrop class="fixed inset-0 z-20 bg-scrim md:hidden" onClick={() => (sidebarOpen.value = false)} />}
+      {sidebarOpen.value && <div data-dialog-backdrop class="backdrop fixed inset-0 z-20 md:hidden" onClick={() => (sidebarOpen.value = false)} />}
       <aside
         ref={asideRef}
         class={cx(

@@ -23,6 +23,7 @@ import { waitForApproval } from './approvals';
 import { cancelSuggestions, suggestReplies } from './suggestions';
 import { compactConversation, contextUsage } from './compaction';
 import { t } from './messages';
+import { saveReplyImage } from './media';
 
 let pendingFlush = 0;
 const pendingUpdates = new Map<string, MessageRecord>();
@@ -114,7 +115,10 @@ async function generateReply(convId: string, parentUserId: string) {
   const toolCtx: ToolProviderContext = { conv, messageId: draft.id, model, history };
   const tools = contributedTools(toolCtx);
   const systemPrompt = systemPromptFor(toolCtx);
-  const providerOptions = providerOptionsFor(cfg.id, 'chat', contributedBuiltinWebSearch(toolCtx));
+  // The provider's own web search, when the web feature chose that route (docs/specs/web-and-images.md §2)
+  const nativeSearch = contributedBuiltinWebSearch(toolCtx);
+  const providerOptions = providerOptionsFor(cfg.id, 'chat', nativeSearch);
+  let imageCount = 0;
   try {
     const final = await runAssistant({
       provider: cfg,
@@ -126,6 +130,9 @@ async function generateReply(convId: string, parentUserId: string) {
       systemPrompt,
       params: settings.value.temperature != null ? { temperature: settings.value.temperature } : undefined,
       providerOptions,
+      webSearch: nativeSearch === 'off' ? undefined : nativeSearch,
+      imageOutput: !!model?.capabilities.imageOutput,
+      saveImage: (data, mimeType) => saveReplyImage(conv, draft.id, data, mimeType, ++imageCount),
       contextLength: model?.contextLength,
       maxOutputTokens: model?.maxOutputTokens,
       resendReasoning: settings.value.resendReasoning,
@@ -150,7 +157,7 @@ async function generateReply(convId: string, parentUserId: string) {
       scheduleMessageUpdate(final);
       flushUpdates();
     }
-    recordUsage({ id: final.id, providerId: cfg.id, model: conv.modelId, kind: 'chat', usage: final.meta?.usage, costUsd: final.meta?.costUsd, temporary: conv.temporary });
+    recordUsage({ id: final.id, conversationId: conv.id, providerId: cfg.id, model: conv.modelId, kind: 'chat', usage: final.meta?.usage, costUsd: final.meta?.costUsd, temporary: conv.temporary });
     if (final.meta?.costUsd && balances.value[cfg.id]) updateBalance(cfg.id, (b) => recordSpend(b, final.meta!.costUsd!));
     if (final.status === 'error' && final.error) showToast(final.error.message, 'error');
     void suggestReplies(conv, final, history);

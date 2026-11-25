@@ -9,8 +9,9 @@ export const BUILTIN_BASE_URLS: Record<string, { env: string; url: string }> = {
   venice: { env: 'VITE_VENICE_BASE_URL', url: 'https://api.venice.ai/api/v1' },
   openrouter: { env: 'VITE_OPENROUTER_BASE_URL', url: 'https://openrouter.ai/api/v1' },
   anthropic: { env: 'VITE_ANTHROPIC_BASE_URL', url: 'https://api.anthropic.com/v1' },
-  gemini: { env: 'VITE_GEMINI_BASE_URL', url: 'https://generativelanguage.googleapis.com/v1beta/openai' },
+  gemini: { env: 'VITE_GEMINI_BASE_URL', url: 'https://generativelanguage.googleapis.com/v1beta' },
   deepseek: { env: 'VITE_DEEPSEEK_BASE_URL', url: 'https://api.deepseek.com' },
+  openai: { env: 'VITE_OPENAI_BASE_URL', url: 'https://api.openai.com/v1' },
   groq: { env: 'VITE_GROQ_BASE_URL', url: 'https://api.groq.com/openai/v1' }
 };
 

@@ -11,7 +11,7 @@ import { settings } from '../state/settings';
 import { composerFocus, composerText, openModelPicker, showToast } from '../state/ui';
 import { Markdown } from './Markdown';
 import { ToolCallCard } from './ToolCallCard';
-import { assistantExtras, userMessageExtras } from './extensions';
+import { assistantExtras, toolViewFor, userMessageExtras } from './extensions';
 import { Button, Collapse, Dots, Icon, Shimmer, Spinner, cx } from './ui';
 import { t } from './messages';
 import { formatNumber } from '../lib/i18n';
@@ -62,6 +62,26 @@ function Reasoning({ part, streaming }: { part: Extract<Part, { type: 'reasoning
       <Collapse open={open} class="border-t border-line px-3 py-2 text-[13px] whitespace-pre-wrap text-muted">
         {part.text}
       </Collapse>
+    </div>
+  );
+}
+
+/** A tool the provider ran on its own servers (e.g. its web search): one line, nothing to approve */
+function ServerToolLine({ p }: { p: Extract<Part, { type: 'server-tool' }> }) {
+  const view = toolViewFor(p.name);
+  const label = view?.label?.(p.name) ?? p.name;
+  return (
+    <div class="my-1.5 flex min-w-0 items-center gap-2 text-xs text-muted">
+      {p.state === 'running' ? <Spinner class="size-3.5 shrink-0" /> : <Icon name={view?.icon ?? 'globe'} class={cx('size-3.5 shrink-0', p.state === 'error' && 'text-danger')} />}
+      <span class="shrink-0 font-medium text-ink">{label}</span>
+      {p.query && <span class="min-w-0 truncate">{p.query}</span>}
+      {p.state === 'running' ? (
+        <Shimmer>{t('msg.searching')}</Shimmer>
+      ) : p.state === 'error' ? (
+        <span class="text-danger">{t('msg.serverToolFailed', { error: p.error ?? '' })}</span>
+      ) : (
+        p.resultCount != null && <span class="shrink-0 tabular-nums">{t('msg.results', { n: formatNumber(p.resultCount) })}</span>
+      )}
     </div>
   );
 }
@@ -138,7 +158,7 @@ function UserMessage({ m }: { m: MessageRecord }) {
       {userMessageExtras.map((X, i) => (
         <X key={i} m={m} />
       ))}
-      {textOf(m) && <div class="max-w-[85%] rounded-2xl bg-glass-strong px-4 py-2.5 text-[15px] leading-7 whitespace-pre-wrap">{textOf(m)}</div>}
+      {textOf(m) && <UserText text={textOf(m)} />}
       <div class="mt-1 flex items-center gap-0.5 opacity-60 transition group-hover:opacity-100 focus-within:opacity-100">
         <SiblingNav m={m} />
         <Button aria-label={t('msg.copy')} onClick={() => copy(textOf(m))}>
@@ -159,6 +179,37 @@ function UserMessage({ m }: { m: MessageRecord }) {
   );
 }
 
+/** Over this a user message is folded (e.g. a pasted JSON or log) */
+const LONG_CHARS = 1500;
+const LONG_LINES = 20;
+
+/** The user's text: long lines wrap anywhere (no horizontal overflow); very long text is folded with a toggle */
+function UserText({ text }: { text: string }) {
+  const lines = text.split('\n').length;
+  const long = text.length > LONG_CHARS || lines > LONG_LINES;
+  const [open, setOpen] = useState(false);
+  return (
+    <div class="max-w-[85%] min-w-0 rounded-2xl bg-glass-strong px-4 py-2.5 text-[15px] leading-7">
+      <div
+        class={cx('whitespace-pre-wrap [overflow-wrap:anywhere]', long && !open && 'max-h-64 overflow-hidden [mask-image:linear-gradient(to_bottom,#000_65%,transparent)]')}
+      >
+        {text}
+      </div>
+      {long && (
+        <button
+          type="button"
+          class="mt-1 flex items-center gap-1 text-xs text-muted hover:text-ink"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          <Icon name="chevron-down" class={cx('size-3.5 transition-transform duration-300', open && 'rotate-180')} />
+          {open ? t('msg.collapse') : t('msg.expand', { lines: formatNumber(lines), chars: formatNumber(text.length) })}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function AssistantMessage({ m }: { m: MessageRecord }) {
   const streaming = m.status === 'streaming';
   const model = modelOf(m.meta?.providerId, m.meta?.model);
@@ -173,6 +224,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
         if (p.type === 'reasoning') return <Reasoning key={i} part={p} streaming={streaming} />;
         if (p.type === 'text') return <Markdown key={i} text={p.text} streaming={streaming && p.state === 'streaming'} citations={sources.map((s) => s.url)} />;
         if (p.type === 'tool') return <ToolCallCard key={i} p={p} live={streaming} owner={{ conversationId: m.conversationId, messageId: m.id }} />;
+        if (p.type === 'server-tool') return <ServerToolLine key={i} p={p} />;
         return null;
       })}
       {assistantExtras.map((X) => (
@@ -232,6 +284,11 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
           {!!usage?.cachedInputTokens && (
             <span class="ml-1 text-ok tabular-nums" title={t('msg.cachedTitle')}>
               {t('msg.cached', { n: formatNumber(usage.cachedInputTokens) })}
+            </span>
+          )}
+          {!!usage?.webSearches && (
+            <span class="ml-2 tabular-nums" title={t('msg.webSearchesTitle')}>
+              {t('msg.webSearches', { n: formatNumber(usage.webSearches) })}
             </span>
           )}
           {m.meta?.costUsd != null && <span class="ml-2 tabular-nums">${m.meta.costUsd.toFixed(4)}</span>}

@@ -67,6 +67,12 @@ function ModelRow({ m, selected, onPick, showProvider }: { m: ModelInfo; selecte
               {t('picker.vision')}
             </Badge>
           )}
+          {m.capabilities.imageOutput && (
+            <Badge>
+              <Icon name="image" class="size-3" />
+              {t('picker.imageOutput')}
+            </Badge>
+          )}
           {m.capabilities.webSearch && (
             <Badge>
               <Icon name="globe" class="size-3" />

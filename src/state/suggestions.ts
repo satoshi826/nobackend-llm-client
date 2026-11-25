@@ -45,7 +45,7 @@ export async function suggestReplies(conv: Conversation, final: MessageRecord, h
       model: ref.modelId,
       providerOptions: providerOptionsFor(cfg.id, 'summary'),
       signal: ctrl.signal,
-      onUsage: (usage, costUsd) => recordUsage({ id: repo.newId(), providerId: cfg.id, model: ref.modelId, kind: 'suggest', usage, costUsd, temporary: conv.temporary })
+      onUsage: (usage, costUsd) => recordUsage({ id: repo.newId(), conversationId: conv.id, providerId: cfg.id, model: ref.modelId, kind: 'suggest', usage, costUsd, temporary: conv.temporary })
     });
     if (ctrl.signal.aborted || !list.length) return;
     const latest = messages.value.find((m) => m.id === final.id) ?? final;

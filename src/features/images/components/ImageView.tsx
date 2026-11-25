@@ -102,6 +102,27 @@ function Elapsed({ since }: { since: number }) {
 
 const OP_LABEL = { generate: 'op.generate', upscale: 'op.upscale', edit: 'op.edit', 'remove-bg': 'op.removeBg' } as const;
 
+/** Images a chat model put in its reply (native image output); image answers render their own */
+export function ReplyImages({ m }: { m: MessageRecord }) {
+  if (m.image) return null;
+  const files = m.parts.filter((x): x is FilePart => x.type === 'file' && x.mimeType.startsWith('image/'));
+  if (!files.length) return null;
+  const items: LightboxItem[] = files.map((f) => ({ blobId: f.blobId, conversationId: m.conversationId, messageId: m.id }));
+  return (
+    <div class={cx('my-2 grid gap-2', files.length === 1 ? 'max-w-md grid-cols-1' : 'max-w-xl grid-cols-2')}>
+      {files.map((f, i) => (
+        <ImageThumb
+          key={f.blobId}
+          blobId={f.blobId}
+          alt={t('thumb.alt', { n: i + 1 })}
+          class={files.length === 1 ? 'aspect-auto max-h-[28rem]' : 'aspect-square'}
+          onOpen={() => (lightbox.value = { items, index: i })}
+        />
+      ))}
+    </div>
+  );
+}
+
 /** An image answer: progress, thumbnails, details, errors and retry options */
 /** The images of an image answer (renders nothing for other messages) */
 export function ImageAnswer({ m }: { m: MessageRecord }) {
@@ -113,7 +134,7 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
   const p = img.params;
   const files = m.parts.filter((x): x is FilePart => x.type === 'file');
   const items: LightboxItem[] = files.map((f) => ({ blobId: f.blobId, conversationId: m.conversationId, messageId: m.id }));
-  const model = imageModelOf(p.model);
+  const model = imageModelOf(p.providerId, p.model);
   if (m.status === 'streaming')
     return (
       <div class="flex items-center gap-2 text-sm text-muted" role="status">
@@ -160,10 +181,13 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
       )}
       {m.status === 'done' && p.op === 'generate' && (
         <div class="flex flex-wrap gap-1.5">
-          <Button class="text-xs" disabled={isStreaming.value} onClick={() => void regenerateImage(m.id, 'same')} title={t('regen.sameTitle')}>
-            <Icon name="refresh" class="size-3.5" />
-            {t('regen.same')}
-          </Button>
+          {/* Same picture again needs a seed (some providers take none) */}
+          {img.seed !== undefined && (
+            <Button class="text-xs" disabled={isStreaming.value} onClick={() => void regenerateImage(m.id, 'same')} title={t('regen.sameTitle')}>
+              <Icon name="refresh" class="size-3.5" />
+              {t('regen.same')}
+            </Button>
+          )}
           <Button class="text-xs" disabled={isStreaming.value} onClick={() => void regenerateImage(m.id, 'new')} title={t('regen.newTitle')}>
             <Icon name="sparkle" class="size-3.5" />
             {t('regen.new')}

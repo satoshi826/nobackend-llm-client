@@ -30,6 +30,8 @@ export interface ComposerApi {
   text: string;
   setText(v: string): void;
   focus(): void;
+  /** The input box (anchor for popovers such as suggestion lists; components/menu.tsx) */
+  box: HTMLElement | null;
 }
 
 /** Something added to the input box: a button, content above the text area, extras sent with the message */

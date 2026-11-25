@@ -1,15 +1,15 @@
-// Web search feature (provider built-in search, or Tavily + Jina Reader tools).
+// Web search feature: the chat provider's own search (native), or Tavily + Jina Reader tools as the fallback.
+// On by default; turned off in Settings → Web 検索 (no per-conversation switch).
 // Importing this module registers it with the core through extension points.
-import { registerComposerAddon, registerSettingsTab, registerToolView } from '../../components/extensions';
-import { SearchResults, WebSearchButton } from './components/Web';
+import { registerSettingsTab, registerToolView } from '../../components/extensions';
+import { SearchResults } from './components/Web';
 import { lazyComponent } from '../../components/lazy';
 import { t } from './messages';
 import { formatNumber } from '../../lib/i18n';
 import './state';
 
-export { searchModeFor } from './state';
+export { searchRouteFor } from './state';
 
-registerComposerAddon({ id: 'web', Button: WebSearchButton });
 registerToolView({
   names: ['web_search'],
   label: () => t('webSearch'),

@@ -16,6 +16,8 @@ export interface UsageRecord {
   /** Cost reported by the provider. If not reported, estimated from the model's prices (costEstimated) */
   costUsd?: number;
   costEstimated?: boolean;
+  /** Conversation the request belonged to (for the conversation's total in the header) */
+  conversationId?: string;
 }
 
 /** Estimate from prices (ignores cache-hit discounts on input, i.e. errs on the high side) */
@@ -25,11 +27,11 @@ export function estimateCost(u: Usage, pricing: ModelInfo['pricing'] | undefined
 }
 
 export function makeUsageRecord(
-  o: { id: string; at: number; providerId: string; model: string; kind: UsageRecord['kind']; usage?: Usage; costUsd?: number },
+  o: { id: string; at: number; providerId: string; model: string; kind: UsageRecord['kind']; usage?: Usage; costUsd?: number; costEstimated?: boolean; conversationId?: string },
   pricing?: ModelInfo['pricing']
 ): UsageRecord | null {
   const u = o.usage ?? {};
-  if (!u.inputTokens && !u.outputTokens && o.costUsd === undefined) return null;
+  if (!u.inputTokens && !u.outputTokens && o.costUsd === undefined && o.kind !== 'image') return null;
   const est = o.costUsd === undefined ? estimateCost(u, pricing) : undefined;
   return {
     id: o.id,
@@ -41,7 +43,8 @@ export function makeUsageRecord(
     cachedInputTokens: u.cachedInputTokens ?? 0,
     outputTokens: u.outputTokens ?? 0,
     reasoningTokens: u.reasoningTokens ?? 0,
-    ...(o.costUsd !== undefined ? { costUsd: o.costUsd } : est !== undefined ? { costUsd: est, costEstimated: true } : {})
+    ...(o.costUsd !== undefined ? { costUsd: o.costUsd, ...(o.costEstimated ? { costEstimated: true } : {}) } : est !== undefined ? { costUsd: est, costEstimated: true } : {}),
+    ...(o.conversationId ? { conversationId: o.conversationId } : {})
   };
 }
 

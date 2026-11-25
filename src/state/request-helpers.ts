@@ -5,6 +5,7 @@ import { getPreset } from '../lib/providers/registry';
 import { makeUsageRecord } from '../lib/usage';
 import { providerSettingsOf } from './settings';
 import { modelOf, providerById } from './models';
+import { addConversationCost } from './costs';
 
 /** Provider-specific request options (decided by the preset) */
 export function providerOptionsFor(providerId: string, purpose: 'chat' | 'summary', webSearch: 'off' | 'auto' | 'on' = 'off') {
@@ -15,11 +16,25 @@ export function providerOptionsFor(providerId: string, purpose: 'chat' | 'summar
   return opts ? { [preset.id]: opts } : undefined;
 }
 
-/** Record usage (temporary chats are not recorded) */
-export function recordUsage(o: { id: string; providerId: string; model: string; kind: 'chat' | 'summary' | 'suggest' | 'image'; usage?: Usage; costUsd?: number; temporary?: boolean }) {
-  if (o.temporary) return;
+/**
+ * Record usage. It also counts toward the conversation's total (header); temporary chats are counted
+ * in memory only and never written to the log.
+ */
+export function recordUsage(o: {
+  id: string;
+  conversationId?: string;
+  providerId: string;
+  model: string;
+  kind: 'chat' | 'summary' | 'suggest' | 'image';
+  usage?: Usage;
+  costUsd?: number;
+  costEstimated?: boolean;
+  temporary?: boolean;
+}) {
   const r = makeUsageRecord({ ...o, at: Date.now() }, modelOf(o.providerId, o.model)?.pricing);
-  if (r) void repo.addUsage(r).catch(() => {});
+  if (!r) return;
+  if (o.conversationId) addConversationCost(o.conversationId, r);
+  if (!o.temporary) void repo.addUsage(r).catch(() => {});
 }
 
 export function parseModelRef(ref: string): { providerId: string; modelId: string } | null {

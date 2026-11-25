@@ -1,10 +1,14 @@
 // The option bar shown above the input box in image mode
 import { useEffect, useState } from 'preact/hooks';
-import { aspectsOf } from '../providers/venice';
+import { aspectsOf, hasOption } from '../providers/common';
+import { ModelOptions } from './ModelOptions';
 import { openSettings } from '../../../state/ui';
 import { Button, Icon, Spinner, cx } from '../../../components/ui';
 import {
   currentImageModel,
+  defaultImageModel,
+  modelRef,
+  setConversationImageModel,
   estimateCost,
   imageSettings,
   imageModels,
@@ -61,12 +65,18 @@ export function ImageBar() {
   return (
     <div class="space-y-1.5 px-3 pt-2.5 text-xs" role="group" aria-label={t('bar.group')}>
       <div class="flex flex-wrap items-center gap-1.5">
-        <select aria-label={t('imageModel')} data-image-model class={cx(sel, 'max-w-[12rem]')} value={m?.id ?? ''} onChange={(e) => void setImageDefaults({ model: (e.target as HTMLSelectElement).value, resolution: '' })}>
-          {list.map((x) => (
-            <option key={x.id} value={x.id}>
-              {x.privacy === 'private' ? x.name : t('bar.relayed', { name: x.name })}
-            </option>
-          ))}
+        <select
+          aria-label={t('imageModel')}
+          title={t('bar.thisChat')}
+          data-image-model
+          class={cx(sel, 'max-w-[13rem]')}
+          value={m ? modelRef(m) : ''}
+          onChange={(e) => {
+            const x = list.find((y) => modelRef(y) === (e.target as HTMLSelectElement).value);
+            if (x) void setConversationImageModel(x);
+          }}
+        >
+          <ModelOptions list={list} defaultRef={defaultImageModel.value ? modelRef(defaultImageModel.value) : undefined} />
         </select>
         <select aria-label={t('bar.aspect')} class={sel} value={aspects.includes(d.aspectRatio) ? d.aspectRatio : (m?.constraints.defaultAspectRatio ?? aspects[0])} onChange={(e) => void setImageDefaults({ aspectRatio: (e.target as HTMLSelectElement).value })}>
           {aspects.map((a) => (
@@ -76,7 +86,7 @@ export function ImageBar() {
           ))}
         </select>
         {!!m?.constraints.resolutions?.length && (
-          <select aria-label={t('bar.resolution')} class={sel} value={d.resolution || m.constraints.defaultResolution || m.constraints.resolutions[0]} onChange={(e) => void setImageDefaults({ resolution: (e.target as HTMLSelectElement).value })}>
+          <select aria-label={m.constraints.resolutionLabel === 'quality' ? t('bar.quality') : t('bar.resolution')} title={m.constraints.resolutionLabel === 'quality' ? t('bar.quality') : t('bar.resolution')} class={sel} value={d.resolution || m.constraints.defaultResolution || m.constraints.resolutions[0]} onChange={(e) => void setImageDefaults({ resolution: (e.target as HTMLSelectElement).value })}>
             {m.constraints.resolutions.map((r) => (
               <option key={r} value={r}>
                 {r}
@@ -91,7 +101,7 @@ export function ImageBar() {
             </option>
           ))}
         </select>
-        {imageStyles.value.length > 0 && (
+        {hasOption(m, 'styles') && imageStyles.value.length > 0 && (
           <select aria-label={t('bar.style')} class={cx(sel, 'max-w-[9rem]')} value={d.style} onChange={(e) => void setImageDefaults({ style: (e.target as HTMLSelectElement).value })}>
             <option value="">{t('bar.noStyle')}</option>
             {imageStyles.value.map((s) => (
@@ -111,25 +121,25 @@ export function ImageBar() {
       </div>
       {details && (
         <div class="grid gap-1.5 sm:grid-cols-[1fr_auto]">
-          <input
+          {hasOption(m, 'negativePrompt') && <input
             class={cx(sel, 'py-1')}
             placeholder={t('bar.negativePlaceholder')}
             value={d.negativePrompt}
             onInput={(e) => void setImageDefaults({ negativePrompt: (e.target as HTMLInputElement).value })}
             aria-label={t('bar.negative')}
-          />
-          <input
+          />}
+          {hasOption(m, 'seed') && <input
             class={cx(sel, 'w-32 py-1 tabular-nums')}
             inputMode="numeric"
             placeholder={t('bar.seedPlaceholder')}
             value={d.seed}
             onInput={(e) => void setImageDefaults({ seed: (e.target as HTMLInputElement).value.replace(/[^\d-]/g, '') })}
             aria-label={t('bar.seed')}
-          />
-          <label class="flex items-center gap-1.5 text-muted sm:col-span-2">
+          />}
+          {hasOption(m, 'enhance') && <label class="flex items-center gap-1.5 text-muted sm:col-span-2">
             <input type="checkbox" checked={d.enhancePrompt} onChange={(e) => void setImageDefaults({ enhancePrompt: (e.target as HTMLInputElement).checked })} />
             {t('bar.enhance')}
-          </label>
+          </label>}
         </div>
       )}
     </div>

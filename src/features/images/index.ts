@@ -11,7 +11,7 @@ import {
 } from '../../components/extensions';
 import { registerMessageTransform } from '../../lib/chat/request';
 import { ImageModelButton, ImageBarAbove, ImageModeButton, ImageSettings, ImageToolDetail, UserImageRequest, imageToolNote } from './components/Hooks';
-import { ImageAnswer, Lightbox } from './components/ImageView';
+import { ImageAnswer, Lightbox, ReplyImages } from './components/ImageView';
 import { imageNote } from './transform';
 import { sendImagePrompt } from './state';
 import { GENERATE_IMAGE } from './tool';
@@ -37,6 +37,8 @@ registerComposerAddon({
 });
 registerModelSlot({ id: 'images', when: (conv) => !!conv.imageMode, Component: ImageModelButton });
 registerAssistantExtra({ id: 'images', Component: ImageAnswer, owns: (m) => !!m.image });
+// Images a chat model put in its reply (native image output; stored by state/media.ts)
+registerAssistantExtra({ id: 'reply-images', Component: ReplyImages });
 registerUserMessageExtra(UserImageRequest);
 registerToolView({
   names: [GENERATE_IMAGE],

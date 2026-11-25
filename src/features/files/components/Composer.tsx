@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Conversation, FileRecord } from '../../../lib/db/schema';
 import { Button, Icon, Modal, Spinner, cx } from '../../../components/ui';
+import { MenuItem, Popover } from '../../../components/menu';
 import { ATTACH_INLINE_CHARS, attachExisting, detach, fileList, pendingAttachments, refreshFiles, uploadFiles } from '../state';
 import { formatChars, formatDate, FileIcon, typeLabel } from './common';
 import { formatNumber } from '../../../lib/i18n';
@@ -14,12 +15,6 @@ export function AttachButton({ conv }: { conv: Conversation }) {
   const [picker, setPicker] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: MouseEvent) => !wrap.current?.contains(e.target as Node) && setMenu(false);
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [menu]);
   const n = pendingAttachments.value.length;
   return (
     <div class="relative" ref={wrap}>
@@ -37,32 +32,26 @@ export function AttachButton({ conv }: { conv: Conversation }) {
         )}
       </Button>
       {menu && (
-        <div role="menu" class="absolute bottom-full left-0 z-20 mb-2 w-56 panel rounded-2xl p-1.5 text-sm">
-          <button
-            type="button"
-            role="menuitem"
-            class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-glass"
-            onClick={() => {
+        <Popover anchor={wrap.current} onClose={() => setMenu(false)} label={t('attach.title')} class="w-56">
+          <MenuItem
+            icon={<Icon name="upload" class="mt-0.5 size-4 shrink-0" />}
+            onSelect={() => {
               setMenu(false);
               input.current?.click();
             }}
           >
-            <Icon name="upload" class="size-4" />
             {t('attach.fromDevice')}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-glass"
-            onClick={() => {
+          </MenuItem>
+          <MenuItem
+            icon={<Icon name="files" class="mt-0.5 size-4 shrink-0" />}
+            onSelect={() => {
               setMenu(false);
               setPicker(true);
             }}
           >
-            <Icon name="files" class="size-4" />
             {t('attach.fromSaved')}
-          </button>
-        </div>
+          </MenuItem>
+        </Popover>
       )}
       <input
         ref={input}

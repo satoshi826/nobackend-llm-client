@@ -3,7 +3,9 @@
 import { currentConv, isDraft, startNewChat } from '../../state/conversations';
 import { compactConversation, compactingConv, contextUsage } from '../../state/compaction';
 import { isStreaming } from '../../state/runs';
-import { modal, sidebarOpen } from '../../state/ui';
+import { modal, openSettings, sidebarOpen } from '../../state/ui';
+import { conversationCosts, loadConversationCost } from '../../state/costs';
+import { useEffect } from 'preact/hooks';
 import { Badge, Button, Chip, Icon, Spinner, cx } from '../ui';
 import { t } from './messages';
 import { formatNumber } from '../../lib/i18n';
@@ -24,6 +26,26 @@ function ContextMeter() {
     >
       {busy ? <Spinner class="size-4" /> : <Icon name="compress" class="size-4" />}
       <span class="tabular-nums">{busy ? t('header.compacting') : pct != null ? `${pct}%` : `${Math.round(u.tokens / 1000)}K`}</span>
+    </Button>
+  );
+}
+
+const money = (n: number) => (n > 0 && n < 0.001 ? '<$0.001' : '$' + formatNumber(n, { minimumFractionDigits: n < 1 ? 3 : 2, maximumFractionDigits: n < 1 ? 3 : 2 }));
+
+/** Estimated total cost of this conversation (replies, summaries, reply suggestions, images); opens the usage tab */
+function ConversationCost() {
+  const conv = currentConv.value;
+  useEffect(() => {
+    if (!isDraft.value && !conv.temporary) void loadConversationCost(conv.id);
+  }, [conv.id]);
+  const c = conversationCosts.value[conv.id];
+  if (!c || (c.usd === 0 && c.unknown === 0)) return null;
+  const title = [t('header.costTitle'), c.unknown ? t('header.costUnknown', { n: formatNumber(c.unknown) }) : '', c.estimated ? t('header.costEstimated') : ''].filter(Boolean).join('\n');
+  return (
+    <Button aria-label={`${t('header.cost')}: ${money(c.usd)}`} title={title} class="text-xs tabular-nums text-muted" onClick={() => openSettings('usage')}>
+      <span aria-hidden="true">≈</span>
+      {money(c.usd)}
+      {c.unknown > 0 && <span aria-hidden="true">+</span>}
     </Button>
   );
 }
@@ -58,6 +80,7 @@ export function Header() {
         )
       )}
       <div class="ml-auto flex shrink-0 items-center gap-0.5">
+        {!draft && <ConversationCost />}
         {!draft && <ContextMeter />}
         <Button aria-label={t('header.systemPrompt')} title={t('header.systemPromptTitle')} onClick={() => (modal.value = 'system')} class={cx('text-xs', conv.systemPrompt && 'text-ink-strong')}>
           <Icon name="sliders" class="size-4" />

@@ -77,9 +77,9 @@ All animations are disabled under `prefers-reduced-motion: reduce`.
 - **Tab strip** (`TabStrip`: settings): text tabs with an accent underline that slides to the selected tab; the panel fades in.
 - **Switch** (`Toggle` in settings-ui, `.switch`): text left, switch right; the knob slides with a slight spring and stretches while pressed.
 - **Accordion** (`Collapse`; `<details>` where supported): height and opacity animate open and closed; the chevron rotates.
-- **Menu / popover**: opaque `panel`, radius 16, opens with `pop` (fade + scale from .96).
+- **Menu / popover** (`components/menu.tsx`: `Popover`, `MenuItem`, `MenuSeparator`): every floating list uses it. It renders in a portal on `<body>` (inside glass, a backdrop-filter only blurs that glass, so a menu in the composer could not blur the page), places itself from its anchor and flips when there is no room, and closes on Escape or a press outside. It is an opaque `panel` with a strong blur, radius 16, and opens with `pop` (fade + scale from .96). Arrow keys move between items.
 - **Card**: glass, radius 18; tool cards and file cards use it; the header row is 13 px muted with an icon.
-- **Dialog**: glass on a 45 % black scrim, radius 22, max width 640 (wide 900); focus handling as `useDialog`.
+- **Dialog**: a `frosted` window — translucent, with what shows through strongly blurred (48 px) — over the `backdrop` utility, which neither darkens nor blurs the page (a backdrop-filter there would stop the window's own blur). Radius 22, max width 640 (wide 900); focus handling as `useDialog`. Menus stay nearly opaque `panel`s.
 - **Toast**: floating glass, bottom center, above the composer.
 
 ## 4. Screen patterns

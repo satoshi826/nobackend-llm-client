@@ -23,6 +23,8 @@ export interface ModelCapabilities {
   reasoningEffort?: string[];
   webSearch?: boolean;
   jsonSchema?: boolean;
+  /** Replies can contain generated images (native image output, docs/specs/web-and-images.md §3) */
+  imageOutput?: boolean;
 }
 
 export interface ModelInfo {
@@ -55,6 +57,13 @@ export type Part =
   | { type: 'reasoning'; text: string; state?: 'streaming' | 'done' }
   | { type: 'file'; blobId: string; name: string; mimeType: string; width?: number; height?: number }
   | { type: 'source'; url: string; title?: string; snippet?: string }
+  /** A tool the chat provider ran on its own servers (native web search). Shown, never executed by the app */
+  | { type: 'server-tool'; id: string; name: string; query?: string; state: 'running' | 'done' | 'error'; resultCount?: number; error?: string }
+  /**
+   * The provider's own content blocks for one step, exactly as received. Sent back in place of the step's
+   * parts while the turn runs (some APIs require it, e.g. Anthropic after pause_turn); removed when the turn ends
+   */
+  | { type: 'provider-content'; provider: string; content: unknown[] }
   | {
       type: 'tool';
       toolCallId: string;
@@ -78,6 +87,8 @@ export interface Usage {
   cachedInputTokens?: number;
   outputTokens?: number;
   reasoningTokens?: number;
+  /** Searches the provider ran (native web search) */
+  webSearches?: number;
 }
 
 export interface ChatMessage {
@@ -111,6 +122,10 @@ export interface ChatRequest {
   providerOptions?: Record<string, Record<string, unknown>>;
   /** Prompt cache routing key (routes requests of the same conversation to the same cache) */
   cacheKey?: string;
+  /** Use the provider's own web search ('auto': the model decides). Only set for models the preset says can (nativeWebSearch) */
+  webSearch?: 'auto' | 'on';
+  /** Ask for images in the reply (models with capabilities.imageOutput) */
+  imageOutput?: boolean;
   signal: AbortSignal;
 }
 
@@ -123,10 +138,17 @@ export type ProviderEvent =
   | { type: 'tool-call-delta'; index: number; argsDelta: string }
   | { type: 'tool-call-end'; index: number; input: unknown; parseError?: string }
   | { type: 'source'; url: string; title?: string; snippet?: string }
+  /** A provider-side tool started or changed (same id updates the same part) */
+  | { type: 'server-tool'; id: string; name: string; query?: string; state: 'running' | 'done' | 'error'; resultCount?: number; error?: string }
+  /** The step's content blocks as the provider sent them (see the provider-content part) */
+  | { type: 'provider-content'; provider: string; content: unknown[] }
+  /** A generated image in the reply (base64) */
+  | { type: 'image'; data: string; mimeType: string }
   | { type: 'usage'; usage: Usage; costUsd?: number }
   | { type: 'vendor-state'; data: Record<string, unknown> }
   | { type: 'account'; balanceUsd?: number; balanceDiem?: number }
-  | { type: 'done'; reason: 'stop' | 'length' | 'tool-calls' | 'content-filter' }
+  /** pause: the provider paused a long server-side turn; the runner sends the turn back to continue it */
+  | { type: 'done'; reason: 'stop' | 'length' | 'tool-calls' | 'content-filter' | 'pause' }
   | { type: 'error'; error: ProviderError };
 
 export type ProviderErrorKind =
@@ -197,9 +219,14 @@ export interface ProviderPreset {
    * always: per the setting / tool-turns: only messages that contain tool calls / never: not sent (API rejects it)
    */
   reasoningResend?: 'always' | 'tool-turns' | 'never';
-  features?: {
-    /** The provider has its own web search (no extra key needed) */
-    builtInWebSearch?: boolean;
+  /**
+   * The provider's own web search (no extra key). supports: whether this model can use it.
+   * The request carries ChatRequest.webSearch; requestOptions / transformRequest / the adapter turn it into the provider's shape
+   */
+  nativeWebSearch?: {
+    supports(modelId: string, model?: ModelInfo): boolean;
+    /** Where queries go and what it costs (Settings → Web search) */
+    note?: string;
   };
   settings?: ProviderSetting[];
   /** Provider-specific request options (passed to transformRequest as req.providerOptions[preset.id]) */

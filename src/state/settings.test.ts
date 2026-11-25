@@ -24,14 +24,13 @@ describe('settings migration', () => {
 describe('provider-specific behaviour lives in presets', () => {
   it('Venice builds its own request options', () => {
     const v = PRESETS.venice;
-    expect(v.features?.builtInWebSearch).toBe(true);
+    expect(v.nativeWebSearch?.supports('m')).toBe(true);
     expect(v.requestOptions?.({ purpose: 'chat', webSearch: 'auto', settings: { includeSystemPrompt: false } })).toEqual({ include_venice_system_prompt: false, enable_web_search: 'auto' });
     expect(v.requestOptions?.({ purpose: 'chat', webSearch: 'off', settings: { includeSystemPrompt: true } })).toEqual({ include_venice_system_prompt: true });
     expect(v.requestOptions?.({ purpose: 'summary', webSearch: 'off', settings: {} })).toMatchObject({ strip_thinking_response: true });
   });
-  it('OpenRouter has no built-in search or Venice options', () => {
+  it('OpenRouter has no Venice options', () => {
     const o = PRESETS.openrouter;
-    expect(o.features?.builtInWebSearch).toBeFalsy();
     expect(o.requestOptions).toBeUndefined();
   });
   it('the vault passes through headers declared by presets', () => {

@@ -53,6 +53,17 @@ export function applyEvent(msg: MessageRecord, ev: ProviderEvent, blocks: BlockM
       }
       break;
     }
+    case 'server-tool': {
+      const { type: _t, ...fields } = ev;
+      const p = msg.parts.find((x) => x.type === 'server-tool' && x.id === ev.id);
+      if (p) Object.assign(p, fields);
+      else msg.parts.push({ type: 'server-tool', ...fields });
+      break;
+    }
+    case 'provider-content': {
+      msg.parts.push({ type: 'provider-content', provider: ev.provider, content: ev.content });
+      break;
+    }
     case 'usage': {
       msg.meta = { ...msg.meta, usage: ev.usage, costUsd: ev.costUsd ?? msg.meta?.costUsd };
       break;
@@ -73,6 +84,7 @@ export function applyEvent(msg: MessageRecord, ev: ProviderEvent, blocks: BlockM
     }
     case 'start':
     case 'account':
+    case 'image': // stored by the runner (needs storage), see runner.ts
       break;
   }
 }

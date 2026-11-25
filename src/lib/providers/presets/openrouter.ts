@@ -1,9 +1,46 @@
-import type { ModelInfo, ProviderPreset } from '../types';
+import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
 import { checkKey, joinUrl } from '../openai-compatible';
 import { builtinBaseUrl } from '../endpoints';
 import { t as tp } from '../messages';
 
 const BASE_URL = builtinBaseUrl('openrouter', (import.meta as any).env ?? {});
+
+/** Search results per search (OpenRouter bills per search request; see docs/specs/web-and-images.md §2.2) */
+const MAX_RESULTS = 5;
+
+/**
+ * Sources, images and search counts out of a chunk (streaming delta or a whole message).
+ * OpenRouter documents annotations and images on the message; deltas are read the same way in case they carry them.
+ */
+export function openrouterExtras(chunk: any, seen: Set<string>): ProviderEvent[] {
+  const out: ProviderEvent[] = [];
+  const choice = Array.isArray(chunk?.choices) ? chunk.choices[0] : undefined;
+  for (const src of [choice?.delta, choice?.message]) {
+    if (!src) continue;
+    for (const a of Array.isArray(src.annotations) ? src.annotations : []) {
+      const c = a?.type === 'url_citation' ? a.url_citation : undefined;
+      if (typeof c?.url !== 'string' || seen.has(c.url)) continue;
+      seen.add(c.url);
+      if (!seen.has('search')) {
+        seen.add('search');
+        out.push({ type: 'server-tool', id: 'openrouter-search', name: 'web_search', state: 'done' });
+      }
+      out.push({ type: 'source', url: c.url, title: typeof c.title === 'string' ? c.title : undefined, snippet: typeof c.content === 'string' ? c.content.slice(0, 300) : undefined });
+    }
+    for (const img of Array.isArray(src.images) ? src.images : []) {
+      const url = img?.image_url?.url;
+      if (typeof url !== 'string' || !url.startsWith('data:image/')) continue;
+      const key = 'img:' + url.length + url.slice(-64);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const mime = /^data:(image\/[a-z+.-]+)/.exec(url)?.[1] ?? 'image/png';
+      out.push({ type: 'image', data: url, mimeType: mime });
+    }
+  }
+  const searches = chunk?.usage?.server_tool_use_details?.web_search_requests;
+  if (typeof searches === 'number' && searches > 0) out.push({ type: 'usage', usage: { webSearches: searches } });
+  return out;
+}
 
 /** Per-token price string → USD per million tokens */
 function perMTok(v: unknown): number | undefined {
@@ -40,10 +77,19 @@ export const openrouterPreset: ProviderPreset = {
   get keyGuide() {
     return tp('openrouter.keyGuide');
   },
-  modelsPath: 'models',
+  // All output kinds, so models that also output images are listed (image-only models are skipped in mapModel)
+  modelsPath: 'models?output_modalities=all',
   get corsHint() {
     return tp('cors.direct', { name: 'OpenRouter', host: 'openrouter.ai' });
   },
+  // OpenRouter's web search server tool (openrouter:web_search); the model decides when to search
+  nativeWebSearch: {
+    supports: (_id, m) => !!m?.capabilities.tools,
+    get note() {
+      return tp('openrouter.searchNote');
+    }
+  },
+  parseExtra: openrouterExtras,
 
   mapModel(raw: any, providerId: string): ModelInfo | null {
     if (!raw?.id) return null;
@@ -63,8 +109,9 @@ export const openrouterPreset: ProviderPreset = {
         tools: params.includes('tools'),
         reasoning: params.includes('reasoning') || params.includes('include_reasoning'),
         reasoningEffort: params.includes('reasoning') ? ['low', 'medium', 'high'] : undefined,
-        webSearch: false, // web search (plugins) not supported
-        jsonSchema: params.includes('structured_outputs')
+        webSearch: params.includes('tools'),
+        jsonSchema: params.includes('structured_outputs'),
+        imageOutput: outputs.includes('image')
       },
       pricing: { inputPerMTok: perMTok(raw.pricing?.prompt), outputPerMTok: perMTok(raw.pricing?.completion), currency: 'USD' },
       // OpenRouter relays to multiple providers. Retention policies differ per provider
@@ -74,8 +121,10 @@ export const openrouterPreset: ProviderPreset = {
     };
   },
 
-  transformRequest(body) {
+  transformRequest(body, req) {
     const out = { ...body };
+    if (req.webSearch) out.tools = [...(out.tools ?? []), { type: 'openrouter:web_search', parameters: { max_results: MAX_RESULTS } }];
+    if (req.imageOutput) out.modalities = ['image', 'text'];
     // OpenRouter uses the reasoning: { effort } format
     if (out.reasoning_effort) {
       out.reasoning = { ...(out.reasoning ?? {}), effort: out.reasoning_effort };

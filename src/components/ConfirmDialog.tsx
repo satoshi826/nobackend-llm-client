@@ -44,8 +44,8 @@ export function ConfirmDialog() {
   const canConfirm = !s.requireText || typed.trim() === s.requireText;
 
   return (
-    <div class="fixed inset-0 z-[60] flex items-center justify-center bg-scrim p-4" onMouseDown={(e) => e.target === e.currentTarget && close(false)}>
-      <div ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg" class="panel rise w-full max-w-sm rounded-[22px] p-5">
+    <div class="backdrop fixed inset-0 z-[60] flex items-center justify-center p-4" onMouseDown={(e) => e.target === e.currentTarget && close(false)}>
+      <div ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg" class="frosted rise-glass w-full max-w-sm rounded-[22px] p-5">
         <div class="flex items-start gap-3">
           {s.danger && (
             <div class="grid size-9 shrink-0 place-items-center rounded-full bg-danger-soft text-danger">

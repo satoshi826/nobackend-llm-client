@@ -68,7 +68,7 @@ function Loading({ overlay }: { overlay?: boolean }) {
   }, []);
   if (!show) return null;
   return (
-    <div role="status" aria-label={t('lazy.loading')} class={cx('fade-in grid place-items-center text-muted', overlay ? 'fixed inset-0 z-40 bg-scrim' : 'min-h-24 flex-1')}>
+    <div role="status" aria-label={t('lazy.loading')} class={cx('fade-in grid place-items-center text-muted', overlay ? 'backdrop fixed inset-0 z-40' : 'min-h-24 flex-1')}>
       <Spinner class="size-5" />
     </div>
   );
@@ -76,7 +76,7 @@ function Loading({ overlay }: { overlay?: boolean }) {
 
 function LoadFailed({ overlay, onDismiss }: { overlay?: boolean; onDismiss?: () => void }) {
   return (
-    <div class={cx('grid place-items-center p-4', overlay ? 'fixed inset-0 z-40 bg-scrim' : 'min-h-24 flex-1')}>
+    <div class={cx('grid place-items-center p-4', overlay ? 'backdrop fixed inset-0 z-40' : 'min-h-24 flex-1')}>
       <div role="alert" class={cx('max-w-sm rounded-2xl p-4 text-sm', overlay ? 'panel' : 'border border-line bg-glass')}>
         <p class="flex items-start gap-2 text-ink">
           <Icon name="refresh" class="mt-0.5 size-4 shrink-0 text-muted" />

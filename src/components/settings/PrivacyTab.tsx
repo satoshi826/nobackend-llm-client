@@ -58,7 +58,10 @@ export function PrivacyTab() {
   const rows: [string, string][] = [
     ...enabledProviders.value.map(
       (p) => {
-        const note = getPreset(p.preset).copy?.destinationNote;
+        const preset = getPreset(p.preset);
+        // The provider's own web search: queries go to the provider too (and on to its search engine)
+        const search = preset.nativeWebSearch?.note;
+        const note = [preset.copy?.destinationNote, search && t('privacy.destSearch', { note: search })].filter(Boolean).join(' ');
         return [hostOfProvider(p.id), note ? t('privacy.destProviderNote', { name: p.name, note }) : t('privacy.destProvider', { name: p.name })] as [string, string];
       }
     ),

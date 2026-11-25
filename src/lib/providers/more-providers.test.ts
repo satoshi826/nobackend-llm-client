@@ -95,11 +95,11 @@ describe('OpenAI-compatible presets', () => {
     { ...msg('assistant', [{ type: 'tool', toolCallId: 't', name: 'x', argsText: '{}', input: {}, state: 'output-available', modelOutput: 'r' }], 'a2'), vendorState: { reasoning_content: 'tool thought' } }
   ];
   const req = { model: 'm', messages: withReasoning, signal: new AbortController().signal };
-  it('DeepSeek keeps reasoning only for tool-call turns; Gemini/Groq never resend it', () => {
+  it('DeepSeek keeps reasoning only for tool-call turns; Groq never resends it', () => {
     const ds = buildChatBody(cfg(deepseekPreset), deepseekPreset, req).messages;
     expect(ds[1].reasoning_content).toBeUndefined();
     expect(ds[2].reasoning_content).toBe('tool thought');
-    for (const p of [geminiPreset, groqPreset]) expect(buildChatBody(cfg(p), p, req).messages.some((m: any) => 'reasoning_content' in m)).toBe(false);
+    expect(buildChatBody(cfg(groqPreset), groqPreset, req).messages.some((m: any) => 'reasoning_content' in m)).toBe(false);
   });
   it('map only chat models', () => {
     expect(geminiPreset.mapModel!({ id: 'models/gemini-2.5-flash' }, 'gemini')?.id).toBe('gemini-2.5-flash');

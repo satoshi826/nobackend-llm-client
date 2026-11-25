@@ -4,7 +4,12 @@ import type { Part } from '../../lib/providers/types';
 import { t } from './messages';
 
 export function imageNote(m: MessageRecord, parts: Part[]): Part[] {
-  if (m.role !== 'assistant' || !m.image) return parts;
+  if (m.role !== 'assistant') return parts;
+  if (!m.image) {
+    // Images a chat model put in its reply: a note after the text
+    const n = m.parts.filter((p) => p.type === 'file').length;
+    return n ? [...parts, { type: 'text', text: '\n' + t('note.inReply', { n }) }] : parts;
+  }
   if (m.status !== 'done') return [];
   const n = m.parts.filter((p) => p.type === 'file').length;
   const p = m.image.params;

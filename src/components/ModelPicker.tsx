@@ -206,7 +206,7 @@ export function ModelPicker() {
   );
 
   return (
-    <Modal title={target.kind === 'regenerate' ? t('picker.titleRegenerate') : t('picker.title')} onClose={() => (modal.value = null)}>
+    <Modal fullOnPhone title={target.kind === 'regenerate' ? t('picker.titleRegenerate') : t('picker.title')} onClose={() => (modal.value = null)}>
       <div class="space-y-3">
         <div class="flex gap-2">
           <label class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-accent/50">

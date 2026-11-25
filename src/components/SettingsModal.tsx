@@ -29,7 +29,7 @@ export function SettingsModal() {
   const list = tabs.map((x) => ({ id: x.id, label: textOf(x.label) }));
   return (
     // Fixed size: switching tabs never resizes the dialog. Tabs in a column on wide screens, a row on phones
-    <Modal title={t('settings.title')} onClose={() => (modal.value = null)} wide fixed bare>
+    <Modal title={t('settings.title')} onClose={() => (modal.value = null)} wide fixed bare fullOnPhone>
       <div class="flex min-h-0 flex-1 flex-col sm:flex-row">
         <nav class="hidden w-48 shrink-0 overflow-y-auto border-r border-line p-2 sm:block">
           <SideTabs label={t('settings.title')} tabs={list} value={tab} onChange={(id) => (settingsTab.value = id)} />

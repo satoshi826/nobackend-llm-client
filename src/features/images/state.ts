@@ -52,7 +52,7 @@ const DEFAULT_IMAGE_SETTINGS = {
   /** Last-used options (the image bar starts from these) */
   imageDefaults: { providerId: '', model: '', aspectRatio: '1:1', resolution: '', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '' } as ImageDefaults,
   /** Let chat models create images with the generate_image tool */
-  imageTool: false
+  imageTool: true
 };
 export const imageSettings = defineFeatureSettings('images', DEFAULT_IMAGE_SETTINGS, (old) => {
   const p = pickLegacy(old, DEFAULT_IMAGE_SETTINGS);

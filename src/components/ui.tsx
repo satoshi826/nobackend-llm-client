@@ -228,8 +228,25 @@ export function Chip({ on, class: className, children, ...rest }: ButtonHTMLAttr
 /**
  * fixed: a fixed size (the same for every content, so switching what is inside causes no layout shift).
  * bare: the content lays itself out (no padding, no scroll area of the modal's own).
+ * fullOnPhone: full screen on phones (large dialogs such as settings and the model picker); a centred window from sm up.
  */
-export function Modal({ title, onClose, children, wide, fixed, bare }: { title: string; onClose(): void; children: ComponentChildren; wide?: boolean; fixed?: boolean; bare?: boolean }) {
+export function Modal({
+  title,
+  onClose,
+  children,
+  wide,
+  fixed,
+  bare,
+  fullOnPhone
+}: {
+  title: string;
+  onClose(): void;
+  children: ComponentChildren;
+  wide?: boolean;
+  fixed?: boolean;
+  bare?: boolean;
+  fullOnPhone?: boolean;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useDialog(ref, { onClose });
   return (
@@ -240,9 +257,10 @@ export function Modal({ title, onClose, children, wide, fixed, bare }: { title: 
         aria-modal="true"
         aria-label={title}
         class={cx(
-          'frosted rise-glass flex max-h-[92dvh] w-full flex-col rounded-t-[22px] sm:rounded-[22px]',
+          'frosted rise-glass flex w-full flex-col sm:max-h-[92dvh] sm:rounded-[22px]',
+          fullOnPhone ? 'h-dvh max-h-dvh rounded-none border-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] sm:h-auto sm:border sm:pt-0 sm:pb-0' : 'max-h-[92dvh] rounded-t-[22px]',
           wide ? 'sm:max-w-3xl' : 'sm:max-w-lg',
-          fixed && 'h-[92dvh] sm:h-[min(44rem,92dvh)]'
+          fixed && (fullOnPhone ? 'sm:h-[min(44rem,92dvh)]' : 'h-[92dvh] sm:h-[min(44rem,92dvh)]')
         )}
       >
         <div class="flex items-center justify-between border-b border-line px-5 py-3">
@@ -267,7 +285,7 @@ export function Badge({ children, tone = 'zinc', title }: { children: ComponentC
     rose: 'bg-danger-soft text-danger'
   }[tone];
   return (
-    <span title={title} class={cx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', toneCls)}>
+    <span title={title} class={cx('inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium', toneCls)}>
       {children}
     </span>
   );

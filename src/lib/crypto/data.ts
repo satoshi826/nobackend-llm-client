@@ -50,3 +50,13 @@ export async function openJSON<T>(k: DataKey, s: Sealed): Promise<T> {
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(s.iv) }, k.key, unb64(s.ct));
   return JSON.parse(dec.decode(pt)) as T;
 }
+
+/** Encrypt raw bytes (images) */
+export async function sealBytes(k: DataKey, data: ArrayBuffer): Promise<{ iv: string; data: ArrayBuffer }> {
+  const iv = crypto.getRandomValues(new Uint8Array(new ArrayBuffer(12)));
+  return { iv: b64(iv), data: await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k.key, data) };
+}
+
+export async function openBytes(k: DataKey, s: { iv: string; data: ArrayBuffer }): Promise<ArrayBuffer> {
+  return crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(s.iv) }, k.key, s.data);
+}

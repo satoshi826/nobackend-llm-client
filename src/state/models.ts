@@ -2,7 +2,7 @@
 import { batch, computed, signal } from '@preact/signals';
 import * as repo from '../lib/db/repo';
 import type { ModelInfo, ProviderConfig, ProviderError } from '../lib/providers/types';
-import { getAdapter, getPreset, PRESET_ORDER } from '../lib/providers/registry';
+import { getAdapter, getPreset, PRESET_ORDER, PRESETS } from '../lib/providers/registry';
 import { plainTransport } from '../lib/providers/transport';
 import { vaultTransport } from '../lib/vault/client';
 import { authFor, keyReady } from './keys';
@@ -116,8 +116,11 @@ export async function setProviderEnabled(id: string, enabled: boolean) {
 export function defaultModel(): { providerId: string; modelId: string } {
   const s = settings.value;
   const vis = visibleModels.value;
-  if (s.lastModelId && vis.some((m) => m.id === s.lastModelId && m.providerId === s.lastProviderId)) return { providerId: s.lastProviderId, modelId: s.lastModelId };
-  for (const p of enabledProviders.value) {
+  // Providers that can be used right away (key ready, or no key needed) come first
+  const usable = (id: string) => keyReady(id) || !!PRESETS[providerById(id)?.preset ?? '']?.keyOptional;
+  if (s.lastModelId && usable(s.lastProviderId) && vis.some((m) => m.id === s.lastModelId && m.providerId === s.lastProviderId)) return { providerId: s.lastProviderId, modelId: s.lastModelId };
+  const ordered = [...enabledProviders.value].sort((a, b) => Number(usable(b.id)) - Number(usable(a.id)));
+  for (const p of ordered) {
     const list = vis.filter((m) => m.providerId === p.id);
     const m = list.find((x) => x.tags?.includes('default')) ?? list[0];
     if (m) return { providerId: m.providerId, modelId: m.id };

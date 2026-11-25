@@ -4,7 +4,88 @@
 //   "思考"  → streams reasoning_content / "think" → <think> tag style
 //   "エラー" → error mid-stream / "残高" → 402 / "長文" → long output / "コード" → code blocks
 //   "画像"  → Markdown with external images (should be blocked) / "xss" → output containing dangerous HTML
+// Image API: /models?type=image, /image/generate (prompt "違反" → 422, "ぼかし" → blurred), /image/styles, /image/upscale, /image/edit, /image/background-remove
 import http from 'node:http';
+import zlib from 'node:zlib';
+
+// ---- Tiny PNG encoder for the image mocks (solid colour with a diagonal stripe; optional transparent corners) ----
+const CRC = new Int32Array(256).map((_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c;
+});
+function crc32(buf) {
+  let c = -1;
+  for (const b of buf) c = CRC[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+}
+function chunkPng(type, data) {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length);
+  const td = Buffer.concat([Buffer.from(type), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(td));
+  return Buffer.concat([len, td, crc]);
+}
+function makePng(w, h, [r, g, b], transparentCorners = false) {
+  const raw = Buffer.alloc((w * 4 + 1) * h);
+  for (let y = 0; y < h; y++) {
+    raw[y * (w * 4 + 1)] = 0;
+    for (let x = 0; x < w; x++) {
+      const o = y * (w * 4 + 1) + 1 + x * 4;
+      const stripe = Math.abs(x - y * (w / h)) < w / 12;
+      const corner = transparentCorners && (x < w / 5 || x > (w * 4) / 5) && (y < h / 5 || y > (h * 4) / 5);
+      raw[o] = stripe ? 255 - r : r;
+      raw[o + 1] = stripe ? 255 - g : g;
+      raw[o + 2] = stripe ? 255 - b : b;
+      raw[o + 3] = corner ? 0 : 255;
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunkPng('IHDR', ihdr), chunkPng('IDAT', zlib.deflateSync(raw)), chunkPng('IEND', Buffer.alloc(0))]);
+}
+const colourFor = (seed) => [(seed * 97) % 256, (seed * 53 + 80) % 256, (seed * 29 + 160) % 256];
+const IMAGE_MODELS = [
+  {
+    id: 'mock-image-flux',
+    type: 'image',
+    model_spec: {
+      name: 'Mock Image Flux',
+      privacy: 'private',
+      traits: ['default'],
+      constraints: { promptCharacterLimit: 2048, steps: { default: 8, max: 30 }, widthHeightDivisor: 8 },
+      pricing: { generation: { usd: 0.01, diem: 0.01 } }
+    }
+  },
+  {
+    id: 'mock-image-aspect',
+    type: 'image',
+    model_spec: {
+      name: 'Mock Image Aspect',
+      privacy: 'private',
+      traits: ['most_uncensored'],
+      constraints: { promptCharacterLimit: 4000, steps: { default: 8, max: 8 }, widthHeightDivisor: 16, aspectRatios: ['1:1', '3:2', '2:3', '16:9'], defaultAspectRatio: '1:1', resolutions: ['1K', '2K'], defaultResolution: '1K' },
+      pricing: { resolutions: { '1K': { usd: 0.04, diem: 0.04 }, '2K': { usd: 0.08, diem: 0.08 } } }
+    }
+  }
+];
+function sizeOf(body) {
+  if (body.aspect_ratio) {
+    const [a, b] = String(body.aspect_ratio).split(':').map(Number);
+    return a >= b ? [256, Math.round((256 * b) / a)] : [Math.round((256 * a) / b), 256];
+  }
+  const w = Number(body.width) || 1024;
+  const h = Number(body.height) || 1024;
+  return [Math.round(w / 4), Math.round(h / 4)];
+}
+function binaryImage(res, buf) {
+  res.writeHead(200, { 'Content-Type': 'image/png' });
+  res.end(buf);
+}
 
 const port = Number(process.argv[2] ?? 8787);
 const KEY = 'mock-key';
@@ -78,6 +159,35 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return res.writeHead(204).end();
   const url = new URL(req.url, `http://localhost:${port}`);
   const path = url.pathname.replace(/^\/api\/v1/, '');
+
+  // ---- Image API mocks (key mock-key). Prompt keywords: "違反" → 422 with a suggestion, "ぼかし" → blurred header ----
+  if (path === '/models' && req.method === 'GET' && url.searchParams.get('type') === 'image') return json(res, 200, { object: 'list', type: 'image', data: IMAGE_MODELS });
+  if (path.startsWith('/image/')) {
+    if (!authed(req)) return json(res, 401, { error: 'Authentication failed' });
+    if (path === '/image/styles' && req.method === 'GET') return json(res, 200, { object: 'list', data: ['3D Model', 'Anime', 'Cinematic', 'Comic Book'] });
+    const body = await readBody(req);
+    await sleep(1200);
+    if (path === '/image/generate') {
+      if (String(body.prompt).includes('違反'))
+        return json(res, 422, { error: 'Your prompt violates the content policy', suggested_prompt: String(body.prompt).replace(/違反/g, '').trim() || 'a calm landscape', recommended_model: 'mock-image-aspect', retryable: true });
+      const n = Math.min(4, Math.max(1, Number(body.variants) || 1));
+      const [w, h] = sizeOf(body);
+      const seed = Number(body.seed) || 1;
+      const images = Array.from({ length: n }, (_, i) => makePng(w, h, colourFor(seed + i)).toString('base64'));
+      const cost = (body.aspect_ratio ? (body.resolution === '2K' ? 0.08 : 0.04) : 0.01) * n;
+      balanceUsd = Math.max(0, balanceUsd - cost);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'x-venice-is-blurred': String(String(body.prompt).includes('ぼかし')),
+        'x-venice-balance-usd': balanceUsd.toFixed(4)
+      });
+      return res.end(JSON.stringify({ id: 'generate-image-mock', images, timing: { total: 1200 } }));
+    }
+    if (path === '/image/upscale') return binaryImage(res, makePng(512, 512, colourFor(7)));
+    if (path === '/image/edit') return binaryImage(res, makePng(256, 256, colourFor(String(body.prompt ?? '').length + 3)));
+    if (path === '/image/background-remove') return binaryImage(res, makePng(256, 256, colourFor(11), true));
+    return json(res, 404, { error: 'not found' });
+  }
 
   if (path === '/models' && req.method === 'GET') return json(res, 200, { object: 'list', type: 'text', data: models });
 
@@ -180,6 +290,59 @@ const server = http.createServer(async (req, res) => {
         description: update ? '会議のメモを要点・決定事項・宿題に分けて整理する。「議事録にして」と頼まれたとき。' : '会議のメモを整理する。「議事録にして」と頼まれたとき。',
         body: update ? '# 手順\n1. 要点を 3 行で書く\n2. 決定事項を箇条書き\n3. 宿題を担当者つきで書く' : '# 手順\n1. 要点を書く\n2. 決定事項を箇条書き'
       });
+    }
+    // generate_image tool: "絵を描いて" asks for an image, then the answer acknowledges it
+    if (toolNames.includes('generate_image') && lastMsg?.role === 'user' && userText.includes('絵を描いて')) {
+      await send({ content: '描いてみます。' });
+      return finishTools('generate_image', { prompt: 'a cute cat sitting by the window, watercolor', aspect_ratio: '4:3' });
+    }
+    if (lastMsg?.role === 'tool' && lastCallName === 'generate_image') {
+      const ans = '窓辺の猫の絵を描きました。';
+      for (const p of chunked(ans)) await send({ content: p });
+      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+      chunk(res, { id, choices: [], usage: { prompt_tokens: 200, completion_tokens: ans.length } });
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
+    // File tools: "レポートにまとめて" creates a Markdown file, "追記して" appends to the file listed in the
+    // system prompt, "結論を直して" edits it, "読んで" (with a file listed) reads it
+    const fileInSys = /\(id: ([\w-]+),/.exec(String(sys ?? ''))?.[1];
+    if (toolNames.includes('create_file') && lastMsg?.role === 'user' && userText.includes('レポートにまとめて')) {
+      await send({ content: 'レポートをファイルにまとめます。' });
+      return finishTools('create_file', {
+        name: '調査レポート.md',
+        content: '# 調査レポート\n\n## 概要\nモックで作ったレポートです。\n\n## 比較\n\n| 項目 | A | B |\n|---|---|---|\n| 価格 | 安い | 高い |\n| 速度 | 速い | 普通 |\n\n## 結論\n結論は未定です。\n'
+      });
+    }
+    if (toolNames.includes('append_file') && lastMsg?.role === 'user' && userText.includes('追記して') && fileInSys) {
+      await send({ content: '続きを書き足します。' });
+      return finishTools('append_file', { file_id: fileInSys, content: '\n## 補足\n追記した段落です。\n' });
+    }
+    if (toolNames.includes('edit_file') && lastMsg?.role === 'user' && userText.includes('結論を直して') && fileInSys) {
+      await send({ content: '結論を書き直します。' });
+      return finishTools('edit_file', { file_id: fileInSys, find: '結論は未定です。', replace: '結論: 用途によっては A がおすすめです。', note: '結論を具体化' });
+    }
+    if (toolNames.includes('read_file') && lastMsg?.role === 'user' && userText.includes('全部読んで') && fileInSys) {
+      await send({ content: 'ファイルを読みます。' });
+      return finishTools('read_file', { file_id: fileInSys });
+    }
+    if (lastMsg?.role === 'tool' && ['create_file', 'append_file', 'edit_file', 'read_file'].includes(lastCallName)) {
+      const ans = lastCallName === 'read_file' ? `読みました（${String(lastMsg.content ?? '').length} 文字）。` : `ファイルに保存しました。${String(lastMsg.content ?? '').slice(0, 60)}`;
+      for (const p of chunked(ans)) await send({ content: p });
+      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+      chunk(res, { id, choices: [], usage: { prompt_tokens: 300, completion_tokens: ans.length }, cost: { usd: COST, diem: COST } });
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
+    // Attached files: acknowledge what arrived
+    const att = [...String(last).matchAll(/<file name="([^"]+)" id="[^"]+" version="\d+">\n([\s\S]*?)\n<\/file>/g)];
+    if (att.length && lastMsg?.role === 'user') {
+      const ans = att.map((m) => `添付「${m[1]}」を受け取りました（${m[2].length} 文字）。冒頭: ${m[2].slice(0, 40).replace(/\n/g, ' ')}`).join('\n\n');
+      for (const p of chunked(ans)) await send({ content: p });
+      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+      chunk(res, { id, choices: [], usage: { prompt_tokens: 400, completion_tokens: ans.length }, cost: { usd: COST, diem: COST } });
+      res.write('data: [DONE]\n\n');
+      return res.end();
     }
     if (lastMsg?.role === 'tool' && lastCallName === 'save_skill') {
       const ans = `結果: ${String(lastMsg.content ?? '').slice(0, 80)}`;

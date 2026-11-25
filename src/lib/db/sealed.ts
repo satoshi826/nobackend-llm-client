@@ -3,7 +3,7 @@
 // the content (text, titles, instructions, etc.) is bundled into enc and encrypted.
 // Crypto cannot be awaited inside an IndexedDB transaction, so conversion happens before writes and after reads.
 import { openJSON, sealJSON, type DataKey, type Sealed } from '../crypto/data';
-import type { Conversation, MessageRecord, SavedPrompt, Skill } from './schema';
+import type { Conversation, FileRecord, MessageRecord, SavedPrompt, Skill } from './schema';
 
 let dataKey: DataKey | null = null;
 
@@ -24,9 +24,10 @@ export class DataLockedError extends Error {
 /** Fields to encrypt (per table) */
 export const SECRET_FIELDS = {
   conversations: ['title', 'systemPrompt', 'tags'],
-  messages: ['parts', 'vendorState', 'skills', 'compaction', 'error', 'suggestions'],
+  messages: ['parts', 'vendorState', 'skills', 'compaction', 'error', 'suggestions', 'imageRequest', 'image', 'attachments'],
   prompts: ['name', 'content'],
-  skills: ['description', 'body']
+  skills: ['description', 'body'],
+  files: ['name', 'versions', 'source']
 } as const;
 
 export type SealedTable = keyof typeof SECRET_FIELDS;
@@ -59,4 +60,4 @@ export async function unseal<T extends object>(rec: WithEnc<T>, key: DataKey | n
 export const isSealed = (rec: unknown): boolean => !!(rec as { enc?: unknown })?.enc;
 
 // Type check (table-to-type mapping)
-export type SealedTypes = { conversations: Conversation; messages: MessageRecord; prompts: SavedPrompt; skills: Skill };
+export type SealedTypes = { conversations: Conversation; messages: MessageRecord; prompts: SavedPrompt; skills: Skill; files: FileRecord };

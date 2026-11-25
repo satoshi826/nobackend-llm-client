@@ -7,6 +7,7 @@ import {
   enabledProviders,
   hostOfProvider,
   importFromFile,
+  BackupPasswordNeeded,
   keyStatus,
   modal,
   providerById,
@@ -30,10 +31,13 @@ import { SERVICE_ORDER } from '../lib/tools/services';
 import { getPreset, PRESETS } from '../lib/providers/registry';
 import type { Permission } from '../lib/tools/types';
 import { KeyPanel, VaultSecurityPanel } from './KeyPanel';
+import { imageUsage } from '../lib/db/images';
 import { SkillsTab } from './SkillsTab';
 import { UsageTab } from './UsageTab';
 import { askConfirm } from './ConfirmDialog';
 import { Badge, Button, Icon, Modal, cx } from './ui';
+import { PERM_LABEL, Section, Toggle, selectCls } from './settings-ui';
+import { settingsSections } from './extensions';
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'connections', label: '接続とキー' },
@@ -43,29 +47,6 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'usage', label: '使用量' },
   { id: 'privacy', label: 'プライバシーとデータ' }
 ];
-
-const selectCls = 'rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-950';
-
-function Section({ title, children }: { title?: string; children: ComponentChildren }) {
-  return (
-    <section class="space-y-3">
-      {title && <h3 class="text-sm font-semibold">{title}</h3>}
-      {children}
-    </section>
-  );
-}
-
-function Toggle({ checked, onChange, title, desc, disabled }: { checked: boolean; onChange(v: boolean): void; title: string; desc?: string; disabled?: boolean }) {
-  return (
-    <label class={cx('flex items-start gap-2 text-sm', disabled && 'opacity-50')}>
-      <input type="checkbox" class="mt-1" checked={checked} disabled={disabled} onChange={(e) => onChange((e.target as HTMLInputElement).checked)} />
-      <span>
-        {title}
-        {desc && <span class="block text-xs text-zinc-500">{desc}</span>}
-      </span>
-    </label>
-  );
-}
 
 function KeyBadge({ id }: { id: string }) {
   const k = keyStatus(id);
@@ -136,7 +117,7 @@ function ConnectionsTab() {
             </select>
           </label>
         )}
-        <p class="text-xs text-zinc-500">パスフレーズを設定すると、API キー・会話・保存済みのプロンプト・スキルを暗号化します。アプリはタブごと・読み込み直すたびに解錠が必要です。バックアップ（JSON）は暗号化されないので、保管に気をつけてください。</p>
+        <p class="text-xs text-zinc-500">パスフレーズを設定すると、API キー・会話・保存済みのプロンプト・スキルを暗号化します。アプリはタブごと・読み込み直すたびに解錠が必要です。バックアップは、書き出すときにパスワードで暗号化できます（プライバシーとデータ）。</p>
       </Section>
       <Section title="LLM の接続先">
         <div class="space-y-2">
@@ -237,12 +218,50 @@ function ChatTab() {
             {choices.map((m) => (
               <option key={m.providerId + m.id} value={`${m.providerId}|${m.id}`}>
                 {providerById(m.providerId)?.name} / {m.name}
-                {m.pricing?.inputPerMTok != null ? `（入力 ${m.pricing.inputPerMTok.toFixed(2)}/M）` : ''}
+                {m.pricing?.inputPerMTok != null ? `（入力 $${m.pricing.inputPerMTok.toFixed(2)}/M）` : ''}
               </option>
             ))}
           </select>
         </label>
       </Section>
+      <Section title="画像">
+        <p class="text-xs text-zinc-500">入力欄の「画像」をオンにすると、入力した文で画像を作ります（Venice の API キーが必要）。作った画像はこのブラウザに保存され、パスフレーズがあれば暗号化されます。</p>
+        <label class="flex items-center justify-between gap-3 text-sm">
+          保存する画像の形式
+          <select class={selectCls} value={s.imageFormat} onChange={(e) => saveSettings({ imageFormat: (e.target as HTMLSelectElement).value as 'webp' | 'png' | 'jpeg' })}>
+            <option value="webp">WebP（小さい）</option>
+            <option value="png">PNG（劣化なし）</option>
+            <option value="jpeg">JPEG</option>
+          </select>
+        </label>
+        <Toggle
+          checked={s.imageTool}
+          onChange={(v) => saveSettings({ imageTool: v })}
+          title="チャットのモデルが画像を作れるようにする"
+          desc="ツール呼び出しに対応したモデルが、会話の流れで必要と判断したときに画像を作ります。送信のたびにツールの説明が少し増えます。"
+        />
+        {s.imageTool && (
+          <label class="flex items-center justify-between gap-3 text-sm">
+            画像を作る前の確認
+            <select
+              class={selectCls}
+              value={s.toolPermissions.generate_image ?? 'ask'}
+              onChange={(e) => saveSettings({ toolPermissions: { ...s.toolPermissions, generate_image: (e.target as HTMLSelectElement).value as Permission } })}
+            >
+              {(['ask', 'allow', 'deny'] as Permission[]).map((v) => (
+                <option key={v} value={v}>
+                  {PERM_LABEL[v]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </Section>
+      {settingsSections
+        .filter((x) => x.tab === 'chat')
+        .map((x) => (
+          <x.Component key={x.id} />
+        ))}
       <Section title="会話の長さと費用">
         <p class="text-xs text-zinc-500">
           送信のたびに、それまでの会話（表示中の枝）をまとめて送ります。長くなったら、ヘッダーの <Icon name="compress" class="inline size-3.5" /> で古い部分を要約に置き換えられます（元の履歴は残ります）。
@@ -282,7 +301,6 @@ function ChatTab() {
   );
 }
 
-const PERM_LABEL: Record<Permission, string> = { ask: '毎回確認する', allow: '確認せずに実行', deny: '使わない' };
 
 function SearchTab() {
   const s = settings.value;
@@ -343,6 +361,28 @@ function SearchTab() {
 function PrivacyTab() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [usage, setUsage] = useState<{ used: number; quota: number; persisted: boolean } | null>(null);
+  // Encrypted backups: on by default when the vault has a passphrase
+  const [encrypt, setEncrypt] = useState(vaultState.value.hasPassphrase);
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [importPw, setImportPw] = useState('');
+  const doImport = async (f: File, password?: string) => {
+    try {
+      const r = await importFromFile(f, password);
+      setPendingFile(null);
+      setImportPw('');
+      showToast(`会話 ${r.conversations} 件${r.skills ? `・スキル ${r.skills} 件` : ''}${r.files ? `・ファイル ${r.files} 件` : ''}${r.images ? `・画像 ${r.images} 枚` : ''}を読み込みました（重複 ${r.skipped} 件はスキップ）`);
+    } catch (err) {
+      if (err instanceof BackupPasswordNeeded) setPendingFile(f);
+      else showToast((err as Error).message, 'error');
+    }
+  };
+  const [imgUsage, setImgUsage] = useState<{ count: number; bytes: number } | null>(null);
+  useEffect(() => {
+    void imageUsage().then(setImgUsage);
+  }, []);
   const s = settings.value;
   useEffect(() => {
     (async () => {
@@ -380,20 +420,86 @@ function PrivacyTab() {
       </Section>
       <Section title="保存データとバックアップ">
         {usage && (
-          <p class="text-xs text-zinc-500">
-            使用量 {(usage.used / 1024 / 1024).toFixed(1)} MB / 上限 {(usage.quota / 1024 / 1024 / 1024).toFixed(1)} GB ・{' '}
-            {usage.persisted ? '永続化されています（自動削除されにくい）' : '永続化されていません（容量不足時に削除される可能性があります）'}
-          </p>
+          <div class="space-y-1.5">
+            <p class="text-xs text-zinc-500">
+              使用量 {(usage.used / 1024 / 1024).toFixed(1)} MB / 上限 {(usage.quota / 1024 / 1024 / 1024).toFixed(1)} GB ・{' '}
+              {usage.persisted ? '永続化されています（ブラウザが自動で消しにくくなっています）' : '永続化されていません（容量が足りなくなると、ブラウザに消される可能性があります）'}
+            </p>
+            {!usage.persisted && (
+              <Button
+                variant="outline"
+                class="text-xs"
+                onClick={async () => {
+                  const ok = (await navigator.storage?.persist?.()) ?? false;
+                  setUsage({ ...usage, persisted: ok });
+                  showToast(
+                    ok ? '永続化されました' : 'ブラウザが永続化を許可しませんでした。ブックマークする・ホーム画面に追加する（PWA）・しばらく使い続けると許可されやすくなります。',
+                    ok ? 'info' : 'error'
+                  );
+                }}
+              >
+                永続化を要求する
+              </Button>
+            )}
+          </div>
         )}
-        <div class="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => downloadExport().then(() => showToast('バックアップを書き出しました'))}>
-            <Icon name="download" />
-            バックアップを書き出す
-          </Button>
-          <Button variant="outline" onClick={() => fileRef.current?.click()}>
-            <Icon name="upload" />
-            読み込む
-          </Button>
+        <div class="space-y-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+          <label class="flex items-start gap-2">
+            <input type="checkbox" class="mt-1" checked={encrypt} onChange={(e) => setEncrypt((e.target as HTMLInputElement).checked)} />
+            <span>
+              パスワードで暗号化して書き出す
+              <span class="block text-xs text-zinc-500">読み込むときに同じパスワードが要ります。忘れると元に戻せません（キー金庫のパスフレーズと同じでも構いません）。</span>
+            </span>
+          </label>
+          {encrypt && (
+            <div class="grid gap-2 sm:grid-cols-2">
+              <input type="password" autocomplete="new-password" class={selectCls} placeholder="パスワード（8 文字以上）" value={pw1} onInput={(e) => setPw1((e.target as HTMLInputElement).value)} aria-label="バックアップのパスワード" />
+              <input type="password" autocomplete="new-password" class={selectCls} placeholder="確認用" value={pw2} onInput={(e) => setPw2((e.target as HTMLInputElement).value)} aria-label="バックアップのパスワード（確認）" />
+            </div>
+          )}
+          <div class="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              disabled={busy || (encrypt && (pw1.length < 8 || pw1 !== pw2))}
+              title={encrypt && pw1.length >= 8 && pw1 !== pw2 ? 'パスワードが確認用と一致しません' : undefined}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await downloadExport(encrypt ? pw1 : undefined);
+                  showToast(encrypt ? '暗号化したバックアップを書き出しました' : 'バックアップを書き出しました');
+                  setPw1('');
+                  setPw2('');
+                } catch (err) {
+                  showToast((err as Error).message, 'error');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Icon name="download" />
+              {busy ? '書き出しています…' : 'バックアップを書き出す'}
+            </Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()}>
+              <Icon name="upload" />
+              読み込む
+            </Button>
+          </div>
+          {pendingFile && (
+            <form
+              class="flex flex-wrap items-center gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void doImport(pendingFile, importPw);
+              }}
+            >
+              <span class="text-xs text-zinc-600 dark:text-zinc-300">「{pendingFile.name}」は暗号化されています。</span>
+              <input type="password" autocomplete="current-password" class={selectCls} placeholder="パスワード" value={importPw} onInput={(e) => setImportPw((e.target as HTMLInputElement).value)} aria-label="バックアップのパスワード" data-autofocus />
+              <Button variant="primary" type="submit" disabled={!importPw}>
+                復号して読み込む
+              </Button>
+              <Button onClick={() => setPendingFile(null)}>やめる</Button>
+            </form>
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -401,18 +507,20 @@ function PrivacyTab() {
             class="hidden"
             onChange={async (e) => {
               const f = (e.target as HTMLInputElement).files?.[0];
-              if (!f) return;
-              try {
-                const r = await importFromFile(f);
-                showToast(`会話 ${r.conversations} 件${r.skills ? `・スキル ${r.skills} 件` : ''}を読み込みました（重複 ${r.skipped} 件はスキップ）`);
-              } catch (err) {
-                showToast((err as Error).message, 'error');
-              } finally {
-                (e.target as HTMLInputElement).value = '';
-              }
+              (e.target as HTMLInputElement).value = '';
+              if (f) await doImport(f);
             }}
           />
         </div>
+        <label class="flex items-start gap-2 text-sm">
+          <input type="checkbox" class="mt-1" checked={s.backupIncludeImages} onChange={(e) => saveSettings({ backupIncludeImages: (e.target as HTMLInputElement).checked })} />
+          <span>
+            バックアップに画像も含める
+            <span class="block text-xs text-zinc-500">
+              画像はファイルがかなり大きくなります。{imgUsage ? `今は ${imgUsage.count} 枚・${(imgUsage.bytes / 1024 / 1024).toFixed(1)} MB。` : ''}含めない場合、会話には画像の枠だけが残ります。
+            </span>
+          </span>
+        </label>
         <p class="text-xs text-zinc-500">
           {s.lastBackupAt ? `最終バックアップ: ${new Date(s.lastBackupAt).toLocaleString()}。` : 'まだバックアップしていません。'}バックアップに API キーは含まれません。
         </p>

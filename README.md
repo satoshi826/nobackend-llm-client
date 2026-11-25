@@ -18,12 +18,14 @@ The UI is currently in Japanese only. Design details: [docs/design.md](docs/desi
 - **Providers**: Venice, OpenRouter, Anthropic, Google Gemini, DeepSeek, Groq, plus OpenAI-compatible endpoints added at build time (e.g. Ollama). No provider is privileged; you choose which to use on first launch.
 - **Model list**: bookmarks (starred models across providers), sort (recommended / name / price / context length) and filter (private / reasoning / vision / search / free), with pricing and capabilities shown.
 - **Chat**: streaming, visible reasoning, Markdown and code highlighting, a conversation tree (regenerate, edit, regenerate with another model), and temporary chats that are never saved (toggle in the chat header before the first message).
+- **Image generation (Venice)**: image mode in the input box (model, aspect ratio, resolution, 1–4 images, style, negative prompt, seed), "same settings again" / "similar image", upscale, edit, background removal, a gallery, and an optional tool so chat models can create images. Images are stored locally (encrypted with a passphrase).
+- **Files**: ask for a report, notes or a translation and the model saves it as a file (Markdown, CSV, …) in the Files tab, writing long documents in parts and keeping every version. The Files tab is a file manager (cards or list, sorting, search inside files, views by type and by conversation, multi-select, drag-and-drop upload). Attach text files, CSV, code or PDFs (text is extracted in the browser) from your device or from saved files. View, edit, download or print to PDF.
 - **Reply suggestions**: short follow-ups under the latest reply; tap one to put it in the input box. Count, how many recent exchanges to use, and the model are configurable.
 - **Web search**: the provider's built-in search (Venice), or tools (Tavily search and Jina Reader page fetch, each run after your approval).
 - **Skills**: SKILL.md-compatible instruction files. The model loads a skill's body only when it needs it, or you can attach one with `/name`. Ask it to "turn this into a skill" and it drafts one, which is saved after you approve it.
 - **Long conversations**: compaction (manual or automatic), prompt caching, and a context-length safeguard.
 - **Usage**: tokens and cost per day, provider and model, recorded only in this browser. Balance alert for Venice.
-- **Data**: full-text search, JSON backup/import, wipe everything, PWA, dark mode, mobile layout.
+- **Data**: full-text search, JSON backup/import (optionally password-encrypted), image deletion, wipe everything, PWA, dark mode, mobile layout.
 
 ## Quick start
 
@@ -44,7 +46,7 @@ VITE_JINA_BASE_URL=http://localhost:8787/jina \
 npm run dev
 ```
 
-**Mock keys**: Venice `mock-key`, Anthropic `mock-ant`, Tavily `tvly-mock`.
+**Mock keys**: Venice `mock-key`, Anthropic `mock-ant`, Tavily `tvly-mock`. The mock also serves Venice image models and generates PNGs; an image prompt containing `違反` returns a content-policy rejection with a suggestion, and asking a chat model "絵を描いて" (with the image tool on) calls `generate_image`.
 
 **Keywords** in a message change the mock's behaviour:
 
@@ -131,7 +133,7 @@ There's no storage mode to choose.
   - You can lock with the sidebar button, or set an idle auto-lock.
 - **Setup**: right after you save your first key, the app offers to set one (you can skip). You can also set, change or remove it under Settings → Connections & keys. Changing or removing it requires the current passphrase.
 - **If you forget it**, nothing can be recovered. The lock screen can only wipe everything so you can start over.
-- **JSON backups are not encrypted.** Store them carefully.
+- **Backups are plain JSON unless you set a password when exporting** (on by default once a passphrase is set). Store plain backups carefully.
 
 ## API key safety
 

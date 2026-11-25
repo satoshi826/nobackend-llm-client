@@ -9,8 +9,10 @@ const BUILTIN: ProviderPreset[] = [venicePreset, openrouterPreset, anthropicPres
 
 export const PRESETS: Record<string, ProviderPreset> = Object.fromEntries([...BUILTIN, ...customPresets].map((p) => [p.id, p]));
 
-/** Display order (built-in → added at build time) */
-export const PRESET_ORDER: string[] = [...BUILTIN, ...customPresets].map((p) => p.id);
+/** Display order: alphabetical by label (no provider is privileged), including providers added at build time */
+export const PRESET_ORDER: string[] = [...BUILTIN, ...customPresets]
+  .sort((a, b) => a.label.localeCompare(b.label, 'en', { sensitivity: 'base' }))
+  .map((p) => p.id);
 
 export function getPreset(id: string): ProviderPreset {
   const p = PRESETS[id];

@@ -1,5 +1,6 @@
-// Conversation list sidebar: new / search / list / notices / settings
-import { useEffect, useState } from 'preact/hooks';
+// Sidebar: tabs (conversations + tabs registered by features), notices, settings
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { useDialog } from './dialog';
 import { searchMessages, type SearchHit } from '../lib/db/repo';
 import type { Conversation } from '../lib/db/schema';
 import {
@@ -19,12 +20,15 @@ import {
   settings,
   showToast,
   sidebarOpen,
+  showChat,
+  sidebarTab,
   startNewChat,
   streamingConv,
   updateConversation
 } from '../state/app';
 import { Button, Icon, cx } from './ui';
 import { askConfirm } from './ConfirmDialog';
+import { sidebarTabs } from './extensions';
 
 function groupLabel(ts: number): string {
   const d = new Date(ts);
@@ -96,7 +100,12 @@ function Row({ c, snippet }: { c: Conversation; snippet?: string }) {
           title="削除"
           class="px-1! hover:text-rose-600"
           onClick={() =>
-            void askConfirm({ title: '会話を削除', message: `「${c.title}」を削除します。この操作は取り消せません。`, confirmLabel: '削除', danger: true }).then((ok) => {
+            void askConfirm({
+              title: '会話を削除',
+              message: `「${c.title}」を削除します。この会話で作った画像も削除されます（ファイルタブの文書や添付ファイルは残ります）。この操作は取り消せません。`,
+              confirmLabel: '削除',
+              danger: true
+            }).then((ok) => {
               if (ok) void removeConversation(c.id, abortConversation);
             })
           }
@@ -154,7 +163,22 @@ function Notices() {
   return items.length ? <div class="flex flex-col gap-2 px-2 pb-2">{items}</div> : null;
 }
 
+const MOBILE = '(max-width: 767px)';
+
 export function Sidebar() {
+  const asideRef = useRef<HTMLElement>(null);
+  const [mobile, setMobile] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(MOBILE).matches);
+  useEffect(() => {
+    const mq = matchMedia(MOBILE);
+    const f = () => setMobile(mq.matches);
+    mq.addEventListener('change', f);
+    return () => mq.removeEventListener('change', f);
+  }, []);
+  // On phones the sidebar is a drawer: a dialog while open, and out of the tab order while closed
+  useDialog(asideRef, { onClose: () => (sidebarOpen.value = false), active: mobile && sidebarOpen.value });
+  useEffect(() => {
+    if (asideRef.current) asideRef.current.inert = mobile && !sidebarOpen.value;
+  }, [mobile, sidebarOpen.value]);
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<Map<string, SearchHit>>(new Map());
   // Full-text search of message bodies (200ms after typing stops)
@@ -173,6 +197,8 @@ export function Sidebar() {
       clearTimeout(t);
     };
   }, [q]);
+  const tab = sidebarTab.value;
+  const ActivePanel = sidebarTabs.find((t) => t.id === tab)?.Panel;
   const ql = q.trim().toLowerCase();
   const list = conversations.value.filter((c) => !ql || c.title.toLowerCase().includes(ql) || hits.has(c.id));
   const pinned = list.filter((c) => c.pinned);
@@ -186,22 +212,51 @@ export function Sidebar() {
 
   return (
     <>
-      {sidebarOpen.value && <div class="fixed inset-0 z-20 bg-black/40 md:hidden" onClick={() => (sidebarOpen.value = false)} />}
+      {sidebarOpen.value && <div data-dialog-backdrop class="fixed inset-0 z-20 bg-black/40 md:hidden" onClick={() => (sidebarOpen.value = false)} />}
       <aside
+        ref={asideRef}
         class={cx(
           'fixed inset-y-0 left-0 z-30 flex w-72 flex-col border-r border-zinc-200 bg-zinc-50 transition-transform md:static md:translate-x-0 dark:border-zinc-800 dark:bg-zinc-950',
           sidebarOpen.value ? 'translate-x-0' : '-translate-x-full'
         )}
-        aria-label="会話一覧"
+        aria-label="サイドバー"
       >
-        <div class="flex items-center gap-1 p-2">
-          <Button variant="outline" class="flex-1 justify-start" onClick={() => startNewChat(false)}>
+        {sidebarTabs.length > 0 && (
+          <div role="tablist" aria-label="表示する一覧" class="m-2 flex gap-1 rounded-lg bg-zinc-200/60 p-0.5 dark:bg-zinc-900">
+            {[{ id: 'chats', label: '会話', icon: 'chat' as const }, ...sidebarTabs].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                class={cx(
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-sm',
+                  tab === t.id ? 'bg-white font-medium shadow-sm dark:bg-zinc-800' : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
+                )}
+                onClick={() => {
+                  if (t.id === 'chats') showChat();
+                  else {
+                    sidebarTab.value = t.id;
+                    sidebarTabs.find((x) => x.id === t.id)?.onSelect?.();
+                  }
+                }}
+              >
+                <Icon name={t.icon} class="size-3.5" />
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {ActivePanel ? (
+          <ActivePanel />
+        ) : (
+        <>
+        <div class={cx('space-y-2 px-2 pb-2', !sidebarTabs.length && 'pt-2')}>
+          <Button variant="outline" class="w-full justify-start" onClick={() => startNewChat(false)}>
             <Icon name="plus" />
             新しいチャット
           </Button>
-        </div>
-        <div class="px-2 pb-2">
-          <label class="flex items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-sm dark:bg-zinc-900">
+          <label class="flex items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-sm focus-within:ring-2 focus-within:ring-sky-500/60 dark:bg-zinc-900">
             <Icon name="search" class="size-3.5 text-zinc-400" />
             <input class="w-full bg-transparent outline-none" placeholder="会話を検索（本文も対象）" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label="会話を検索" />
           </label>
@@ -225,6 +280,8 @@ export function Sidebar() {
           ))}
           {list.length === 0 && <p class="px-2.5 py-4 text-sm text-zinc-500">{q ? '見つかりません' : 'まだ会話はありません'}</p>}
         </nav>
+        </>
+        )}
         <Notices />
         <div class="flex items-center gap-2 border-t border-zinc-200 p-2 dark:border-zinc-800">
           <Button class="justify-start" onClick={() => openSettings()}>

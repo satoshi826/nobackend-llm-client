@@ -2,6 +2,8 @@ import { render } from 'preact';
 import './styles.css';
 import { App } from './App';
 import { init } from './state/app';
+// Features register themselves with the core (extension points) when imported
+import './features';
 
 render(<App />, document.getElementById('app')!);
 init().catch((e) => {

@@ -1,7 +1,10 @@
 // JSON export / import. API keys are not included by default.
-import { db, SCHEMA_VERSION, type Conversation, type MessageRecord, type SavedPrompt, type Skill } from './schema';
+import { db, SCHEMA_VERSION, type Conversation, type ImageParams, type MessageRecord, type SavedPrompt, type Skill } from './schema';
 import { validateSkill } from '../skills/skill';
 import { seal, unseal } from './sealed';
+import { exportImages, importImages, type ExportedImage } from './images';
+import { cleanFiles, exportFiles, importFiles } from './files';
+import type { Attachment, FileRecord } from './schema';
 
 const openAll = <T extends object>(rows: T[]) => Promise.all(rows.map((r) => unseal(r)));
 
@@ -16,10 +19,14 @@ export interface ExportFile {
   prompts: SavedPrompt[];
   /** Since v3 */
   skills?: Skill[];
+  /** Images (only when the user chose to include them) */
+  images?: ExportedImage[];
+  /** Since v6: documents and uploaded files (text) */
+  files?: FileRecord[];
   settings: { key: string; value: unknown }[];
 }
 
-export async function exportAll(): Promise<ExportFile> {
+export async function exportAll(includeImages = false): Promise<ExportFile> {
   const d = db();
   return {
     format: EXPORT_FORMAT,
@@ -30,6 +37,8 @@ export async function exportAll(): Promise<ExportFile> {
     messages: await openAll(await d.messages.toArray()),
     prompts: await openAll(await d.prompts.toArray()),
     skills: await openAll(await d.skills.toArray()),
+    ...(includeImages ? { images: await exportImages() } : {}),
+    files: await exportFiles(),
     // Connection settings and keys are excluded (avoids attacks that swap baseUrl via import)
     settings: (await d.settings.toArray()).filter((s) => !String(s.key).startsWith('secret'))
   };
@@ -40,6 +49,8 @@ export interface ImportResult {
   messages: number;
   prompts: number;
   skills: number;
+  images: number;
+  files: number;
   skipped: number;
 }
 
@@ -47,7 +58,7 @@ export interface ImportResult {
 export async function importAll(raw: unknown): Promise<ImportResult> {
   const f = validate(raw);
   const d = db();
-  const res: ImportResult = { conversations: 0, messages: 0, prompts: 0, skills: 0, skipped: 0 };
+  const res: ImportResult = { conversations: 0, messages: 0, prompts: 0, skills: 0, images: 0, files: 0, skipped: 0 };
   // Encrypt up front, outside the transaction (awaiting inside would close the transaction)
   const conversations = await Promise.all(f.conversations.map((c) => seal('conversations', { ...c, temporary: undefined })));
   const messages = await Promise.all(f.messages.map((m) => seal('messages', m)));
@@ -88,7 +99,40 @@ export async function importAll(raw: unknown): Promise<ImportResult> {
       res.skills++;
     }
   });
+  if (f.images?.length) res.images = await importImages(f.images, new Set(f.conversations.map((c) => c.id)));
+  if (f.files?.length) res.files = await importFiles(f.files);
   return res;
+}
+
+/** Keep only well-formed image request fields */
+function cleanImageParams(x: any): ImageParams | undefined {
+  if (!x || typeof x !== 'object' || !['generate', 'upscale', 'edit', 'remove-bg'].includes(x.op)) return undefined;
+  const str = (v: unknown) => (isStr(v) ? v : undefined);
+  return {
+    op: x.op,
+    providerId: str(x.providerId) ?? 'venice',
+    model: str(x.model) ?? '',
+    prompt: str(x.prompt) ?? '',
+    negativePrompt: str(x.negativePrompt),
+    aspectRatio: str(x.aspectRatio),
+    resolution: str(x.resolution),
+    variants: Math.min(4, Math.max(1, Number(x.variants) || 1)),
+    style: str(x.style),
+    seed: Number.isFinite(x.seed) ? x.seed : undefined,
+    enhancePrompt: !!x.enhancePrompt || undefined,
+    safeMode: x.safeMode !== false,
+    format: x.format === 'png' || x.format === 'jpeg' ? x.format : 'webp',
+    sourceBlobId: str(x.sourceBlobId),
+    scale: x.scale === 4 ? 4 : x.scale === 2 ? 2 : undefined
+  };
+}
+
+function cleanAttachments(x: unknown): Attachment[] | undefined {
+  if (!Array.isArray(x)) return undefined;
+  const out = x
+    .filter((a: any) => a && isStr(a.fileId) && isStr(a.name) && isStr(a.text))
+    .map((a: any) => ({ fileId: a.fileId, name: a.name.slice(0, 120), mime: isStr(a.mime) ? a.mime : 'text/plain', version: Number(a.version) || 1, text: a.text, totalChars: Number(a.totalChars) || a.text.length }));
+  return out.length ? out : undefined;
 }
 
 function isStr(x: unknown): x is string {
@@ -126,7 +170,14 @@ export function validate(raw: unknown): ExportFile {
       createdAt: typeof m.createdAt === 'number' ? m.createdAt : Date.now(),
       role: m.role,
       // Accept only text-like parts (file/tool parts have nothing to refer to)
-      parts: m.parts.filter((p: any) => (p?.type === 'text' || p?.type === 'reasoning') && isStr(p.text)).map((p: any) => ({ type: p.type, text: p.text, state: 'done' as const })),
+      // Text parts, plus image file parts (the image itself may or may not be in the file)
+      parts: m.parts
+        .filter((p: any) => ((p?.type === 'text' || p?.type === 'reasoning') && isStr(p.text)) || (p?.type === 'file' && isStr(p.blobId) && isStr(p.mimeType) && p.mimeType.startsWith('image/')))
+        .map((p: any) =>
+          p.type === 'file'
+            ? { type: 'file' as const, blobId: p.blobId, name: isStr(p.name) ? p.name : 'image', mimeType: p.mimeType, ...(Number.isFinite(p.width) ? { width: p.width, height: p.height } : {}) }
+            : { type: p.type, text: p.text, state: 'done' as const }
+        ),
       status: 'done' as const,
       meta: m.meta && typeof m.meta === 'object' ? { model: isStr((m.meta as any).model) ? (m.meta as any).model : undefined } : undefined,
       compaction:
@@ -135,6 +186,16 @@ export function validate(raw: unknown): ExportFile {
           : undefined,
       skills: Array.isArray(m.skills)
         ? m.skills.filter((s: any) => s && isStr(s.name) && isStr(s.body)).map((s: any) => ({ name: s.name, body: s.body }))
+        : undefined,
+      attachments: cleanAttachments(m.attachments),
+      imageRequest: cleanImageParams(m.imageRequest),
+      image: m.image && cleanImageParams(m.image.params)
+        ? {
+            params: cleanImageParams(m.image.params)!,
+            seed: Number.isFinite(m.image.seed) ? m.image.seed : undefined,
+            blurred: !!m.image.blurred || undefined,
+            violations: Number(m.image.violations) || undefined
+          }
         : undefined
     } as MessageRecord))
     // Reject system messages other than compaction nodes (so instructions cannot be slipped into a conversation)
@@ -155,5 +216,8 @@ export function validate(raw: unknown): ExportFile {
       updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : Date.now()
     }))
     .filter((s) => !validateSkill(s));
-  return { format: EXPORT_FORMAT, version: f.version, exportedAt: String(f.exportedAt ?? ''), conversations, messages, prompts, skills, settings: [] };
+  const images = (Array.isArray(f.images) ? f.images : []).filter(
+    (im) => im && isStr(im.id) && isStr(im.conversationId) && isStr(im.messageId) && isStr(im.mime) && isStr(im.data) && typeof im.createdAt === 'number'
+  );
+  return { format: EXPORT_FORMAT, version: f.version, exportedAt: String(f.exportedAt ?? ''), conversations, messages, prompts, skills, images, files: cleanFiles(f.files), settings: [] };
 }

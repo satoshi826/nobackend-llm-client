@@ -170,3 +170,12 @@ hr {
   margin: 4px 0;
   width: 100%;
 }
+
+/* Visible keyboard focus */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}
+.err:empty {
+  display: none;
+}

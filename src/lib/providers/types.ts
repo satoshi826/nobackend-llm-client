@@ -53,7 +53,7 @@ export type ToolState =
 export type Part =
   | { type: 'text'; text: string; state?: 'streaming' | 'done' }
   | { type: 'reasoning'; text: string; state?: 'streaming' | 'done' }
-  | { type: 'file'; blobId: string; name: string; mimeType: string }
+  | { type: 'file'; blobId: string; name: string; mimeType: string; width?: number; height?: number }
   | { type: 'source'; url: string; title?: string; snippet?: string }
   | {
       type: 'tool';

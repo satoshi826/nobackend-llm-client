@@ -8,7 +8,7 @@ export interface UsageRecord {
   at: number;
   providerId: string;
   model: string;
-  kind: 'chat' | 'summary' | 'suggest';
+  kind: 'chat' | 'summary' | 'suggest' | 'image';
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;

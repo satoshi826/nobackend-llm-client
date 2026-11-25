@@ -1,20 +1,33 @@
 // Tool call display (running, result, error, denied), and the approval card while awaiting approval.
 import { useState } from 'preact/hooks';
 import type { Part } from '../lib/providers/types';
-import { pendingApprovals, resolveApproval } from '../state/app';
+import { currentImageModel, paramsFromBar, pendingApprovals, resolveApproval } from '../state/app';
+import { estimateImageCost } from '../lib/images/venice';
 import { Button, Icon, Shimmer, Spinner, cx } from './ui';
 import { SkillApproval } from './SkillApproval';
+import { ToolImages } from './ImageView';
+import { toolViewFor } from './extensions';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
 
-const LABEL: Record<string, string> = { web_search: 'Web 検索', fetch_url: 'ページ本文の取得', load_skill: 'スキル', save_skill: 'スキルの保存' };
-const FIELD: Record<string, string> = { web_search: 'query', fetch_url: 'url', load_skill: 'name', save_skill: 'name' };
-const ICON = { web_search: 'search', fetch_url: 'globe', load_skill: 'book', save_skill: 'book' } as const;
+const LABEL: Record<string, string> = { web_search: 'Web 検索', fetch_url: 'ページ本文の取得', load_skill: 'スキル', save_skill: 'スキルの保存', generate_image: '画像の生成' };
+const FIELD: Record<string, string> = { web_search: 'query', fetch_url: 'url', load_skill: 'name', save_skill: 'name', generate_image: 'prompt' };
+const ICON = { web_search: 'search', fetch_url: 'globe', load_skill: 'book', save_skill: 'book', generate_image: 'image' } as const;
 
 function summary(p: ToolPart): string {
+  const custom = toolViewFor(p.name)?.summary?.(p);
+  if (custom !== undefined) return custom;
   const i = (p.input ?? {}) as Record<string, unknown>;
   const v = i[FIELD[p.name] ?? ''];
   return typeof v === 'string' ? v : p.argsText;
+}
+
+/** What the image tool will use: model, whether it is relayed, and the estimated price */
+function imageToolNote(): string {
+  const m = currentImageModel.value;
+  if (!m) return 'プロンプトは Venice に送られます。';
+  const cost = estimateImageCost({ ...paramsFromBar(''), variants: 1, enhancePrompt: false }, m);
+  return `プロンプトは Venice の「${m.name}」（${m.privacy === 'private' ? 'private' : m.privacy === 'anonymized' ? '外部中継' : '保持方針は提供元による'}）に送られます。${cost !== undefined ? `費用は約 $${cost.toFixed(3)}。` : '費用は不明です。'}`;
 }
 
 function ApprovalCard({ p }: { p: ToolPart }) {
@@ -24,7 +37,14 @@ function ApprovalCard({ p }: { p: ToolPart }) {
   const [reason, setReason] = useState('');
   if (!pending) return null;
   const edited = field && value !== summary(p) ? { ...((p.input ?? {}) as object), [field]: value } : undefined;
-  const where = p.name === 'web_search' ? '検索語は Tavily に送られます。' : p.name === 'fetch_url' ? 'この URL は Jina Reader に送られ、Jina がページを取得します。' : '';
+  const where =
+    p.name === 'web_search'
+      ? '検索語は Tavily に送られます。'
+      : p.name === 'fetch_url'
+        ? 'この URL は Jina Reader に送られ、Jina がページを取得します。'
+        : p.name === 'generate_image'
+          ? imageToolNote()
+          : '';
   return (
     <div role="group" aria-label="ツールの実行の確認" class="my-2 rounded-lg border border-sky-300 bg-sky-50/60 p-3 text-sm dark:border-sky-800 dark:bg-sky-950/40">
       <div class="mb-2 flex items-center gap-1.5 font-medium">
@@ -63,10 +83,10 @@ function ApprovalCard({ p }: { p: ToolPart }) {
   );
 }
 
-export function ToolCallCard({ p, live }: { p: ToolPart; live: boolean }) {
+export function ToolCallCard({ p, live, owner }: { p: ToolPart; live: boolean; owner?: { conversationId: string; messageId: string } }) {
   const [open, setOpen] = useState(false);
   if (p.state === 'approval-requested' && live && pendingApprovals.value[p.toolCallId]) return p.name === 'save_skill' ? <SkillApproval p={p} /> : <ApprovalCard p={p} />;
-  const d = (p.uiDetails ?? {}) as { results?: { title: string; url: string }[]; title?: string; chars?: number; truncated?: boolean; updated?: boolean };
+  const d = (p.uiDetails ?? {}) as { results?: { title: string; url: string }[]; title?: string; chars?: number; truncated?: boolean; updated?: boolean; blobIds?: string[] };
   let status: string;
   let tone = 'text-zinc-500';
   switch (p.state) {
@@ -85,13 +105,15 @@ export function ToolCallCard({ p, live }: { p: ToolPart; live: boolean }) {
           ? `${d.results?.length ?? 0} 件`
           : p.name === 'fetch_url'
             ? `${(d.chars ?? 0).toLocaleString()} 文字${d.truncated ? '（一部）' : ''}`
-            : p.name === 'load_skill'
+            : p.name === 'generate_image'
+              ? `${d.blobIds?.length ?? 0} 枚`
+              : p.name === 'load_skill'
               ? '読み込みました'
               : p.name === 'save_skill'
                 ? d.updated
                   ? '更新しました'
                   : '作成しました'
-                : '完了';
+                : (toolViewFor(p.name)?.doneStatus?.(p) ?? '完了');
       break;
     case 'output-denied':
       status = p.approval?.auto ? '禁止（設定）' : '拒否しました';
@@ -102,6 +124,8 @@ export function ToolCallCard({ p, live }: { p: ToolPart; live: boolean }) {
       tone = 'text-rose-700 dark:text-rose-400';
   }
   const hasDetails = (d.results?.length ?? 0) > 0 || !!p.error || !!p.approval?.reason;
+  const view = toolViewFor(p.name);
+  const Detail = view?.Detail;
   return (
     <div class="my-1.5 rounded-lg border border-zinc-200 text-xs dark:border-zinc-800">
       <button
@@ -113,13 +137,22 @@ export function ToolCallCard({ p, live }: { p: ToolPart; live: boolean }) {
         {live && (p.state === 'input-available' || p.state === 'input-streaming') ? (
           <Spinner class="size-3.5 text-sky-600 dark:text-sky-400" />
         ) : (
-          <Icon name={ICON[p.name as keyof typeof ICON] ?? 'wrench'} class="size-3.5 shrink-0" />
+          <Icon name={ICON[p.name as keyof typeof ICON] ?? view?.icon ?? 'wrench'} class="size-3.5 shrink-0" />
         )}
-        <span class="shrink-0 font-medium">{LABEL[p.name] ?? p.name}</span>
+        <span class="shrink-0 font-medium">{LABEL[p.name] ?? view?.label?.(p.name) ?? p.name}</span>
         <span class="min-w-0 truncate text-zinc-500">{summary(p)}</span>
         <span class={cx('ml-auto shrink-0', tone)}>{live && (p.state === 'input-available' || p.state === 'input-streaming') ? <Shimmer>{status}</Shimmer> : status}</span>
         {hasDetails && <Icon name="chevron-down" class={cx('size-3.5 shrink-0 transition', open && 'rotate-180')} />}
       </button>
+      {Detail && p.state === 'output-available' && <Detail p={p} live={live} owner={owner} />}
+      {p.name === 'generate_image' && (d as { deleted?: boolean }).deleted && !d.blobIds?.length && (
+        <p class="border-t border-zinc-200 px-3 py-2 text-zinc-500 dark:border-zinc-800">（画像は削除されました）</p>
+      )}
+      {p.name === 'generate_image' && !!d.blobIds?.length && owner && (
+        <div class="border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
+          <ToolImages blobIds={d.blobIds} conversationId={owner.conversationId} messageId={owner.messageId} />
+        </div>
+      )}
       {open && (
         <div class="border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
           {p.error && <p class="text-rose-700 dark:text-rose-400">{p.error}</p>}

@@ -5,6 +5,11 @@ export type ModalName = 'settings' | 'models' | 'system';
 export type SettingsTab = 'connections' | 'chat' | 'search' | 'skills' | 'usage' | 'privacy';
 
 export const modal = signal<ModalName | null>(null);
+/** What the main area shows: the chat, or a screen registered by a feature (e.g. { kind: 'files' }, { kind: 'file', id }) */
+export type MainViewState = { kind: string; id?: string };
+export const mainView = signal<MainViewState>({ kind: 'chat' });
+/** Selected sidebar tab ('chats' or a feature's tab id) */
+export const sidebarTab = signal('chats');
 export const settingsTab = signal<SettingsTab>('connections');
 export const sidebarOpen = signal(false);
 /** Text in the input box (filled when a reply suggestion is clicked) */
@@ -33,3 +38,12 @@ export function showToast(text: string, kind: 'info' | 'error' = 'info') {
   clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => (toast.value = null), kind === 'error' ? 6000 : 3500);
 }
+
+/** Image viewer: the images being browsed and which one is shown */
+export interface LightboxItem {
+  blobId: string;
+  conversationId: string;
+  messageId: string;
+}
+/** fromGallery: opened from the file manager (offers to open the image's conversation) */
+export const lightbox = signal<{ items: LightboxItem[]; index: number; fromGallery?: boolean } | null>(null);

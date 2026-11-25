@@ -2,7 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import type { ChatMessage, ModelInfo } from '../providers/types';
 import type { UsageRecord } from '../usage';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 6;
 
 export interface Conversation {
   id: string;
@@ -19,6 +19,43 @@ export interface Conversation {
   tags: string[];
   /** Temporary chat. Conversations with true are never written to the DB (memory only) */
   temporary?: boolean;
+  /** Image mode: messages sent from the input box are image prompts */
+  imageMode?: boolean;
+}
+
+/** What an image request asks for (saved on the user message so it can be regenerated) */
+export interface ImageParams {
+  op: 'generate' | 'upscale' | 'edit' | 'remove-bg';
+  providerId: string;
+  /** Image model (generate / edit) */
+  model: string;
+  prompt: string;
+  negativePrompt?: string;
+  aspectRatio?: string;
+  resolution?: string;
+  variants: number;
+  style?: string;
+  /** Fixed seed; undefined means random */
+  seed?: number;
+  enhancePrompt?: boolean;
+  safeMode: boolean;
+  format: 'webp' | 'png' | 'jpeg';
+  /** Source image (upscale / edit / remove-bg) */
+  sourceBlobId?: string;
+  scale?: 2 | 4;
+}
+
+/** What came back for an image request (saved on the assistant message) */
+export interface ImageResult {
+  params: ImageParams;
+  /** Seed actually used (when the request fixed one) */
+  seed?: number;
+  blurred?: boolean;
+  /** Variants dropped by the provider's content policy */
+  violations?: number;
+  enhancedPrompt?: string;
+  /** Alternatives the provider suggested after a content-policy rejection */
+  suggestion?: { prompt?: string; model?: string };
 }
 
 export type MessageStatus = 'streaming' | 'done' | 'error' | 'aborted';
@@ -34,8 +71,57 @@ export interface MessageRecord extends ChatMessage {
   compaction?: { summary: string; coversUntilId: string; count: number; model?: string; auto?: boolean };
   /** Reply suggestions (made after an answer; encrypted along with the conversation) */
   suggestions?: string[];
+  /** Image request (user message) */
+  imageRequest?: ImageParams;
+  /** Image result (assistant message); the images themselves are file parts pointing at the blobs table */
+  image?: ImageResult;
   /** Skills the user picked in the input box (body saved as of sending, so regeneration sends the same content) */
   skills?: { name: string; body: string }[];
+  /** Files the user attached (text saved as of sending, so regeneration sends the same content) */
+  attachments?: Attachment[];
+}
+
+/** A file attached to a user message. text is what is sent to the model (possibly only the beginning) */
+export interface Attachment {
+  fileId: string;
+  name: string;
+  mime: string;
+  version: number;
+  text: string;
+  /** Length of the whole file; larger than text.length when only the beginning is sent */
+  totalChars: number;
+}
+
+/** One saved state of a file */
+export interface FileVersion {
+  v: number;
+  at: number;
+  text: string;
+  /** Who made this version */
+  by: 'model' | 'user' | 'upload';
+  /** Short note, e.g. "appended" or the model's change summary */
+  note?: string;
+}
+
+/**
+ * A text file: documents the model wrote (kind 'document') and files the user brought in (kind 'upload').
+ * Images stay in the blobs table. name and versions are encrypted with a passphrase.
+ */
+export interface FileRecord {
+  id: string;
+  name: string;
+  mime: string;
+  kind: 'document' | 'upload';
+  /** Conversation it was made or attached in (the file outlives the conversation) */
+  conversationId?: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Characters in the latest version */
+  size: number;
+  /** For uploads: where the text came from (e.g. "PDF から抽出") */
+  source?: string;
+  /** Oldest first; the last one is current. Old versions beyond a limit are dropped */
+  versions: FileVersion[];
 }
 
 /** Skill (SKILL.md-compatible work instructions) */
@@ -69,10 +155,16 @@ export interface SettingRecord {
   value: unknown;
 }
 
+/** A stored image. With a passphrase the bytes are encrypted (enc) instead of kept as a Blob */
 export interface BlobRecord {
   id: string;
-  hash: string;
-  blob: Blob;
+  conversationId: string;
+  messageId: string;
+  createdAt: number;
+  mime: string;
+  size: number;
+  blob?: Blob;
+  enc?: { iv: string; data: ArrayBuffer };
 }
 
 export interface ModelRecord extends ModelInfo {
@@ -88,6 +180,7 @@ export class AppDB extends Dexie {
   settings!: Table<SettingRecord, string>;
   skills!: Table<Skill, string>;
   usage!: Table<UsageRecord, string>;
+  files!: Table<FileRecord, string>;
 
   constructor(name = 'nobackend-llm-client') {
     super(name);
@@ -103,8 +196,12 @@ export class AppDB extends Dexie {
     });
     // v2: secrets removed since keys are kept by the key vault (a separate page). providers removed too since connections come from presets
     this.version(2).stores({ secrets: null, providers: null });
+    // v5: images (blobs) indexed by conversation and time; the old hash index was never used
+    this.version(5).stores({ blobs: 'id, conversationId, createdAt' });
     // v3: skills
     this.version(3).stores({ skills: 'id, name, updatedAt' });
+    // v6: files (documents written by the model, files the user uploaded)
+    this.version(6).stores({ files: 'id, updatedAt, conversationId, kind' });
     // v4: usage records (survive deleting conversations). Rebuilt from the usage of existing answers
     this.version(4)
       .stores({ usage: 'id, at, providerId' })

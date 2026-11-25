@@ -1,6 +1,6 @@
 // Builds the messages to send (history, compaction, tool calls within the same turn)
 import type { ChatMessage, Part } from '../providers/types';
-import type { MessageRecord } from '../db/schema';
+import type { Attachment, MessageRecord } from '../db/schema';
 import { withAttachedSkills } from '../skills/skill';
 
 export interface BuildOptions {
@@ -40,16 +40,37 @@ export function buildRequestMessages(history: MessageRecord[], systemPrompt: str
     if (m.compaction) continue;
     if (m.role === 'assistant' && m.status === 'error' && !m.parts.some((p) => p.type === 'text' && p.text)) continue;
     let parts = m.parts.filter((p) => p.type === 'text' || p.type === 'tool');
+    // Image answers: the model gets a note instead of the image data
+    if (m.role === 'assistant' && m.image) {
+      const n = m.parts.filter((p) => p.type === 'file').length;
+      const what = m.image.params.op === 'generate' ? `画像を ${n} 枚生成しました` : m.image.params.op === 'upscale' ? '画像を高解像度化しました' : m.image.params.op === 'edit' ? '画像を編集しました' : '画像の背景を除去しました';
+      parts = m.status === 'done' ? [{ type: 'text', text: n === 0 && m.image.params.op === 'generate' ? `［生成した画像は削除されました: ${m.image.params.prompt.slice(0, 200)}］` : `［${what}: ${m.image.params.prompt.slice(0, 200)}］` }] : [];
+    }
     // Skills the user picked are prepended to that message's text
     if (m.role === 'user' && m.skills?.length) {
       const text = parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
       parts = [{ type: 'text', text: withAttachedSkills(text, m.skills) }];
+    }
+    // Attached files come before the message text
+    if (m.role === 'user' && m.attachments?.length) {
+      const text = parts.map((p) => (p.type === 'text' ? p.text : '')).join('');
+      parts = [{ type: 'text', text: withAttachments(text, m.attachments) }];
     }
     if (parts.length === 0) continue;
     const sameModel = !!opts.model && m.meta?.providerId === opts.providerId && m.meta?.model === opts.model;
     out.push({ id: m.id, role: m.role, parts, vendorState: opts.resendReasoning && sameModel ? m.vendorState : undefined });
   }
   return out;
+}
+
+/** The text sent for a user message with attached files */
+export function withAttachments(text: string, atts: Attachment[]): string {
+  const blocks = atts.map((a) => {
+    const partial = a.text.length < a.totalChars;
+    const note = partial ? `\n[Only the first ${a.text.length} of ${a.totalChars} characters are included. Use read_file with file_id="${a.fileId}" and offset=${a.text.length} to read more.]` : '';
+    return `<file name="${a.name.replace(/"/g, "'")}" id="${a.fileId}" version="${a.version}">\n${a.text}\n</file>${note}`;
+  });
+  return [...blocks, text].filter(Boolean).join('\n\n');
 }
 
 /**

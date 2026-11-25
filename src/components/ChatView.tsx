@@ -6,7 +6,6 @@ import {
   contextUsage,
   currentConv,
   currentPath,
-  hostOfProvider,
   isDraft,
   isStreaming,
   keyStatus,
@@ -30,6 +29,9 @@ import {
   cancelSuggestions,
   suggestingFor,
   startNewChat,
+  sendImagePrompt,
+  setImageMode,
+  currentImageModel,
   enabledProviders,
   providers,
   setProviderEnabled,
@@ -39,6 +41,8 @@ import {
 } from '../state/app';
 import { getPreset, PRESETS } from '../lib/providers/registry';
 import { MessageItem } from './MessageItem';
+import { ImageBar } from './ImageBar';
+import { collectComposerExtras, composerAddons } from './extensions';
 import { KeyPanel, VaultSecurityPanel } from './KeyPanel';
 import { Badge, Button, Icon, Spinner, cx } from './ui';
 
@@ -97,6 +101,28 @@ function Header() {
       <Button class="md:hidden" aria-label="メニュー" onClick={() => (sidebarOpen.value = true)}>
         <Icon name="menu" class="size-5" />
       </Button>
+      {conv.imageMode ? (
+        // Image mode: what is shown here is where prompts go (the image model), not the chat model
+        <button
+          type="button"
+          class="flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          onClick={() => document.querySelector<HTMLElement>('select[aria-label="画像モデル"]')?.focus()}
+          title="画像モード: プロンプトはこの画像モデルに送られます（チャットのモデルは、画像モードをオフにすると表示されます）"
+        >
+          <Icon name="image" class="size-4 shrink-0 text-fuchsia-600 dark:text-fuchsia-400" />
+          <span class="truncate font-semibold">{currentImageModel.value?.name ?? '画像モデル'}</span>
+          {currentImageModel.value?.privacy === 'private' ? (
+            <Badge tone="green" title="Venice がホストし、プロンプトを保存しない画像モデル">
+              <Icon name="lock" class="size-3" />
+              private
+            </Badge>
+          ) : currentImageModel.value?.privacy === 'anonymized' ? (
+            <Badge tone="amber" title="外部の事業者に中継される画像モデル">
+              外部中継
+            </Badge>
+          ) : null}
+        </button>
+      ) : (
       <button
         type="button"
         class="flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -108,6 +134,7 @@ function Header() {
         <PrivacyBadge />
         <Icon name="chevron-down" class="size-3.5 shrink-0 text-zinc-400" />
       </button>
+      )}
       {isDraft.value ? (
         // Before the first message, the new chat can be switched to/from a temporary (unsaved) chat here
         <Button
@@ -230,13 +257,23 @@ function Composer() {
     ref.current?.focus();
   };
 
-  const canSend = !!text.trim() || attached.length > 0;
-  const submit = () => {
+  const imageMode = !!conv.imageMode;
+  const addons = composerAddons.filter((a) => !imageMode || a.inImageMode);
+  const canSend = !!text.trim() || attached.length > 0 || (!imageMode && addons.some((a) => a.hasContent?.()));
+  const submit = async () => {
     if (!canSend || streaming) return;
     const t = text;
     setText('');
-    void sendMessage(t);
+    if (imageMode) return void sendImagePrompt(t);
+    void sendMessage(t, await collectComposerExtras(conv, false));
   };
+  const takeFiles = (files: File[]) => {
+    const target = addons.find((a) => a.onFiles);
+    if (!files.length || !target) return false;
+    target.onFiles!(files, conv);
+    return true;
+  };
+  const [dragging, setDragging] = useState(false);
 
   const mode = searchModeFor(conv.providerId, conv.modelId);
   const webOn = conv.webSearch !== 'off';
@@ -250,8 +287,27 @@ function Composer() {
 
   return (
     <div class="mx-auto w-full max-w-3xl px-3 pb-3 sm:px-4">
-      <div class="relative rounded-2xl border border-zinc-300 bg-white shadow-sm focus-within:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
-        {suggestions.length > 0 && (
+      <div
+        class={cx(
+          'relative rounded-2xl border border-zinc-300 bg-white shadow-sm focus-within:border-zinc-400 dark:border-zinc-700 dark:focus-within:border-zinc-500 dark:bg-zinc-900',
+          dragging && 'border-emerald-500 ring-2 ring-emerald-500/50'
+        )}
+        onDragOver={(e) => {
+          if (imageMode || !e.dataTransfer?.types.includes('Files')) return;
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          setDragging(false);
+          if (imageMode || !e.dataTransfer?.files.length) return;
+          e.preventDefault();
+          takeFiles([...e.dataTransfer.files]);
+        }}
+      >
+        {imageMode && <ImageBar />}
+        {addons.map((a) => a.Above && <a.Above key={a.id} conv={conv} />)}
+        {!imageMode && suggestions.length > 0 && (
           <ul role="listbox" aria-label="スキルの候補" class="absolute bottom-full left-0 z-20 mb-2 w-80 max-w-full rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
             {suggestions.map((s, i) => (
               <li key={s.id}>
@@ -270,7 +326,7 @@ function Composer() {
             ))}
           </ul>
         )}
-        {attached.length > 0 && (
+        {!imageMode && attached.length > 0 && (
           <div class="flex flex-wrap gap-1 px-3 pt-2.5">
             {attached.map((s) => (
               <span key={s.id} class="inline-flex items-center gap-1 rounded-full bg-violet-50 py-0.5 pr-1 pl-2 font-mono text-xs text-violet-800 dark:bg-violet-950 dark:text-violet-200">
@@ -287,9 +343,21 @@ function Composer() {
           ref={ref}
           rows={1}
           value={text}
-          placeholder={touch ? 'メッセージを入力' : 'メッセージを入力（Enter で送信、Shift+Enter で改行、/ でスキル）'}
+          placeholder={
+            imageMode
+              ? touch
+                ? '作りたい画像を説明してください'
+                : '作りたい画像を説明してください（Enter で生成、Shift+Enter で改行）'
+              : touch
+                ? 'メッセージを入力'
+                : 'メッセージを入力（Enter で送信、Shift+Enter で改行、/ でスキル）'
+          }
           aria-label="メッセージ"
           class="block max-h-60 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[15px] outline-none placeholder:text-zinc-400"
+          onPaste={(e) => {
+            const files = [...(e.clipboardData?.files ?? [])];
+            if (!imageMode && files.length && takeFiles(files)) e.preventDefault();
+          }}
           onInput={(e) => {
             const v = (e.target as HTMLTextAreaElement).value;
             // Once the user starts typing, in-progress reply suggestions are no longer needed
@@ -308,11 +376,21 @@ function Composer() {
             }
             if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !touch) {
               e.preventDefault();
-              submit();
+              void submit();
             }
           }}
         />
         <div class="flex items-center gap-1 px-2 pb-2">
+          <Button
+            aria-pressed={imageMode}
+            title={imageMode ? '画像モード: 入力した文で画像を作ります（押すとチャットに戻る）' : '画像を作る（画像モード）'}
+            class={cx('text-xs', imageMode && 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300')}
+            onClick={() => void setImageMode(!imageMode)}
+          >
+            <Icon name="image" class="size-4" />
+            画像{imageMode ? ': オン' : ''}
+          </Button>
+          {!imageMode && (
           <Button
             aria-pressed={webOn}
             disabled={!mode}
@@ -323,6 +401,8 @@ function Composer() {
             <Icon name="globe" class="size-4" />
             Web 検索{webOn && mode ? ': オン' : ''}
           </Button>
+          )}
+          {!imageMode && (
           <div class="relative">
             <Button
               aria-haspopup="menu"
@@ -336,22 +416,21 @@ function Composer() {
             </Button>
             {menu && <SkillMenu onClose={() => setMenu(false)} />}
           </div>
+          )}
+          {addons.map((a) => a.Button && <a.Button key={a.id} conv={conv} />)}
           <div class="ml-auto">
             {streaming ? (
               <Button variant="primary" aria-label="停止" onClick={() => stopGeneration()} class="rounded-full! p-2!">
                 <Icon name="stop" class="size-4" />
               </Button>
             ) : (
-              <Button variant="primary" aria-label="送信" disabled={!canSend} onClick={submit} class="rounded-full! p-2!">
+              <Button variant="primary" aria-label="送信" disabled={!canSend} onClick={() => void submit()} class="rounded-full! p-2!">
                 <Icon name="send" class="size-4" />
               </Button>
             )}
           </div>
         </div>
       </div>
-      <p class="mt-1.5 text-center text-[11px] text-zinc-400">
-        {conv.temporary ? 'この会話は保存されません' : '会話はこのブラウザにだけ保存されます'} ・ 送信先: {hostOfProvider(conv.providerId)}
-      </p>
     </div>
   );
 }
@@ -368,6 +447,17 @@ function MessageList() {
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [path.length, lastLen]);
+  // Content can grow after rendering (images loading, code highlighting): keep following the bottom
+  useEffect(() => {
+    const el = scroller.current;
+    const inner = el?.firstElementChild;
+    if (!el || !inner) return;
+    const ro = new ResizeObserver(() => {
+      if (stick.current) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <div

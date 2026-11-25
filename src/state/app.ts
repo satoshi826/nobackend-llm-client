@@ -5,7 +5,8 @@ import { checkLeftoverLocalKeys, connectKeys } from './keys';
 import { loadModels, refreshModelsNeedingKey } from './models';
 import { keyInfos, vaultState } from './keys';
 import { saveSettings, settings } from './settings';
-import { loadConversations, restoreFromHash, startNewChat } from './conversations';
+import { loadConversations, startNewChat } from './conversations';
+import { restoreRoute } from './router';
 import { loadSkills } from './skills';
 import { dataLock, initDataLock, setBusyCheck } from './lock';
 import { isStreaming } from './generation';
@@ -19,6 +20,9 @@ export * from './generation';
 export * from './data';
 export * from './skills';
 export * from './lock';
+export * from './images';
+export * from './router';
+export * from './tool-registry';
 
 export const ready = signal(false);
 
@@ -37,7 +41,7 @@ export async function init() {
     await loadConversations();
     await loadSkills();
     startNewChat();
-    await restoreFromHash(openHash);
+    await restoreRoute(openHash);
   };
   await initDataLock(loadData);
   setBusyCheck(() => isStreaming.value);

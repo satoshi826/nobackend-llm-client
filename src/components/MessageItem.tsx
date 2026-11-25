@@ -5,6 +5,8 @@ import { childrenOf } from '../lib/chat/tree';
 import { composerFocus, composerText, editUserMessage, isStreaming, messages, modelOf, openModelPicker, regenerate, settings, showToast, suggestingFor, switchSibling } from '../state/app';
 import { Markdown } from './Markdown';
 import { ToolCallCard } from './ToolCallCard';
+import { ImageAnswer } from './ImageView';
+import { userMessageExtras } from './extensions';
 import { Badge, Button, Dots, Icon, Shimmer, Spinner, cx } from './ui';
 
 function textOf(m: MessageRecord): string {
@@ -126,6 +128,21 @@ function UserMessage({ m }: { m: MessageRecord }) {
   }
   return (
     <div class="group flex flex-col items-end">
+      {userMessageExtras.map((X, i) => (
+        <X key={i} m={m} />
+      ))}
+      {m.imageRequest && (
+        <div class="mb-1 flex items-center gap-1 text-xs text-fuchsia-700 dark:text-fuchsia-300" title="画像の依頼">
+          <Icon name="image" class="size-3.5" />
+          {m.imageRequest.op === 'generate'
+            ? `画像 · ${m.imageRequest.aspectRatio ?? ''}${m.imageRequest.variants > 1 ? ` · ${m.imageRequest.variants} 枚` : ''}`
+            : m.imageRequest.op === 'upscale'
+              ? '高解像度化'
+              : m.imageRequest.op === 'edit'
+                ? '画像の編集'
+                : '背景の除去'}
+        </div>
+      )}
       {m.skills?.length ? (
         <div class="mb-1 flex max-w-[85%] flex-wrap justify-end gap-1">
           {m.skills.map((s) => (
@@ -168,10 +185,11 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
       {m.parts.map((p, i) => {
         if (p.type === 'reasoning') return <Reasoning key={i} part={p} streaming={streaming} />;
         if (p.type === 'text') return <Markdown key={i} text={p.text} streaming={streaming && p.state === 'streaming'} citations={sources.map((s) => s.url)} />;
-        if (p.type === 'tool') return <ToolCallCard key={i} p={p} live={streaming} />;
+        if (p.type === 'tool') return <ToolCallCard key={i} p={p} live={streaming} owner={{ conversationId: m.conversationId, messageId: m.id }} />;
         return null;
       })}
-      {streaming && !hasText && !m.parts.some((p) => p.type === 'reasoning') && (
+      {m.image && <ImageAnswer m={m} />}
+      {streaming && !m.image && !hasText && !m.parts.some((p) => p.type === 'reasoning') && (
         <div class="flex items-center gap-2 text-sm text-zinc-400" role="status">
           <Dots />
           <Shimmer>応答を待っています</Shimmer>
@@ -200,14 +218,14 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
           <Button aria-label="再生成" title="再生成" disabled={isStreaming.value} onClick={() => regenerate(m.id)}>
             <Icon name="refresh" class="size-3.5" />
           </Button>
-          <Button
+          {!m.image && <Button
             aria-label="別のモデルで再生成"
             title="別のモデルで再生成"
             disabled={isStreaming.value}
             onClick={() => openModelPicker({ kind: 'regenerate', assistantId: m.id })}
           >
             <Icon name="swap" class="size-3.5" />
-          </Button>
+          </Button>}
           <span class="ml-1 truncate" title={m.meta?.model}>
             {model?.name ?? m.meta?.model}
           </span>

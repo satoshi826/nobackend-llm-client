@@ -7,7 +7,9 @@ import { pathToLeaf, resolveLeaf } from '../lib/chat/tree';
 import { titleFrom } from '../lib/chat/title';
 import { settings } from './settings';
 import { defaultModel, visibleModels } from './models';
-import { sidebarOpen } from './ui';
+import { mainView, sidebarOpen, sidebarTab } from './ui';
+import { registerRoute, setHash as setRouteHash } from './router';
+import { keyInfos, keyReady, vaultStatusKnown } from './keys';
 
 export const conversations = signal<Conversation[]>([]);
 /** ID of the displayed saved conversation (null means a draft) */
@@ -48,6 +50,18 @@ effect(() => {
   }
 });
 
+// Once the key status is known, a new chat that landed on a provider without a usable key
+// switches to one that can be used right away (the default is chosen before keys are known at startup)
+effect(() => {
+  if (!vaultStatusKnown.value) return;
+  void keyInfos.value;
+  void visibleModels.value;
+  const d = draft.peek();
+  if (currentId.peek() !== null || keyReady(d.providerId)) return;
+  const m = defaultModel();
+  if (m.modelId && m.providerId !== d.providerId && keyReady(m.providerId)) draft.value = { ...d, providerId: m.providerId, modelId: m.modelId };
+});
+
 export const isDraft = computed(() => currentId.value === null);
 /** The displayed conversation (including a draft; always present) */
 export const currentConv = computed<Conversation>(() => (currentId.value ? conversations.value.find((c) => c.id === currentId.value) : undefined) ?? draft.value);
@@ -72,6 +86,8 @@ export function startNewChat(temporary = false) {
     messages.value = [];
     draft.value = makeDraft(temporary);
     sidebarOpen.value = false;
+    mainView.value = { kind: 'chat' };
+    sidebarTab.value = 'chats';
   });
   setHash(null);
 }
@@ -88,6 +104,8 @@ export async function openConversation(id: string) {
     currentId.value = id;
     messages.value = list;
     sidebarOpen.value = false;
+    mainView.value = { kind: 'chat' };
+    sidebarTab.value = 'chats';
   });
   setHash(id);
   // Repair a leaf that points at a message that was never written (closed right as a reply started)
@@ -145,12 +163,21 @@ export async function putMessage(m: MessageRecord, conv: Conversation) {
 // ---- URL（#/c/<id>）----
 function setHash(id: string | null) {
   const conv = id ? conversations.value.find((c) => c.id === id) : null;
-  const next = conv && !conv.temporary ? `#/c/${id}` : '';
-  if (location.hash !== next) history.replaceState(null, '', next || location.pathname);
+  setRouteHash(conv && !conv.temporary ? `#/c/${id}` : '');
 }
 
-/** Open the conversation named in the URL (pass the hash read before anything resets it) */
-export async function restoreFromHash(hash = location.hash) {
-  const m = /^#\/c\/([\w-]+)$/.exec(hash);
-  if (m && conversations.value.some((c) => c.id === m[1])) await openConversation(m[1]);
+/** Show the chat again (the conversation that was open, or the draft) */
+export function showChat() {
+  batch(() => {
+    mainView.value = { kind: 'chat' };
+    sidebarTab.value = 'chats';
+  });
+  setHash(currentId.value);
 }
+
+registerRoute({
+  pattern: /^#\/c\/([\w-]+)$/,
+  open: async (m) => {
+    if (conversations.value.some((c) => c.id === m[1])) await openConversation(m[1]);
+  }
+});

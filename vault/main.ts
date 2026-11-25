@@ -82,6 +82,7 @@ function show(m: { ok: boolean; text: string }) {
 }
 
 async function run(btn: HTMLButtonElement, busy: string, fn: () => Promise<{ ok: boolean; message: string }>) {
+  message = null;
   btn.disabled = true;
   btn.textContent = busy;
   const r = await fn();
@@ -101,16 +102,30 @@ function passFields(autocomplete: string): { box: HTMLElement; p1: HTMLInputElem
 }
 
 function unlockForm(note: string): HTMLElement {
-  const pass = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': 'パスフレーズ' });
+  const pass = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': 'パスフレーズ', 'data-autofocus': true });
   const btn = h('button', { type: 'submit', class: 'btn primary' }, '解錠');
+  const error = h('p', { class: 'err', role: 'alert' });
   return h(
     'form',
-    { class: 'stack', onsubmit: (e: Event) => {
+    { class: 'stack', onsubmit: async (e: Event) => {
       e.preventDefault();
-      void run(btn, '解錠中…', () => unlock(pass.value));
+      message = null;
+      error.textContent = '';
+      btn.disabled = true;
+      btn.textContent = '解錠中…';
+      const r = await unlock(pass.value);
+      if (r.ok) return show({ ok: true, text: r.message });
+      // Keep what was typed so the user can fix it, instead of re-rendering the whole page
+      btn.disabled = false;
+      btn.textContent = '解錠';
+      error.textContent = r.message;
+      pass.focus();
+      pass.select();
+      postHeight();
     } },
     h('label', {}, note, pass),
-    btn
+    btn,
+    error
   );
 }
 
@@ -306,6 +321,8 @@ async function render() {
   if (message) nodes.push(h('p', { class: message.ok ? 'ok' : 'err', role: 'status' }, message.text));
   root.replaceChildren(...nodes);
   postHeight();
+  // Put the cursor in the unlock field (unless the user is already working inside this page)
+  if (!root.contains(document.activeElement)) root.querySelector<HTMLElement>('[data-autofocus]')?.focus();
 }
 
 if (view === 'keys' || view === 'security' || view === 'unlock') {

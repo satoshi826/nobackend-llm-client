@@ -47,10 +47,11 @@ Out of scope: a malicious build of the app itself (self-deploy to avoid trusting
 ```
 
 - **Stack**: Vite, Preact + `@preact/signals`, TypeScript, Tailwind v4, Dexie 4, marked + DOMPurify + highlight.js (lazy), Vitest.
-- **Source layout**:
-  - `src/lib/` — UI-independent logic (providers, chat pipeline, tools, skills, db, crypto, vault client, usage).
-  - `src/state/` — app state as signals: `settings`, `ui`, `keys`, `models`, `conversations`, `generation`, `skills`, `lock`, `data`; `app.ts` is the entry point and startup sequence.
-  - `src/components/` — UI.
+- **Source layout** (dependencies point one way: `lib` → `state` → `components` → `features`; see [docs/specs/architecture.md](specs/architecture.md)):
+  - `src/lib/` — UI-independent logic (providers, chat pipeline, tools, skills, db, crypto, vault client, usage). Never imports state or UI.
+  - `src/state/` — core app state as signals: `settings`, `ui`, `keys`, `models`, `conversations`, `generation`, `skills`, `lock`, `data`, `images`; `app.ts` is the entry point and startup sequence. Extension points: `tool-registry.ts` (tools a feature offers to the model), `router.ts` (URL hash routes).
+  - `src/components/` — core UI. `extensions.ts` holds the UI extension points (sidebar tabs, composer add-ons, tool-card views, main-area views, user-message extras, settings sections).
+  - `src/features/<name>/` — self-contained features (`files` so far). A feature imports the core and registers itself through the extension points when `src/features/index.ts` imports it; the core never imports a feature.
   - `vault/` — the key vault page (no framework, DOM built with `createElement`/`textContent`).
   - `csp.config.ts` — builds the `_headers` file for both the app and a separately deployed vault.
 
@@ -175,7 +176,8 @@ Startup (`state/app.ts`): load settings → load models → connect to the vault
 
 ### 4.4 Backup and wipe
 
-- **Export**: decrypted JSON of conversations, messages, prompts and skills. Keys, the data key and connection settings are not included. Backups are not encrypted, and the UI says so.
+- **Export**: decrypted JSON of conversations, messages, prompts and skills (images optional). Keys, the data key and connection settings are not included. Optionally the whole file is encrypted with a backup password (PBKDF2 + AES-GCM, the vault's scheme; format `nobackend-llm-client/export-encrypted`); this is on by default when a passphrase is set. Import asks for the password when it sees that format.
+- **Storage persistence**: the app calls `navigator.storage.persist()` at start; Settings → Privacy shows the result and offers a "request persistence" button when it was refused.
 - **Import**: validates shape, accepts only text/reasoning parts, compaction system nodes and attached-skill snapshots, drops invalid skills, never overwrites existing ids or skill names, and seals rows if encryption is on.
 - **Wipe everything**: asks the vault to clear keys (works cross-origin), deletes the app database and the same-origin `key-vault` database, and reloads.
 
@@ -291,10 +293,29 @@ From it are derived: presets, the vault's allowed hosts, the app CSP `connect-sr
 - **`save_skill`** creates or updates a skill by name. It always asks for approval (no "always allow"). The card shows the full draft, editable, and a line diff of the description and body for updates. Skills created by the model are marked `createdBy: 'model'`.
 - Script and resource files bundled with Claude skills are not supported.
 
+### 7.3 Image generation (Venice)
+
+- **Image mode** (`Conversation.imageMode`, toggled in the composer): the input text is an image prompt. The bar above the input chooses the image model (`/models?type=image`, public, cached 6 h), aspect ratio (the model's `aspectRatios`, else presets mapped to width/height rounded to `widthHeightDivisor`), resolution (when the model lists them), 1–4 variants, style (`/image/styles`), and in "details" a negative prompt, a fixed seed and prompt enhancement. The bar shows an estimated cost (per-image or per-resolution price × variants). Choices persist as `imageDefaults`.
+- **Requests**: the user message stores `imageRequest` (`ImageParams`: op, model, prompt, size, seed, …); the answer stores `image` (`ImageResult`: params, seed used, blurred, policy-dropped count, enhanced prompt, suggestion) and one `file` part per image. A seed is always sent (random when not fixed) so "same settings again" reproduces the picture and "similar image" picks a new seed. Regenerate / edit route image requests to `state/images.ts` via a registered handler.
+- **Operations**: `POST /image/generate` (base64 JSON), `/image/upscale` (2×/4×), `/image/edit` (instruction), `/image/background-remove` (raw bytes), all through the vault with the Venice key; no new CSP host is needed. Upscale / edit / background removal are started from the viewer and append a request + answer pair after the current leaf. A 422 content-policy rejection shows Venice's suggested prompt / model as one-tap retries. `safe_mode` is always sent as off (no setting); if Venice still blurs a result, the viewer says so.
+- **Storage** (`lib/db/images.ts`, schema v5 `blobs`): one record per image keyed by id, indexed by conversation and time; encrypted with the data key when a passphrase is set (`sealBytes`), decrypted to object URLs on display. Deleting a conversation deletes its images; temporary chats keep images in memory. Single images can be deleted from the viewer, and several at once from the gallery (select mode); `deleteImages` removes the blob records, strips the file parts / tool `blobIds` from messages and marks them `deleted`, so the conversation shows "image deleted" instead of a broken picture. Backups include images only when "include images" is on.
+- **Chat context**: chat models receive a short text note ("generated N images: prompt…") instead of image data.
+- **generate_image tool** (`lib/tools/image.ts`, offered through the tool registry, off by default): tool-capable chat models can create one image with the current image-bar model; permission defaults to "ask"; the images show inside the tool card.
+- **UI**: thumbnails in the answer (spinner + elapsed time while working), a full-screen viewer (download, copy prompt, upscale, background removal, edit, previous/next), and all images in the file manager (画像 view). In image mode the chat header shows the image model and its privacy badge (that is where prompts go). The approval card of the `generate_image` tool names the model, private / relayed, and the estimated cost. Usage is logged as kind `image` with an estimated cost (labelled "unknown" when no price is listed; enhancement is extra). Because image prices are estimates, an image job restarts the balance comparison instead of adding a guess, so it never triggers the unexplained-drop alert.
+
+### 7.4 Files (`src/features/files`)
+
+- **What**: documents the model writes (kind `document`) and files the user attaches or uploads (kind `upload`), managed together with images. Text only; images stay in `blobs`.
+- **File manager** (main area, `#/files`, shown when the sidebar's ファイル tab is chosen): files and images as cards (text preview / thumbnail) or a list (name, type, size, updated, conversation); sort by updated / name / type / size (layout and sort saved as setting `ui:filer`); checkbox, Shift-range and Ctrl/Cmd-click selection with "use in chat" (attach the files and return to the chat), download and delete; drag-and-drop or the アップロード button imports files without a chat. The sidebar tab becomes navigation: アップロード, search (names and contents), views (すべて / 最近使ったもの (7 days) / 文書 / 添付 / 画像, with counts) and 会話ごと (items made in or attached to each conversation). Images open in the image viewer; the old gallery modal is gone. Filtering and sorting are pure functions in `features/files/filer.ts`.
+- **Storage** (`lib/db/files.ts`, schema v6 `files`): `FileRecord` with `versions[]` (oldest first, at most 30; each with author `model` / `user` / `upload` and an optional note). `name`, `versions` and `source` are sealed with the data key. Temporary chats keep their files in memory. Files outlive the conversation they were made in (deleting a conversation deletes its images but not its files). Backups always include files.
+- **Attachments**: the composer's 添付 button (device or saved files), drag-and-drop and paste. Text formats are read as-is; PDFs go through pdf.js (lazy chunk; worker created through the `app-pdf` Trusted Types policy; character maps served from `/pdfjs/cmaps/` for CJK PDFs; 60 s timeout). On send, `takeAttachments` snapshots each file into `MessageRecord.attachments` (up to 60,000 characters inline, with `totalChars`), so regeneration sends the same content; `request.ts` puts `<file name id version>…</file>` blocks before the message text and tells the model to use `read_file` for the rest.
+- **Tools** (`features/files/tools.ts`, on by default, permission "allow" since nothing leaves the browser): `create_file`, `append_file` (long documents in parts), `edit_file` (whole text, or one exact find/replace) and `read_file` (20,000 characters per call with offsets). Every write makes a new version. The model may only touch files attached to or created in the conversation (scope rebuilt from history + this turn); the system prompt lists them by id. Tool cards show a file card that opens the file.
+- **File view** (main area, `#/f/<id>`; a breadcrumb back to the file manager, or a back arrow to the chat when opened from a chat): Markdown rendered, CSV/TSV as a table, other text as-is; version picker with "restore this version" (saved as a new version), manual editing (new version by "you"), rename, copy, download, print / save as PDF (the document is copied into `#print-root` and printed alone), "use in chat" (attach and return), open the source conversation, delete.
+
 ## 8. UI structure
 
-- **Sidebar**: new chat, search (full text, decrypted in memory when encrypted), list (pinned first), notices (balance alert, leftover same-origin keys after moving to a separate vault, backup reminder), settings button, lock button, balances.
-- **Chat view**: header (model, privacy badge, context meter with manual compaction, system prompt), then one of: provider chooser, key setup or unlock, passphrase prompt, empty state, or message list. The composer has web search, skills, `/name`, and send/stop.
+- **Sidebar**: tabs at the top — 会話 (新しいチャット, search with full text, decrypted in memory when encrypted, list with pinned first) and tabs registered by features (ファイル: アップロード, search, views and per-conversation groups for the file manager); choosing a tab shows its screen in the main area (`showChat` / the tab's `onSelect`) — then notices (balance alert, leftover same-origin keys after moving to a separate vault, backup reminder), settings button, lock button, balances.
+- **Chat view**: header (model, privacy badge, context meter with manual compaction, system prompt), then one of: provider chooser, key setup or unlock, passphrase prompt, empty state, or message list. The composer has web search, skills, `/name`, add-ons registered by features (添付), and send/stop. The main area shows the chat or a feature's view (`mainView`, e.g. a file).
 - **Settings tabs**:
   - Connections & keys: vault placement banner, passphrase section with auto-lock, per-provider key and settings.
   - Chat: theme, temperature, default system prompt, reply suggestions, compaction, reasoning resend.
@@ -303,6 +324,8 @@ From it are derived: presets, the vault's allowed hosts, the app CSP `connect-sr
   - Usage.
   - Privacy & data: destinations table, storage usage, backup, delete all keys, wipe.
 - No `alert()` or `confirm()`: dialogs are in-app (`askConfirm`, optionally requiring a typed word).
+- **Dialogs** (`components/dialog.ts`, `useDialog`): used by modals, the confirm dialog, the image viewer and the mobile sidebar drawer. It moves focus in (`[data-autofocus]`, else the first field, else the first control that is not the close button), traps Tab, makes everything outside inert (except `data-live` toasts), closes on Esc (only the topmost dialog when they stack) and returns focus to the opener. All controls get a visible `:focus-visible` ring.
+- **Lock screen**: the vault's unlock field is focused on load; a wrong passphrase keeps the text selected with an inline error.
 - The UI text is Japanese only for now.
 
 ## 9. Security details
@@ -361,7 +384,7 @@ From it are derived: presets, the vault's allowed hosts, the app CSP `connect-sr
   - sealed storage and re-sealing, export/import;
   - vault host checks, key headers, passphrase lifecycle and data-key wrapping;
   - Markdown sanitization.
-- `npm run mock` starts `scripts/mock-venice.mjs` (port 8787), which mocks Venice, an Anthropic-style API, Tavily and Jina. Keywords in messages trigger behaviors (reasoning, code, long text, errors, balance drop, XSS, tool calls, skills, save_skill, suggestions).
+- `npm run mock` starts `scripts/mock-venice.mjs` (port 8787), which mocks Venice, an Anthropic-style API, Tavily and Jina. Keywords in messages trigger behaviors (reasoning, code, long text, errors, balance drop, XSS, tool calls, skills, save_skill, suggestions, file tools: 「レポートにまとめて」「追記して」「結論を直して」「全部読んで」, and attachments are echoed back).
 - `scripts/serve-with-headers.mjs` serves a build with its `_headers`; `npx wrangler dev --local` reproduces Workers behavior.
 
 ## 13. Limitations and future work
@@ -371,4 +394,4 @@ From it are derived: presets, the vault's allowed hosts, the app CSP `connect-sr
 - **Not verified with real keys**: OpenRouter, Anthropic, Gemini, DeepSeek, Groq, Tavily and Jina have been tested against mocks only.
 - **Approvals** waiting at reload are not resumed; an aborted reply cannot be continued.
 - **Pricing** is unavailable for Anthropic, Gemini, DeepSeek and Groq, so usage shows tokens only.
-- **Backups** are plaintext JSON.
+- **Backups** are plaintext JSON unless a backup password is set when exporting.

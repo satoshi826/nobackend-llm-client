@@ -18,7 +18,7 @@ export const venicePreset: ProviderPreset = {
     purpose === 'summary'
       ? { include_venice_system_prompt: false, strip_thinking_response: true }
       : { include_venice_system_prompt: !!settings.includeSystemPrompt, ...(webSearch !== 'off' ? { enable_web_search: webSearch } : {}) },
-  responseHeaders: ['x-venice-balance-usd', 'x-venice-balance-diem'],
+  responseHeaders: ['x-venice-balance-usd', 'x-venice-balance-diem', 'x-venice-is-blurred', 'x-venice-is-content-violation', 'x-venice-content-violation-count', 'x-venice-enhanced-prompt'],
   copy: {
     private: 'Venice がホストし、プロンプトを保存しないモデル',
     relayed: 'Venice が匿名化して Claude・Gemini などの外部事業者に中継するモデル。各社の保持ポリシーに従う',

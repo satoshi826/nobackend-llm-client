@@ -4,6 +4,8 @@ import { db, type Conversation, type MessageRecord, type SavedPrompt, type Model
 import type { UsageRecord } from '../usage';
 import { currentDataKey, seal, unseal } from './sealed';
 import type { DataKey } from '../crypto/data';
+import { forgetTemporaryImages, resealImages } from './images';
+import { forgetTemporaryFiles } from './files';
 
 const memConversations = new Map<string, Conversation>();
 const memMessages = new Map<string, MessageRecord>();
@@ -36,10 +38,13 @@ export async function putConversation(c: Conversation): Promise<void> {
 export async function deleteConversation(id: string): Promise<void> {
   if (memConversations.delete(id)) {
     for (const [k, m] of memMessages) if (m.conversationId === id) memMessages.delete(k);
+    forgetTemporaryImages(id);
+    forgetTemporaryFiles(id);
     return;
   }
-  await db().transaction('rw', db().conversations, db().messages, async () => {
+  await db().transaction('rw', db().conversations, db().messages, db().blobs, async () => {
     await db().messages.where('conversationId').equals(id).delete();
+    await db().blobs.where('conversationId').equals(id).delete();
     await db().conversations.delete(id);
   });
   for (const [k, m] of searchCache) if (m.conversationId === id) searchCache.delete(k);
@@ -152,7 +157,7 @@ export async function getSetting<T>(key: string, fallback: T): Promise<T> {
 export const setSetting = (key: string, value: unknown) => db().settings.put({ key, value });
 
 // ---- Switching encryption on/off (setting / removing the passphrase) ----
-const SEALED_TABLES = ['conversations', 'messages', 'prompts', 'skills'] as const;
+const SEALED_TABLES = ['conversations', 'messages', 'prompts', 'skills', 'files'] as const;
 
 /**
  * Encrypt (to: a data key) or decrypt (to: null) all stored data in bulk.
@@ -173,6 +178,7 @@ export async function resealAll(from: DataKey | null, to: DataKey | null, onProg
       onProgress?.(done, total);
     }
   }
+  await resealImages(from, to, onProgress);
   clearSearchCache();
 }
 

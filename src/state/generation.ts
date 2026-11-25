@@ -1,6 +1,6 @@
 // Sending, generating / regenerating / editing / stopping answers, tool approval, compaction, balance monitoring
 import { computed, signal } from '@preact/signals';
-import type { Conversation, MessageRecord } from '../lib/db/schema';
+import type { Attachment, Conversation, MessageRecord } from '../lib/db/schema';
 import type { Usage } from '../lib/providers/types';
 import * as repo from '../lib/db/repo';
 import { getPreset } from '../lib/providers/registry';
@@ -24,6 +24,7 @@ import { conversations, currentConv, currentId, currentPath, liveMessages, messa
 import { openSettings, showToast } from './ui';
 import { accountById } from '../lib/keys/accounts';
 import { allSkills, attachedSkillIds, attachedSkills, modelSkills, saveSkill } from './skills';
+import { contributedSystemNotes, contributedTools, type ToolProviderContext } from './tool-registry';
 
 // ---- Generation state ----
 export const streamingConv = signal<Set<string>>(new Set());
@@ -37,6 +38,42 @@ function setStreaming(convId: string, on: boolean) {
   else s.delete(convId);
   streamingConv.value = s;
 }
+
+/** Record spend / observed balance from work outside the chat loop (image jobs), so balance alerts stay accurate */
+export function recordProviderSpend(providerId: string, usd: number) {
+  if (balances.value[providerId]) updateBalance(providerId, (b) => recordSpend(b, usd));
+}
+/** Start the balance comparison afresh (after spend whose exact price is unknown, e.g. image jobs) */
+export function resetProviderBalanceBaseline(providerId: string) {
+  const b = balances.value[providerId];
+  if (b) balances.value = { ...balances.value, [providerId]: { ...b, last: null, spentSinceLast: 0 } };
+}
+export function observeProviderBalance(providerId: string, usd: number) {
+  updateBalance(providerId, (b) => observeBalance(b, usd));
+}
+
+/** Start a run for a conversation (shared by chat replies and image jobs): the stop button aborts it */
+export function beginRun(convId: string): AbortController {
+  const ctrl = new AbortController();
+  controllers.set(convId, ctrl);
+  setStreaming(convId, true);
+  return ctrl;
+}
+
+export function endRun(convId: string) {
+  controllers.delete(convId);
+  setStreaming(convId, false);
+}
+
+/**
+ * Image jobs live in state/images.ts, which imports this module; it registers itself here
+ * so regenerate / edit can hand image requests over without a circular import.
+ */
+let imageHandler: ((convId: string, userMsgId: string) => Promise<void>) | null = null;
+export function registerImageHandler(fn: (convId: string, userMsgId: string) => Promise<void>) {
+  imageHandler = fn;
+}
+
 
 export function stopGeneration(convId = currentId.value) {
   if (convId) controllers.get(convId)?.abort();
@@ -263,10 +300,16 @@ function ensureKey(providerId: string): boolean {
   return false;
 }
 
-export async function sendMessage(text: string) {
+/** Extra content a feature adds to the user message (e.g. attached files, built by features/files) */
+export interface SendExtras {
+  attachments?: Attachment[];
+}
+
+export async function sendMessage(text: string, extras: SendExtras = {}) {
   cancelSuggestions();
   const attached = attachedSkills.value.map((s) => ({ name: s.name, body: s.body }));
-  if (!text.trim() && !attached.length) return;
+  const files = extras.attachments ?? [];
+  if (!text.trim() && !attached.length && !files.length) return;
   const cur = currentConv.value;
   if (!ensureKey(cur.providerId)) return;
   if (!cur.modelId) {
@@ -279,7 +322,7 @@ export async function sendMessage(text: string) {
     if (u.limit && (u.tokens + estimateTokens(text)) / u.limit >= settings.value.compactThreshold) await compactConversation(true);
   }
   attachedSkillIds.value = [];
-  const conv = await persistDraft(text.trim() ? text : attached.map((s) => s.name).join(', '));
+  const conv = await persistDraft(text.trim() ? text : [...attached.map((s) => s.name), ...files.map((f) => f.name)].join(', '));
   const user: MessageRecord = {
     id: repo.newId(),
     conversationId: conv.id,
@@ -288,7 +331,8 @@ export async function sendMessage(text: string) {
     parts: [{ type: 'text', text }],
     createdAt: Date.now(),
     status: 'done',
-    ...(attached.length ? { skills: attached } : {})
+    ...(attached.length ? { skills: attached } : {}),
+    ...(files.length ? { attachments: files } : {})
   };
   await putMessage(user, conv);
   messages.value = [...messages.value, user];
@@ -325,7 +369,11 @@ async function generateReply(convId: string, parentUserId: string) {
   const webOn = conv.webSearch !== 'off';
   const search = webOn ? searchModeFor(cfg.id, conv.modelId) : null;
   const skillList = skillsFor(cfg.id, conv.modelId);
-  const tools = [...(search === 'tools' ? WEB_TOOLS : []), ...(skillList.length ? [makeSkillTool(skillList)] : [])];
+  // Tools contributed by features (images, files, ...) through the tool registry
+  const toolCtx: ToolProviderContext = { conv, messageId: draft.id, model, history };
+  const tools = [...(search === 'tools' ? WEB_TOOLS : []), ...(skillList.length ? [makeSkillTool(skillList)] : []), ...contributedTools(toolCtx)];
+  const notes = contributedSystemNotes(toolCtx);
+  const systemPrompt = [withSkillCatalog(conv.systemPrompt, skillList), notes].filter(Boolean).join('\n\n');
   // Tools available only in conversations that loaded (specified) a skill. For skill-creator: save_skill, and load_skill that can read all skills
   const toolsCapable = !!model?.capabilities.tools;
   const dynamicTools = (turn: MessageRecord): Tool[] => {
@@ -349,7 +397,7 @@ async function generateReply(convId: string, parentUserId: string) {
       transport,
       model: conv.modelId,
       history,
-      systemPrompt: withSkillCatalog(conv.systemPrompt, skillList),
+      systemPrompt,
       params: settings.value.temperature != null ? { temperature: settings.value.temperature } : undefined,
       providerOptions,
       contextLength: model?.contextLength,
@@ -391,7 +439,11 @@ async function generateReply(convId: string, parentUserId: string) {
 export async function regenerate(assistantId: string) {
   const m = messages.value.find((x) => x.id === assistantId);
   const conv = currentConv.value;
-  if (!m?.parentId || !currentId.value || !ensureKey(conv.providerId)) return;
+  if (!m?.parentId || !currentId.value) return;
+  // Image requests are regenerated by the image module
+  const parent = messages.value.find((x) => x.id === m.parentId);
+  if (parent?.imageRequest && imageHandler) return imageHandler(currentId.value, parent.id);
+  if (!ensureKey(conv.providerId)) return;
   await generateReply(currentId.value, m.parentId);
 }
 
@@ -407,11 +459,18 @@ export async function regenerateWith(assistantId: string, providerId: string, mo
 export async function editUserMessage(userId: string, newText: string) {
   const conv = currentConv.value;
   const orig = messages.value.find((x) => x.id === userId);
-  if (!currentId.value || !orig || !newText.trim() || !ensureKey(conv.providerId)) return;
-  const user: MessageRecord = { ...orig, id: repo.newId(), parts: [{ type: 'text', text: newText }], createdAt: Date.now() };
+  if (!currentId.value || !orig || !newText.trim() || (!orig.imageRequest && !ensureKey(conv.providerId))) return;
+  const user: MessageRecord = {
+    ...orig,
+    id: repo.newId(),
+    parts: [{ type: 'text', text: newText }],
+    createdAt: Date.now(),
+    ...(orig.imageRequest ? { imageRequest: { ...orig.imageRequest, prompt: newText } } : {})
+  };
   await putMessage(user, conv);
   messages.value = [...messages.value, user];
   await updateConversation({ currentLeafId: user.id });
+  if (user.imageRequest && imageHandler) return imageHandler(conv.id, user.id);
   await generateReply(conv.id, user.id);
 }
 

@@ -1,13 +1,14 @@
 import type { ComponentChildren, ButtonHTMLAttributes } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useRef } from 'preact/hooks';
+import { useDialog } from './dialog';
 
 export function cx(...xs: (string | false | null | undefined)[]): string {
   return xs.filter(Boolean).join(' ');
 }
 
-type IconName =
+export type IconName =
   | 'menu' | 'plus' | 'settings' | 'send' | 'stop' | 'copy' | 'refresh' | 'edit' | 'trash' | 'pin' | 'chevron-left'
-  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star';
+  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star' | 'image' | 'expand' | 'wand' | 'scissors' | 'paperclip' | 'file' | 'files' | 'chat' | 'printer' | 'history' | 'grid' | 'list' | 'clock';
 
 const PATHS: Record<IconName, string> = {
   menu: 'M4 6h16M4 12h16M4 18h16',
@@ -41,7 +42,20 @@ const PATHS: Record<IconName, string> = {
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   upload: 'M12 20V9M7 14l5-5 5 5M5 4h14',
   book: 'M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2V5ZM4 20a2 2 0 0 0 2 2h13v-4M8 7h7',
-  star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.9L12 3.5Z'
+  star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.9L12 3.5Z',
+  image: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9.5h.01',
+  expand: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
+  wand: 'M4 20 15 9M14 4v2M19 9h2M17.5 6.5 19 5M12.5 7.5 16.5 11.5',
+  scissors: 'M6 7a2.5 2.5 0 1 0 0-.01M6 17a2.5 2.5 0 1 0 0-.01M8 8.5 20 18M8 15.5 20 6',
+  paperclip: 'M20 11.5 12.5 19a5 5 0 0 1-7-7L13 4.5a3.3 3.3 0 0 1 4.7 4.7l-7.5 7.5a1.7 1.7 0 0 1-2.4-2.4L15 7.2',
+  file: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6',
+  files: 'M8 3h7l4 4v11H8zM15 3v4h4M5 7v14h11',
+  chat: 'M4 5h16v11H9l-5 4V5Z',
+  printer: 'M7 9V3h10v6M7 17H4v-7h16v7h-3M7 14h10v7H7z',
+  history: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 8v4l3 2',
+  grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2'
 };
 
 export function Icon({ name, class: className = 'size-4', filled }: { name: IconName; class?: string; filled?: boolean }) {
@@ -74,12 +88,7 @@ export function Button({
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose(): void; children: ComponentChildren; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    ref.current?.querySelector<HTMLElement>('input,textarea,button')?.focus();
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  useDialog(ref, { onClose });
   return (
     <div class="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
@@ -91,7 +100,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
       >
         <div class="flex items-center justify-between border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
           <h2 class="font-semibold">{title}</h2>
-          <Button onClick={onClose} aria-label="閉じる">
+          <Button onClick={onClose} aria-label="閉じる" data-dialog-close>
             <Icon name="x" />
           </Button>
         </div>

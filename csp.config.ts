@@ -44,7 +44,7 @@ export function appCsp(env: Env, vaultOrigin?: string): string {
     "frame-ancestors 'none'",
     "object-src 'none'",
     "require-trusted-types-for 'script'",
-    'trusted-types app-md dompurify app-sw'
+    'trusted-types app-md dompurify app-sw app-pdf'
   ].join('; ');
 }
 

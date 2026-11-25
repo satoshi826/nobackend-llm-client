@@ -138,3 +138,12 @@ describe('build-time custom providers', () => {
     expect(p.validateKey).toBeUndefined();
   });
 });
+
+describe('provider order', () => {
+  it('lists providers alphabetically by label', async () => {
+    const { PRESET_ORDER, PRESETS } = await import('./registry');
+    const labels = PRESET_ORDER.map((id) => PRESETS[id].label);
+    expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })));
+    expect(PRESET_ORDER[0]).toBe('anthropic');
+  });
+});

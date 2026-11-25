@@ -36,6 +36,15 @@ export interface Settings {
   autoLockMinutes: number;
   /** Show reply suggestions after an answer */
   replySuggestions: boolean;
+  imageFormat: 'webp' | 'png' | 'jpeg';
+  /** Last-used image options (the image mode bar starts from these) */
+  imageDefaults: { model: string; aspectRatio: string; resolution: string; variants: number; style: string; negativePrompt: string; enhancePrompt: boolean; seed: string };
+  /** Include images in JSON backups (large) */
+  backupIncludeImages: boolean;
+  /** Let chat models create images with the generate_image tool */
+  imageTool: boolean;
+  /** Let chat models write and read files (create_file / append_file / edit_file / read_file) */
+  fileTools: boolean;
   /** Bookmarked models ('providerId|modelId'), shown together at the top of the model picker */
   favoriteModels: string[];
   /** Number of reply suggestions */
@@ -71,10 +80,15 @@ export const DEFAULT_SETTINGS: Settings = {
   autoLockMinutes: 0,
   favoriteModels: [],
   replySuggestions: true,
+  imageFormat: 'webp',
+  imageDefaults: { model: '', aspectRatio: '1:1', resolution: '', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '' },
+  backupIncludeImages: false,
+  imageTool: false,
+  fileTools: true,
   suggestionCount: 3,
   suggestionTurns: 2,
   suggestionModel: '',
-  toolPermissions: { web_search: 'ask', fetch_url: 'ask', load_skill: 'allow' }
+  toolPermissions: { web_search: 'ask', fetch_url: 'ask', load_skill: 'allow', generate_image: 'ask', create_file: 'allow', append_file: 'allow', edit_file: 'allow', read_file: 'allow' }
 };
 
 export const settings = signal<Settings>(DEFAULT_SETTINGS);
@@ -92,7 +106,12 @@ export function migrateSettings(raw: Record<string, unknown>): Settings {
   if ((stored.searchEngine as string) === 'venice') stored.searchEngine = 'builtin';
   // Venice used to be always enabled. Do not remove it from the settings of people who were using it
   if (!('enabledProviders' in stored) && Object.keys(raw).length) stored.enabledProviders = ['venice'];
-  return { ...DEFAULT_SETTINGS, ...stored, toolPermissions: { ...DEFAULT_SETTINGS.toolPermissions, ...(stored.toolPermissions ?? {}) } };
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    imageDefaults: { ...DEFAULT_SETTINGS.imageDefaults, ...(stored.imageDefaults ?? {}) },
+    toolPermissions: { ...DEFAULT_SETTINGS.toolPermissions, ...(stored.toolPermissions ?? {}) }
+  };
 }
 
 export async function loadSettings() {

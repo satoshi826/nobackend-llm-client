@@ -208,7 +208,7 @@ export function ModelPicker() {
     <Modal title={target.kind === 'regenerate' ? '別のモデルで再生成' : 'モデルを選ぶ'} onClose={() => (modal.value = null)}>
       <div class="space-y-3">
         <div class="flex gap-2">
-          <label class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
+          <label class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-zinc-300 px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-sky-500/60 dark:border-zinc-700">
             <Icon name="search" class="size-4 shrink-0 text-zinc-400" />
             <input class="w-full bg-transparent outline-none" placeholder="モデル名で検索" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label="モデル名で検索" />
           </label>

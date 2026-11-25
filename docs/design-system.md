@@ -74,7 +74,9 @@ All animations are disabled under `prefers-reduced-motion: reduce`.
 - **Badge**: pill, 12 px, soft background of its meaning color (ok / warn / neutral). `private` keeps its name and lock icon.
 - **Field**: glass-sunken, radius 12, no visible border until hover/focus (line-strong), focus ring = accent 2 px.
 - **Segmented control** (`Segmented`: sidebar tabs, theme picker, grid / list): sunken track, glass-strong selected segment that slides to the chosen item.
-- **Tab strip** (`TabStrip`: settings): text tabs with an accent underline that slides to the selected tab; the panel fades in.
+- **Side tabs** (`SideTabs`: settings on wide screens): a column of tabs on the left whose highlight slides to the selected one (arrow keys move). The settings dialog has a fixed size (`Modal fixed`), so switching tabs never resizes it; the content scrolls on its own.
+- **Tab strip** (`TabStrip`: settings on phones): text tabs with an accent underline that slides to the selected tab; the panel fades in.
+- **Scrollbars**: everywhere thin rounded thumbs on a transparent track, a little brighter while the pointer is over the area; the chat list's bar stays between the floating header and the input box. Chrome drops `::-webkit-scrollbar` styles when `scrollbar-width` / `scrollbar-color` are set, so those are for Firefox only.
 - **Switch** (`Toggle` in settings-ui, `.switch`): text left, switch right; the knob slides with a slight spring and stretches while pressed.
 - **Accordion** (`Collapse`; `<details>` where supported): height and opacity animate open and closed; the chevron rotates.
 - **Menu / popover** (`components/menu.tsx`: `Popover`, `MenuItem`, `MenuSeparator`): every floating list uses it. It renders in a portal on `<body>` (inside glass, a backdrop-filter only blurs that glass, so a menu in the composer could not blur the page), places itself from its anchor and flips when there is no room, and closes on Escape or a press outside. It is an opaque `panel` with a strong blur, radius 16, and opens with `pop` (fade + scale from .96). Arrow keys move between items.

@@ -2,7 +2,7 @@
 import type { ComponentType } from 'preact';
 import { modal, settingsTab, type SettingsTab } from '../state/ui';
 import { settingsSections, settingsTabs, textOf, type Text } from './extensions';
-import { Modal, TabStrip } from './ui';
+import { Modal, SideTabs, TabStrip } from './ui';
 import { AppearanceTab } from './settings/AppearanceTab';
 import { ChatTab } from './settings/ChatTab';
 import { ConnectionsTab } from './settings/ConnectionsTab';
@@ -26,16 +26,18 @@ export function SettingsModal() {
   const tabs: TabDef[] = [...CORE_FIRST, ...(hasFeatures ? [FEATURES] : []), ...settingsTabs, ...CORE_LAST];
   const tab = tabs.some((x) => x.id === settingsTab.value) ? settingsTab.value : 'connections';
   const Active = tabs.find((x) => x.id === tab)!.Component;
+  const list = tabs.map((x) => ({ id: x.id, label: textOf(x.label) }));
   return (
-    <Modal title={t('settings.title')} onClose={() => (modal.value = null)} wide>
-      <TabStrip
-        class="-mt-2 mb-5"
-        tabs={tabs.map((x) => ({ id: x.id, label: textOf(x.label) }))}
-        value={tab}
-        onChange={(id) => (settingsTab.value = id)}
-      />
-      <div role="tabpanel" key={tab} class="fade-in">
-        <Active />
+    // Fixed size: switching tabs never resizes the dialog. Tabs in a column on wide screens, a row on phones
+    <Modal title={t('settings.title')} onClose={() => (modal.value = null)} wide fixed bare>
+      <div class="flex min-h-0 flex-1 flex-col sm:flex-row">
+        <nav class="hidden w-48 shrink-0 overflow-y-auto border-r border-line p-2 sm:block">
+          <SideTabs label={t('settings.title')} tabs={list} value={tab} onChange={(id) => (settingsTab.value = id)} />
+        </nav>
+        <TabStrip class="shrink-0 px-3 sm:hidden" label={t('settings.title')} tabs={list} value={tab} onChange={(id) => (settingsTab.value = id)} />
+        <div role="tabpanel" key={tab} class="fade-in scroll-thin min-h-0 flex-1 overflow-y-auto p-5">
+          <Active />
+        </div>
       </div>
     </Modal>
   );

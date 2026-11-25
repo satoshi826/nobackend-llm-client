@@ -130,6 +130,48 @@ export function Segmented({ label, index, count, class: className, children }: {
   );
 }
 
+/** Tabs in a column (settings on wide screens): the selected tab's background slides to it */
+export function SideTabs<T extends string>({ tabs, value, onChange, label, class: className }: { tabs: { id: T; label: string }[]; value: T; onChange(id: T): void; label?: string; class?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [bar, setBar] = useState<{ y: number; h: number } | null>(null);
+  const key = tabs.map((x) => x.label).join('|');
+  useLayoutEffect(() => {
+    const el = ref.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (el) setBar({ y: el.offsetTop, h: el.offsetHeight });
+  }, [value, key]);
+  return (
+    <div ref={ref} role="tablist" aria-orientation="vertical" aria-label={label} class={cx('relative flex flex-col gap-0.5', className)}>
+      {bar && (
+        <span
+          aria-hidden="true"
+          class="absolute inset-x-0 top-0 rounded-[10px] border border-line bg-glass-strong transition-[translate,height] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]"
+          style={{ height: `${bar.h}px`, translate: `0 ${bar.y}px` }}
+        />
+      )}
+      {tabs.map((x) => (
+        <button
+          key={x.id}
+          type="button"
+          role="tab"
+          aria-selected={value === x.id}
+          onClick={() => onChange(x.id)}
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+            e.preventDefault();
+            const i = tabs.findIndex((t) => t.id === value);
+            const next = tabs[(i + (e.key === 'ArrowDown' ? 1 : tabs.length - 1)) % tabs.length];
+            onChange(next.id);
+            requestAnimationFrame(() => ref.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
+          }}
+          class={cx('relative z-10 rounded-[10px] px-3 py-2 text-left text-sm', value === x.id ? 'font-medium text-ink-strong' : 'text-muted hover:text-ink')}
+        >
+          {x.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** A row of tabs with an underline that slides to the selected tab */
 export function TabStrip<T extends string>({ tabs, value, onChange, label, class: className }: { tabs: { id: T; label: string }[]; value: T; onChange(id: T): void; label?: string; class?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -183,7 +225,11 @@ export function Chip({ on, class: className, children, ...rest }: ButtonHTMLAttr
   );
 }
 
-export function Modal({ title, onClose, children, wide }: { title: string; onClose(): void; children: ComponentChildren; wide?: boolean }) {
+/**
+ * fixed: a fixed size (the same for every content, so switching what is inside causes no layout shift).
+ * bare: the content lays itself out (no padding, no scroll area of the modal's own).
+ */
+export function Modal({ title, onClose, children, wide, fixed, bare }: { title: string; onClose(): void; children: ComponentChildren; wide?: boolean; fixed?: boolean; bare?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useDialog(ref, { onClose });
   return (
@@ -193,7 +239,11 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        class={cx('frosted rise-glass flex max-h-[92dvh] w-full flex-col rounded-t-[22px] sm:rounded-[22px]', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}
+        class={cx(
+          'frosted rise-glass flex max-h-[92dvh] w-full flex-col rounded-t-[22px] sm:rounded-[22px]',
+          wide ? 'sm:max-w-3xl' : 'sm:max-w-lg',
+          fixed && 'h-[92dvh] sm:h-[min(44rem,92dvh)]'
+        )}
       >
         <div class="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 class="font-semibold text-ink-strong">{title}</h2>
@@ -201,7 +251,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
             <Icon name="x" />
           </Button>
         </div>
-        <div class="scroll-thin overflow-y-auto p-5">{children}</div>
+        {bare ? <div class="flex min-h-0 flex-1 flex-col">{children}</div> : <div class="scroll-thin overflow-y-auto p-5">{children}</div>}
       </div>
     </div>
   );

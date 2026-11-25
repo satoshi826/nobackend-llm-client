@@ -139,7 +139,7 @@ body {
 
 /* The input box: floating glass tinted toward the page colour, so a bright image scrolling behind it does not wash it out */
 @utility glass-deep {
-  background-color: color-mix(in srgb, var(--bg) 65%, transparent);
+  background-color: color-mix(in srgb, var(--bg) 55%, transparent);
   border: 1px solid var(--line);
   -webkit-backdrop-filter: blur(40px) saturate(115%);
   backdrop-filter: blur(40px) saturate(115%);
@@ -239,7 +239,25 @@ body {
   @apply ml-0.5 animate-pulse text-faint;
 }
 
-.scroll-thin { scrollbar-width: thin; }
+/* ---- Scrollbars: thin rounded thumbs on a transparent track, everywhere ----
+   Chrome ignores ::-webkit-scrollbar once scrollbar-width / scrollbar-color are set, so the standard
+   properties are only for Firefox. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background-color: var(--line-strong);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+*:hover::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--faint) 70%, transparent); }
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background-color: var(--muted); }
+::-webkit-scrollbar-button { display: none; }
+@supports (-moz-appearance: none) {
+  * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+}
+/* The chat list's bar stays between the floating header and the input box */
+.chat-scroll::-webkit-scrollbar-track { margin-top: var(--chat-top, 0px); margin-bottom: var(--chat-bottom, 0px); }
 
 /* Moving highlight over "in progress" text */
 @keyframes text-shimmer {
@@ -365,6 +383,7 @@ details[open] > summary::before { rotate: 45deg; }
 /* The message list fades out under the input box: fully hidden behind the chip row, and the soft edge
    sits behind the (blurred) bottom of the input box. --chat-fade is measured in ChatView. */
 .chat-scroll {
+  scrollbar-gutter: stable both-edges;
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--chat-fade, 0px) - 28px), transparent calc(100% - var(--chat-fade, 0px)));
   mask-image: linear-gradient(to bottom, #000 calc(100% - var(--chat-fade, 0px) - 28px), transparent calc(100% - var(--chat-fade, 0px)));
 }

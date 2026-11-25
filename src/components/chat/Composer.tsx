@@ -92,8 +92,9 @@ export function Composer() {
   const below = addons.filter((a) => a.Button && a.placement !== 'inside');
   const Slot = modelSlots.find((s) => s.when(conv))?.Component;
 
+  // 16px wider than the message column on each side (max-w-3xl + 2rem), so text scrolling under it never shows past its rounded corners
   return (
-    <div class="mx-auto w-full max-w-3xl px-3 pb-3 sm:px-4 md:pb-1">
+    <div class="mx-auto w-full max-w-[calc(48rem+2rem)] px-2 pb-3 sm:px-0 md:pb-1">
       <div
         ref={boxRef}
         data-composer-box
@@ -116,7 +117,7 @@ export function Composer() {
       >
         {addons.map((a) => a.Above && <a.Above key={a.id} conv={conv} api={api} />)}
         {/* One line by default: attach | text | send; the text grows upward and the buttons stay at the bottom */}
-        <div class="flex items-end gap-1 p-1.5">
+        <div class="flex items-end gap-0.5 p-1.5">
           {inside.map((a) => a.Button && <a.Button key={a.id} conv={conv} />)}
           <textarea
           ref={ref}
@@ -124,7 +125,7 @@ export function Composer() {
           value={text}
           placeholder={placeholder}
           aria-label={t('composer.label')}
-          class={cx('block max-h-60 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-6 text-ink-strong outline-none placeholder:text-faint', inside.length ? 'px-1' : 'px-2.5')}
+          class={cx('block max-h-60 min-w-0 flex-1 resize-none bg-transparent py-1 text-[15px] leading-6 text-ink-strong outline-none placeholder:text-faint', inside.length ? 'pr-1 pl-0' : 'px-2.5')}
           onPaste={(e) => {
             const files = [...(e.clipboardData?.files ?? [])];
             if (files.length && takeFiles(files)) e.preventDefault();

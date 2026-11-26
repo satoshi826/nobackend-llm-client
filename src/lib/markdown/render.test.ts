@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { renderMarkdown, settledEnd } from './render';
+import { renderMarkdown as renderNodes, settledEnd } from './render';
+
+/** The rendered nodes as HTML, for assertions */
+function renderMarkdown(src: string, opts: Parameters<typeof renderNodes>[1]): string {
+  const box = document.createElement('div');
+  box.append(renderNodes(src, opts));
+  return box.innerHTML;
+}
 
 describe('renderMarkdown', () => {
   it('escapes raw HTML and never makes scripts executable', () => {
@@ -23,6 +30,9 @@ describe('renderMarkdown', () => {
     const html = renderMarkdown('```js\nconst a = 1 < 2;\n```', { highlight: false });
     expect(html).toContain('data-copy');
     expect(html).toContain('1 &lt; 2');
+  });
+  it('returns DOM nodes, not an HTML string to parse again', () => {
+    expect(renderNodes('**a**', { highlight: false })).toBeInstanceOf(DocumentFragment);
   });
 });
 

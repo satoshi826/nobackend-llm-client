@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { ensureHighlighter, isHighlighterReady, renderMarkdown, setSafeHTML, settledEnd } from '../lib/markdown/render';
+import { ensureHighlighter, isHighlighterReady, renderMarkdown, settledEnd } from '../lib/markdown/render';
 import { cx } from './ui';
 import { t } from './messages';
 
-/** Renders Markdown. This component (setSafeHTML) is the only place that inserts HTML into the DOM. */
+/** Renders Markdown (as sanitized nodes from renderMarkdown; no HTML string is inserted) */
 export function Markdown({ text, streaming, citations, class: className }: { text: string; streaming?: boolean; citations?: string[]; class?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [hlReady, setHlReady] = useState(isHighlighterReady());
@@ -20,11 +20,10 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.dataset.raw = text;
     if (!streaming) {
       settled.current = null;
       // Do not highlight while streaming (expensive, and the code is incomplete)
-      setSafeHTML(el, renderMarkdown(text, { highlight: hlReady, citations }));
+      el.replaceChildren(renderMarkdown(text, { highlight: hlReady, citations }));
       return;
     }
     const cites = citations?.join('|') ?? '';
@@ -33,20 +32,15 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
       el.textContent = '';
       s = settled.current = { src: '', cites, nodes: 0 };
     }
-    const render = (src: string) => {
-      const tmp = document.createElement('div');
-      tmp.dataset.raw = src;
-      setSafeHTML(tmp, renderMarkdown(src, { highlight: false, citations }));
-      return tmp.childNodes;
-    };
+    const render = (src: string) => renderMarkdown(src, { highlight: false, citations });
     while (el.childNodes.length > s.nodes) el.lastChild!.remove();
     const end = settledEnd(text, s.src.length);
     if (end > s.src.length) {
-      el.append(...render(text.slice(s.src.length, end)));
+      el.append(render(text.slice(s.src.length, end)));
       s.src = text.slice(0, end);
       s.nodes = el.childNodes.length;
     }
-    el.append(...render(text.slice(end)));
+    el.append(render(text.slice(end)));
   }, [text, streaming, hlReady, citations?.join('|')]);
 
   const onClick = async (e: MouseEvent) => {

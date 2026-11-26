@@ -1,8 +1,9 @@
-// Markdown → sanitized HTML (TrustedHTML).
+// Markdown → sanitized DOM nodes.
 // - raw HTML is never rendered (shown escaped)
 // - external images are not loaded but replaced with links (prevents data exfiltration via image URLs)
 // - links open in a new tab + noopener noreferrer
-// - only this module's setSafeHTML() puts HTML into the DOM (Trusted Types policy app-md)
+// - DOMPurify sanitizes once and hands back DOM nodes, so no HTML string is ever parsed into the page
+//   (no innerHTML, and no second parse that could change what was sanitized)
 import { Marked, type Tokens } from 'marked';
 import DOMPurify from 'dompurify';
 import { t } from './messages';
@@ -109,44 +110,25 @@ export function linkCitations(src: string, citations: string[]): string {
   );
 }
 
-export function renderMarkdown(src: string, opts: { highlight: boolean; citations?: string[] }): string {
-  setupPurify();
-  if (opts.citations?.length) src = linkCitations(src, opts.citations);
-  // Where DOMPurify is unavailable it returns the input untouched, so escape everything in that case
-  if (!DOMPurify.isSupported) return `<pre class="md-fallback">${escapeHtml(src)}</pre>`;
-  const html = (opts.highlight ? markedHl : markedPlain).parse(src, { async: false }) as string;
-  return DOMPurify.sanitize(html, PURIFY_CONFIG) as unknown as string;
-}
-
-// ---- Trusted Types ----
-type TTPolicy = { createHTML(s: string): any };
-let policy: TTPolicy | null | undefined;
-
-function getPolicy(): TTPolicy | null {
-  if (policy !== undefined) return policy;
-  const tt = (globalThis as any).trustedTypes;
-  if (tt?.createPolicy) {
-    // Only strings already passed through renderMarkdown reach the policy, but sanitize again here just in case
-    policy = tt.createPolicy('app-md', {
-      createHTML: (s: string) => DOMPurify.sanitize(s, PURIFY_CONFIG) as unknown as string
-    });
-  } else {
-    policy = null;
-  }
-  return policy ?? null;
-}
-
-/** The only function in the app allowed to use innerHTML */
-export function setSafeHTML(el: HTMLElement, sanitizedHtml: string): void {
+/** Markdown → sanitized nodes ready to insert. Never throws: if anything fails, the source is shown as plain text */
+export function renderMarkdown(src: string, opts: { highlight: boolean; citations?: string[] }): DocumentFragment {
+  const asText = () => {
+    const f = document.createDocumentFragment();
+    f.textContent = src;
+    return f;
+  };
+  // Where DOMPurify is unavailable it returns the input untouched, so show the text in that case
+  if (!DOMPurify.isSupported) return asText();
   try {
-    const p = getPolicy();
-    (el as any).innerHTML = p ? p.createHTML(sanitizedHtml) : DOMPurify.sanitize(sanitizedHtml, PURIFY_CONFIG);
-    // DOMPurify returns an empty string when its internal parsing fails, so fall back to plain text if the result is empty despite having content
-    if (!el.innerHTML && el.dataset.raw) throw new Error('sanitized output was empty');
+    setupPurify();
+    const linked = opts.citations?.length ? linkCitations(src, opts.citations) : src;
+    const html = (opts.highlight ? markedHl : markedPlain).parse(linked, { async: false }) as string;
+    const nodes = DOMPurify.sanitize(html, { ...PURIFY_CONFIG, RETURN_DOM_FRAGMENT: true });
+    // DOMPurify gives nothing back when its own parsing fails
+    return nodes.hasChildNodes() || !src.trim() ? nodes : asText();
   } catch (e) {
-    // Even if insertion fails (e.g. a Trusted Types misconfiguration), always show the content as text
-    console.error('[markdown] Could not insert HTML; falling back to plain text', e);
-    el.textContent = el.dataset.raw ?? '';
+    console.error('[markdown] Could not render; showing plain text', e);
+    return asText();
   }
 }
 

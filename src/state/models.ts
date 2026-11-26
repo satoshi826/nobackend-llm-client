@@ -50,8 +50,10 @@ function sortModels(list: ModelInfo[]): ModelInfo[] {
 export async function loadModels() {
   const cached: ModelInfo[] = [];
   const states: Record<string, ModelsState> = {};
+  // One read for every provider's cached list
+  const all = await repo.listAllModels();
   for (const p of providers.value) {
-    const list = await repo.listModels(p.id);
+    const list = all.filter((m) => m.providerId === p.id);
     cached.push(...list);
     states[p.id] = { ...EMPTY_MODELS_STATE, fetchedAt: list[0]?.fetchedAt ?? null };
   }

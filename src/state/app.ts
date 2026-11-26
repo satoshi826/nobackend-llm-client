@@ -17,11 +17,12 @@ import { isStreaming } from './runs';
 export const ready = signal(false);
 
 export async function init() {
+  // The vault page loads in its frame while the stored data is read (it is awaited before the first screen,
+  // which depends on whether keys are set)
+  const keys = connectKeys();
   await loadSettings();
-  await loadFeatureSettings();
-  await loadModels();
-  await connectKeys();
-  await checkLeftoverLocalKeys();
+  await Promise.all([loadFeatureSettings(), loadModels()]);
+  void checkLeftoverLocalKeys();
   // Read the URL first: startNewChat() clears it, and a reload should reopen the conversation that was open
   const openHash = location.hash;
   // If conversations are encrypted, do not load them until unlocked (show the lock screen)
@@ -37,6 +38,7 @@ export async function init() {
   await initDataLock(loadData);
   setBusyCheck(() => isStreaming.value);
   if (dataLock.value === 'none') await loadData();
+  await keys;
   ready.value = true;
   // Once a key is set or unlocked, fetch the model lists that require a key
   effect(() => {

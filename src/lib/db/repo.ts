@@ -152,7 +152,7 @@ export async function replaceModels(providerId: string, models: Omit<ModelRecord
     await db().models.bulkPut(models.map((m) => ({ ...m, fetchedAt: now })));
   });
 }
-export const listModels = (providerId: string) => db().models.where('providerId').equals(providerId).toArray();
+export const listAllModels = () => db().models.toArray();
 
 // ---- settings ----
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {

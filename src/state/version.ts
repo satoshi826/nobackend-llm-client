@@ -25,7 +25,7 @@ export const updateCheck = signal<{ at: number; ok: boolean } | null>(null);
 export async function checkForUpdate(): Promise<BuildInfo | null> {
   if (isDevBuild) return null;
   try {
-    const res = await fetch('/version.json', { cache: 'no-store', credentials: 'omit' });
+    const res = await fetch(`${import.meta.env.BASE_URL}version.json`, { cache: 'no-store', credentials: 'omit' });
     if (!res.ok) throw new Error(String(res.status));
     const info = (await res.json()) as BuildInfo;
     if (typeof info?.commit !== 'string') throw new Error('bad version file');

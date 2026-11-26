@@ -6,13 +6,19 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { appHeadersFile, appPagePolicies, cspMetaTag, sandboxCsp, separateOrigins } from './csp.config';
 
+/** Where the app is served from: '/' at a domain root, '/repo/' under a subpath (VITE_BASE_PATH, e.g. GitHub Pages project sites) */
+function basePath(env: Record<string, string | undefined>): string {
+  const p = (env.VITE_BASE_PATH || '/').trim();
+  return `/${p.replace(/^\/+|\/+$/g, '')}/`.replace(/^\/\/$/, '/');
+}
+
 /** Generates _headers (CSP and other security headers) */
-function headersPlugin(env: Record<string, string | undefined>): Plugin {
+function headersPlugin(env: Record<string, string | undefined>, base: string): Plugin {
   return {
     name: 'security-headers',
     apply: 'build',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: '_headers', source: appHeadersFile(env) });
+      this.emitFile({ type: 'asset', fileName: '_headers', source: appHeadersFile(env, base) });
     }
   };
 }
@@ -30,14 +36,14 @@ function cspMetaPlugin(policies: Record<string, string>): Plugin {
 }
 
 /** The sandbox page (sandbox/sandbox.html → /sandbox/), with its CSP put in; served by the dev server too */
-function sandboxPagePlugin(): Plugin {
+function sandboxPagePlugin(base: string): Plugin {
   const page = () => readFileSync(resolve(__dirname, 'sandbox/sandbox.html'), 'utf8').replace('<!--CSP-->', cspMetaTag(sandboxCsp(false)));
   return {
     name: 'sandbox-page',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const path = (req.url ?? '').split('?')[0];
-        if (path !== '/sandbox/' && path !== '/sandbox/index.html') return next();
+        if (path !== `${base}sandbox/` && path !== `${base}sandbox/index.html`) return next();
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Content-Security-Policy', sandboxCsp());
         res.setHeader('X-DNS-Prefetch-Control', 'off');
@@ -54,12 +60,12 @@ function sandboxPagePlugin(): Plugin {
  * pdf.js character maps (needed to extract text from many Japanese / Chinese PDFs), served at /pdfjs/cmaps/.
  * They are fetched only when a PDF is attached.
  */
-function pdfCmapsPlugin(): Plugin {
+function pdfCmapsPlugin(base: string): Plugin {
   const dir = resolve(__dirname, 'node_modules/pdfjs-dist/cmaps');
   return {
     name: 'pdfjs-cmaps',
     configureServer(server) {
-      server.middlewares.use('/pdfjs/cmaps/', (req, res, next) => {
+      server.middlewares.use(`${base}pdfjs/cmaps/`, (req, res, next) => {
         const name = decodeURIComponent((req.url ?? '').split('?')[0].replace(/^\//, ''));
         if (!/^[\w.-]+$/.test(name)) return next();
         try {
@@ -80,7 +86,7 @@ function pdfCmapsPlugin(): Plugin {
  * The Service Worker (sw/sw.js → /sw.js) with this build's file list, so it can cache every script and
  * stylesheet at install, including screens that load their code later (components/lazy.tsx).
  */
-function serviceWorkerPlugin(): Plugin {
+function serviceWorkerPlugin(base: string): Plugin {
   return {
     name: 'service-worker',
     apply: 'build',
@@ -89,7 +95,7 @@ function serviceWorkerPlugin(): Plugin {
     generateBundle: { order: 'post', handler(_options, bundle) {
       const assets = Object.keys(bundle)
         .filter((f) => f.startsWith('assets/'))
-        .map((f) => `/${f}`)
+        .map((f) => `${base}${f}`)
         .sort();
       const precache = assets.filter((f) => /\.(js|css)$/.test(f));
       const source =
@@ -130,9 +136,11 @@ function versionFilePlugin(info: ReturnType<typeof buildInfo>): Plugin {
 export default defineConfig(({ mode, command }) => {
   const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env };
   const info = command === 'build' ? buildInfo(env) : { version: 'dev', commit: 'dev', builtAt: '' };
+  const base = basePath(env);
   return {
+    base,
     define: { __APP_BUILD__: JSON.stringify(info) },
-    plugins: [preact(), tailwindcss(), headersPlugin(env), cspMetaPlugin(appPagePolicies(env)), sandboxPagePlugin(), pdfCmapsPlugin(), serviceWorkerPlugin(), versionFilePlugin(info)],
+    plugins: [preact(), tailwindcss(), headersPlugin(env, base), cspMetaPlugin(appPagePolicies(env)), sandboxPagePlugin(base), pdfCmapsPlugin(base), serviceWorkerPlugin(base), versionFilePlugin(info)],
     build: {
       target: 'es2022',
       emptyOutDir: true,

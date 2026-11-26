@@ -118,28 +118,28 @@ export function vaultCsp(env: Env, appOrigins: string[]): string {
  * and if removal fails the two CSPs stack and block the vault's requests, so we avoid it.
  * The app switches views via #, so no other path ever returns HTML (404).
  */
-export function appHeadersFile(env: Env): string {
+export function appHeadersFile(env: Env, base = '/'): string {
   const { vaultOrigin, fetchOrigin } = separateOrigins(env);
   const app = `  Content-Security-Policy: ${appCsp(env, vaultOrigin, fetchOrigin)}`;
   return [
-    '/*',
+    `${base}*`,
     ...COMMON.map((h) => '  ' + h),
     '  Cross-Origin-Opener-Policy: same-origin',
     '  Cross-Origin-Resource-Policy: same-origin',
     '',
-    '/',
+    base,
     app,
     '',
-    '/index.html',
+    `${base}index.html`,
     app,
     '',
-    '/sandbox/*',
+    `${base}sandbox/*`,
     `  Content-Security-Policy: ${sandboxCsp()}`,
     // DNS prefetch hints could carry data in host names (CSP does not cover them)
     '  X-DNS-Prefetch-Control: off',
     '',
-    ...(vaultOrigin ? [] : ['/vault/*', `  Content-Security-Policy: ${vaultCsp(env, ["'self'"])}`, '']),
-    ...(fetchOrigin ? [] : ['/fetch/*', `  Content-Security-Policy: ${fetchCsp(["'self'"])}`, ''])
+    ...(vaultOrigin ? [] : [`${base}vault/*`, `  Content-Security-Policy: ${vaultCsp(env, ["'self'"])}`, '']),
+    ...(fetchOrigin ? [] : [`${base}fetch/*`, `  Content-Security-Policy: ${fetchCsp(["'self'"])}`, ''])
   ].join('\n');
 }
 

@@ -98,7 +98,7 @@ async function readPdf(data: ArrayBuffer): Promise<string> {
   );
   const task = pdfjs.getDocument({
     data: new Uint8Array(data),
-    cMapUrl: '/pdfjs/cmaps/',
+    cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
     cMapPacked: true,
     disableFontFace: true,
     useSystemFonts: false

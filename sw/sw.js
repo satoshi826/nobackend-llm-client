@@ -1,19 +1,22 @@
 // Service Worker: caches only the app itself (same-origin static files) so it can start offline.
 // - never touches requests to other origins such as APIs (conversation content is never cached)
 // - the page (index.html) is network-first, falling back to cache only on failure (so updates apply immediately)
-// - /assets/ is cache-first since file names carry a hash
+// - assets/ is cache-first since file names carry a hash
 // - every built script and stylesheet is cached at install (PRECACHE, filled in by the build:
 //   vite.config.ts serviceWorkerPlugin), so screens that load their code later (components/lazy.tsx)
 //   also open offline. Files a build no longer has are removed when the new worker activates;
 //   files that did not change keep their cached copy.
-// - handles only the app page (/). Leaves the vault page (/vault/) alone
-// - /index.html gets redirected to / by the host, so the cache key is always /
+// - handles only the app page (the scope itself). Leaves the vault page (vault/) alone
+// - index.html gets redirected to the scope by the host, so the cache key is always the scope
 //   (browsers refuse to render a page from a redirected response)
+// - paths are under the scope: '/' at a domain root, '/repo/' under a subpath (VITE_BASE_PATH)
 const CACHE = 'app-shell-v3';
-const SHELL = ['/', '/favicon.svg', '/manifest.webmanifest'];
+const BASE = new URL(self.registration.scope).pathname;
+const ASSETS = `${BASE}assets/`;
+const SHELL = [BASE, `${BASE}favicon.svg`, `${BASE}manifest.webmanifest`];
 /** Scripts and stylesheets of this build (filled in by the build) */
 const PRECACHE = self.__PRECACHE__ ?? [];
-/** Every file under /assets/ in this build, including ones only cached when used (fonts) */
+/** Every file under assets/ in this build, including ones only cached when used (fonts) */
 const KNOWN = new Set(self.__ASSETS__ ?? []);
 /** A real asset, not a page some host returns for a missing file (that must never be cached as a script) */
 const isAsset = (res) => res.ok && !(res.headers.get('content-type') ?? '').includes('text/html');
@@ -44,7 +47,7 @@ self.addEventListener('activate', (event) => {
         const cache = await caches.open(CACHE);
         for (const req of await cache.keys()) {
           const path = new URL(req.url).pathname;
-          if (path.startsWith('/assets/') && !KNOWN.has(path)) await cache.delete(req);
+          if (path.startsWith(ASSETS) && !KNOWN.has(path)) await cache.delete(req);
         }
       }
       await self.clients.claim();
@@ -58,21 +61,21 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // external (APIs etc.) passes through
   if (req.mode === 'navigate') {
-    if (url.pathname !== '/' && url.pathname !== '/index.html') return; // pages other than the app (e.g. the vault) pass through
+    if (url.pathname !== BASE && url.pathname !== `${BASE}index.html`) return; // pages other than the app (e.g. the vault) pass through
     event.respondWith(
       fetch(req)
         .then((res) => {
           if (res.ok && !res.redirected) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put('/', copy));
+            caches.open(CACHE).then((c) => c.put(BASE, copy));
           }
           return res;
         })
-        .catch(() => caches.match('/'))
+        .catch(() => caches.match(BASE))
     );
     return;
   }
-  if (url.pathname.startsWith('/assets/')) {
+  if (url.pathname.startsWith(ASSETS)) {
     event.respondWith(
       caches.match(req).then(
         (hit) =>

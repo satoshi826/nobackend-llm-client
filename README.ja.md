@@ -114,7 +114,13 @@ VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.c
 
 `npm run build` は各ページの CSP を `_headers` だけでなく HTML にも入れるので、`_headers` を読まないホスト（GitHub Pages）でも CSP は効きます。ただし `<meta>` の CSP に書けないものは失われます: `frame-ancestors`（ほかのサイトがページを埋め込める）と、ほかのヘッダ（`nosniff`、`Referrer-Policy`、COOP）。普段使いには Cloudflare をおすすめします。
 
-アプリは `/fetch/`・`/vault/`・`/sandbox/`・`/sw.js` やアセットを、すべてドメインのルートからの絶対パスで参照します。そのため、ドメインの直下（`<ユーザー名>.github.io` という名前のリポジトリか、独自ドメイン）でだけ動き、`<ユーザー名>.github.io/<リポジトリ名>/` の下では動きません。
+標準ではドメインの直下（`<ユーザー名>.github.io` という名前のリポジトリか、独自ドメイン）から配信します。`<ユーザー名>.github.io/<リポジトリ名>/` のようなパスの下に置くときは、そのパスを指定してビルドします。
+
+```bash
+VITE_BASE_PATH=/<リポジトリ名>/ npm run build
+```
+
+各ページ（`fetch/`・`vault/`・`sandbox/`）、Service Worker、アセットはすべてそのパスの下になります。`<ユーザー名>.github.io` の下のサイトはすべて同じオリジンです。ほかのリポジトリのサイトで動くスクリプトから、アプリが保存したもの（会話、金庫のキー）を読めてしまい、守れるのはパスフレーズによる暗号化だけです。できればアプリ専用のドメインに置いてください。
 
 ### Web のページを読む・ファイルを取り込む
 

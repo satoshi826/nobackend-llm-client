@@ -23,16 +23,18 @@ watchForUpdates();
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // Under Trusted Types, register() needs a TrustedScriptURL. Use a dedicated policy that allows nothing but /sw.js.
+    // Under Trusted Types, register() needs a TrustedScriptURL. Use a dedicated policy that allows nothing but sw.js.
+    const base = import.meta.env.BASE_URL;
+    const sw = `${base}sw.js`;
     const tt = (window as any).trustedTypes;
     const swUrl = tt?.createPolicy
       ? tt.createPolicy('app-sw', {
           createScriptURL: (u: string) => {
-            if (u !== '/sw.js') throw new TypeError('Service Worker URL not allowed');
+            if (u !== sw) throw new TypeError('Service Worker URL not allowed');
             return u;
           }
-        }).createScriptURL('/sw.js')
-      : '/sw.js';
-    navigator.serviceWorker.register(swUrl, { scope: '/' }).catch((e) => console.warn('Could not register the Service Worker', e));
+        }).createScriptURL(sw)
+      : sw;
+    navigator.serviceWorker.register(swUrl, { scope: base }).catch((e) => console.warn('Could not register the Service Worker', e));
   });
 }

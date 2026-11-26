@@ -4,7 +4,7 @@
 import { getLang } from '../i18n';
 import { fetchRoutes, type FetchMode } from './protocol';
 
-const SAME_ORIGIN_PATH = '/fetch/';
+const SAME_ORIGIN_PATH = `${(import.meta as any).env?.BASE_URL ?? '/'}fetch/`;
 export const FETCH_URL: string = (import.meta as any).env?.VITE_FETCH_URL || (typeof location !== 'undefined' ? new URL(SAME_ORIGIN_PATH, location.origin).toString() : SAME_ORIGIN_PATH);
 /** The fetch page's relay and Jina Reader, for settings to show (a fetch page built on its own gets the same VITE_FETCH_RELAY_URL) */
 export const FETCH_ROUTES = fetchRoutes((import.meta as any).env ?? {});

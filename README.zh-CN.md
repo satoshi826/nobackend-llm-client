@@ -114,7 +114,13 @@ VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.c
 
 `npm run build` 会把每个页面的 CSP 同时写入 `_headers` 和 HTML，因此不读取 `_headers` 的主机（GitHub Pages）也会执行 CSP。但 `<meta>` 形式的 CSP 写不了的内容会失去：`frame-ancestors`（其他网站可以嵌入这些页面）以及其他响应头（`nosniff`、`Referrer-Policy`、COOP）。日常使用推荐 Cloudflare。
 
-应用以从域名根目录开始的绝对路径引用 `/fetch/`、`/vault/`、`/sandbox/`、`/sw.js` 和各类资源，因此只能部署在域名的根目录（名为 `<用户名>.github.io` 的仓库，或自定义域名），不能放在 `<用户名>.github.io/<仓库名>/` 之下。
+默认从域名根目录提供（名为 `<用户名>.github.io` 的仓库，或自定义域名）。要放在 `<用户名>.github.io/<仓库名>/` 这样的路径下时，构建时指定该路径：
+
+```bash
+VITE_BASE_PATH=/<仓库名>/ npm run build
+```
+
+各页面（`fetch/`、`vault/`、`sandbox/`）、Service Worker 和资源都会位于该路径下。`<用户名>.github.io` 下的所有站点同源：你其他仓库站点上的脚本可以读取应用保存的内容（对话、保管库中的密钥），只有口令加密能保护它们。最好使用应用专用的域名。
 
 ### 读取网页、从网络导入文件
 

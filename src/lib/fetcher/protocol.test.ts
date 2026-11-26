@@ -32,6 +32,11 @@ describe('fetch page', () => {
     expect(Object.keys(appPagePolicies(env))).toEqual(['/index.html']);
     expect(Object.keys(appPagePolicies({}))).toEqual(['/index.html', '/vault/index.html', '/fetch/index.html']);
   });
+  it('puts every header path under the base path when served from a subpath', () => {
+    const headers = appHeadersFile({}, '/repo/');
+    for (const path of ['/repo/*', '/repo/', '/repo/index.html', '/repo/sandbox/*', '/repo/vault/*', '/repo/fetch/*']) expect(headers.split('\n')).toContain(path);
+    expect(headers).not.toMatch(/^\/(?!repo\/)/m);
+  });
   it('lets the sandbox run scripts but reach nothing', () => {
     const p = sandboxCsp();
     expect(p).toContain("connect-src 'none'");

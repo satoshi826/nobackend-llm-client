@@ -15,7 +15,7 @@ import { t } from './messages';
  * - VITE_VAULT_URL set: a vault on a separate origin (e.g. https://vault.example.com/index.html). Keys stay unreadable even if the app suffers XSS
  */
 // /vault/index.html gets redirected to /vault/ by Cloudflare and others, so open /vault/ directly
-const SAME_ORIGIN_PATH = '/vault/';
+const SAME_ORIGIN_PATH = `${(import.meta as any).env?.BASE_URL ?? '/'}vault/`;
 export const VAULT_URL: string = (import.meta as any).env?.VITE_VAULT_URL || (typeof location !== 'undefined' ? new URL(SAME_ORIGIN_PATH, location.origin).toString() : SAME_ORIGIN_PATH);
 export const VAULT_ORIGIN = typeof location !== 'undefined' ? new URL(VAULT_URL, location.origin).origin : '';
 /** Whether the key vault is on a different origin from the app (i.e. keys are isolated from XSS) */

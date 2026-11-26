@@ -168,10 +168,10 @@ export async function exportImages(): Promise<ExportedImage[]> {
 }
 
 /** Import images; existing ids are skipped. Returns how many were added */
-export async function importImages(list: ExportedImage[], conversationIds: Set<string>): Promise<number> {
+export async function importImages(list: ExportedImage[]): Promise<number> {
   let n = 0;
   for (const im of list) {
-    if (!conversationIds.has(im.conversationId) || !/^image\//.test(im.mime) || (await db().blobs.get(im.id))) continue;
+    if (!/^image\//.test(im.mime) || (await db().blobs.get(im.id))) continue;
     const blob = base64ToBlob(im.data, im.mime);
     const key = currentDataKey();
     const base = { id: im.id, conversationId: im.conversationId, messageId: im.messageId, createdAt: im.createdAt, mime: im.mime, size: blob.size };
@@ -197,15 +197,15 @@ export async function deleteImageRecords(ids: string[]): Promise<void> {
 registerDataTable<ExportedImage>({
   key: 'images',
   exportRows: async ({ includeImages }) => (includeImages ? exportImages() : undefined),
-  clean: (raw, { conversationIds }) =>
+  clean: (raw) =>
     (Array.isArray(raw) ? raw : []).filter(
       (im: any): im is ExportedImage =>
-        !!im && typeof im.id === 'string' && conversationIds.has(im.conversationId) && typeof im.messageId === 'string' && typeof im.mime === 'string' && typeof im.data === 'string' && typeof im.createdAt === 'number'
+        !!im && typeof im.id === 'string' && typeof im.conversationId === 'string' && typeof im.messageId === 'string' && typeof im.mime === 'string' && typeof im.data === 'string' && typeof im.createdAt === 'number'
     ),
-  importRows: (rows) => importImages(rows, new Set(rows.map((r) => r.conversationId))),
+  importRows: (rows) => importImages(rows),
   reseal: resealImages,
-  async onConversationDeleted(id, temporary) {
+  // Saved images outlive their conversation (they stay in the Files tab); a temporary chat's go with it
+  onConversationDeleted(id, temporary) {
     if (temporary) forgetTemporaryImages(id);
-    else await db().blobs.where('conversationId').equals(id).delete();
   }
 });

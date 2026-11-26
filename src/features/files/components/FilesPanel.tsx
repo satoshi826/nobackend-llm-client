@@ -19,7 +19,8 @@ export function FilesPanel() {
   const view = filerView.value;
   const conv = filerConversation.value;
   const count = (v: FilerView) => (items ? items.filter((it) => inView(it, v)).length : undefined);
-  const convs = items ? conversationsWithItems(items) : [];
+  // Only chats that still exist (items of deleted chats stay, without a chat filter)
+  const convs = items ? conversationsWithItems(items).filter((c) => convTitle(c.id) !== undefined) : [];
   const row = (active: boolean) => cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm', active ? 'text-ink-strong' : 'hover:bg-glass-strong');
   return (
     <nav ref={navRef} class="scroll-thin relative isolate min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-2" aria-label={t('panel.nav')}>

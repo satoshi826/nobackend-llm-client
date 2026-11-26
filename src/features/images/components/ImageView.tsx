@@ -4,7 +4,7 @@ import { useDialog } from '../../../components/dialog';
 import type { ImageParams, MessageRecord } from '../../../lib/db/schema';
 import type { Part } from '../../../lib/providers/types';
 import { getImage, getImageThumb } from '../../../lib/db/images';
-import { currentId, messages, openConversation } from '../../../state/conversations';
+import { conversations, currentId, messages, openConversation, startNewChat } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
 import { modal, showToast } from '../../../state/ui';
 import { Button, Icon, Shimmer, Spinner, cx, IconButton } from '../../../components/ui';
@@ -300,9 +300,14 @@ export function Lightbox() {
   const source = msg ? messages.value.find((m) => m.id === msg.parentId) : undefined;
   const promptText = msg?.image?.params.prompt || source?.imageRequest?.prompt || '';
   const inThisChat = currentId.value === item.conversationId;
+  // Saved images outlive their conversation: one whose chat was deleted is edited in a new chat
+  const chatExists = inThisChat || conversations.value.some((c) => c.id === item.conversationId);
   const close = () => (lightbox.value = null);
   const act = async (fn: () => Promise<void>) => {
-    if (!inThisChat) await openConversation(item.conversationId);
+    if (!inThisChat) {
+      if (chatExists) await openConversation(item.conversationId);
+      else startNewChat();
+    }
     close();
     modal.value = null;
     await fn();
@@ -365,7 +370,7 @@ export function Lightbox() {
           >
             <Icon name="trash" />
           </IconButton>
-          {lb.fromGallery && !inThisChat && (
+          {lb.fromGallery && !inThisChat && chatExists && (
             <Button
               class="text-xs text-white hover:bg-glass"
               onClick={() => {

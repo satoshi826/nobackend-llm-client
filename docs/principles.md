@@ -27,6 +27,7 @@ Threats the design holds against, and the rule that holds each one.
 
 - **Everything stays in this browser.** Conversations, files, images, settings and the usage log live in IndexedDB of this origin; nothing is sent anywhere except the requests the user makes to providers and services they enabled.
 - **Temporary chats are never written** (not to the database, not to the usage log).
+- **Deleting a conversation keeps what was made in it.** Its images and documents stay in the Files tab until deleted there; only a temporary chat's go with it.
 - **Backups never contain keys or the data key.** They can be encrypted with a separate password.
 - **The background picture is stored unencrypted** (downscaled, with the settings) and is included in backups.
 - **Data is per origin.** Moving the app to another URL means export, import and entering the keys again.

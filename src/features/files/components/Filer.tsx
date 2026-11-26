@@ -319,7 +319,8 @@ function FilterMenu({ items }: { items: FilerItem[] | null }) {
   const view = filerView.value;
   const conv = filerConversation.value;
   const active = view !== 'all' || !!conv;
-  const convs = items ? conversationsWithItems(items) : [];
+  // Only chats that still exist (items of deleted chats stay, without a chat filter)
+  const convs = items ? conversationsWithItems(items).filter((c) => convTitle(c.id) !== undefined) : [];
   return (
     <span ref={anchor} class="relative">
       <IconButton label={t('filter.button')} aria-haspopup="menu" aria-expanded={open} class={cx(open && 'bg-glass-strong')} onClick={() => setOpen(!open)}>

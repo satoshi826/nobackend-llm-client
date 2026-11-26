@@ -5,6 +5,7 @@ import { getImage, imageUsage, listImages, putImage, resealImages, exportImages,
 import { setDataKey } from '../../lib/db/sealed';
 import { generateDataKey } from '../../lib/crypto/data';
 import { db, type ImageParams, type MessageRecord } from '../../lib/db/schema';
+import * as repo from '../../lib/db/repo';
 import { buildRequestMessages, registerMessageTransform } from '../../lib/chat/request';
 import { imageNote } from './transform';
 
@@ -84,8 +85,8 @@ describe('image storage', () => {
     const ex = await exportImages();
     expect(atob(ex[0].data)).toBe('hello');
     await db().blobs.clear();
-    expect(await importImages(ex, new Set(['c1']))).toBe(1);
-    expect(await importImages(ex, new Set(['c1']))).toBe(0);
+    expect(await importImages(ex)).toBe(1);
+    expect(await importImages(ex)).toBe(0);
     expect((await db().blobs.get('i1'))?.enc).toBeDefined();
     // Temporary chats stay in memory
     await putImage({ ...meta('t1'), conversationId: 'tmp' }, new Blob(['x']), true);
@@ -94,6 +95,11 @@ describe('image storage', () => {
     await resealImages(key, null);
     setDataKey(null);
     expect((await db().blobs.get('i1'))?.blob).toBeDefined();
+  });
+  it('keeps saved images when their conversation is deleted', async () => {
+    await putImage(meta('k1'), new Blob(['kept']), false);
+    await repo.deleteConversation('c1');
+    expect(await (await getImage('k1'))!.text()).toBe('kept');
   });
 });
 

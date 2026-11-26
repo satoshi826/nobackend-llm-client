@@ -272,10 +272,11 @@ async function addUserRequest(conv: Conversation, p: ImageParams, text: string) 
 
 /** Upscale / remove the background of / edit an image already in the current conversation */
 export async function imageAction(op: 'upscale' | 'remove-bg' | 'edit', sourceBlobId: string, opts: { scale?: 2 | 4; prompt?: string } = {}) {
-  if (!ensureImageKey(EDIT_PROVIDER) || !currentId.value) return;
-  const conv = currentConv.value;
+  if (!ensureImageKey(EDIT_PROVIDER)) return;
   const text = op === 'upscale' ? t('request.upscaleText', { scale: opts.scale ?? 2 }) : op === 'remove-bg' ? t('request.removeBgText') : (opts.prompt ?? '').trim();
   if (!text) return;
+  // In a new chat (an image whose conversation was deleted) the request starts a saved conversation
+  const conv = await persistDraft(text);
   const p: ImageParams = {
     op,
     providerId: EDIT_PROVIDER,

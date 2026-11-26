@@ -45,6 +45,17 @@ describe('parseSSE', () => {
     const msgs = await collect(parseSSE(streamOf(['data: x'])));
     expect(msgs[0].data).toBe('x');
   });
+  it('reads event and id fields and joins multi-line data with newlines', async () => {
+    const msgs = await collect(parseSSE(streamOf(['event: delta\nid: 7\ndata: a\ndata:b\n\nevent: ping\n\ndata: c\n\n'])));
+    expect(msgs).toEqual([
+      { event: 'delta', data: 'a\nb', id: '7' },
+      { event: undefined, data: 'c', id: '7' }
+    ]);
+  });
+  it('accepts bare CR line endings, and a CR at the end of a chunk followed by LF counts as one break', async () => {
+    expect((await collect(parseSSE(streamOf(['data: a\r\rdata: b\r\r'])))).map((m) => m.data)).toEqual(['a', 'b']);
+    expect((await collect(parseSSE(streamOf(['data: a\r', '\ndata: b\r\n\r\n'])))).map((m) => m.data)).toEqual(['a\nb']);
+  });
 });
 
 describe('ThinkSplitter', () => {
@@ -60,6 +71,23 @@ describe('ThinkSplitter', () => {
     const segs = [...s.push('a < b <th'), ...s.push('e end'), ...s.flush()];
     expect(segs.map((x) => x.text).join('')).toBe('a < b <the end');
     expect(segs.every((x) => x.kind === 'text')).toBe(true);
+  });
+  it('flushes an unclosed block as reasoning and a held-back partial tag as text', () => {
+    const open = new ThinkSplitter();
+    expect([...open.push('<think>still thinking'), ...open.flush()]).toEqual([{ kind: 'reasoning', text: 'still thinking' }]);
+    const partial = new ThinkSplitter();
+    expect(partial.push('answer <thi')).toEqual([{ kind: 'text', text: 'answer ' }]);
+    expect(partial.flush()).toEqual([{ kind: 'text', text: '<thi' }]);
+  });
+  it('handles several blocks in one chunk', () => {
+    const s = new ThinkSplitter();
+    expect(s.push('a<think>r1</think>b<think>r2</think>c')).toEqual([
+      { kind: 'text', text: 'a' },
+      { kind: 'reasoning', text: 'r1' },
+      { kind: 'text', text: 'b' },
+      { kind: 'reasoning', text: 'r2' },
+      { kind: 'text', text: 'c' }
+    ]);
   });
 });
 

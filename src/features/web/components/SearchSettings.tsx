@@ -8,9 +8,10 @@ import { accountById } from '../../../lib/keys/accounts';
 import { SERVICE_ORDER } from '../../../lib/tools/services';
 import { getPreset } from '../../../lib/providers/registry';
 import { FETCH_ROUTES } from '../../../lib/fetcher/config';
+import { fetchSettingsOpen } from '../../../state/fetch-page';
 import { KeyPanel } from '../../../components/KeyPanel';
 import { AccountRow } from '../../../components/settings/AccountRow';
-import { Icon, Select, cx } from '../../../components/ui';
+import { Button, Icon, Select, cx } from '../../../components/ui';
 import { PermissionSelect, Section, Toggle } from '../../../components/settings-ui';
 import { providerSearchRoute, webSettings } from '../state';
 import { t } from '../messages';
@@ -113,6 +114,15 @@ export function SearchSettings() {
             ))}
           </ol>
           {!relay && <p class="text-xs text-muted">{t('settings.noRelay')}</p>}
+        </div>
+        <div class="flex items-center justify-between gap-4 text-sm">
+          <span>
+            {t('settings.pageSettings')}
+            <span class="mt-0.5 block text-xs text-muted">{t('settings.pageSettingsDesc')}</span>
+          </span>
+          <Button variant="outline" onClick={() => (fetchSettingsOpen.value = true)}>
+            {t('settings.open')}
+          </Button>
         </div>
       </Section>
     </div>

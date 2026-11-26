@@ -35,23 +35,38 @@ const appOrigin = params.get('app') ?? '';
 const target = window.parent !== window && APP_ORIGINS.includes(appOrigin) ? appOrigin : null;
 const url = fetchableUrl(params.get('url') ?? '');
 const mode: 'read' | 'save' = params.get('mode') === 'read' ? 'read' : 'save';
+/** Opened from the app's settings to manage what this page keeps, instead of to fetch */
+const settingsView = params.get('view') === 'settings';
 
-// ---- sites the user chose not to be asked about again (this page's storage) ----
+// ---- this page's storage: sites the user chose not to be asked about again, and the Jina Reader key ----
+// (Kept here, not in the key vault: the app never reaches Jina, so the key is only of use to this page)
 const ALLOWED_KEY = 'nbl-fetch-allowed-hosts';
+const JINA_KEY = 'nbl-fetch-jina-key';
+function load(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function store(key: string, value: string | null) {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    /* storage unavailable: nothing is kept (the user is asked each time, Jina is used without a key) */
+  }
+}
 function allowedHosts(): string[] {
   try {
-    const v = JSON.parse(localStorage.getItem(ALLOWED_KEY) ?? '[]');
+    const v = JSON.parse(load(ALLOWED_KEY) ?? '[]');
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
   } catch {
     return [];
   }
 }
 function setAllowedHosts(list: string[]) {
-  try {
-    localStorage.setItem(ALLOWED_KEY, JSON.stringify([...new Set(list)].sort()));
-  } catch {
-    /* storage unavailable: the user is simply asked each time */
-  }
+  store(ALLOWED_KEY, list.length ? JSON.stringify([...new Set(list)].sort()) : null);
 }
 const MAX_MB = formatNumber(MAX_FETCH_BYTES / 1024 / 1024);
 
@@ -126,9 +141,11 @@ function visibleTextLength(html: string): number {
     .trim().length;
 }
 
-/** A page as Markdown from Jina Reader (it renders the page, so it also reads pages drawn by scripts) */
+/** A page as Markdown from Jina Reader (it renders the page, so it also reads pages drawn by scripts); with the user's key when set */
 async function viaJina(u: URL): Promise<{ title: string; text: string }> {
-  const res = await fetch(`${JINA}/${u.href}`, { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', headers: { Accept: 'application/json' } });
+  const key = load(JINA_KEY);
+  const headers: Record<string, string> = { Accept: 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) };
+  const res = await fetch(`${JINA}/${u.href}`, { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', headers });
   if (!res.ok) throw new Error(t('status', { host: new URL(JINA).host, status: String(res.status) }));
   const json = await res.json().catch(() => null);
   const text = typeof json?.data?.content === 'string' ? json.data.content : '';
@@ -164,12 +181,71 @@ async function fetchFor(u: URL, onProgress: (bytes: number) => void): Promise<Re
 }
 
 const root = document.getElementById('root')!;
+const closeSettings = () => post({ type: 'fetch-close' });
+
+/** Deleting the key waits for a second press (no confirm()) */
+let confirmingKey = false;
+
+/** The settings view: the Jina Reader key and the remembered sites */
+function renderSettings() {
+  const key = load(JINA_KEY);
+  let jina: Child;
+  if (!key) {
+    const input = h('input', { type: 'password', autocomplete: 'off', spellcheck: 'false' });
+    const form = h(
+      'form',
+      { class: 'stack' },
+      h('label', {}, t('jinaKeyLabel'), input),
+      h('div', { class: 'btns' }, h('button', { type: 'submit', class: 'btn primary' }, t('save')))
+    );
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!input.value.trim()) return input.focus();
+      store(JINA_KEY, input.value.trim());
+      renderSettings();
+    });
+    jina = form;
+  } else if (!confirmingKey) {
+    const del = h('button', { type: 'button', class: 'btn danger', onClick: () => ((confirmingKey = true), renderSettings()) }, t('delete'));
+    jina = h('div', { class: 'card row' }, h('div', { class: 'fill' }, t('jinaKeySet', { tail: key.slice(-4) })), h('div', { class: 'btns' }, del));
+  } else {
+    const yes = h('button', { type: 'button', class: 'btn danger', onClick: () => ((confirmingKey = false), store(JINA_KEY, null), renderSettings()) }, t('delete'));
+    const no = h('button', { type: 'button', class: 'btn outline', onClick: () => ((confirmingKey = false), renderSettings()) }, t('cancel'));
+    jina = h('div', { class: 'card stack', role: 'alert' }, h('p', {}, t('jinaKeyDeleteWarning')), h('div', { class: 'btns' }, yes, no));
+  }
+  const hosts = allowedHosts();
+  const sites = hosts.length
+    ? hosts.map((host) =>
+        h(
+          'div',
+          { class: 'card row' },
+          h('div', { class: 'fill mono' }, host),
+          h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: () => (setAllowedHosts(allowedHosts().filter((x) => x !== host)), renderSettings()) }, t('forget')))
+        )
+      )
+    : [h('p', { class: 'muted' }, t('noSites'))];
+  root.replaceChildren(
+    h(
+      'div',
+      { class: 'card stack' },
+      h('div', { class: 'strong' }, 'Jina Reader'),
+      h('p', { class: 'muted' }, t('jinaKeyDesc', { jina: new URL(JINA).host })),
+      jina,
+      h('hr', {}),
+      h('div', { class: 'strong' }, t('sitesTitle')),
+      h('p', { class: 'muted' }, t('sitesDesc')),
+      ...sites,
+      h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: closeSettings }, t('close')))
+    )
+  );
+}
 
 function render() {
   if (!target) {
     root.replaceChildren(h('p', { class: 'muted' }, t('embedOnly')));
     return;
   }
+  if (settingsView) return renderSettings();
   if (!url) {
     root.replaceChildren(
       h('div', { class: 'card stack' }, h('p', { role: 'alert' }, t('badUrl')), h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: () => post({ type: 'fetch-result', ok: false, cancelled: true }) }, t('close'))))
@@ -236,6 +312,6 @@ function render() {
 
 render();
 addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') post({ type: 'fetch-result', ok: false, cancelled: true });
+  if (e.key === 'Escape') post(settingsView ? { type: 'fetch-close' } : { type: 'fetch-result', ok: false, cancelled: true });
 });
 new ResizeObserver(() => post({ type: 'fetch-resize', height: root.scrollHeight })).observe(root);

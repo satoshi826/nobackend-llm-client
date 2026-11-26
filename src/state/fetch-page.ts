@@ -14,6 +14,9 @@ export interface Fetched {
   via: FetchVia;
 }
 
+/** The fetch page's own settings are open (over the app's settings; the FetchDialog shows them) */
+export const fetchSettingsOpen = signal(false);
+
 /** The address being fetched; the FetchDialog shows the fetch page for it */
 export const fetchRequest = signal<{ url: string; mode: FetchMode; done(r: Fetched | null): void } | null>(null);
 

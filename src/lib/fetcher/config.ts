@@ -12,11 +12,16 @@ export const FETCH_ORIGIN = typeof location !== 'undefined' ? new URL(FETCH_URL,
 
 /** The fetch page for one address, told which app opened it (it answers only to allowed app origins) */
 export function fetchPageUrl(url: string, mode: FetchMode, theme: 'dark' | 'light'): string {
+  return pageUrl({ url, mode }, theme);
+}
+
+/** The fetch page's own settings (the Jina Reader key, the remembered sites) */
+export function fetchSettingsUrl(theme: 'dark' | 'light'): string {
+  return pageUrl({ view: 'settings' }, theme);
+}
+
+function pageUrl(params: Record<string, string>, theme: 'dark' | 'light'): string {
   const u = new URL(FETCH_URL);
-  u.searchParams.set('url', url);
-  u.searchParams.set('mode', mode);
-  u.searchParams.set('app', location.origin);
-  u.searchParams.set('lang', getLang());
-  u.searchParams.set('theme', theme);
+  for (const [k, v] of Object.entries({ ...params, app: location.origin, lang: getLang(), theme })) u.searchParams.set(k, v);
   return u.toString();
 }

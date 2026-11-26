@@ -17,7 +17,9 @@ export function fetchRoutes(env: Record<string, string | undefined>): { relay: s
 export type FromFetcher =
   | { type: 'fetch-resize'; height: number }
   | { type: 'fetch-result'; ok: true; name: string; mime: string; data: ArrayBuffer; url: string; via: FetchVia }
-  | { type: 'fetch-result'; ok: false; cancelled: boolean; message?: string };
+  | { type: 'fetch-result'; ok: false; cancelled: boolean; message?: string }
+  /** The settings view was closed */
+  | { type: 'fetch-close' };
 
 /** Only https addresses are fetched (no http, no data:, no file:, no credentials in the address) */
 export function fetchableUrl(raw: string): URL | null {

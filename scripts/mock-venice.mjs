@@ -120,9 +120,10 @@ function mk(id, name, privacy, traits, caps) {
   };
 }
 
-function cors(res) {
+function cors(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', '*');
+  // '*' does not cover Authorization: echo what the browser asks for, as real services do
+  res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Expose-Headers', '*');
 }
@@ -155,7 +156,7 @@ function chunked(text, size = 6) {
 }
 
 const server = http.createServer(async (req, res) => {
-  cors(res);
+  cors(req, res);
   if (req.method === 'OPTIONS') return res.writeHead(204).end();
   const url = new URL(req.url, `http://localhost:${port}`);
   const path = url.pathname.replace(/^\/api\/v1/, '');
@@ -369,6 +370,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname.startsWith('/jina/') && req.method === 'GET') {
     const target = decodeURIComponent(url.pathname.slice('/jina/'.length)) + url.search;
+    console.log(`jina ${target} (${req.headers.authorization ? 'with a key' : 'no key'})`);
     return json(res, 200, { code: 200, data: { title: 'モック記事', url: target, content: `# モック記事\n\n${target} の本文です。`.padEnd(400, '。') } });
   }
   if (path === '/api_keys/rate_limits') {

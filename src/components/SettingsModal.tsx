@@ -1,4 +1,4 @@
-// Settings: core tabs, tabs registered by features, then privacy & data
+// Settings: core tabs, tabs registered by features, then privacy & data and about
 import type { ComponentType } from 'preact';
 import { modal, settingsTab, type SettingsTab } from '../state/ui';
 import { settingsSections, settingsTabs, textOf, type Text } from './extensions';
@@ -8,6 +8,7 @@ import { ChatTab } from './settings/ChatTab';
 import { ConnectionsTab } from './settings/ConnectionsTab';
 import { FeaturesTab } from './settings/FeaturesTab';
 import { PrivacyTab } from './settings/PrivacyTab';
+import { AboutTab } from './settings/AboutTab';
 import { t } from './messages';
 
 type TabDef = { id: SettingsTab; label: Text; Component: ComponentType };
@@ -18,7 +19,10 @@ const CORE_FIRST: TabDef[] = [
   { id: 'appearance', label: () => t('settings.tabAppearance'), Component: AppearanceTab }
 ];
 const FEATURES: TabDef = { id: 'features', label: () => t('settings.tabFeatures'), Component: FeaturesTab };
-const CORE_LAST: TabDef[] = [{ id: 'privacy', label: () => t('settings.tabPrivacy'), Component: PrivacyTab }];
+const CORE_LAST: TabDef[] = [
+  { id: 'privacy', label: () => t('settings.tabPrivacy'), Component: PrivacyTab },
+  { id: 'about', label: () => t('settings.tabAbout'), Component: AboutTab }
+];
 
 export function SettingsModal() {
   // "機能" holds the sections features put there (images, files); hidden when there are none

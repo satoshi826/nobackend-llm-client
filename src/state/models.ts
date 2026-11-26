@@ -10,6 +10,7 @@ import { ProviderFailure } from '../lib/providers/errors';
 import { providerConfigOf } from '../lib/keys/accounts';
 import { compareModels } from '../lib/model-list';
 import { saveSettings, settings } from './settings';
+import { withListPrices } from '../lib/providers/prices';
 
 type ModelsState = { loading: boolean; error: ProviderError | null; fetchedAt: number | null; needsKey?: boolean };
 const EMPTY_MODELS_STATE: ModelsState = { loading: false, error: null, fetchedAt: null };
@@ -54,7 +55,7 @@ export async function loadModels() {
   const all = await repo.listAllModels();
   for (const p of providers.value) {
     const list = all.filter((m) => m.providerId === p.id);
-    cached.push(...list);
+    cached.push(...withListPrices(list, p.preset));
     states[p.id] = { ...EMPTY_MODELS_STATE, fetchedAt: list[0]?.fetchedAt ?? null };
   }
   batch(() => {
@@ -84,8 +85,10 @@ export async function refreshModels(providerId: string) {
       ? await getAdapter(cfg).listModels(cfg, preset, vaultTransport, authFor(providerId))
       : await getAdapter(cfg).listModels(cfg, preset, plainTransport);
     await repo.replaceModels(cfg.id, list);
+    // Prices from the app's own list are added on reading, so a scheduled price change applies without refetching
+    const priced = withListPrices(list, cfg.preset);
     batch(() => {
-      models.value = sortModels([...models.value.filter((m) => m.providerId !== providerId), ...list]);
+      models.value = sortModels([...models.value.filter((m) => m.providerId !== providerId), ...priced]);
       setState({ loading: false, error: null, fetchedAt: Date.now() });
     });
   } catch (e) {

@@ -3,6 +3,7 @@ import preact from '@preact/preset-vite';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 import { readdirSync, readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { appHeadersFile } from './csp.config';
 
 /** Generates _headers (CSP and other security headers) */
@@ -63,10 +64,40 @@ function serviceWorkerPlugin(): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => {
-  const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env };
+/**
+ * Which build this is: package version, commit (Cloudflare Workers Builds sets WORKERS_CI_COMMIT_SHA; otherwise
+ * git), build time. Shown in Settings → 情報 and written to /version.json, which running pages poll to learn
+ * that a newer build is out (state/version.ts).
+ */
+function buildInfo(env: Record<string, string | undefined>) {
+  let commit = env.WORKERS_CI_COMMIT_SHA || env.CF_PAGES_COMMIT_SHA || env.GITHUB_SHA || '';
+  if (!commit) {
+    try {
+      commit = execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    } catch {
+      commit = 'unknown';
+    }
+  }
+  const version = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')).version as string;
+  return { version, commit, builtAt: new Date().toISOString() };
+}
+
+function versionFilePlugin(info: ReturnType<typeof buildInfo>): Plugin {
   return {
-    plugins: [preact(), tailwindcss(), headersPlugin(env), pdfCmapsPlugin(), serviceWorkerPlugin()],
+    name: 'version-file',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify(info) });
+    }
+  };
+}
+
+export default defineConfig(({ mode, command }) => {
+  const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env };
+  const info = command === 'build' ? buildInfo(env) : { version: 'dev', commit: 'dev', builtAt: '' };
+  return {
+    define: { __APP_BUILD__: JSON.stringify(info) },
+    plugins: [preact(), tailwindcss(), headersPlugin(env), pdfCmapsPlugin(), serviceWorkerPlugin(), versionFilePlugin(info)],
     build: {
       target: 'es2022',
       emptyOutDir: true,

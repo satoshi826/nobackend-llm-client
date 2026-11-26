@@ -10,7 +10,28 @@ import { VAULT_PROTOCOL, type ToVault } from '../src/lib/vault/protocol';
 import { detectLang, formatList, getLang, setLang } from '../src/lib/i18n';
 import { MIN_PASSPHRASE_LENGTH } from '../src/lib/crypto/passphrase';
 import { handle } from './core';
-import { allowedHosts, allStatus, clearAll, label as providerLabel, lock, onChange, remove, removePassphrase, revealKey, saveKey, setPassphrase, status, unlock, vaultState } from './store';
+import {
+  addPasskey,
+  allowedHosts,
+  allStatus,
+  clearAll,
+  label as providerLabel,
+  listPasskeys,
+  lock,
+  onChange,
+  passkeySupport,
+  remove,
+  removePasskey,
+  removePassphrase,
+  revealKey,
+  saveKey,
+  setPassphrase,
+  status,
+  unlock,
+  unlockWithPasskey,
+  vaultState
+} from './store';
+import { formatDateTime } from '../src/lib/i18n';
 import { ACCOUNT_IDS as PROVIDER_IDS, accountById } from '../src/lib/keys/accounts';
 import './style.css';
 import { t } from './messages';
@@ -79,6 +100,8 @@ const root = document.getElementById('root')!;
 let message: { ok: boolean; text: string } | null = null;
 /** Action awaiting the second confirmation step (no confirm()) */
 let confirming: 'clear-all' | 'delete-key' | null = null;
+/** Passkey (credential id) whose removal awaits confirmation */
+let confirmingPasskey: string | null = null;
 /** Whether the passphrase change/remove form is open */
 let passMode: 'idle' | 'change' | 'remove' = 'idle';
 /** Showing the saved key: asking for the passphrase, or the key shown in full */
@@ -116,8 +139,27 @@ function passFields(autocomplete: string): { box: HTMLElement; p1: HTMLInputElem
   };
 }
 
-function unlockForm(note: string): HTMLElement {
-  const pass = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': t('pass.label'), 'data-autofocus': true });
+/** Passkey button for the unlock forms (focused first, so Enter uses it) */
+function passkeyUnlockButton(): HTMLElement {
+  const error = h('p', { class: 'err', role: 'alert' });
+  const btn = h('button', { type: 'button', class: 'btn primary', 'data-autofocus': true }, t('passkey.unlock'));
+  btn.addEventListener('click', async () => {
+    message = null;
+    error.textContent = '';
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    const r = await unlockWithPasskey();
+    if (r.ok) return show({ ok: true, text: r.message });
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    error.textContent = r.message;
+    postHeight();
+  });
+  return h('div', { class: 'stack' }, btn, error);
+}
+
+function unlockForm(note: string, passkeys = false): HTMLElement {
+  const pass = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': t('pass.label'), 'data-autofocus': !passkeys });
   const btn = h('button', { type: 'submit', class: 'btn primary' }, t('unlock.button'));
   const error = h('p', { class: 'err', role: 'alert' });
   return h(
@@ -138,10 +180,70 @@ function unlockForm(note: string): HTMLElement {
       pass.select();
       postHeight();
     } },
+    passkeys && passkeyUnlockButton(),
+    passkeys && h('div', { class: 'muted small' }, t('passkey.or')),
     h('label', {}, note, pass),
     btn,
     error
   );
+}
+
+/** Registered passkeys and registering a new one (security view, while unlocked with a passphrase) */
+async function passkeySection(): Promise<Node[]> {
+  const [list, support] = await Promise.all([listPasskeys(), passkeySupport()]);
+  const add = h('button', { type: 'button', class: 'btn outline' }, t('passkey.add'));
+  add.addEventListener('click', () => void run(add, addPasskey));
+  return [
+    h('hr', {}),
+    h('div', { class: 'strong' }, t('passkey.title')),
+    h('p', { class: 'muted' }, t('passkey.desc')),
+    ...(list.length
+      ? list.map((p) =>
+          h(
+            'div',
+            { class: 'card row' },
+            h(
+              'div',
+              { class: 'fill' },
+              h('div', {}, t('passkey.item', { date: formatDateTime(p.createdAt) })),
+              p.lastUsedAt ? h('div', { class: 'muted small' }, t('passkey.lastUsed', { date: formatDateTime(p.lastUsedAt) })) : null
+            ),
+            confirmingPasskey === p.credentialId
+              ? null
+              : h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn danger', onclick: () => {
+                  confirmingPasskey = p.credentialId;
+                  void render();
+                } }, t('common.delete')))
+          )
+        )
+        .flatMap((row, i) => {
+          const p = list[i];
+          if (confirmingPasskey !== p.credentialId) return [row];
+          const yes = h('button', { type: 'button', class: 'btn danger' }, t('common.delete'));
+          yes.addEventListener('click', () => {
+            confirmingPasskey = null;
+            void run(yes, async () => {
+              await removePasskey(p.credentialId);
+              return { ok: true, message: t('passkey.removed') };
+            });
+          });
+          return [
+            row,
+            h(
+              'div',
+              { class: 'card stack', role: 'alert' },
+              h('p', {}, t('passkey.deleteWarning')),
+              h('div', { class: 'btns' }, yes, h('button', { type: 'button', class: 'btn outline', onclick: () => {
+                confirmingPasskey = null;
+                void render();
+              } }, t('common.cancel')))
+            )
+          ];
+        })
+      : [h('p', { class: 'muted small' }, t('passkey.listEmpty'))]),
+    support === false ? h('p', { class: 'muted small' }, t('passkey.unsupportedNote')) : h('div', { class: 'btns' }, add),
+    h('p', { class: 'muted small' }, t('passkey.changeNote'))
+  ];
 }
 
 /** A translated sentence with one placeholder shown as <code> (one template per sentence, so word order can differ) */
@@ -233,7 +335,7 @@ async function renderKey(id: string): Promise<Node[]> {
         : h('p', { class: 'badge-line' }, ...withCode(t('key.isolated'), '{host}', location.host))
     );
   if (vs.locked) {
-    nodes.push(unlockForm(t('key.unlockAll')));
+    nodes.push(unlockForm(t('key.unlockAll'), (await listPasskeys()).length > 0));
     return nodes;
   }
   if (accountById(id)?.keyOptional && !st.present) nodes.push(h('p', { class: 'muted' }, t('key.optional')));
@@ -322,7 +424,7 @@ async function renderSecurity(): Promise<Node[]> {
       )
     );
   } else if (vs.locked) {
-    nodes.push(unlockForm(t('security.unlockLabel')), h('p', { class: 'muted' }, t('security.forgotten')));
+    nodes.push(unlockForm(t('security.unlockLabel'), (await listPasskeys()).length > 0), h('p', { class: 'muted' }, t('security.forgotten')));
   } else {
     nodes.push(
       h(
@@ -395,6 +497,7 @@ async function renderSecurity(): Promise<Node[]> {
     }
   }
   if (setup) return nodes;
+  if (vs.hasPassphrase && !vs.locked && passMode === 'idle') nodes.push(...(await passkeySection()));
   nodes.push(
     h('hr', {}),
     dangerAction('clear-all', t('security.clearAll'), vs.hasPassphrase ? t('security.clearAllWarningPass') : t('security.clearAllWarning'), async () => {
@@ -409,7 +512,7 @@ async function renderSecurity(): Promise<Node[]> {
 async function renderUnlock(): Promise<Node[]> {
   const vs = await vaultState();
   if (!vs.locked) return [h('p', { class: 'ok' }, t('unlock.done'))];
-  return [unlockForm(t('pass.label'))];
+  return [unlockForm(t('pass.label'), (await listPasskeys()).length > 0)];
 }
 
 async function render() {

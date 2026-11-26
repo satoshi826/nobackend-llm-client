@@ -2,6 +2,7 @@
 import type { Part, ProviderEvent } from '../providers/types';
 import type { MessageRecord } from '../db/schema';
 import { t } from './messages';
+import { noteError } from '../error-log';
 
 export interface BlockMap {
   /** ProviderEvent index → position in the parts array */
@@ -79,7 +80,10 @@ export function applyEvent(msg: MessageRecord, ev: ProviderEvent, blocks: BlockM
     }
     case 'error': {
       msg.status = ev.error.kind === 'aborted' ? 'aborted' : 'error';
-      if (ev.error.kind !== 'aborted') msg.error = { kind: ev.error.kind, message: ev.error.message, hint: ev.error.hint };
+      if (ev.error.kind !== 'aborted') {
+        msg.error = { kind: ev.error.kind, message: ev.error.message, hint: ev.error.hint };
+        noteError({ source: 'chat', kind: ev.error.kind, status: ev.error.status, provider: msg.meta?.providerId, message: ev.error.message });
+      }
       break;
     }
     case 'start':

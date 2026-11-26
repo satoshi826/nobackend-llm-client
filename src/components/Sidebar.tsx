@@ -9,6 +9,7 @@ import { balanceAlerts } from '../state/balance';
 import { clearLeftoverLocalKeys, leftoverLocalKeys } from '../state/keys';
 import { dataLock, lockNow } from '../state/lock';
 import { providerById } from '../state/models';
+import { newerBuild } from '../state/version';
 import { openSettings, showToast, sidebarOpen, sidebarTab } from '../state/ui';
 import { Button, EmptyState, Icon, IconButton, RowHighlight, SearchField, Segmented, TextField, cx, useSelectedBox } from './ui';
 import { askConfirm } from './ConfirmDialog';
@@ -132,6 +133,16 @@ function Notices() {
           }
         >
           {t('side.delete')}
+        </button>
+      </div>
+    );
+  if (newerBuild.value)
+    items.push(
+      <div key="update" role="status" class="rounded-lg bg-glass-strong px-3 py-2 text-xs text-ink">
+        <div class="font-semibold text-ink-strong">{t('side.updateTitle')}</div>
+        {t('side.updateText')}
+        <button type="button" class="ml-1 underline" onClick={() => location.reload()}>
+          {t('side.updateReload')}
         </button>
       </div>
     );

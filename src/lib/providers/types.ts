@@ -35,7 +35,15 @@ export interface ModelInfo {
   contextLength?: number;
   maxOutputTokens?: number;
   capabilities: ModelCapabilities;
-  pricing?: { inputPerMTok?: number; outputPerMTok?: number; currency: 'USD' };
+  pricing?: {
+    inputPerMTok?: number;
+    outputPerMTok?: number;
+    /** Input read from the provider's prompt cache (when the provider prices it apart) */
+    cachedInputPerMTok?: number;
+    currency: 'USD';
+    /** Set when the price comes from the app's own price list (lib/providers/prices.ts), not the provider's API: that list's date */
+    listedAt?: string;
+  };
   privacy?: 'private' | 'anonymized' | 'unknown';
   tags?: string[];
   offline?: boolean;

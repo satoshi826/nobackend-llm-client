@@ -34,6 +34,7 @@ function VaultFrame({ params, title }: { params: Record<string, string>; title: 
       src={vaultViewUrl({ ...params, theme: dark ? 'dark' : 'light' })}
       title={title}
       referrerpolicy="no-referrer"
+      allow="publickey-credentials-get; publickey-credentials-create"
       class="block w-full rounded-lg border-0"
       style={{ height: `${height}px` }}
     />

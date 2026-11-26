@@ -48,7 +48,12 @@ function ModelRow({ m, selected, onPick, showProvider }: { m: ModelInfo; selecte
           <span class="truncate text-sm font-medium">{m.name}</span>
           {showProvider && <span class="shrink-0 text-xs text-muted">{providerById(m.providerId)?.name}</span>}
           {selected && <Icon name="check" class="size-4 shrink-0 text-ink-strong" />}
-          <span class="ml-auto shrink-0 text-xs text-muted tabular-nums" title={t('picker.priceTitle')}>
+          <span
+            class="ml-auto shrink-0 text-xs text-muted tabular-nums"
+            title={m.pricing?.listedAt ? `${t('picker.priceTitle')}
+${t('picker.priceListed', { date: m.pricing.listedAt })}` : t('picker.priceTitle')}
+          >
+            {m.pricing?.listedAt && '≈ '}
             {formatPrice(m.pricing?.inputPerMTok)} / {formatPrice(m.pricing?.outputPerMTok)}
           </span>
         </div>

@@ -9,6 +9,7 @@ import { decryptSecret, encryptSecret, MIN_PASSPHRASE_LENGTH, WrongPassphraseErr
 import { ACCOUNT_IDS, accountById, providerConfigOf, type KeyStatus, type VaultState } from '../src/lib/keys/accounts';
 import { formatList, formatNumber } from '../src/lib/i18n';
 import { t } from './messages';
+import { b64, b64url, openWithPrf, randomBytes, sealWithPrf, unb64, unb64url, type SealedPassphrase } from './passkey';
 
 // ---- Storage (IndexedDB) ----
 interface SecretRec {
@@ -26,6 +27,19 @@ interface MetaRec {
   check: EncryptedBlob;
   /** Passphrase ID (renewed every time it is set or changed) */
   pid?: string;
+}
+/** Passkeys that can unlock the vault (one record each, under this prefix + the credential id) */
+const PASSKEY_PREFIX = '__passkey__:';
+interface PasskeyRec extends SealedPassphrase {
+  id: string;
+  /** Credential id (base64url) */
+  credentialId: string;
+  /** PRF input (base64) */
+  salt: string;
+  /** Passphrase id it was made under (passkeys are removed when the passphrase changes) */
+  pid: string;
+  createdAt: number;
+  lastUsedAt?: number;
 }
 /** Marker for wrapping the app's data key (so the app cannot get other ciphertexts decrypted) */
 const DATA_KEY_PREFIX = 'nbl-data-key:';
@@ -53,12 +67,16 @@ async function idb<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRe
 }
 
 const getRec = (id: string) => idb<SecretRec | undefined>('readonly', (s) => s.get(id));
-const putRec = (r: SecretRec | MetaRec) => idb<unknown>('readwrite', (s) => s.put(r));
+const putRec = (r: SecretRec | MetaRec | PasskeyRec) => idb<unknown>('readwrite', (s) => s.put(r));
 const delRec = (id: string) => idb<unknown>('readwrite', (s) => s.delete(id));
 const getMeta = () => idb<MetaRec | undefined>('readonly', (s) => s.get(META_ID));
 async function allRecs(): Promise<SecretRec[]> {
-  const all = await idb<(SecretRec | MetaRec)[]>('readonly', (s) => s.getAll());
-  return all.filter((r): r is SecretRec => r.id !== META_ID);
+  const all = await idb<(SecretRec | MetaRec | PasskeyRec)[]>('readonly', (s) => s.getAll());
+  return all.filter((r): r is SecretRec => r.id !== META_ID && !r.id.startsWith(PASSKEY_PREFIX));
+}
+async function passkeyRecs(): Promise<PasskeyRec[]> {
+  const all = await idb<{ id: string }[]>('readonly', (s) => s.getAll());
+  return all.filter((r): r is PasskeyRec => r.id.startsWith(PASSKEY_PREFIX));
 }
 
 // ---- In-memory state (unlocked keys and passphrase) and sharing between vault pages ----
@@ -208,6 +226,8 @@ async function rewriteAll(next: string | null) {
     else mem.set(r.id, key);
   }
   const meta = await getMeta();
+  // Passkeys hold the passphrase itself, so a new (or no) passphrase makes them useless: remove them
+  if (next !== passphrase) for (const p of await passkeyRecs()) await delRec(p.id);
   if (next === null) await delRec(META_ID);
   // Keep the ID when re-aligning with the same passphrase (the app's data key need not be rewrapped)
   else await putRec({ id: META_ID, check: await encryptSecret(CHECK_TEXT, next), pid: meta?.pid && next === passphrase ? meta.pid : crypto.randomUUID() });
@@ -277,6 +297,140 @@ export async function unwrapDataKey(blob: EncryptedBlob): Promise<string> {
   const text = await decryptSecret(blob, passphrase);
   if (!text.startsWith(DATA_KEY_PREFIX)) throw new KeyError('auth', t('store.notDataKey'));
   return text.slice(DATA_KEY_PREFIX.length);
+}
+
+// ---- Passkeys (WebAuthn PRF; see passkey.ts) ----
+export interface PasskeyInfo {
+  credentialId: string;
+  createdAt: number;
+  lastUsedAt?: number;
+}
+
+/** Whether this browser can do passkeys with PRF: false when it says it cannot, undefined when it does not say */
+export async function passkeySupport(): Promise<boolean | undefined> {
+  const P = (globalThis as any).PublicKeyCredential;
+  if (!P || !navigator.credentials || !isSecureContext) return false;
+  try {
+    const caps = await P.getClientCapabilities?.();
+    if (caps && 'extension:prf' in caps) return !!caps['extension:prf'];
+  } catch {
+    /* not reported */
+  }
+  return undefined;
+}
+
+export async function listPasskeys(): Promise<PasskeyInfo[]> {
+  const pid = (await getMeta())?.pid ?? 'legacy';
+  return (await passkeyRecs())
+    .filter((p) => p.pid === pid)
+    .map(({ credentialId, createdAt, lastUsedAt }) => ({ credentialId, createdAt, lastUsedAt }))
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+function webauthnFailure(e: unknown): Result {
+  const name = (e as DOMException)?.name;
+  if (name === 'NotAllowedError' || name === 'AbortError') return { ok: false, message: t('passkey.cancelled') };
+  if (name === 'InvalidStateError') return { ok: false, message: t('passkey.exists') };
+  if (name === 'SecurityError' || name === 'NotSupportedError') return { ok: false, message: t('passkey.unsupported') };
+  return { ok: false, message: t('passkey.failed', { reason: String((e as Error)?.message ?? e) }) };
+}
+
+type PrfResult = { ok: true; credentialId: string; output: ArrayBuffer } | { ok: false; message: string };
+
+/** Ask the authenticator for PRF(salt) of one of these passkeys (user verification required) */
+async function prfOf(list: { credentialId: string; salt: string }[]): Promise<PrfResult> {
+  const prf =
+    list.length === 1
+      ? { eval: { first: unb64(list[0].salt) } }
+      : { evalByCredential: Object.fromEntries(list.map((c) => [c.credentialId, { first: unb64(c.salt) }])) };
+  let cred: PublicKeyCredential | null;
+  try {
+    cred = (await navigator.credentials.get({
+      publicKey: {
+        challenge: randomBytes(32),
+        allowCredentials: list.map((c) => ({ type: 'public-key' as const, id: unb64url(c.credentialId) })),
+        userVerification: 'required',
+        timeout: 120_000,
+        extensions: { prf } as AuthenticationExtensionsClientInputs
+      }
+    })) as PublicKeyCredential | null;
+  } catch (e) {
+    return { ok: false, message: webauthnFailure(e).message };
+  }
+  if (!cred) return { ok: false, message: t('passkey.cancelled') };
+  const output = (cred.getClientExtensionResults() as any).prf?.results?.first as ArrayBuffer | undefined;
+  if (!output) return { ok: false, message: t('passkey.noPrf') };
+  return { ok: true, credentialId: b64url(cred.rawId), output };
+}
+
+/** Register a passkey that can unlock the vault (needs a passphrase, and the vault unlocked) */
+export async function addPasskey(): Promise<Result> {
+  const vs = await vaultState();
+  if (!vs.hasPassphrase) return { ok: false, message: t('passkey.needPassphrase') };
+  if (passphrase === null) return { ok: false, message: t('store.unlockFirst') };
+  const pass = passphrase;
+  const salt = randomBytes(32);
+  const existing = await listPasskeys();
+  let cred: PublicKeyCredential | null;
+  try {
+    cred = (await navigator.credentials.create({
+      publicKey: {
+        rp: { name: t('passkey.rpName') },
+        user: { id: randomBytes(16), name: t('passkey.userName'), displayName: t('passkey.userName') },
+        challenge: randomBytes(32),
+        pubKeyCredParams: [
+          { type: 'public-key', alg: -7 },
+          { type: 'public-key', alg: -257 }
+        ],
+        excludeCredentials: existing.map((p) => ({ type: 'public-key' as const, id: unb64url(p.credentialId) })),
+        authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
+        timeout: 120_000,
+        extensions: { prf: { eval: { first: salt } } } as AuthenticationExtensionsClientInputs
+      }
+    })) as PublicKeyCredential | null;
+  } catch (e) {
+    return webauthnFailure(e);
+  }
+  if (!cred) return { ok: false, message: t('passkey.cancelled') };
+  const credentialId = b64url(cred.rawId);
+  const ext = (cred.getClientExtensionResults() as any).prf as { enabled?: boolean; results?: { first?: ArrayBuffer } } | undefined;
+  if (!ext?.enabled && !ext?.results?.first) return { ok: false, message: t('passkey.noPrf') };
+  // Some authenticators give the PRF output only when the passkey is used, not when it is made: ask once more
+  let output = ext.results?.first;
+  if (!output) {
+    const r = await prfOf([{ credentialId, salt: b64(salt) }]);
+    if (!r.ok) return { ok: false, message: r.message };
+    output = r.output;
+  }
+  const meta = await getMeta();
+  await putRec({ id: PASSKEY_PREFIX + credentialId, credentialId, salt: b64(salt), ...(await sealWithPrf(output, pass)), pid: meta?.pid ?? 'legacy', createdAt: Date.now() });
+  changed();
+  return { ok: true, message: t('passkey.added') };
+}
+
+export async function removePasskey(credentialId: string) {
+  await delRec(PASSKEY_PREFIX + credentialId);
+  changed();
+}
+
+/** Unlock with one of the registered passkeys */
+export async function unlockWithPasskey(): Promise<Result> {
+  const pid = (await getMeta())?.pid ?? 'legacy';
+  const recs = (await passkeyRecs()).filter((p) => p.pid === pid);
+  if (!recs.length) return { ok: false, message: t('passkey.none') };
+  const r = await prfOf(recs);
+  if (!r.ok) return { ok: false, message: r.message };
+  const rec = recs.find((p) => p.credentialId === r.credentialId);
+  if (!rec) return { ok: false, message: t('passkey.unknown') };
+  let pass: string;
+  try {
+    pass = await openWithPrf(r.output, rec);
+  } catch {
+    return { ok: false, message: t('passkey.unknown') };
+  }
+  const res = await unlock(pass);
+  if (res.ok) await putRec({ ...rec, lastUsedAt: Date.now() });
+  return res;
 }
 
 export function lock() {

@@ -20,10 +20,16 @@ export interface UsageRecord {
   conversationId?: string;
 }
 
-/** Estimate from prices (ignores cache-hit discounts on input, i.e. errs on the high side) */
+/**
+ * Estimate from prices. inputTokens includes cached input (every adapter reports it that way); cached input is
+ * charged at the cache price when the model has one, otherwise at the full input price (errs on the high side)
+ */
 export function estimateCost(u: Usage, pricing: ModelInfo['pricing'] | undefined): number | undefined {
   if (!pricing || (pricing.inputPerMTok == null && pricing.outputPerMTok == null)) return undefined;
-  return ((u.inputTokens ?? 0) * (pricing.inputPerMTok ?? 0) + (u.outputTokens ?? 0) * (pricing.outputPerMTok ?? 0)) / 1_000_000;
+  const input = u.inputTokens ?? 0;
+  const cached = pricing.cachedInputPerMTok != null ? Math.min(input, u.cachedInputTokens ?? 0) : 0;
+  const inPrice = pricing.inputPerMTok ?? 0;
+  return ((input - cached) * inPrice + cached * (pricing.cachedInputPerMTok ?? inPrice) + (u.outputTokens ?? 0) * (pricing.outputPerMTok ?? 0)) / 1_000_000;
 }
 
 export function makeUsageRecord(

@@ -7,7 +7,7 @@ import { getImage, getImageThumb } from '../../../lib/db/images';
 import { conversations, currentId, messages, openConversation, startNewChat } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
 import { modal, showToast } from '../../../state/ui';
-import { Button, Icon, Shimmer, Spinner, cx, IconButton } from '../../../components/ui';
+import { Button, Disclosure, Icon, Shimmer, Spinner, cx, IconButton } from '../../../components/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import {
   deleteImages,
@@ -219,10 +219,9 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
         </div>
       )}
       {img.enhancedPrompt && (
-        <details class="text-xs text-muted">
-          <summary class="cursor-pointer">{t('info.enhanced')}</summary>
-          <p class="mt-1 whitespace-pre-wrap">{img.enhancedPrompt}</p>
-        </details>
+        <Disclosure class="text-xs" summary={t('info.enhanced')}>
+          <p class="mt-1 whitespace-pre-wrap text-muted">{img.enhancedPrompt}</p>
+        </Disclosure>
       )}
       {m.status === 'done' && p.op === 'generate' && (
         <div class="flex flex-wrap gap-1.5">

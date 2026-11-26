@@ -63,7 +63,7 @@ function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet
           <span class="block truncate">{c.title}</span>
           {snippet && <span class="block truncate text-xs text-muted">{snippet}</span>}
         </span>
-        {live && <span class="ml-auto size-1.5 shrink-0 animate-pulse rounded-full bg-accent" aria-label={t('side.generating')} />}
+        {live && <span class="ml-auto size-1.5 shrink-0 motion-safe:animate-pulse rounded-full bg-accent" aria-label={t('side.generating')} />}
       </button>
       {/* Always shown on touch devices (no hover) */}
       <div class="hidden shrink-0 items-center pr-1 group-focus-within:flex group-hover:flex [@media(hover:none)]:flex">

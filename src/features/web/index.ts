@@ -1,5 +1,5 @@
 // The web feature: searching (the chat provider's own search, or the Tavily tool) and reading pages (fetch_url).
-// On by default; turned off in Settings → Web 検索 (no per-conversation switch).
+// On by default; turned off in Settings → Web (no per-conversation switch).
 // Importing this module registers it with the core through extension points.
 import { registerSettingsTab, registerToolView } from '../../components/extensions';
 import { SearchResults } from './components/Web';

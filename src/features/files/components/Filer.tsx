@@ -6,7 +6,7 @@ import { getImage } from '../../../lib/db/images';
 import { sidebarOpen } from '../../../state/ui';
 import { confirmAndDelete, deleteImages, ImageThumb, lightbox } from '../../images';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { Button, Icon, IconButton, Segmented, Select, Spinner, cx } from '../../../components/ui';
+import { Button, EmptyState, Icon, IconButton, Segmented, Select, Spinner, cx } from '../../../components/ui';
 import { filterItems, previewText, sortItems, type FilerItem } from '../filer';
 import {
   deleteFiles,
@@ -199,6 +199,7 @@ export function Filer() {
               <Icon name="x" class="size-4" />
             </button>
             <span class="tabular-nums">{t('filer.selected', { n: formatNumber(picked.size) })}</span>
+            {selectedFiles.length < selected.length && <span class="text-xs text-muted">{t('filer.imagesNotAttachable')}</span>}
             <Button class="text-xs" onClick={() => setPicked(picked.size === list.length ? new Set() : new Set(list.map((i) => i.key)))}>
               {picked.size === list.length ? t('filer.deselectAll') : t('filer.selectAll')}
             </Button>
@@ -206,7 +207,7 @@ export function Filer() {
               <Button
                 class="text-xs"
                 disabled={!selectedFiles.length}
-                title={selectedFiles.length === selected.length ? t('useInChatTitle') : t('filer.imagesNotAttachable')}
+                title={t('useInChatTitle')}
                 onClick={() => void useInChat(selectedFiles.map((f) => f.id))}
               >
                 <Icon name="paperclip" class="size-3.5" />
@@ -216,7 +217,7 @@ export function Filer() {
                 <Icon name="download" class="size-3.5" />
                 {t('download')}
               </Button>
-              <Button class="text-xs text-danger" onClick={() => void removeSelected()}>
+              <Button variant="danger" class="py-1! text-xs" onClick={() => void removeSelected()}>
                 <Icon name="trash" class="size-3.5" />
                 {t('delete')}
               </Button>
@@ -232,7 +233,7 @@ export function Filer() {
             {t('loading')}
           </p>
         ) : items.length === 0 && !importing.value.length ? (
-          <EmptyState view={view} filtered={!!conv || !!filerQuery.value.trim()} onUpload={() => input.current?.click()} />
+          <FilerEmpty view={view} filtered={!!conv || !!filerQuery.value.trim()} onUpload={() => input.current?.click()} />
         ) : prefs.layout === 'grid' ? (
           <div class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
             {importing.value.map((u) => (
@@ -259,10 +260,9 @@ export function Filer() {
   );
 }
 
-function EmptyState({ view, filtered, onUpload }: { view: FilerView; filtered: boolean; onUpload(): void }) {
+function FilerEmpty({ view, filtered, onUpload }: { view: FilerView; filtered: boolean; onUpload(): void }) {
   return (
-    <div class="mx-auto mt-16 max-w-sm text-center text-sm text-muted">
-      <Icon name="files" class="mx-auto mb-3 size-8 text-faint" />
+    <EmptyState icon={filtered ? 'search' : view === 'image' ? 'image' : 'files'} class="mx-auto mt-16 max-w-sm">
       {filtered ? (
         <p>{t('empty.filtered')}</p>
       ) : view === 'image' ? (
@@ -277,7 +277,7 @@ function EmptyState({ view, filtered, onUpload }: { view: FilerView; filtered: b
           </Button>
         </>
       )}
-    </div>
+    </EmptyState>
   );
 }
 
@@ -361,14 +361,14 @@ function ListView({ items, picked, onToggle, onOpen, onAll }: { items: FilerItem
       </thead>
       <tbody>
         {items.map((it, i) => (
-          <tr key={it.key} class={cx('border-b border-line', picked.has(it.key) ? 'bg-accent-soft' : 'hover:bg-glass')}>
+          <tr key={it.key} class={cx('border-b border-line', picked.has(it.key) && 'bg-accent-soft')}>
             <td class="py-1.5 pl-1">
               <Checkbox checked={picked.has(it.key)} label={t('filer.select', { name: it.name })} onToggle={(range) => onToggle(i, range)} />
             </td>
             <td class="py-1.5">
               <button
                 type="button"
-                class="flex w-full min-w-0 items-center gap-2 text-left"
+                class="flex w-full min-w-0 items-center gap-2 rounded-md text-left hover:text-ink-strong hover:underline"
                 onClick={(e) => (picked.size || e.ctrlKey || e.metaKey || e.shiftKey ? onToggle(i, e.shiftKey) : onOpen(it))}
               >
                 <Icon name={it.type === 'image' ? 'image' : it.kind === 'upload' ? 'paperclip' : 'file'} class="size-4 shrink-0 text-muted" />

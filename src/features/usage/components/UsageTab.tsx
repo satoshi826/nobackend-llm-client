@@ -6,7 +6,7 @@ import { summarizeUsage, type UsageRecord, type UsageTotals } from '../../../lib
 import { modelOf, providerById } from '../../../state/models';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { Button, Chip, Icon, IconButton, Segmented, cx } from '../../../components/ui';
+import { Button, Chip, EmptyState, Icon, IconButton, Segmented, cx } from '../../../components/ui';
 import { formatDate, formatNumber, formatDateTime } from '../../../lib/i18n';
 import { t } from '../messages';
 
@@ -188,7 +188,7 @@ export function UsageTab() {
       {!s ? (
         <p class="text-sm text-muted">{t('loading')}</p>
       ) : s.total.requests === 0 ? (
-        <p class="py-6 text-center text-sm text-muted">{t('empty')}</p>
+        <EmptyState icon="history">{t('empty')}</EmptyState>
       ) : (
         <>
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -242,7 +242,7 @@ export function UsageTab() {
       )}
       <div class="border-t border-line pt-4">
         <Button
-          variant="outline"
+          variant="danger"
           onClick={() =>
             void askConfirm({ title: t('clear.title'), message: t('clear.message'), confirmLabel: t('clear.confirm'), danger: true }).then(async (ok) => {
               if (!ok) return;

@@ -10,7 +10,7 @@ import { getPreset } from '../../lib/providers/registry';
 import { accountById } from '../../lib/keys/accounts';
 import { askConfirm } from '../ConfirmDialog';
 
-import { Button, Icon, TextField } from '../ui';
+import { Button, Icon, Spinner, TextField } from '../ui';
 import { Section,  } from '../settings-ui';
 import { t } from './messages';
 import { sentences } from '../messages';
@@ -124,11 +124,12 @@ export function PrivacyTab() {
               <TextField type="password" autocomplete="new-password" placeholder={t('privacy.passwordConfirmPlaceholder')} value={pw2} onInput={(e) => setPw2((e.target as HTMLInputElement).value)} aria-label={t('privacy.passwordConfirmLabel')} />
             </div>
           )}
+          {encrypt && pw1.length >= 8 && pw2 && pw1 !== pw2 && <p class="text-xs text-danger">{t('privacy.passwordMismatch')}</p>}
           <div class="flex flex-wrap gap-2">
             <Button
               variant="outline"
               disabled={busy || (encrypt && (pw1.length < 8 || pw1 !== pw2))}
-              title={encrypt && pw1.length >= 8 && pw1 !== pw2 ? t('privacy.passwordMismatch') : undefined}
+              aria-busy={busy}
               onClick={async () => {
                 setBusy(true);
                 try {
@@ -143,8 +144,8 @@ export function PrivacyTab() {
                 }
               }}
             >
-              <Icon name="download" />
-              {busy ? t('privacy.exporting') : t('privacy.export')}
+              {busy ? <Spinner class="size-4" /> : <Icon name="download" />}
+              {t('privacy.export')}
             </Button>
             <Button variant="outline" onClick={() => fileRef.current?.click()}>
               <Icon name="upload" />
@@ -199,7 +200,7 @@ export function PrivacyTab() {
       <Section title={t('privacy.deleteKeys')}>
         <p class="text-xs text-muted">{vaultState.value.hasPassphrase ? t('privacy.deleteKeysTextPass') : t('privacy.deleteKeysText')}</p>
         <Button
-          variant="outline"
+          variant="danger"
           onClick={() =>
             void askConfirm({
               title: t('privacy.deleteKeysTitle'),
@@ -213,7 +214,7 @@ export function PrivacyTab() {
             })
           }
         >
-          <Icon name="key" />
+          <Icon name="trash" />
           {t('privacy.deleteKeysTitle')}
         </Button>
       </Section>
@@ -233,6 +234,7 @@ export function PrivacyTab() {
             })
           }
         >
+          <Icon name="trash" />
           {t('privacy.wipeTitle')}
         </Button>
       </Section>

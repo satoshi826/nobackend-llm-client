@@ -17,7 +17,7 @@ export function FileToolDetail({ p }: { p: ToolPart }) {
     <div class="border-t border-line px-3 py-2">
       <button
         type="button"
-        class="flex w-full items-center gap-2 rounded-lg border border-line bg-glass px-3 py-2 text-left hover:bg-glass"
+        class="flex w-full items-center gap-2 rounded-lg border border-line bg-glass px-3 py-2 text-left hover:bg-glass-strong"
         onClick={() => void openFile(d.fileId)}
       >
         <Icon name="file" class="size-5 shrink-0 text-accent-text" />

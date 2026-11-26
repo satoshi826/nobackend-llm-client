@@ -288,7 +288,6 @@ export function Lightbox() {
             <IconButton
               class="text-white hover:bg-glass"
               label={t('lb.copyPrompt')}
-             
               onClick={() => void navigator.clipboard.writeText(promptText).then(() => showToast(t('lb.copied')))}
             >
               <Icon name="copy" />
@@ -307,7 +306,7 @@ export function Lightbox() {
                 <Icon name="scissors" class="size-4" />
                 {t('lb.removeBg')}
               </Button>
-              <Button class="text-xs text-white hover:bg-glass" disabled={isStreaming.value} aria-pressed={editing} title={t('lb.editTitle', { cost: usd(estimateCost({ ...OP_BASE, op: 'edit' }) ?? 0, 2) })} onClick={() => setEditing(!editing)}>
+              <Button class={cx('text-xs text-white hover:bg-glass', editing && 'bg-glass-strong')} disabled={isStreaming.value} aria-pressed={editing} title={t('lb.editTitle', { cost: usd(estimateCost({ ...OP_BASE, op: 'edit' }) ?? 0, 2) })} onClick={() => setEditing(!editing)}>
                 <Icon name="wand" class="size-4" />
                 {t('lb.edit')}
               </Button>
@@ -316,7 +315,6 @@ export function Lightbox() {
           <IconButton
             class="text-white hover:bg-glass"
             label={t('lb.delete')}
-           
             onClick={async () => {
               const cur = lightbox.value;
               if (!cur || !(await confirmAndDelete([item.blobId]))) return;
@@ -367,10 +365,10 @@ export function Lightbox() {
         {url ? <img src={url} alt={promptText || t('lb.alt')} class="max-h-full max-w-full object-contain" /> : <Spinner class="size-6" />}
         {lb.items.length > 1 && (
           <>
-            <button type="button" class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass" onClick={() => step(-1)} aria-label={t('lb.prev')} title={t('lb.prev')}>
+            <button type="button" class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass-strong" onClick={() => step(-1)} aria-label={t('lb.prev')} title={t('lb.prev')}>
               <Icon name="chevron-left" />
             </button>
-            <button type="button" class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass" onClick={() => step(1)} aria-label={t('lb.next')} title={t('lb.next')}>
+            <button type="button" class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass-strong" onClick={() => step(1)} aria-label={t('lb.next')} title={t('lb.next')}>
               <Icon name="chevron-right" />
             </button>
           </>

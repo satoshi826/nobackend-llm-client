@@ -3,7 +3,7 @@ import { useRef, useState } from 'preact/hooks';
 import type { MessageRecord, Skill } from '../../../lib/db/schema';
 import { openSettings } from '../../../state/ui';
 import type { ComposerApi } from '../../../components/extensions';
-import { Chip, Icon, cx } from '../../../components/ui';
+import { Chip, EmptyState, Icon, cx } from '../../../components/ui';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { allSkills, attachedSkillIds, attachedSkills, toggleAttachedSkill } from '../state';
 import { t } from '../messages';
@@ -42,7 +42,7 @@ function SkillMenu({ anchor, onClose }: { anchor: HTMLElement | null; onClose():
   return (
     <Popover anchor={anchor} onClose={onClose} label={t('composer.menu')} class="w-80 max-w-[calc(100vw-2rem)]">
       {list.length === 0 ? (
-        <p class="p-2 text-xs text-muted">{t('none')}</p>
+        <EmptyState icon="book" compact>{t('none')}</EmptyState>
       ) : (
         list.map((s) => (
           <MenuItem

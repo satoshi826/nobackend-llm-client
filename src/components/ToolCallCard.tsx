@@ -2,7 +2,7 @@
 // What is shown for each tool (label, icon, summary, details, approval note) comes from the tool views features register.
 import { useState } from 'preact/hooks';
 import { pendingApprovals, resolveApproval } from '../state/approvals';
-import { Button, Collapse, Icon, Shimmer, Spinner, TextField, cx } from './ui';
+import { Button, Chevron, Collapse, Icon, Shimmer, Spinner, TextField, cx } from './ui';
 import { textOf, toolViewFor, type ToolPart } from './extensions';
 import { sentences, t } from './messages';
 
@@ -103,13 +103,23 @@ export function ToolCallCard({ p, live, owner }: { p: ToolPart; live: boolean; o
   const Detail = view?.Detail;
   return (
     <div class="my-1.5 rounded-lg border border-line text-xs">
-      <button type="button" class="flex w-full items-center gap-1.5 px-3 py-1.5 text-left" onClick={() => hasDetails && setOpen(!open)} aria-expanded={hasDetails ? open : undefined}>
-        {running ? <Spinner class="size-3.5 text-accent-text" /> : <Icon name={view?.icon ?? 'wrench'} class="size-3.5 shrink-0" />}
-        <span class="shrink-0 font-medium">{labelOf(p.name)}</span>
-        <span class="min-w-0 truncate text-muted">{summary(p)}</span>
-        <span class={cx('ml-auto shrink-0', tone)}>{running ? <Shimmer>{status}</Shimmer> : status}</span>
-        {hasDetails && <Icon name="chevron-down" class={cx('size-3.5 shrink-0 transition', open && 'rotate-180')} />}
-      </button>
+      {hasDetails ? (
+        <button type="button" class="flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-left hover:bg-glass-strong" onClick={() => setOpen(!open)} aria-expanded={open}>
+          {running ? <Spinner class="size-3.5 text-accent-text" /> : <Icon name={view?.icon ?? 'wrench'} class="size-3.5 shrink-0" />}
+          <span class="shrink-0 font-medium">{labelOf(p.name)}</span>
+          <span class="min-w-0 truncate text-muted">{summary(p)}</span>
+          <span class={cx('ml-auto shrink-0', tone)}>{running ? <Shimmer>{status}</Shimmer> : status}</span>
+          {hasDetails && <Chevron open={open} />}
+        </button>
+      ) : (
+        <div class="flex w-full items-center gap-1.5 px-3 py-1.5">
+          {running ? <Spinner class="size-3.5 text-accent-text" /> : <Icon name={view?.icon ?? 'wrench'} class="size-3.5 shrink-0" />}
+          <span class="shrink-0 font-medium">{labelOf(p.name)}</span>
+          <span class="min-w-0 truncate text-muted">{summary(p)}</span>
+          <span class={cx('ml-auto shrink-0', tone)}>{running ? <Shimmer>{status}</Shimmer> : status}</span>
+          {hasDetails && <Chevron open={open} />}
+        </div>
+      )}
       {Detail && <Detail p={p} live={live} owner={owner} />}
       <Collapse open={open} class="border-t border-line px-3 py-2">
         {p.error && <p class="text-danger">{p.error}</p>}

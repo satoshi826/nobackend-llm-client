@@ -21,11 +21,12 @@ function ContextMeter() {
       aria-label={t('header.compact')}
       title={`${t('header.compactTitle')}\n${u.limit ? t('header.estimateWithLimit', { tokens: formatNumber(u.tokens), limit: formatNumber(u.limit) }) : t('header.estimate', { tokens: formatNumber(u.tokens) })}`}
       disabled={busy || isStreaming.value}
+      aria-busy={busy}
       onClick={() => compactConversation()}
       class={cx('text-xs', tone)}
     >
       {busy ? <Spinner class="size-4" /> : <Icon name="compress" class="size-4" />}
-      <span class="tabular-nums">{busy ? t('header.compacting') : pct != null ? `${pct}%` : `${Math.round(u.tokens / 1000)}K`}</span>
+      <span class="tabular-nums">{pct != null ? `${pct}%` : `${Math.round(u.tokens / 1000)}K`}</span>
     </Button>
   );
 }

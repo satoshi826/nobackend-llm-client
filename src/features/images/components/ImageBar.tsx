@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { aspectsOf, hasOption } from '../providers/common';
 import { ModelOptions } from './ModelOptions';
 import { openSettings } from '../../../state/ui';
-import { Button, Icon, Select, Spinner, TextField, cx } from '../../../components/ui';
+import { Button, Chevron, Collapse, Select, Spinner, TextField } from '../../../components/ui';
 import {
   currentImageModel,
   defaultImageModel,
@@ -111,22 +111,23 @@ export function ImageBar() {
         )}
         <button type="button" class="flex items-center gap-0.5 text-muted hover:text-ink" aria-expanded={details} onClick={() => setDetails(!details)}>
           {t('bar.details')}
-          <Icon name="chevron-down" class={cx('size-3 transition', details && 'rotate-180')} />
+          <Chevron open={details} />
         </button>
         <span class="ml-auto text-muted tabular-nums" title={t('bar.costTitle')}>
           {cost !== undefined ? t(d.enhancePrompt ? 'bar.costEnhance' : 'bar.cost', { cost: usd(cost, cost < 0.1 ? 3 : 2) }) : t('bar.costUnknown')}
         </span>
       </div>
-      {details && (
+      <Collapse open={details}>
         <div class="grid gap-1.5 sm:grid-cols-[1fr_auto]">
-          {hasOption(m, 'negativePrompt') && <TextField compact
-           
+          {hasOption(m, 'negativePrompt') && <TextField
+            compact
             placeholder={t('bar.negativePlaceholder')}
             value={d.negativePrompt}
             onInput={(e) => void setImageDefaults({ negativePrompt: (e.target as HTMLInputElement).value })}
             aria-label={t('bar.negative')}
           />}
-          {hasOption(m, 'seed') && <TextField compact
+          {hasOption(m, 'seed') && <TextField
+            compact
             class="w-32 tabular-nums"
             inputMode="numeric"
             placeholder={t('bar.seedPlaceholder')}
@@ -139,7 +140,7 @@ export function ImageBar() {
             {t('bar.enhance')}
           </label>}
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }

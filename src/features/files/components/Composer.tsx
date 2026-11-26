@@ -1,7 +1,7 @@
 // Input box pieces: the attach button (device / saved files) and the list of attached files
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Conversation, FileRecord } from '../../../lib/db/schema';
-import { Button, Icon, Modal, SearchField, Spinner, cx } from '../../../components/ui';
+import { Button, EmptyState, Icon, Modal, SearchField, Spinner, cx } from '../../../components/ui';
 import { MenuItem, Popover } from '../../../components/menu';
 import { ATTACH_INLINE_CHARS, attachExisting, detach, fileList, pendingAttachments, refreshFiles, uploadFiles } from '../state';
 import { formatChars, formatDate, FileIcon, typeLabel } from './common';
@@ -90,7 +90,7 @@ function FilePicker({ onClose }: { onClose(): void }) {
           {t('loading')}
         </p>
       ) : shown.length === 0 ? (
-        <p class="text-sm text-muted">{list.length ? t('picker.noMatch') : t('picker.empty')}</p>
+        <EmptyState icon={list.length ? 'search' : 'files'}>{list.length ? t('picker.noMatch') : t('picker.empty')}</EmptyState>
       ) : (
         <ul class="space-y-1">
           {shown.map((f: FileRecord) => (

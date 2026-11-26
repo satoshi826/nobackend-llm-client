@@ -3,7 +3,7 @@
 import type { Conversation, MessageRecord } from '../../../lib/db/schema';
 import type { Permission } from '../../../lib/tools/types';
 import { saveSettings, settings } from '../../../state/settings';
-import { Chip, Icon, Select, cx } from '../../../components/ui';
+import { Chip, Disclosure, Icon, Select, cx } from '../../../components/ui';
 import { PermissionSelect, Section, Toggle, } from '../../../components/settings-ui';
 import type { ToolPart } from '../../../components/extensions';
 import { useEffect } from 'preact/hooks';
@@ -134,10 +134,7 @@ function ToolRequestDetails({ p, ran }: { p: ToolPart; ran?: ToolRequest & { mod
       </div>
     ) : null;
   return (
-    <details class="border-t border-line px-3 py-2" open={!ran && p.state === 'approval-requested'}>
-      <summary class="cursor-pointer text-muted">
-        {t('detail.title')} · {req.model} · {cost}
-      </summary>
+    <Disclosure class="border-t border-line px-3 py-2" defaultOpen={!ran && p.state === 'approval-requested'} summary={`${t('detail.title')} · ${req.model} · ${cost}`}>
       <dl class="mt-2 space-y-1.5">
         {row(t('detail.model'), `${req.model}（${req.provider}）`)}
         {row(t('detail.prompt'), req.prompt, true)}
@@ -146,7 +143,7 @@ function ToolRequestDetails({ p, ran }: { p: ToolPart; ran?: ToolRequest & { mod
         {row(t('detail.cost'), cost)}
       </dl>
       {!ran && <p class="mt-2 text-faint">{t('detail.planned')}</p>}
-    </details>
+    </Disclosure>
   );
 }
 

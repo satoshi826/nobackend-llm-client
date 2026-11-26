@@ -4,7 +4,7 @@ import { showToast } from '../../../state/ui';
 import type { Skill } from '../../../lib/db/schema';
 import { DESCRIPTION_MAX, NAME_MAX, type SkillDraft } from '../../../lib/skills/skill';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { Button, Collapse, Icon, IconButton, TextArea, TextField } from '../../../components/ui';
+import { Button, Chevron, Collapse, EmptyState, Icon, IconButton, TextArea, TextField } from '../../../components/ui';
 import { skillSettings, builtinSkills, downloadSkill, importSkillFiles, removeSkill, saveSkill, setBuiltinEnabled, setModelInvocable, skills } from '../state';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
@@ -105,8 +105,9 @@ function BuiltinRow({ s }: { s: Skill }) {
               <input type="checkbox" checked={on} onChange={(e) => void setBuiltinEnabled(s.name, (e.target as HTMLInputElement).checked)} />
               {t('tab.use')}
             </label>
-            <button type="button" class="text-muted underline-offset-2 hover:underline" aria-expanded={open} onClick={() => setOpen(!open)}>
-              {open ? t('tab.hideBody') : t('tab.showBody')}
+            <button type="button" class="flex items-center gap-1 text-muted hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>
+              {t('tab.body')}
+              <Chevron open={open} />
             </button>
           </div>
           <Collapse open={open} class="pt-2">
@@ -148,6 +149,7 @@ function SkillRow({ s, onEdit }: { s: Skill; onEdit(): void }) {
           <IconButton
             label={t('tab.deleteAria', { name: s.name })}
             title={t('delete')}
+            variant="remove"
             onClick={() =>
               void askConfirm({ title: t('tab.deleteTitle'), message: t('tab.deleteMessage', { name: s.name }), confirmLabel: t('delete'), danger: true }).then((ok) => {
                 if (ok) void removeSkill(s.id);
@@ -211,7 +213,7 @@ export function SkillsTab() {
       <h4 class="text-xs font-semibold text-muted">{t('tab.yours')}</h4>
       {editing === 'new' && <SkillEditor onDone={() => setEditing(null)} />}
       {list.length === 0 && editing !== 'new' ? (
-        <p class="py-6 text-center text-sm text-muted">{t('none')}</p>
+        <EmptyState icon="book">{t('none')}</EmptyState>
       ) : (
         <ul class="space-y-2">
           {list.map((s) => (editing === s.id ? <SkillEditor key={s.id} skill={s} onDone={() => setEditing(null)} /> : <SkillRow key={s.id} s={s} onEdit={() => setEditing(s.id)} />))}

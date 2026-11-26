@@ -67,17 +67,19 @@ export function Icon({ name, class: className = 'size-4', filled }: { name: Icon
   );
 }
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'outline' | 'danger' };
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'outline' | 'danger' | 'remove' };
 
 export function Button({ variant = 'ghost', class: className, children, ...rest }: ButtonProps) {
-  // primary: the one main action of a view; outline = secondary (glass); ghost: toolbar / icon buttons; danger: destructive
+  // primary: the one main action of a view; outline = secondary (glass); ghost: toolbar / icon buttons;
+  // danger: a destructive action with a label (with the trash icon); remove: an icon-only delete, red only under the pointer
   const base =
     'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] text-sm font-medium transition duration-200 active:scale-[.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100';
   const v = {
     primary: 'bg-accent text-accent-ink hover:opacity-90 px-3.5 py-2',
     ghost: 'text-ink hover:bg-glass-strong px-2 py-1.5',
     outline: 'border border-line bg-glass hover:border-line-strong hover:bg-glass-strong px-3.5 py-2',
-    danger: 'bg-danger-soft text-danger border border-danger/40 hover:bg-danger/20 px-3.5 py-2'
+    danger: 'bg-danger-soft text-danger border border-danger/40 hover:bg-danger/20 px-3.5 py-2',
+    remove: 'text-ink hover:bg-danger-soft hover:text-danger px-2 py-1.5'
   }[variant];
   return (
     <button type="button" class={cx(base, v, className as string)} {...rest}>
@@ -92,6 +94,25 @@ export function Button({ variant = 'ghost', class: className, children, ...rest 
  */
 export function IconButton({ label, ...rest }: Omit<ButtonProps, 'aria-label'> & { label: string }) {
   return <Button aria-label={label} title={label} {...rest} />;
+}
+
+/** The arrow of anything that opens and closes: at the right end, pointing down, turned up while open */
+export function Chevron({ open, class: className }: { open: boolean; class?: string }) {
+  return <Icon name="chevron-down" class={cx('size-3.5 shrink-0 text-faint transition-transform duration-300', open && 'rotate-180', className)} />;
+}
+
+/** A summary line that opens and closes the content under it (results, request details) */
+export function Disclosure({ summary, defaultOpen = false, class: className, children }: { summary: ComponentChildren; defaultOpen?: boolean; class?: string; children: ComponentChildren }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div class={className}>
+      <button type="button" class="flex w-full items-center gap-2 text-left text-muted hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span class="min-w-0 flex-1">{summary}</span>
+        <Chevron open={open} />
+      </button>
+      <Collapse open={open}>{children}</Collapse>
+    </div>
+  );
 }
 
 /**
@@ -331,6 +352,16 @@ export function TabStrip<T extends string>({ tabs, value, onChange, label, class
           style={{ width: `${bar.w}px`, translate: `${bar.x}px 0` }}
         />
       )}
+    </div>
+  );
+}
+
+/** What a list or screen shows when it has nothing: centered and muted, an icon above, an optional action below */
+export function EmptyState({ icon, compact, class: className, children }: { icon?: IconName; compact?: boolean; class?: string; children: ComponentChildren }) {
+  return (
+    <div class={cx('text-center text-muted', compact ? 'px-2 py-3 text-xs' : 'py-8 text-sm', className)}>
+      {icon && <Icon name={icon} class={cx('mx-auto text-faint', compact ? 'mb-1.5 size-5' : 'mb-3 size-8')} />}
+      {children}
     </div>
   );
 }

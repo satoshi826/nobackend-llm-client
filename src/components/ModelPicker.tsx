@@ -10,7 +10,7 @@ import { modal, modelPickerTarget } from '../state/ui';
 import type { ModelInfo } from '../lib/providers/types';
 import { arrangeModels, FILTER_ORDER, matchesFilter, type ModelFilter, type ModelSort } from '../lib/model-list';
 import { PRESETS } from '../lib/providers/registry';
-import { Badge, Button, Collapse, Icon, Modal, SearchField, Select, Spinner, cx, formatCtx, formatPrice } from './ui';
+import { Badge, Button, Chevron, Collapse, EmptyState, Icon, Modal, SearchField, Select, Spinner, cx, formatCtx, formatPrice } from './ui';
 import { t } from './messages';
 
 function copyOf(providerId: string) {
@@ -155,14 +155,14 @@ function Section(props: {
     <section>
       <button
         type="button"
-        class="sticky top-0 z-10 flex w-full items-center gap-2 bg-glass px-1 py-2 text-left text-sm font-semibold"
+        class="sticky top-0 z-10 flex w-full items-center gap-2 rounded-lg bg-glass px-2 py-2 text-left text-sm font-semibold hover:bg-glass-strong"
         aria-expanded={open}
         onClick={toggle}
         disabled={props.forceOpen}
       >
-        <Icon name="chevron-down" class={cx('size-3.5 shrink-0 text-faint transition', !open && '-rotate-90')} />
         {props.title}
         <span class="ml-auto text-xs font-normal text-faint tabular-nums">{props.count}</span>
+        <Chevron open={open} />
       </button>
       <Collapse open={open} class="pb-2">
         {props.children}
@@ -212,7 +212,6 @@ export function ModelPicker() {
           <SearchField class="min-w-0 flex-1" placeholder={t('picker.searchPlaceholder')} label={t('picker.searchPlaceholder')} value={q} onInput={setQ} />
           <Select
             aria-label={t('picker.sortLabel')}
-           
             value={sort}
             onChange={(e) => saveSettings({ modelSort: (e.target as HTMLSelectElement).value as ModelSort })}
           >
@@ -237,9 +236,9 @@ export function ModelPicker() {
         )}
         <div class="flex items-center justify-between gap-2 text-xs text-muted">
           <span>{arranged.length === all.length ? t('picker.count', { n: all.length }) : t('picker.countFiltered', { shown: arranged.length, total: all.length })}</span>
-          <Button class="text-xs" onClick={() => refreshAllModels()} disabled={anyLoading}>
+          <Button class="text-xs" onClick={() => refreshAllModels()} disabled={anyLoading} aria-busy={anyLoading}>
             <Icon name="refresh" class={cx('size-3.5', anyLoading && 'motion-safe:animate-spin')} />
-            {anyLoading ? t('picker.loading') : t('picker.refresh')}
+            {t('picker.refresh')}
           </Button>
         </div>
 
@@ -305,7 +304,7 @@ export function ModelPicker() {
               </Section>
             );
           })}
-          {arranged.length === 0 && (searching || active.length > 0) && <p class="py-6 text-center text-sm text-muted">{t('picker.noMatch')}</p>}
+          {arranged.length === 0 && (searching || active.length > 0) && <EmptyState icon="search">{t('picker.noMatch')}</EmptyState>}
         </div>
       </div>
     </Modal>

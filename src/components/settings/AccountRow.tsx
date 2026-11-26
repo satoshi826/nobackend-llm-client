@@ -2,7 +2,7 @@
 import type { ComponentChildren } from 'preact';
 import { keyStatus } from '../../state/keys';
 import { accountById } from '../../lib/keys/accounts';
-import { Badge, Collapse, Icon, cx } from '../ui';
+import { Badge, Chevron, Collapse } from '../ui';
 import { t } from './messages';
 
 function KeyBadge({ id }: { id: string }) {
@@ -16,11 +16,11 @@ export function AccountRow(props: { id: string; title: string; host: string; ope
   return (
     <div class="rounded-lg border border-line">
       <div class="flex items-center gap-2 px-3 py-2">
-        <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={props.onToggle} aria-expanded={props.open}>
-          <Icon name="chevron-down" class={cx('size-3.5 shrink-0 transition', !props.open && '-rotate-90')} />
+        <button type="button" class="-mx-1.5 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-0.5 text-left hover:bg-glass-strong" onClick={props.onToggle} aria-expanded={props.open}>
           <span class="font-medium">{props.title}</span>
           <span class="truncate text-xs text-muted">{props.host}</span>
           <KeyBadge id={props.id} />
+          <Chevron open={props.open} class="ml-auto" />
         </button>
         {props.right}
       </div>

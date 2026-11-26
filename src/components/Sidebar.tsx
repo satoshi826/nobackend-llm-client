@@ -10,7 +10,7 @@ import { clearLeftoverLocalKeys, leftoverLocalKeys } from '../state/keys';
 import { dataLock, lockNow } from '../state/lock';
 import { providerById } from '../state/models';
 import { openSettings, showToast, sidebarOpen, sidebarTab } from '../state/ui';
-import { Button, Icon, IconButton, RowHighlight, SearchField, Segmented, TextField, cx, useSelectedBox } from './ui';
+import { Button, EmptyState, Icon, IconButton, RowHighlight, SearchField, Segmented, TextField, cx, useSelectedBox } from './ui';
 import { askConfirm } from './ConfirmDialog';
 import { sidebarTabs, textOf } from './extensions';
 import { t } from './messages';
@@ -71,7 +71,6 @@ function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet
         </IconButton>
         <IconButton
           label={t('side.rename')}
-         
           onClick={() => {
             setTitle(c.title);
             setRenaming(true);
@@ -82,8 +81,8 @@ function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet
         </IconButton>
         <IconButton
           label={t('side.delete')}
-         
-          class="px-1! hover:text-danger"
+          variant="remove"
+          class="px-1!"
           onClick={() =>
             void askConfirm({
               title: t('side.deleteTitle'),
@@ -247,7 +246,7 @@ export function Sidebar() {
               ))}
             </section>
           ))}
-          {list.length === 0 && <p class="px-2.5 py-4 text-sm text-muted">{q ? t('side.notFound') : t('side.empty')}</p>}
+          {list.length === 0 && <EmptyState icon={q ? 'search' : 'chat'}>{q ? t('side.notFound') : t('side.empty')}</EmptyState>}
         </nav>
         </>
         )}

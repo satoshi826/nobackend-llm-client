@@ -4,7 +4,6 @@ import { defineMessages } from '../src/lib/i18n';
 export const t = defineMessages(
   {
     // ---- Shared ----
-    'common.busy': '処理中…',
     'common.cancel': 'キャンセル',
     'common.delete': '削除',
     'common.unsupportedProvider': '未対応の接続先です。',
@@ -25,7 +24,6 @@ export const t = defineMessages(
 
     // ---- Unlocking ----
     'unlock.button': '解錠',
-    'unlock.busy': '解錠中…',
     'unlock.done': '解錠しました。',
     'unlock.partial': '解錠しました。{count} 件のキーは別のパスフレーズで暗号化されているため開けませんでした（削除して入れ直してください）。',
 
@@ -40,6 +38,7 @@ export const t = defineMessages(
     'key.registeredLast4Encrypted': '登録済みのキー: ••••{last4}（暗号化済み）',
     'key.hosts': '送信先: {hosts}',
     'key.deleted': 'キーを削除しました。',
+    'key.deleteWarning': '{name} の API キーを削除します。元に戻せません。',
     'key.show': '表示',
     'key.hide': '隠す',
     'key.revealNote': 'キーを表示するには、パスフレーズをもう一度入力してください',
@@ -47,7 +46,6 @@ export const t = defineMessages(
     'key.label': '{name} の API キー',
     'key.replace': 'キーを差し替える',
     'key.save': '確認して保存',
-    'key.checking': '確認中…',
     'key.encryptNote': 'パスフレーズで暗号化して保存します。',
     'key.plainNoteBrowser': 'このブラウザに保存します。暗号化したい場合は、設定の「接続とキー」でパスフレーズを設定してください。',
     'key.plainNoteVault': 'この金庫に保存します。暗号化したい場合は、設定の「接続とキー」でパスフレーズを設定してください。',
@@ -60,7 +58,6 @@ export const t = defineMessages(
     'security.setButton': 'パスフレーズを設定',
     'security.setupHint': '{min} 文字以上にしてください。このブラウザでアプリを開くたびに 1 回入力します。',
     'security.unencrypted': 'キーと会話は暗号化せずに保存されています。パスフレーズを設定すると、API キーと会話（保存済みのプロンプト・スキルを含む）をすべて暗号化し、アプリを開くたびに 1 回の解錠が必要になります。',
-    'security.encrypting': '暗号化中…',
     'security.unlockLabel': 'パスフレーズで解錠',
     'security.forgotten': 'パスフレーズを忘れた場合は元に戻せません。',
     'security.unlocked': 'キーと会話はパスフレーズで暗号化されています（解錠中）',
@@ -68,9 +65,7 @@ export const t = defineMessages(
     'security.lock': 'ロック',
     'security.change': '変更',
     'security.changeOpen': 'パスフレーズを変更',
-    'security.reencrypting': '暗号化し直しています…',
     'security.remove': 'パスフレーズを外す',
-    'security.decrypting': '復号しています…',
     'security.removeWarning': 'API キーと会話を暗号化せずに保存し直します。端末のデータやバックアップからの流出に弱くなり、解錠なしで開けるようになります。',
     'security.clearAll': 'すべてのキーを削除',
     'security.clearAllWarning': '保存されているすべての API キーを削除します。元に戻せません。',
@@ -96,7 +91,6 @@ export const t = defineMessages(
   },
   {
     en: {
-      'common.busy': 'Working…',
       'common.cancel': 'Cancel',
       'common.delete': 'Delete',
       'common.unsupportedProvider': 'This provider is not supported.',
@@ -115,7 +109,6 @@ export const t = defineMessages(
       'pass.mismatch': 'The passphrases do not match. Enter the same one twice.',
 
       'unlock.button': 'Unlock',
-      'unlock.busy': 'Unlocking…',
       'unlock.done': 'Unlocked.',
       'unlock.partial': 'Unlocked. Could not open {count} of the keys because they were encrypted with a different passphrase (delete them and enter them again).',
 
@@ -129,6 +122,7 @@ export const t = defineMessages(
       'key.registeredLast4Encrypted': 'Saved key: ••••{last4} (encrypted)',
       'key.hosts': 'Sent to: {hosts}',
       'key.deleted': 'Key deleted.',
+      'key.deleteWarning': 'This deletes the {name} API key. This can’t be undone.',
       'key.show': 'Show',
       'key.hide': 'Hide',
       'key.revealNote': 'Enter your passphrase again to show the key',
@@ -136,7 +130,6 @@ export const t = defineMessages(
       'key.label': '{name} API key',
       'key.replace': 'Replace key',
       'key.save': 'Check and save',
-      'key.checking': 'Checking…',
       'key.encryptNote': 'The key is encrypted with your passphrase before it is saved.',
       'key.plainNoteBrowser': 'The key is saved in this browser. To encrypt it, set a passphrase in Settings → Connections and keys.',
       'key.plainNoteVault': 'The key is saved in this vault. To encrypt it, set a passphrase in Settings → Connections and keys.',
@@ -148,7 +141,6 @@ export const t = defineMessages(
       'security.setButton': 'Set passphrase',
       'security.setupHint': 'Use at least {min} characters. You enter it once each time you open the app in this browser.',
       'security.unencrypted': 'Keys and conversations are stored unencrypted. Setting a passphrase encrypts all API keys and conversations (including saved prompts and skills), and the app needs to be unlocked once each time you open it.',
-      'security.encrypting': 'Encrypting…',
       'security.unlockLabel': 'Unlock with your passphrase',
       'security.forgotten': 'A forgotten passphrase cannot be recovered.',
       'security.unlocked': 'Keys and conversations are encrypted with your passphrase (unlocked)',
@@ -156,9 +148,7 @@ export const t = defineMessages(
       'security.lock': 'Lock',
       'security.change': 'Change',
       'security.changeOpen': 'Change passphrase',
-      'security.reencrypting': 'Re-encrypting…',
       'security.remove': 'Remove passphrase',
-      'security.decrypting': 'Decrypting…',
       'security.removeWarning': 'API keys and conversations will be saved again without encryption. They become more exposed to leaks from device data or backups, and the app opens without unlocking.',
       'security.clearAll': 'Delete all keys',
       'security.clearAllWarning': 'All saved API keys will be deleted. This cannot be undone.',
@@ -182,7 +172,6 @@ export const t = defineMessages(
       'store.noKey': 'The {name} key is not set or is locked. Set the key or unlock.'
     },
     zh: {
-      'common.busy': '处理中…',
       'common.cancel': '取消',
       'common.delete': '删除',
       'common.unsupportedProvider': '不支持此服务商。',
@@ -201,7 +190,6 @@ export const t = defineMessages(
       'pass.mismatch': '两次输入的口令不一致。请输入相同的口令。',
 
       'unlock.button': '解锁',
-      'unlock.busy': '正在解锁…',
       'unlock.done': '已解锁。',
       'unlock.partial': '已解锁。有 {count} 个密钥是用其他口令加密的，无法打开（请删除后重新输入）。',
 
@@ -215,6 +203,7 @@ export const t = defineMessages(
       'key.registeredLast4Encrypted': '已保存的密钥：••••{last4}（已加密）',
       'key.hosts': '发送到：{hosts}',
       'key.deleted': '已删除密钥。',
+      'key.deleteWarning': '将删除 {name} 的 API 密钥。此操作无法撤销。',
       'key.show': '显示',
       'key.hide': '隐藏',
       'key.revealNote': '请再次输入口令以显示密钥',
@@ -222,7 +211,6 @@ export const t = defineMessages(
       'key.label': '{name} 的 API 密钥',
       'key.replace': '替换密钥',
       'key.save': '验证并保存',
-      'key.checking': '正在验证…',
       'key.encryptNote': '将用口令加密后保存。',
       'key.plainNoteBrowser': '将保存在此浏览器中。如需加密，请在设置的“连接与密钥”中设置口令。',
       'key.plainNoteVault': '将保存在此保险库中。如需加密，请在设置的“连接与密钥”中设置口令。',
@@ -234,7 +222,6 @@ export const t = defineMessages(
       'security.setButton': '设置口令',
       'security.setupHint': '至少 {min} 个字符。每次在此浏览器中打开应用时需输入一次。',
       'security.unencrypted': '密钥和对话目前未加密保存。设置口令后，所有 API 密钥和对话（包括已保存的提示词和技能）都会被加密，每次打开应用时需要解锁一次。',
-      'security.encrypting': '正在加密…',
       'security.unlockLabel': '用口令解锁',
       'security.forgotten': '忘记口令后将无法恢复。',
       'security.unlocked': '密钥和对话已用口令加密（已解锁）',
@@ -242,9 +229,7 @@ export const t = defineMessages(
       'security.lock': '锁定',
       'security.change': '更改',
       'security.changeOpen': '更改口令',
-      'security.reencrypting': '正在重新加密…',
       'security.remove': '移除口令',
-      'security.decrypting': '正在解密…',
       'security.removeWarning': 'API 密钥和对话将重新以未加密的方式保存。设备数据或备份泄露时更容易暴露，并且无需解锁即可打开。',
       'security.clearAll': '删除所有密钥',
       'security.clearAllWarning': '将删除所有已保存的 API 密钥。此操作无法撤销。',

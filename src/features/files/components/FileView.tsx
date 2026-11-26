@@ -133,7 +133,6 @@ export function FileView({ id = '' }: { id?: string }) {
             <label class="flex items-center gap-1 text-xs text-muted">
               <Icon name="history" class="size-3.5" />
               <Select compact
-               
                 value={String(shown.v)}
                 aria-label={t('file.versionLabel')}
                 onChange={(e) => setViewV(Number((e.target as HTMLSelectElement).value))}
@@ -189,8 +188,7 @@ export function FileView({ id = '' }: { id?: string }) {
           )}
           <IconButton
             label={t('delete')}
-           
-            class="hover:text-danger"
+            variant="remove"
             onClick={async () => {
               if (await askConfirm({ title: t('file.deleteTitle'), message: t('file.deleteMessage', { name: f.name }), confirmLabel: t('delete'), danger: true })) await deleteFiles([f.id]);
             }}

@@ -78,7 +78,7 @@ function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, 
 const root = document.getElementById('root')!;
 let message: { ok: boolean; text: string } | null = null;
 /** Action awaiting the second confirmation step (no confirm()) */
-let confirming: 'clear-all' | null = null;
+let confirming: 'clear-all' | 'delete-key' | null = null;
 /** Whether the passphrase change/remove form is open */
 let passMode: 'idle' | 'change' | 'remove' = 'idle';
 /** Showing the saved key: asking for the passphrase, or the key shown in full */
@@ -95,10 +95,11 @@ function show(m: { ok: boolean; text: string }) {
   void render();
 }
 
-async function run(btn: HTMLButtonElement, busy: string, fn: () => Promise<{ ok: boolean; message: string }>) {
+/** Run a button's action: the button keeps its label and shows a spinner over it (aria-busy) until it is done */
+async function run(btn: HTMLButtonElement, fn: () => Promise<{ ok: boolean; message: string }>) {
   message = null;
   btn.disabled = true;
-  btn.textContent = busy;
+  btn.setAttribute('aria-busy', 'true');
   const r = await fn();
   show({ ok: r.ok, text: r.message });
 }
@@ -126,12 +127,12 @@ function unlockForm(note: string): HTMLElement {
       message = null;
       error.textContent = '';
       btn.disabled = true;
-      btn.textContent = t('unlock.busy');
+      btn.setAttribute('aria-busy', 'true');
       const r = await unlock(pass.value);
       if (r.ok) return show({ ok: true, text: r.message });
       // Keep what was typed so the user can fix it, instead of re-rendering the whole page
       btn.disabled = false;
-      btn.textContent = t('unlock.button');
+      btn.removeAttribute('aria-busy');
       error.textContent = r.message;
       pass.focus();
       pass.select();
@@ -192,17 +193,12 @@ function revealForm(id: string): HTMLElement {
   );
 }
 
-/** Dangerous action with a confirm button */
-function dangerAction(kind: 'clear-all', label: string, warning: string, action: () => Promise<{ ok: boolean; message: string }>): HTMLElement {
-  if (confirming !== kind)
-    return h('button', { type: 'button', class: 'btn outline', onclick: () => {
-      confirming = kind;
-      void render();
-    } }, label);
+/** The second step of a destructive action: what will happen, then the action or cancel */
+function confirmCard(warning: string, label: string, action: () => Promise<{ ok: boolean; message: string }>): HTMLElement {
   const yes = h('button', { type: 'button', class: 'btn danger' }, label);
   yes.addEventListener('click', () => {
     confirming = null;
-    void run(yes, t('common.busy'), action);
+    void run(yes, action);
   });
   return h(
     'div',
@@ -213,6 +209,15 @@ function dangerAction(kind: 'clear-all', label: string, warning: string, action:
       void render();
     } }, t('common.cancel')))
   );
+}
+
+/** Dangerous action: a button that turns into its confirm card */
+function dangerAction(kind: 'clear-all', label: string, warning: string, action: () => Promise<{ ok: boolean; message: string }>): HTMLElement {
+  if (confirming === kind) return confirmCard(warning, label, action);
+  return h('button', { type: 'button', class: 'btn danger', onclick: () => {
+    confirming = kind;
+    void render();
+  } }, label);
 }
 
 /** Key of one provider (add, show, replace, delete). Unlock if the vault is locked */
@@ -258,12 +263,19 @@ async function renderKey(id: string): Promise<Node[]> {
           shown && h('div', { class: 'mono secret' }, shown),
           h('div', { class: 'muted' }, t('key.hosts', { hosts: formatList(st.hosts) }))
         ),
-        h('div', { class: 'btns' }, toggle, h('button', { type: 'button', class: 'btn outline', onclick: async () => {
-          await remove(id);
-          show({ ok: true, text: t('key.deleted') });
+        h('div', { class: 'btns' }, toggle, h('button', { type: 'button', class: 'btn danger', onclick: () => {
+          confirming = 'delete-key';
+          void render();
         } }, t('common.delete')))
       )
     );
+    if (confirming === 'delete-key')
+      nodes.push(
+        confirmCard(t('key.deleteWarning', { name }), t('common.delete'), async () => {
+          await remove(id);
+          return { ok: true, message: t('key.deleted') };
+        })
+      );
     if (reveal === 'asking') nodes.push(revealForm(id));
   }
   const key = h('input', { type: 'password', autocomplete: 'off', spellcheck: 'false', placeholder: t('key.placeholder', { name }), class: 'mono', 'aria-label': t('key.label', { name }) });
@@ -273,7 +285,7 @@ async function renderKey(id: string): Promise<Node[]> {
       'form',
       { class: 'stack', onsubmit: (e: Event) => {
         e.preventDefault();
-        void run(submit, t('key.checking'), () => saveKey(id, key.value));
+        void run(submit, () => saveKey(id, key.value));
       } },
       h('label', {}, st.present ? t('key.replace') : t('key.label', { name }), key),
       h('p', { class: 'muted' }, vs.hasPassphrase ? t('key.encryptNote') : isolated === false ? t('key.plainNoteBrowser') : t('key.plainNoteVault')),
@@ -303,7 +315,7 @@ async function renderSecurity(): Promise<Node[]> {
           e.preventDefault();
           const err = f.check();
           if (err) return show({ ok: false, text: err });
-          void run(btn, t('security.encrypting'), () => setPassphrase(f.p1.value));
+          void run(btn, () => setPassphrase(f.p1.value));
         } },
         f.box,
         btn
@@ -335,7 +347,7 @@ async function renderSecurity(): Promise<Node[]> {
             e.preventDefault();
             const err = f.check();
             if (err) return show({ ok: false, text: err });
-            void run(btn, t('security.reencrypting'), async () => {
+            void run(btn, async () => {
               const r = await setPassphrase(f.p1.value, current.value);
               if (r.ok) passMode = 'idle';
               return r;
@@ -354,7 +366,7 @@ async function renderSecurity(): Promise<Node[]> {
           'form',
           { class: 'stack card', onsubmit: (e: Event) => {
             e.preventDefault();
-            void run(btn, t('security.decrypting'), async () => {
+            void run(btn, async () => {
               const r = await removePassphrase(current.value);
               if (r.ok) passMode = 'idle';
               return r;

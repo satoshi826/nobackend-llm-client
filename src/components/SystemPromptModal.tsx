@@ -4,7 +4,8 @@ import { saveSettings, settings } from '../state/settings';
 import { modal, showToast } from '../state/ui';
 import * as repo from '../lib/db/repo';
 import type { SavedPrompt } from '../lib/db/schema';
-import { Button, Icon, IconButton, Modal, TextArea, TextField } from './ui';
+import { Button, EmptyState, Icon, IconButton, Modal, TextArea, TextField } from './ui';
+import { askConfirm } from './ConfirmDialog';
 import { t } from './messages';
 
 export function SystemPromptModal() {
@@ -89,7 +90,9 @@ export function SystemPromptModal() {
                 </button>
                 <IconButton
                   label={t('sys.deleteNamed', { name: p.name })}
+                  variant="remove"
                   onClick={async () => {
+                    if (!(await askConfirm({ title: t('sys.deleteTitle'), message: t('sys.deleteMessage', { name: p.name }), confirmLabel: t('sys.delete'), danger: true }))) return;
                     await repo.deletePrompt(p.id);
                     setSaved(saved.filter((x) => x.id !== p.id));
                   }}
@@ -98,7 +101,11 @@ export function SystemPromptModal() {
                 </IconButton>
               </li>
             ))}
-            {saved.length === 0 && <li class="text-xs text-muted">{t('sys.none')}</li>}
+            {saved.length === 0 && (
+              <li>
+                <EmptyState compact>{t('sys.none')}</EmptyState>
+              </li>
+            )}
           </ul>
         </section>
       </div>

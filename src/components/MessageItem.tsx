@@ -12,7 +12,7 @@ import { composerFocus, composerText, openModelPicker, showToast } from '../stat
 import { Markdown } from './Markdown';
 import { ToolCallCard } from './ToolCallCard';
 import { assistantExtras, toolViewFor, userMessageExtras } from './extensions';
-import { Button, Collapse, Dots, Icon, IconButton, Shimmer, Spinner, TextArea, cx } from './ui';
+import { Button, Chevron, Collapse, Dots, Icon, IconButton, Shimmer, Spinner, TextArea, cx } from './ui';
 import { t } from './messages';
 import { formatNumber } from '../lib/i18n';
 
@@ -53,11 +53,11 @@ function Reasoning({ part, streaming }: { part: Extract<Part, { type: 'reasoning
   const active = streaming && part.state === 'streaming';
   return (
     <div class="mb-3 rounded-lg border border-line">
-      <button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted" onClick={() => setOpen(!open)} aria-expanded={open}>
+      <button type="button" class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-muted hover:text-ink" onClick={() => setOpen(!open)} aria-expanded={open}>
         <Icon name="brain" class={cx('size-3.5', active && 'text-accent-text motion-safe:animate-pulse')} />
         {active ? <Shimmer>{t('msg.thinking')}</Shimmer> : <span>{t('msg.reasoning')}</span>}
         <span class="text-faint">{t('msg.chars', { n: formatNumber(part.text.length) })}</span>
-        <Icon name="chevron-down" class={cx('ml-auto size-3.5 transition', open && 'rotate-180')} />
+        <Chevron open={open} class="ml-auto" />
       </button>
       <Collapse open={open} class="border-t border-line px-3 py-2 text-[13px] whitespace-pre-wrap text-muted">
         {part.text}
@@ -202,8 +202,8 @@ function UserText({ text }: { text: string }) {
           aria-expanded={open}
           onClick={() => setOpen(!open)}
         >
-          <Icon name="chevron-down" class={cx('size-3.5 transition-transform duration-300', open && 'rotate-180')} />
           {open ? t('msg.collapse') : t('msg.expand', { lines: formatNumber(lines), chars: formatNumber(text.length) })}
+          <Chevron open={open} />
         </button>
       )}
     </div>
@@ -264,7 +264,6 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
             {!owned && (
               <IconButton
                 label={t('msg.regenerateOther')}
-               
                 disabled={isStreaming.value}
                 class="-ml-1 px-1!"
                 onClick={() => openModelPicker({ kind: 'regenerate', assistantId: m.id })}
@@ -308,7 +307,7 @@ function CompactionDivider({ m }: { m: MessageRecord }) {
         <button type="button" class="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-glass-strong" onClick={() => setOpen(!open)} aria-expanded={open}>
           <Icon name="compress" class="size-3.5" />
           {t(c.auto ? 'msg.compactedAuto' : 'msg.compacted', { n: formatNumber(c.count) })}
-          <Icon name="chevron-down" class={cx('size-3.5 transition', open && 'rotate-180')} />
+          <Chevron open={open} />
         </button>
         <span class="h-px flex-1 bg-glass-strong" />
       </div>

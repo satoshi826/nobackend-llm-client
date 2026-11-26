@@ -75,7 +75,7 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'outline' | 'danger' }) {
   // primary: the one main action of a view; outline = secondary (glass); ghost: toolbar / icon buttons; danger: destructive
   const base =
-    'inline-flex items-center justify-center gap-1.5 rounded-[10px] text-sm font-medium transition duration-200 active:scale-[.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100';
+    'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] text-sm font-medium transition duration-200 active:scale-[.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100';
   const v = {
     primary: 'bg-accent text-accent-ink hover:opacity-90 px-3.5 py-2',
     ghost: 'text-ink hover:bg-glass-strong px-2 py-1.5',

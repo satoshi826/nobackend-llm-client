@@ -58,4 +58,4 @@ Natural mainland UI wording, full-width punctuation, no space between Chinese an
 | 版 | version | 版本 |
 | 指示（システムプロンプト） | instructions (system prompt) | 指令（系统提示词） |
 | 思考 | reasoning | 思考 |
-| 文脈長 | context length | 上下文长度 |
+| コンテキスト長 | context length | 上下文长度 |

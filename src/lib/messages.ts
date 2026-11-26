@@ -6,7 +6,7 @@ export const t = defineMessages(
     'sort.recommended': 'おすすめ順',
     'sort.name': '名前順',
     'sort.price': '安い順',
-    'sort.context': '文脈が長い順',
+    'sort.context': 'コンテキストが長い順',
     'filter.reasoning': '思考',
     'filter.vision': '画像',
     'filter.webSearch': '検索',

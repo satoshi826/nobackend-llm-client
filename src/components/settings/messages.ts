@@ -59,9 +59,9 @@ export const t = defineMessages(
     /** {icon} is replaced by the compaction icon */
     'chat.lengthText': '送信のたびに、それまでの会話（表示中の枝）をまとめて送ります。長くなったら、ヘッダーの {icon} で古い部分を要約に置き換えられます（元の履歴は残ります）。',
     'chat.autoCompact': '長くなったら自動で圧縮する',
-    'chat.autoCompactDesc': '送ろうとしている入力が文脈長の目安を超えたら、送信前に要約します（要約 1 回ぶんの料金がかかります）。',
+    'chat.autoCompactDesc': '送ろうとしている入力がコンテキスト長の目安を超えたら、送信前に要約します（要約 1 回ぶんの料金がかかります）。',
     'chat.compactThreshold': '自動で圧縮する目安',
-    'chat.compactThresholdOption': '文脈長の {n}%',
+    'chat.compactThresholdOption': 'コンテキスト長の {n}%',
     'chat.compactModel': '要約に使うモデル',
     'chat.resendReasoning': '前回までの思考をモデルに送り返す',
     'chat.resendReasoningDesc': '思考するモデルの思考内容を次の送信にも含めます。提供元によっては推奨されていますが、思考のトークンにも毎回課金されます。',

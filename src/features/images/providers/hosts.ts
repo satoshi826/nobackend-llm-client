@@ -1,0 +1,162 @@
+// Image generation on the open-model hosts that offer an OpenAI-style Images API: NanoGPT, DeepInfra, Together.
+// They use the same key as their chat provider (account). Requests from a browser are allowed (checked 2026-11-26).
+// Images come back as base64 (a URL answer could not be fetched: the app reaches only fixed hosts), and their type
+// is read from the bytes, since the APIs do not say it.
+// - NanoGPT: its own image model list (no key), each model with its own size names and a price per size; the sizes
+//   are offered as they are, in the aspect menu, and sent as `size`
+// - DeepInfra: image models in the chat model list (tag image-gen), a price per image; sizes as width x height
+// - Together: image models in its keyed model list (type image); no prices in the list
+import type { ImageParams } from '../../../lib/db/schema';
+import type { AuthRef, ProviderConfig, Transport } from '../../../lib/providers/types';
+import { joinUrl } from '../../../lib/providers/openai-compatible';
+import type { ImageProvider } from './types';
+import { DEFAULT_ASPECTS, ImageApiError, jsonPost, sendImageRequest, type ImageModelInfo } from './common';
+import { t } from '../messages';
+
+const num = (x: unknown): number | undefined => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
+
+/** width x height for the shared aspect ratios (multiples of 64, about one megapixel) */
+const SIZES: Record<string, [number, number]> = { '1:1': [1024, 1024], '4:3': [1152, 896], '3:4': [896, 1152], '16:9': [1344, 768], '9:16': [768, 1344] };
+export const sizeFor = (aspect: string | undefined): [number, number] => SIZES[aspect ?? '1:1'] ?? SIZES['1:1'];
+
+/** The image type from its first bytes (PNG, JPEG, WebP, GIF); PNG when unknown */
+export function sniffMime(bytes: Uint8Array): string {
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'image/jpeg';
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif';
+  if (bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
+  return 'image/png';
+}
+
+function fromBase64(b64: string): Blob {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: sniffMime(bytes) });
+}
+
+/** POST {base}/images/generations and read the base64 images out of data[] */
+async function generateImages(cfg: ProviderConfig, transport: Transport, auth: AuthRef | undefined, body: Record<string, unknown>, signal?: AbortSignal) {
+  const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'images/generations'), jsonPost(body, signal), auth);
+  const data = await res.json();
+  const images = (Array.isArray(data?.data) ? data.data : []).filter((x: any) => typeof x?.b64_json === 'string').map((x: any) => fromBase64(x.b64_json));
+  if (!images.length) throw new ImageApiError({ kind: 'bad-request', message: t('err.noImage') });
+  const cost = num(data?.cost) ?? num(data?.usage?.cost);
+  return { images, ...(cost !== undefined ? { costUsd: cost } : {}) };
+}
+
+const variants = (p: ImageParams, max = 4) => Math.min(max, Math.max(1, p.variants));
+
+// ---- NanoGPT ----
+export function mapNanoImageModel(raw: any, providerId = 'nanogpt'): ImageModelInfo | null {
+  const id = typeof raw?.id === 'string' ? raw.id : '';
+  const inputs: string[] = raw?.architecture?.input_modalities ?? [];
+  // Text-to-image only (not background removal or other image-in tools)
+  if (!id || !inputs.includes('text') || raw?.capabilities?.image_generation === false) return null;
+  const sizes: string[] = Array.isArray(raw?.supported_parameters?.resolutions) ? raw.supported_parameters.resolutions.filter((s: unknown) => typeof s === 'string') : [];
+  const prices: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw?.pricing?.per_image ?? {})) if (typeof v === 'number') prices[k] = v;
+  return {
+    providerId,
+    id,
+    name: typeof raw.name === 'string' ? raw.name : id,
+    privacy: 'unknown',
+    // single: the model makes one image per request
+    traits: num(raw?.supported_parameters?.max_images) === 1 ? ['single'] : [],
+    // The provider's own size names (e.g. square_hd, landscape_16_9, 2048x2048) stand in for aspect ratios
+    constraints: { aspectRatios: sizes.length ? sizes : undefined, defaultAspectRatio: sizes[0], promptCharacterLimit: num(raw?.supported_parameters?.max_prompt_characters) },
+    pricing: Object.keys(prices).length ? { resolutions: prices, source: 'api' } : {},
+    options: { seed: false, negativePrompt: false, styles: false, enhance: false }
+  };
+}
+
+export const nanogptImageProvider: ImageProvider = {
+  id: 'nanogpt',
+  label: 'NanoGPT',
+  account: 'nanogpt',
+  async listModels(cfg, transport) {
+    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'image-models'), { method: 'GET', headers: { Accept: 'application/json' } }, undefined);
+    const data = await res.json();
+    return (Array.isArray(data?.data) ? data.data : []).map((r: unknown) => mapNanoImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
+  },
+  generate: (p, m, c) =>
+    generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: variants(p, m?.traits.includes('single') ? 1 : 4), ...(p.aspectRatio ? { size: p.aspectRatio } : {}), response_format: 'b64_json' }, c.signal),
+  estimateCost(p, m) {
+    if (p.op !== 'generate') return undefined;
+    const each = m?.pricing.resolutions?.[p.aspectRatio ?? m.constraints.defaultAspectRatio ?? ''];
+    return each === undefined ? undefined : each * variants(p, m?.traits.includes('single') ? 1 : 4);
+  },
+  privacyLabel: () => ({ tone: 'zinc', label: 'NanoGPT', title: t('privacy.nanogptTitle') })
+};
+
+// ---- DeepInfra ----
+/** Image models that need an image in (editing, expanding, background removal, vectors) are left out */
+const DEEPINFRA_SKIP = /edit|expand|rmbg|remov|upscal|inpaint|vector/i;
+
+export function mapDeepInfraImageModel(raw: any, providerId = 'deepinfra'): ImageModelInfo | null {
+  const id = typeof raw?.id === 'string' ? raw.id : '';
+  const m = raw?.metadata ?? {};
+  if (!id || !(m.tags ?? []).includes('image-gen') || DEEPINFRA_SKIP.test(id)) return null;
+  const each = num(m.pricing?.per_image_unit);
+  return {
+    providerId,
+    id,
+    name: id,
+    privacy: 'unknown',
+    traits: [],
+    constraints: { aspectRatios: DEFAULT_ASPECTS, defaultAspectRatio: '1:1' },
+    pricing: each !== undefined ? { generation: each, source: 'api' } : {},
+    options: { seed: false, negativePrompt: false, styles: false, enhance: false }
+  };
+}
+
+export const deepinfraImageProvider: ImageProvider = {
+  id: 'deepinfra',
+  label: 'DeepInfra',
+  account: 'deepinfra',
+  async listModels(cfg, transport) {
+    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'models'), { method: 'GET', headers: { Accept: 'application/json' } }, undefined);
+    const data = await res.json();
+    return (Array.isArray(data?.data) ? data.data : []).map((r: unknown) => mapDeepInfraImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
+  },
+  generate(p, _m, c) {
+    const [w, h] = sizeFor(p.aspectRatio);
+    return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: variants(p), size: `${w}x${h}`, response_format: 'b64_json' }, c.signal);
+  },
+  estimateCost: (p, m) => (p.op === 'generate' && m?.pricing.generation !== undefined ? m.pricing.generation * variants(p) : undefined),
+  privacyLabel: () => ({ tone: 'zinc', label: 'DeepInfra', title: t('privacy.deepinfraTitle') })
+};
+
+// ---- Together ----
+export function mapTogetherImageModel(raw: any, providerId = 'together'): ImageModelInfo | null {
+  const id = typeof raw?.id === 'string' ? raw.id : '';
+  if (!id || raw?.type !== 'image') return null;
+  return {
+    providerId,
+    id,
+    name: typeof raw.display_name === 'string' ? raw.display_name : id,
+    privacy: 'unknown',
+    traits: [],
+    constraints: { aspectRatios: DEFAULT_ASPECTS, defaultAspectRatio: '1:1' },
+    pricing: {},
+    options: { seed: false, negativePrompt: false, styles: false, enhance: false }
+  };
+}
+
+export const togetherImageProvider: ImageProvider = {
+  id: 'together',
+  label: 'Together',
+  account: 'together',
+  keyedList: true,
+  async listModels(cfg, transport, auth) {
+    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'models'), { method: 'GET', headers: { Accept: 'application/json' } }, auth);
+    const data = await res.json();
+    const list: unknown[] = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
+    return list.map((r) => mapTogetherImageModel(r, cfg.id)).filter((m): m is ImageModelInfo => !!m);
+  },
+  generate(p, _m, c) {
+    const [width, height] = sizeFor(p.aspectRatio);
+    return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: variants(p), width, height, response_format: 'base64' }, c.signal);
+  },
+  estimateCost: () => undefined,
+  privacyLabel: () => ({ tone: 'zinc', label: 'Together', title: t('privacy.togetherTitle') })
+};

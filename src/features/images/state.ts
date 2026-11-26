@@ -24,6 +24,7 @@ import { openrouterImageProvider } from './providers/openrouter';
 import { geminiImageProvider } from './providers/gemini';
 import { openaiImageProvider } from './providers/openai';
 import { ImageApiError, hasOption, type ImageModelInfo } from './providers/common';
+import { deepinfraImageProvider, nanogptImageProvider, togetherImageProvider } from './providers/hosts';
 import { imageProviderList, imageProviderOf, registerImageProvider, type ImageCallContext, type ImageProvider } from './providers/types';
 import { makeImageTool, type ImageToolInput } from './tool';
 import { t } from './messages';
@@ -33,6 +34,9 @@ registerImageProvider(veniceImageProvider);
 registerImageProvider(openrouterImageProvider);
 registerImageProvider(geminiImageProvider);
 registerImageProvider(openaiImageProvider);
+registerImageProvider(nanogptImageProvider);
+registerImageProvider(deepinfraImageProvider);
+registerImageProvider(togetherImageProvider);
 
 export interface ImageDefaults {
   /** The default image model (Settings → 機能 → 画像): used by the generate_image tool and image mode */

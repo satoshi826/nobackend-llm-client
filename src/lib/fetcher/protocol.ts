@@ -9,6 +9,11 @@ export type FetchMode = 'read' | 'save';
 /** How it was fetched: straight from the site, through the user's relay, or as text from Jina Reader (read only) */
 export type FetchVia = 'direct' | 'relay' | 'jina';
 
+/** The fetch page's ways after the site itself: the user's relay (optional) and Jina Reader (reading only) */
+export function fetchRoutes(env: Record<string, string | undefined>): { relay: string; jina: string } {
+  return { relay: env.VITE_FETCH_RELAY_URL || '', jina: (env.VITE_JINA_BASE_URL || 'https://r.jina.ai').replace(/\/+$/, '') };
+}
+
 export type FromFetcher =
   | { type: 'fetch-resize'; height: number }
   | { type: 'fetch-result'; ok: true; name: string; mime: string; data: ArrayBuffer; url: string; via: FetchVia }

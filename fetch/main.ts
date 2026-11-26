@@ -7,7 +7,7 @@
 // app can fetch without the user (fully so when this page is on its own origin, VITE_FETCH_URL).
 // No dependencies on the app. The DOM is built with createElement and textContent only (no innerHTML).
 import { detectLang, formatNumber, getLang, setLang } from '../src/lib/i18n';
-import { fetchableUrl, MAX_FETCH_BYTES, nameFor, type FetchVia, type FromFetcher } from '../src/lib/fetcher/protocol';
+import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, type FetchVia, type FromFetcher } from '../src/lib/fetcher/protocol';
 import '../vault/style.css';
 import { t } from './messages';
 
@@ -20,10 +20,8 @@ const APP_ORIGINS: string[] = [
     .filter(Boolean),
   location.origin
 ];
-/** Optional relay for sites that do not allow fetching from a browser (the user's own, e.g. relay/worker.js) */
-const RELAY: string = env.VITE_FETCH_RELAY_URL || '';
-/** Jina Reader, the fallback for reading (keyless; overridable for the mock server) */
-const JINA: string = (env.VITE_JINA_BASE_URL || 'https://r.jina.ai').replace(/\/+$/, '');
+// The user's relay for sites that refuse browsers (e.g. relay/worker.js), and Jina Reader, the keyless fallback for reading
+const { relay: RELAY, jina: JINA } = fetchRoutes(env);
 
 const params = new URLSearchParams(location.search);
 {

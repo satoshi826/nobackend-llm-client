@@ -115,7 +115,7 @@ Use subdomains of one custom domain (three Workers or Pages sites, free). Two di
 
 Models reach the web in two ways, both through a separate fetch page (`/fetch/`, its own CSP) that shows the address and asks you first; tick "don't ask again" to remember a site (kept in the fetch page's storage, with "forget all" there). The app itself never reaches arbitrary addresses.
 
-- **Read** (`fetch_url`, with what the model wants from the page): the page (HTML, text or PDF) becomes text in the app, and a separate call with no tools answers the request from it. Only that answer reaches the conversation's model, so instructions planted in the page have little hold. The reading model is the conversation's unless you pick one in Settings → Web 検索. Pages that refuse direct fetching go through your relay (below), and pages that hold almost no text in their HTML (drawn by scripts) are read through Jina Reader (`r.jina.ai`, keyless).
+- **Read** (`fetch_url`, with what the model wants from the page): the page (HTML, text or PDF) becomes text in the app, and a separate call with no tools answers the request from it. Only that answer reaches the conversation's model, so instructions planted in the page have little hold. The reading model is the conversation's unless you pick one in Settings → Web. Pages that refuse direct fetching go through your relay (below), and pages that hold almost no text in their HTML (drawn by scripts) are read through Jina Reader (`r.jina.ai`, keyless).
 - **Save** (`fetch_file`): a file or an image is kept in the Files tab as it is. Text, CSV, HTML, code and PDFs become files the model can read; images are saved as images (up to 20 MB; no SVG). To work with a page's markup (a scraper, say), save it and have the model read it, or try code on it with `run_javascript`.
 
 A browser can only fetch from sites that allow it (CORS): file and image hosts often do (GitHub raw files, Wikimedia, many CDNs), ordinary web pages often don't. For those, you can deploy your own relay (optional):
@@ -125,6 +125,7 @@ A browser can only fetch from sites that allow it (CORS): file and image hosts o
 cd relay && npx wrangler deploy
 # app: tell the fetch page where the relay is
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<account>.workers.dev npm run build
+# with the fetch page on its own origin, pass the same value to build:fetch and to the app build (Settings → Web shows it)
 ```
 
 The relay only takes public https addresses, passes on none of your headers or cookies, keeps nothing, answers only to the allowed origins, checks every redirect the same way, and asks Cloudflare to cap each IP at 30 requests a minute (the allowed origin is a header any script can fake, and the relay's address is readable in the app). Cloudflare applies this cap loosely: in a test it let every request through. Addresses you fetch through it are seen by it (your own Worker).

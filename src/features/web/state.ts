@@ -8,7 +8,7 @@ import { extractFromPage } from '../../lib/chat/extract';
 import type { ToolResult } from '../../lib/tools/types';
 import { accountById } from '../../lib/keys/accounts';
 import { vaultTransport as transport } from '../../lib/vault/client';
-import { authFor, keyReady } from '../../state/keys';
+import { authFor, keyReady, keyStatus } from '../../state/keys';
 import { modelOf, providerById } from '../../state/models';
 import { settings } from '../../state/settings';
 import { fetchFromWeb } from '../../state/fetch-page';
@@ -44,9 +44,19 @@ export function nativeSearchFor(providerId: string, modelId: string): boolean {
  */
 export function searchRouteFor(providerId: string, modelId: string): SearchRoute {
   if (!webSettings.value.value.enabled) return null;
-  const toolsReady = !!modelOf(providerId, modelId)?.capabilities.tools && keyReady('tavily');
-  if (nativeSearchFor(providerId, modelId)) return webSettings.value.value.searchEngine === 'tools' && toolsReady ? 'tools' : 'native';
-  return toolsReady ? 'tools' : null;
+  return pickRoute(nativeSearchFor(providerId, modelId), !!modelOf(providerId, modelId)?.capabilities.tools && keyReady('tavily'));
+}
+
+/** How a connection's tool-calling models search, as settings show it (a Tavily key counts while locked too) */
+export function providerSearchRoute(providerId: string): SearchRoute {
+  const cfg = providerById(providerId);
+  return pickRoute(!!(cfg && getPreset(cfg.preset).nativeWebSearch), keyStatus('tavily').present);
+}
+
+/** The connection's own search unless Tavily is preferred and usable; else Tavily when usable */
+function pickRoute(native: boolean, tavily: boolean): SearchRoute {
+  if (native) return webSettings.value.value.searchEngine === 'tools' && tavily ? 'tools' : 'native';
+  return tavily ? 'tools' : null;
 }
 
 /**

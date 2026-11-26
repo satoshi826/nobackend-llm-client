@@ -8,6 +8,7 @@ import { showToast } from '../../state/ui';
 import { imageUsage } from '../../lib/db/images';
 import { getPreset } from '../../lib/providers/registry';
 import { accountById } from '../../lib/keys/accounts';
+import { FETCH_ROUTES } from '../../lib/fetcher/config';
 import { askConfirm } from '../ConfirmDialog';
 
 import { Button, Icon, Spinner, TextField, Checkbox } from '../ui';
@@ -66,7 +67,8 @@ export function PrivacyTab() {
       }
     ),
     [accountById('tavily')!.host, t('privacy.destTavily')],
-    [t('privacy.destPages'), t('privacy.destPagesText')],
+    [t('privacy.destPages'), t('privacy.destPagesText', { jina: new URL(FETCH_ROUTES.jina).host })],
+    ...(FETCH_ROUTES.relay ? [[new URL(FETCH_ROUTES.relay).host, t('privacy.destRelay')] as [string, string]] : []),
     ...enabledProviders.value.flatMap((p) => getPreset(p.preset).copy?.extraDestinations ?? []),
     [t('privacy.destOrigin'), t('privacy.destOriginText')]
   ];

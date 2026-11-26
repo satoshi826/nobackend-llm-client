@@ -114,7 +114,7 @@ VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.c
 
 模型接触网络的方式有两种，都由独立的获取页面（`/fetch/`，有自己的 CSP）先显示地址并征求确认；选择“以后不再询问”会记住该网站（保存在获取页面的存储中，“全部撤销”也在那里）。应用本身不会连接任意地址。
 
-- **读取**（`fetch_url`，同时给出想从网页了解的内容）: 在应用内把网页（HTML、文本或 PDF）转为正文，由一次不带工具的独立调用根据正文回答请求。对话模型只收到这个回答，因此网页中植入的指令不容易产生影响。读取所用的模型与对话相同，或在 设置 → 网页搜索 中选择。无法直接获取的网页经由中转服务器（见下文），HTML 中几乎没有正文的网页（由脚本绘制）经由 Jina Reader（`r.jina.ai`，无需密钥）读取。
+- **读取**（`fetch_url`，同时给出想从网页了解的内容）: 在应用内把网页（HTML、文本或 PDF）转为正文，由一次不带工具的独立调用根据正文回答请求。对话模型只收到这个回答，因此网页中植入的指令不容易产生影响。读取所用的模型与对话相同，或在 设置 → 网页 中选择。无法直接获取的网页经由中转服务器（见下文），HTML 中几乎没有正文的网页（由脚本绘制）经由 Jina Reader（`r.jina.ai`，无需密钥）读取。
 - **导入**（`fetch_file`）: 把文件或图像原样保存到“文件”标签。文本、CSV、HTML、代码和 PDF 会成为模型可以读取的文件；图像按图像保存（最大 20 MB，不支持 SVG）。需要处理网页的 HTML（例如写爬虫）时，可以保存后让模型读取，或用 `run_javascript` 试运行。
 
 浏览器只能从允许跨源读取的网站获取（CORS）：文件和图像的分发站点（GitHub raw 文件、Wikimedia、许多 CDN）通常允许，普通网页通常不允许。对于这些网站，可以部署自己的中转服务器（可选）：
@@ -124,6 +124,7 @@ VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.c
 cd relay && npx wrangler deploy
 # 应用：告诉获取页面中转的位置
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<账户>.workers.dev npm run build
+# 获取页面放在独立源时，build:fetch 和应用的 build 都要传入相同的值（应用在 设置 → 网页 中显示它）
 ```
 
 中转只连接公开的 https 地址，不转发你的请求头或 Cookie，不保存任何内容，只响应允许的源，对重定向目标做同样的检查，并向 Cloudflare 指定每个 IP 每分钟最多 30 次请求（源可以被脚本伪造，中转的地址也能从应用代码中读到）。不过 Cloudflare 只是粗略地执行这个限制，测试时所有请求都通过了。通过中转获取的地址中转（你自己的 Worker）也能看到。

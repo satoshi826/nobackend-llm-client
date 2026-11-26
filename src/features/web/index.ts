@@ -41,7 +41,7 @@ registerToolView({
 });
 registerSettingsTab({
   id: 'search',
-  label: () => t('webSearch'),
+  label: () => t('tabLabel'),
   icon: 'globe',
   Component: lazyComponent(() => import('./components/SearchSettings').then((m) => m.SearchSettings))
 });

@@ -149,3 +149,36 @@ export function setSafeHTML(el: HTMLElement, sanitizedHtml: string): void {
     el.textContent = el.dataset.raw ?? '';
   }
 }
+
+// ---- Streaming ----
+const LIST_OR_INDENT = /^(\s|[-*+](\s|$)|\d{1,9}([.)](\s|$)|$))/;
+
+/**
+ * While a reply streams in, where the part that later text can no longer change ends: after the last blank line
+ * outside a code fence that is followed by the start of a new top-level block (not an indented line or a list item,
+ * which could still belong to the block above). `from` is an earlier result, so each call scans only the new text.
+ * Rendering the settled part once and only the rest on every update keeps long replies cheap; the finished reply
+ * is rendered whole again.
+ */
+export function settledEnd(src: string, from = 0): number {
+  let end = from;
+  let fence: RegExp | null = null;
+  let blank = -1;
+  for (let pos = from; pos < src.length; ) {
+    const nl = src.indexOf('\n', pos);
+    const line = src.slice(pos, nl < 0 ? src.length : nl);
+    if (fence) {
+      if (fence.test(line)) fence = null;
+    } else if (!line.trim()) {
+      if (nl >= 0) blank = nl + 1;
+    } else {
+      if (blank >= 0 && !LIST_OR_INDENT.test(line)) end = blank;
+      blank = -1;
+      const f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+      if (f) fence = new RegExp(`^ {0,3}${f[1][0] === '`' ? '`' : '~'}{${f[1].length},}\\s*$`);
+    }
+    if (nl < 0) break;
+    pos = nl + 1;
+  }
+  return end;
+}

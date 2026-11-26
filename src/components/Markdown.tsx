@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { ensureHighlighter, isHighlighterReady, renderMarkdown, setSafeHTML } from '../lib/markdown/render';
+import { ensureHighlighter, isHighlighterReady, renderMarkdown, setSafeHTML, settledEnd } from '../lib/markdown/render';
 import { cx } from './ui';
 import { t } from './messages';
 
@@ -14,11 +14,39 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
     }
   }, [streaming, text]);
 
+  // While streaming: the source already rendered for good (see settledEnd) and how many child nodes it made
+  const settled = useRef<{ src: string; cites: string; nodes: number } | null>(null);
+
   useLayoutEffect(() => {
-    if (!ref.current) return;
-    ref.current.dataset.raw = text;
-    // Do not highlight while streaming (expensive, and the code is incomplete)
-    setSafeHTML(ref.current, renderMarkdown(text, { highlight: !streaming && hlReady, citations }));
+    const el = ref.current;
+    if (!el) return;
+    el.dataset.raw = text;
+    if (!streaming) {
+      settled.current = null;
+      // Do not highlight while streaming (expensive, and the code is incomplete)
+      setSafeHTML(el, renderMarkdown(text, { highlight: hlReady, citations }));
+      return;
+    }
+    const cites = citations?.join('|') ?? '';
+    let s = settled.current;
+    if (!s || s.cites !== cites || !text.startsWith(s.src)) {
+      el.textContent = '';
+      s = settled.current = { src: '', cites, nodes: 0 };
+    }
+    const render = (src: string) => {
+      const tmp = document.createElement('div');
+      tmp.dataset.raw = src;
+      setSafeHTML(tmp, renderMarkdown(src, { highlight: false, citations }));
+      return tmp.childNodes;
+    };
+    while (el.childNodes.length > s.nodes) el.lastChild!.remove();
+    const end = settledEnd(text, s.src.length);
+    if (end > s.src.length) {
+      el.append(...render(text.slice(s.src.length, end)));
+      s.src = text.slice(0, end);
+      s.nodes = el.childNodes.length;
+    }
+    el.append(...render(text.slice(end)));
   }, [text, streaming, hlReady, citations?.join('|')]);
 
   const onClick = async (e: MouseEvent) => {

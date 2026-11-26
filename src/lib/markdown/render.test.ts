@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { renderMarkdown } from './render';
+import { renderMarkdown, settledEnd } from './render';
 
 describe('renderMarkdown', () => {
   it('escapes raw HTML and never makes scripts executable', () => {
@@ -37,5 +37,32 @@ describe('linkCitations', () => {
   it('becomes a source link after rendering', () => {
     const html = renderMarkdown('事実^1^。', { highlight: false, citations: ['https://a.example/'] });
     expect(html).toContain('href="https://a.example/"');
+  });
+});
+
+describe('settledEnd', () => {
+  it('settles everything before a blank line followed by a new paragraph', () => {
+    const src = 'First paragraph.\n\nSecond';
+    expect(src.slice(0, settledEnd(src))).toBe('First paragraph.\n\n');
+  });
+  it('keeps the last block open until another block starts', () => {
+    expect(settledEnd('First.\n\n')).toBe(0);
+    expect(settledEnd('First.\nstill first')).toBe(0);
+  });
+  it('never settles inside a code fence', () => {
+    const src = 'Intro.\n\n```ts\nconst a = 1;\n\nconst b = 2;\n';
+    expect(src.slice(0, settledEnd(src))).toBe('Intro.\n\n');
+    const closed = src + '```\n\nAfter';
+    expect(closed.slice(settledEnd(closed))).toBe('After');
+  });
+  it('does not split a list or an indented continuation', () => {
+    expect(settledEnd('- one\n\n- two')).toBe(0);
+    expect(settledEnd('1. one\n\n2')).toBe(0);
+    expect(settledEnd('- one\n\n  more of one')).toBe(0);
+  });
+  it('continues from an earlier result', () => {
+    const src = 'A.\n\nB.\n\nC';
+    const first = settledEnd('A.\n\nB');
+    expect(src.slice(0, settledEnd(src, first))).toBe('A.\n\nB.\n\n');
   });
 });

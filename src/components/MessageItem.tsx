@@ -1,7 +1,8 @@
+import { memo } from 'preact/compat';
 import { useState } from 'preact/hooks';
+import { computed, useComputed } from '@preact/signals';
 import type { MessageRecord } from '../lib/db/schema';
 import type { Part } from '../lib/providers/types';
-import { childrenOf } from '../lib/chat/tree';
 import { messages } from '../state/conversations';
 import { editUserMessage, regenerate, switchSibling } from '../state/generation';
 import { isStreaming } from '../state/runs';
@@ -20,19 +21,38 @@ function textOf(m: MessageRecord): string {
   return m.parts.filter((p) => p.type === 'text').map((p) => (p as { text: string }).text).join('');
 }
 
+/** Each message's place among its versions (the messages with the same parent and role), as "index count"; only for messages with versions */
+const versions = computed(() => {
+  const groups = new Map<string, MessageRecord[]>();
+  for (const x of messages.value) {
+    const k = `${x.parentId}|${x.role}`;
+    const g = groups.get(k);
+    if (g) g.push(x);
+    else groups.set(k, [x]);
+  }
+  const out = new Map<string, string>();
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    g.sort((a, b) => a.createdAt - b.createdAt);
+    g.forEach((x, i) => out.set(x.id, `${i} ${g.length}`));
+  }
+  return out;
+});
+
 function SiblingNav({ m }: { m: MessageRecord }) {
-  const sibs = childrenOf(messages.value, m.parentId).filter((s) => s.role === m.role);
-  if (sibs.length < 2) return null;
-  const i = sibs.findIndex((s) => s.id === m.id);
+  // A string, so this re-renders only when the place changes (not on every streamed token)
+  const pos = useComputed(() => versions.value.get(m.id)).value;
+  if (!pos) return null;
+  const [i, n] = pos.split(' ').map(Number);
   return (
     <div class="flex items-center text-xs text-muted">
       <IconButton label={t('msg.prevVersion')} disabled={i <= 0 || isStreaming.value} onClick={() => switchSibling(m.id, -1)}>
         <Icon name="chevron-left" class="size-3.5" />
       </IconButton>
       <span class="tabular-nums">
-        {i + 1}/{sibs.length}
+        {i + 1}/{n}
       </span>
-      <IconButton label={t('msg.nextVersion')} disabled={i >= sibs.length - 1 || isStreaming.value} onClick={() => switchSibling(m.id, 1)}>
+      <IconButton label={t('msg.nextVersion')} disabled={i >= n - 1 || isStreaming.value} onClick={() => switchSibling(m.id, 1)}>
         <Icon name="chevron-right" class="size-3.5" />
       </IconButton>
     </div>
@@ -353,7 +373,8 @@ function Suggestions({ m }: { m: MessageRecord }) {
   );
 }
 
-export function MessageItem({ m, isLast }: { m: MessageRecord; isLast?: boolean }) {
+/** One message. Memoized: while a reply streams, only that reply's object changes, so the others are skipped */
+export const MessageItem = memo(function MessageItem({ m, isLast }: { m: MessageRecord; isLast?: boolean }) {
   if (m.compaction) return <CompactionDivider m={m} />;
   return (
     <div class={cx('py-3', Date.now() - m.createdAt < 4000 && 'rise')}>
@@ -361,4 +382,4 @@ export function MessageItem({ m, isLast }: { m: MessageRecord; isLast?: boolean 
       {isLast && m.role === 'assistant' && m.status !== 'streaming' && <Suggestions m={m} />}
     </div>
   );
-}
+});

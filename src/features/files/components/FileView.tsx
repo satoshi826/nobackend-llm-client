@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { currentVersion, extOf, versionsOf, versionText } from '../../../lib/db/files';
 import type { FileRecord, FileVersion } from '../../../lib/db/schema';
 import { conversations, openConversation, showChat } from '../../../state/conversations';
-import { showToast, sidebarOpen } from '../../../state/ui';
+import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { Markdown } from '../../../components/Markdown';
+import { PageHeader } from '../../../components/PageHeader';
 import { Badge, Button, Icon, IconButton, Select, Spinner, TextField } from '../../../components/ui';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
@@ -91,10 +92,7 @@ export function FileView({ id = '' }: { id?: string }) {
 
   return (
     <main class="flex min-w-0 flex-1 flex-col">
-      <header class="glass mx-2 mt-2 flex flex-wrap items-center gap-1 rounded-2xl px-2 py-1.5 sm:mx-3 md:ml-0 md:mr-3 md:mt-0">
-        <IconButton class="md:hidden" label={t('menu')} onClick={() => (sidebarOpen.value = true)}>
-          <Icon name="menu" />
-        </IconButton>
+      <PageHeader wrap>
         {fileReturnsToChat() ? (
           <IconButton label={t('file.backToChat')} onClick={closeFileView}>
             <Icon name="chevron-left" />
@@ -194,7 +192,7 @@ export function FileView({ id = '' }: { id?: string }) {
             }}
           />
         </div>
-      </header>
+      </PageHeader>
       {f.url && (
         <p class="mx-3 mt-2 flex min-w-0 items-center gap-1.5 text-xs text-muted md:ml-1">
           <Icon name="link" class="size-3.5 shrink-0" />

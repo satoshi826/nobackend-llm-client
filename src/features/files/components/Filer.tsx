@@ -4,10 +4,10 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { currentText } from '../../../lib/db/files';
 import { getImage } from '../../../lib/db/images';
-import { sidebarOpen } from '../../../state/ui';
 import { confirmAndDelete, deleteImages, ImageThumb, lightbox } from '../../images';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
+import { PageHeader } from '../../../components/PageHeader';
 import { Button, Checkbox, Chip, EmptyState, Icon, IconButton, SearchField, Segmented, Spinner, cx, useDebounced, type IconName } from '../../../components/ui';
 import { filterItems, NATURAL_ORDER, previewText, sortItems, type FilerItem } from '../filer';
 import {
@@ -193,11 +193,7 @@ export function Filer() {
       }}
     >
       {/* While items are selected, their actions cover the header (no layout shift under the pointer) */}
-      <div class="relative mx-2 mt-2 sm:mx-3 md:ml-0 md:mr-3 md:mt-0">
-        <header class="glass flex min-h-12 items-center gap-1 rounded-2xl px-2 py-1.5">
-          <IconButton class="md:hidden" label={t('menu')} onClick={() => (sidebarOpen.value = true)}>
-            <Icon name="menu" />
-          </IconButton>
+      <PageHeader>
           <SearchField class="min-w-0 flex-1 md:max-w-xs" placeholder={t('filer.search')} label={t('filer.searchLabel')} value={filerQuery.value} onInput={(v) => (filerQuery.value = v)} />
           <div class="ml-auto flex shrink-0 items-center gap-0.5">
             <SortMenu prefs={prefs} />
@@ -230,7 +226,6 @@ export function Filer() {
               }}
             />
           </div>
-        </header>
         {selecting && (
           <div class="panel fade-in absolute inset-0 flex items-center gap-2 overflow-x-auto rounded-2xl px-2 text-sm whitespace-nowrap" role="toolbar" aria-label={t('filer.selectionActions')}>
             <IconButton label={t('filer.clearSelection')} onClick={() => setPicked(new Set())}>
@@ -259,7 +254,7 @@ export function Filer() {
             </div>
           </div>
         )}
-      </div>
+      </PageHeader>
       <FilterChips count={items?.length ?? null} />
 
       <div class="scroll-thin min-h-0 flex-1 overflow-y-auto px-3 pb-3 sm:px-4 sm:pb-4 md:pr-7 md:pl-1">

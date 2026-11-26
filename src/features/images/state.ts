@@ -167,7 +167,7 @@ function byRef(ref: string | undefined): ImageModelInfo | undefined {
   return ref && i > 0 ? imageModelOf(ref.slice(0, i), ref.slice(i + 1)) : undefined;
 }
 
-/** The default model: the one chosen in settings, else Venice's default, else the first one */
+/** The default model: the one chosen in settings, else one its provider marks as default (Venice does), else the first one */
 export const defaultImageModel = computed(() => {
   const list = imageModels.value;
   const d = imageSettings.value.value.imageDefaults;

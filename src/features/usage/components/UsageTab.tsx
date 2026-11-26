@@ -8,7 +8,7 @@ import { PRESETS } from '../../../lib/providers/registry';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { Button, Chip, EmptyState, Icon, IconButton, Segmented, cx } from '../../../components/ui';
-import { formatDate, formatNumber, formatDateTime } from '../../../lib/i18n';
+import { formatDate, formatList, formatNumber, formatDateTime } from '../../../lib/i18n';
 import { t } from '../messages';
 
 type Range = 'today' | '7' | '30' | 'all';
@@ -148,7 +148,7 @@ function BalanceSection() {
     <section class="space-y-2">
       <h3 class="text-sm font-semibold">{t('balance.title')}</h3>
       {list.length === 0 ? (
-        <p class="text-xs text-muted">{t('balance.none')}</p>
+        <p class="text-xs text-muted">{t('balance.none', { providers: formatList(Object.values(PRESETS).flatMap((p) => (p.balanceApi ? [p.defaults.name] : [])).sort((a, b) => a.localeCompare(b))) })}</p>
       ) : (
         <ul class="divide-y divide-line rounded-lg border border-line text-sm">
           {list.map(([pid, b]) => (

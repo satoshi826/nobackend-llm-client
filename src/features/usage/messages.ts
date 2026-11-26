@@ -5,7 +5,7 @@ export const t = defineMessages(
   {
     tab: '使用量',
     'balance.title': '残高',
-    'balance.none': '残高を確認できる接続先（Venice・OpenRouter・DeepSeek・NanoGPT）のキーを設定すると、ここに最新の残高が表示されます。',
+    'balance.none': '残高を確認できる接続先（{providers}）のキーを設定すると、ここに最新の残高が表示されます。',
     'balance.keyLimit': 'このキーの上限の残り',
     'balance.row': '{time} 時点',
     'balance.alertNote': '残高がこのアプリで使った分より {amount} 以上多く減ると、キーが別の場所で使われている可能性があるとして、サイドバーに警告を出します。',
@@ -61,7 +61,7 @@ export const t = defineMessages(
   {
     en: {
       'balance.title': 'Balance',
-      'balance.none': 'Set a key for a provider that reports its balance (Venice, OpenRouter, DeepSeek, NanoGPT) to see the latest balance here.',
+      'balance.none': 'Set a key for a provider that reports its balance ({providers}) to see the latest balance here.',
       'balance.keyLimit': 'left on this key’s limit',
       'balance.row': 'as of {time}',
       'balance.alertNote': 'If the balance drops by {amount} or more beyond what this app spent, the sidebar warns you that the key may be used somewhere else.',
@@ -112,7 +112,7 @@ export const t = defineMessages(
     },
     zh: {
       'balance.title': '余额',
-      'balance.none': '为可查询余额的服务商（Venice、OpenRouter、DeepSeek、NanoGPT）设置密钥后，这里会显示最新余额。',
+      'balance.none': '为可查询余额的服务商（{providers}）设置密钥后，这里会显示最新余额。',
       'balance.keyLimit': '此密钥额度的剩余',
       'balance.row': '截至 {time}',
       'balance.alertNote': '如果余额减少的金额比本应用的花费多出 {amount} 以上，侧边栏会提示密钥可能在别处被使用。',

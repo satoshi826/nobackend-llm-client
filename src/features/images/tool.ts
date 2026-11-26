@@ -1,4 +1,4 @@
-// generate_image: lets a chat model create images (Venice image API). Off by default; asks before running.
+// generate_image: lets a chat model create images with the default image model. Off by default; asks before running.
 import type { Tool } from '../../lib/tools/types';
 import { t } from './messages';
 

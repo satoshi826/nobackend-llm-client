@@ -24,7 +24,8 @@ import {
   setImageMode,
   toolParams
 } from '../state';
-import { imageProviderOf } from '../providers/types';
+import { imageProviderList, imageProviderOf } from '../providers/types';
+import { formatList } from '../../../lib/i18n';
 import { ModelOptions } from './ModelOptions';
 import { ImageBar } from './ImageBar';
 import { t, usd } from '../messages';
@@ -167,6 +168,9 @@ export function ImageToolDetail({ p, owner }: { p: ToolPart; owner?: { conversat
   );
 }
 
+/** Every image provider, A to Z (for texts that name them) */
+const imageProviderNames = () => formatList(imageProviderList().map((p) => p.label).sort((a, b) => a.localeCompare(b)));
+
 /** The default image model (tool and image mode) */
 function DefaultModelSelect() {
   useEffect(() => {
@@ -174,7 +178,7 @@ function DefaultModelSelect() {
   }, [imageReady.value]);
   const list = imageModels.value;
   const m = defaultImageModel.value;
-  if (!list.length) return <p class="text-xs text-muted">{t('settings.noModels')}</p>;
+  if (!list.length) return <p class="text-xs text-muted">{t('settings.noModels', { providers: imageProviderNames() })}</p>;
   const cost = m ? estimateCost({ ...toolParams(undefined, {}), providerId: m.providerId, model: m.id }) : undefined;
   return (
     <label class="block text-sm">
@@ -205,7 +209,7 @@ export function ImageSettings() {
   const saveImage = imageSettings.save;
   return (
     <Section title={t('settings.title')}>
-      <p class="text-xs text-muted">{t('settings.desc')}</p>
+      <p class="text-xs text-muted">{t('settings.desc', { providers: imageProviderNames() })}</p>
       <DefaultModelSelect />
       <label class="flex items-center justify-between gap-3 text-sm">
         {t('settings.format')}

@@ -56,8 +56,9 @@ export function SearchSettings() {
                 {name === 'web_search' ? t('webSearch') : t('fetchPage')}
                 <span class="block text-xs text-muted">{name === 'web_search' ? t('settings.searchSends') : t('settings.fetchSends')}</span>
               </span>
-              <Select value={s.toolPermissions[name] ?? 'ask'} onChange={(e) => saveSettings({ toolPermissions: { ...s.toolPermissions, [name]: (e.target as HTMLSelectElement).value as Permission } })}>
-                {(['ask', 'allow', 'deny'] as Permission[]).map((v) => (
+              {/* Fetching a page always asks (the address may carry the conversation); it can only be turned off */}
+              <Select value={name === 'fetch_url' && s.toolPermissions[name] !== 'deny' ? 'ask' : (s.toolPermissions[name] ?? 'ask')} onChange={(e) => saveSettings({ toolPermissions: { ...s.toolPermissions, [name]: (e.target as HTMLSelectElement).value as Permission } })}>
+                {((name === 'fetch_url' ? ['ask', 'deny'] : ['ask', 'allow', 'deny']) as Permission[]).map((v) => (
                   <option key={v} value={v}>
                     {PERM_LABEL[v]}
                   </option>

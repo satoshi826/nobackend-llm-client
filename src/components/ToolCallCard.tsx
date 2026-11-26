@@ -2,7 +2,7 @@
 // What is shown for each tool (label, icon, summary, details, approval note) comes from the tool views features register.
 import { useState } from 'preact/hooks';
 import { pendingApprovals, resolveApproval } from '../state/approvals';
-import { Button, Chevron, Collapse, Icon, Shimmer, Spinner, TextField, cx } from './ui';
+import { Button, Chevron, Collapse, Icon, Shimmer, Spinner, TextArea, TextField, cx } from './ui';
 import { textOf, toolViewFor, type ToolPart } from './extensions';
 import { sentences, t } from './messages';
 
@@ -33,10 +33,13 @@ function ApprovalCard({ p }: { p: ToolPart }) {
         {t('tool.askRun', { tool: labelOf(p.name) })}
       </div>
       {field ? (
-        <TextField
-          class="block w-full font-mono"
+        // Wrapped in full (a long address must not hide its end); one line of text, so Enter adds no line break
+        <TextArea
+          rows={1}
+          class="block w-full resize-none font-mono break-all [field-sizing:content]"
           value={value}
-          onInput={(e) => setValue((e.target as HTMLInputElement).value)}
+          onInput={(e) => setValue((e.target as HTMLTextAreaElement).value)}
+          onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
           aria-label={t('tool.editableLabel', { label: textOf(field.label) })}
         />
       ) : (

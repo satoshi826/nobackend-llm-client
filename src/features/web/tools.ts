@@ -100,6 +100,8 @@ export const fetchUrlTool: Tool<FetchInput> = {
     };
   },
   risk: 'network',
+  // The address leaves the browser and may carry anything from the conversation, so it is shown every time
+  alwaysAsk: true,
   summarize: (i) => i.url,
   prepare(raw) {
     const r = (raw ?? {}) as Record<string, unknown>;

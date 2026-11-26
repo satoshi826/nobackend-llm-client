@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'preact/hooks';
 import { ready } from './state/app';
+import { backgroundImage, backgroundOf, GLOW_PRESETS, loadBackgroundImage } from './state/background';
 import { uiLang } from './state/settings';
 import { dataLock, dataWork } from './state/lock';
 import { modal, toast } from './state/ui';
@@ -25,10 +27,36 @@ function MainArea() {
   return view ? <view.Component id={v.id} /> : <ChatView />;
 }
 
-/** The slow background light behind the glass (styles.css .sky-glow) */
+/** The page background behind the glass (Settings → 表示): moving light, a solid colour or the user's picture */
 function SkyGlow() {
+  const bg = backgroundOf();
+  useEffect(() => {
+    if (bg.kind === 'image') void loadBackgroundImage();
+  }, [bg.kind]);
+  // The drift speed changes the running animations' rate, so the light keeps its place (changing the
+  // duration instead would make it jump). 0 holds it where it is
+  const glow = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    for (const a of glow.current?.getAnimations({ subtree: true }) ?? []) a.playbackRate = bg.speed;
+  }, [bg.speed, bg.kind]);
+  if (bg.kind === 'solid') return <div class="sky-glow" aria-hidden="true" style={{ background: bg.color }} />;
+  if (bg.kind === 'image' && backgroundImage.value)
+    return (
+      <div class="sky-glow" aria-hidden="true" style={{ background: `center / cover no-repeat url("${backgroundImage.value}")` }}>
+        <div class="absolute inset-0" style={{ background: `color-mix(in srgb, var(--bg) ${Math.round(bg.dim * 100)}%, transparent)` }} />
+      </div>
+    );
+  const p = GLOW_PRESETS[bg.preset] ?? GLOW_PRESETS.moonlight;
+  const vars = {
+    '--glow-1': p.colors[0],
+    '--glow-2': p.colors[1],
+    '--glow-3': p.colors[2],
+    '--glow-o1': String(p.opacity[0]),
+    '--glow-o2': String(p.opacity[1]),
+    '--glow-o3': String(p.opacity[2])
+  } as Record<string, string>;
   return (
-    <div class="sky-glow" aria-hidden="true">
+    <div ref={glow} class="sky-glow" aria-hidden="true" style={vars}>
       <span />
       <span />
       <span />

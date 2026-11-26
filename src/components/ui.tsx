@@ -130,6 +130,59 @@ export function Segmented({ label, index, count, class: className, children }: {
   );
 }
 
+/**
+ * Slider: a label with the current value on one line, the track below. The filled part of the track follows
+ * the value (`--fill`); the knob grows on hover and while dragged. onChange fires while dragging.
+ * format: how the value is shown (default: the number itself).
+ */
+export function Slider({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+  format,
+  desc,
+  disabled,
+  class: className
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange(v: number): void;
+  format?(v: number): string;
+  desc?: string;
+  disabled?: boolean;
+  class?: string;
+}) {
+  const fill = max > min ? ((Math.min(max, Math.max(min, value)) - min) / (max - min)) * 100 : 0;
+  const shown = format ? format(value) : String(value);
+  return (
+    <label class={cx('block text-sm', disabled && 'cursor-not-allowed opacity-50', className)}>
+      <span class="flex items-baseline justify-between gap-3">
+        {label}
+        <span class="text-xs tabular-nums text-muted">{shown}</span>
+      </span>
+      <input
+        type="range"
+        class="slider mt-2"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        aria-valuetext={shown}
+        style={{ '--fill': `${fill}%` } as Record<string, string>}
+        onInput={(e) => onChange(Number((e.target as HTMLInputElement).value))}
+      />
+      {desc && <span class="mt-1 block text-xs text-muted">{desc}</span>}
+    </label>
+  );
+}
+
 /** Tabs in a column (settings on wide screens): the selected tab's background slides to it */
 export function SideTabs<T extends string>({ tabs, value, onChange, label, class: className }: { tabs: { id: T; label: string }[]; value: T; onChange(id: T): void; label?: string; class?: string }) {
   const ref = useRef<HTMLDivElement>(null);

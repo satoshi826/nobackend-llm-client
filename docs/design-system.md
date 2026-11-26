@@ -17,7 +17,7 @@ Status: direction chosen 2026-11-25 (A. Glass, Moonlight variant). Mock-ups: the
 | Token | Value | Use |
 |---|---|---|
 | `--bg` | `#07080d` | Page ground |
-| `--glow-1` / `--glow-2` / `--glow-3` | `#64748b` / `#6366f1` / `#94a3b8` | Background light blobs (opacity 0.30 / 0.24 / 0.13, blur 110–120 px) |
+| `--glow-1` / `--glow-2` / `--glow-3` | `#64748b` / `#6366f1` / `#94a3b8` | Background light blobs (opacity `--glow-o1..3` 0.30 / 0.24 / 0.13, blur 110–120 px). These are the Moonlight set; Settings → 表示 can pick another of the ten sets (`GLOW_PRESETS` in `state/background.ts`), set the drift speed 0–3× (the running animations' playbackRate, so the light never jumps; 0 holds it), or replace the light with a solid colour or the user's picture (darkened by a `--bg` overlay so text stays readable) |
 | `--glass` | `rgba(255,255,255,.06)` | Panels (sidebar, header, cards, composer) |
 | `--glass-strong` | `rgba(255,255,255,.10)` | Raised / hovered glass, active row |
 | `--sunken` | `rgba(0,0,0,.25)` | Fields, segmented controls inside glass |
@@ -77,6 +77,7 @@ All animations are disabled under `prefers-reduced-motion: reduce`.
 - **Side tabs** (`SideTabs`: settings on wide screens): a column of tabs on the left whose highlight slides to the selected one (arrow keys move). The settings dialog has a fixed size (`Modal fixed`), so switching tabs never resizes it; the content scrolls on its own.
 - **Tab strip** (`TabStrip`: settings on phones): text tabs with an accent underline that slides to the selected tab; the panel fades in.
 - **Scrollbars**: everywhere thin rounded thumbs on a transparent track, a little brighter while the pointer is over the area; the chat list's bar stays between the floating header and the input box. Chrome drops `::-webkit-scrollbar` styles when `scrollbar-width` / `scrollbar-color` are set, so those are for Firefox only.
+- **Slider** (`Slider` in ui.tsx, `.slider`): label and current value (`format`) on one line, a thin track below filled up to the value in the accent colour; the white knob grows on hover and while dragged. Use it for any continuous setting instead of a bare range input.
 - **Switch** (`Toggle` in settings-ui, `.switch`): text left, switch right; the knob slides with a slight spring and stretches while pressed.
 - **Accordion** (`Collapse`; `<details>` where supported): height and opacity animate open and closed; the chevron rotates.
 - **Menu / popover** (`components/menu.tsx`: `Popover`, `MenuItem`, `MenuSeparator`): every floating list uses it. It renders in a portal on `<body>` (inside glass, a backdrop-filter only blurs that glass, so a menu in the composer could not blur the page), places itself from its anchor and flips when there is no room, and closes on Escape or a press outside. It is an opaque `panel` with a strong blur, radius 16, and opens with `pop` (fade + scale from .96). Arrow keys move between items.

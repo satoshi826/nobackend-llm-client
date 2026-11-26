@@ -6,6 +6,7 @@ import type { Permission } from '../lib/tools/types';
 
 export type { ModelSort, ModelFilter } from '../lib/model-list';
 import type { ModelSort, ModelFilter } from '../lib/model-list';
+import type { BackgroundSetting } from './background';
 
 export interface Settings {
   /** Last used model (new chats start with it) */
@@ -16,6 +17,8 @@ export interface Settings {
   modelSort: ModelSort;
   modelFilters: ModelFilter[];
   theme: 'system' | 'light' | 'dark';
+  /** Page background (state/background.ts; missing fields take the defaults there) */
+  background?: Partial<BackgroundSetting>;
   /** Display language ('auto' follows the browser) */
   language: 'auto' | Lang;
   /** Provider-specific settings (the preset's settings). { [providerId]: { [key]: value } } */

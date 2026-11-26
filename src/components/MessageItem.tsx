@@ -16,6 +16,7 @@ import { assistantExtras, toolViewFor, userMessageExtras } from './extensions';
 import { Button, Chevron, Collapse, Dots, Icon, IconButton, Shimmer, Spinner, TextArea, cx } from './ui';
 import { t } from './messages';
 import { formatNumber } from '../lib/i18n';
+import { estimateCost } from '../lib/usage';
 
 function textOf(m: MessageRecord): string {
   return m.parts.filter((p) => p.type === 'text').map((p) => (p as { text: string }).text).join('');
@@ -236,6 +237,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
   const sources = m.parts.filter((p) => p.type === 'source') as Extract<Part, { type: 'source' }>[];
   const hasText = m.parts.some((p) => p.type === 'text' && p.text);
   const usage = m.meta?.usage;
+  const estimated = m.meta?.costUsd == null && usage ? estimateCost(usage, model?.pricing) : undefined;
   // A feature answers this message itself (e.g. images): no waiting text, no "another model"
   const owned = assistantExtras.some((x) => x.owns?.(m));
   return (
@@ -310,7 +312,18 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
               {t('msg.webSearches', { n: formatNumber(usage.webSearches) })}
             </span>
           )}
-          {m.meta?.costUsd != null && <span class="ml-2 tabular-nums">${m.meta.costUsd.toFixed(4)}</span>}
+          {m.meta?.costUsd != null ? (
+            <span class="ml-2 tabular-nums" title={t('msg.costTitle')}>
+              ${m.meta.costUsd.toFixed(4)}
+            </span>
+          ) : (
+            estimated != null && (
+              // No cost reported (e.g. OpenAI, Anthropic): estimated from the model's list price, and marked so
+              <span class="ml-2 tabular-nums" title={t('msg.costEstimatedTitle')}>
+                ≈${estimated.toFixed(4)}
+              </span>
+            )
+          )}
         </div>
       )}
     </div>

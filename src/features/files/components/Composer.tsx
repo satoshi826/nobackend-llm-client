@@ -1,7 +1,7 @@
 // Input box pieces: the attach button (device / saved files) and the list of attached files
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Conversation, FileRecord } from '../../../lib/db/schema';
-import { Button, Icon, Modal, Spinner, cx } from '../../../components/ui';
+import { Button, Icon, Modal, SearchField, Spinner, cx } from '../../../components/ui';
 import { MenuItem, Popover } from '../../../components/menu';
 import { ATTACH_INLINE_CHARS, attachExisting, detach, fileList, pendingAttachments, refreshFiles, uploadFiles } from '../state';
 import { formatChars, formatDate, FileIcon, typeLabel } from './common';
@@ -82,14 +82,8 @@ function FilePicker({ onClose }: { onClose(): void }) {
   const shown = (list ?? []).filter((f) => !ql || f.name.toLowerCase().includes(ql));
   const picked = new Set(pendingAttachments.value.map((a) => a.fileId));
   return (
-    <Modal title={t('picker.title')} onClose={onClose}>
-      <input
-        class="mb-3 w-full rounded-lg border border-line bg-glass px-3 py-2 text-sm"
-        placeholder={t('picker.filter')}
-        value={q}
-        onInput={(e) => setQ((e.target as HTMLInputElement).value)}
-        aria-label={t('picker.filter')}
-      />
+    <Modal fixed title={t('picker.title')} onClose={onClose}>
+      <SearchField class="mb-3" placeholder={t('picker.filter')} label={t('picker.filter')} value={q} onInput={setQ} />
       {!list ? (
         <p class="flex items-center gap-2 text-sm text-muted">
           <Spinner class="size-4" />
@@ -139,7 +133,7 @@ export function AttachmentChips() {
           {a.reading ? <Spinner class="size-3" /> : <Icon name="paperclip" class="size-3" />}
           <span class="truncate">{a.name}</span>
           {a.chars !== undefined && <span class="text-muted tabular-nums">{formatChars(a.chars)}</span>}
-          <button type="button" aria-label={t('attach.remove', { name: a.name })} class="rounded-full p-0.5 hover:bg-glass-strong" onClick={() => detach(a.fileId)}>
+          <button type="button" aria-label={t('attach.remove', { name: a.name })} title={t('attach.remove', { name: a.name })} class="rounded-full p-0.5 hover:bg-glass-strong" onClick={() => detach(a.fileId)}>
             <Icon name="x" class="size-3" />
           </button>
         </span>

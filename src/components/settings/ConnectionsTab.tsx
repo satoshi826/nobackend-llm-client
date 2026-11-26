@@ -7,8 +7,8 @@ import { providerSettingsOf, saveSettings, setProviderSetting, settings } from '
 import { vaultIsolated, VAULT_ORIGIN } from '../../lib/vault/client';
 import { getPreset } from '../../lib/providers/registry';
 import { KeyPanel, VaultSecurityPanel } from '../KeyPanel';
-import { Icon, cx } from '../ui';
-import { Section, Toggle, selectCls } from '../settings-ui';
+import { Icon, Select, cx } from '../ui';
+import { Section, Toggle, } from '../settings-ui';
 import { AccountRow } from './AccountRow';
 import { t } from './messages';
 import { sentences } from '../messages';
@@ -47,13 +47,13 @@ export function ConnectionsTab() {
               {t('conn.autoLock')}
               <span class="block text-xs text-muted">{t('conn.autoLockHint')}</span>
             </span>
-            <select class={selectCls} value={String(settings.value.autoLockMinutes)} onChange={(e) => saveSettings({ autoLockMinutes: Number((e.target as HTMLSelectElement).value) })}>
+            <Select value={String(settings.value.autoLockMinutes)} onChange={(e) => saveSettings({ autoLockMinutes: Number((e.target as HTMLSelectElement).value) })}>
               {[0, 5, 15, 30, 60].map((m) => (
                 <option key={m} value={m}>
                   {m ? t('conn.autoLockMinutes', { n: m }) : t('conn.autoLockNever')}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         )}
         <p class="text-xs text-muted">{t('conn.passphraseNote')}</p>

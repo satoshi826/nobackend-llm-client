@@ -4,8 +4,8 @@ import { saveSettings, settings } from '../../state/settings';
 import { showToast } from '../../state/ui';
 import { backgroundImage, backgroundOf, clearBackgroundImage, GLOW_ORDER, GLOW_PRESETS, loadBackgroundImage, MAX_SPEED, saveBackground, setBackgroundImage, type BackgroundSetting } from '../../state/background';
 import { LANGS, LANG_NAMES, type Lang } from '../../lib/i18n';
-import { Button, Segmented, Slider, cx } from '../ui';
-import { Section, selectCls } from '../settings-ui';
+import { Button, Segmented, Select, Slider, cx } from '../ui';
+import { Section } from '../settings-ui';
 import { t } from './messages';
 
 const KINDS: BackgroundSetting['kind'][] = ['glow', 'solid', 'image'];
@@ -17,20 +17,14 @@ function Background() {
   if (bg.kind === 'image') void loadBackgroundImage();
   return (
     <Section title={t('bg.title')}>
-      <Segmented label={t('bg.title')} index={KINDS.indexOf(bg.kind)} count={KINDS.length} class="max-w-md">
-        {KINDS.map((k) => (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={bg.kind === k}
-            class={cx('relative z-10 flex-1 rounded-[9px] px-3 py-1.5 text-sm', bg.kind === k ? 'font-medium text-ink-strong' : 'text-muted hover:text-ink')}
-            onClick={() => (k === 'image' && !backgroundImage.value ? input.current?.click() : void saveBackground({ kind: k }))}
-          >
-            {t(k === 'glow' ? 'bg.glow' : k === 'solid' ? 'bg.solid' : 'bg.image')}
-          </button>
-        ))}
-      </Segmented>
+      <Segmented
+        label={t('bg.title')}
+        items={KINDS.map((k) => ({ id: k, label: t(k === 'glow' ? 'bg.glow' : k === 'solid' ? 'bg.solid' : 'bg.image') }))}
+        value={bg.kind}
+        onChange={(k) => (k === 'image' && !backgroundImage.value ? input.current?.click() : void saveBackground({ kind: k }))}
+        stretch
+        class="max-w-md"
+      />
 
       {bg.kind === 'glow' && (
         <>
@@ -132,14 +126,14 @@ export function AppearanceTab() {
       <Section title="言語 / Language">
         <label class="flex items-center justify-between gap-3 text-sm">
           {t('appearance.language')}
-          <select class={selectCls} value={s.language} onChange={(e) => saveSettings({ language: (e.target as HTMLSelectElement).value as 'auto' | Lang })}>
+          <Select value={s.language} onChange={(e) => saveSettings({ language: (e.target as HTMLSelectElement).value as 'auto' | Lang })}>
             <option value="auto">{t('chat.langAuto')}</option>
             {LANGS.map((l) => (
               <option key={l} value={l}>
                 {LANG_NAMES[l]}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </Section>
     </div>

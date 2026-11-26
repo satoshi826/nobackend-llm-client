@@ -1,7 +1,7 @@
 // In-app confirmation dialog used instead of the browser's native confirm()/alert().
 import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { Button, Icon } from './ui';
+import { Button, Icon, TextField } from './ui';
 import { useDialog } from './dialog';
 import { t } from './messages';
 
@@ -64,12 +64,12 @@ export function ConfirmDialog() {
         {s.requireText && (
           <label class="mt-4 block text-sm">
             {t('confirm.typeToConfirm', { text: s.requireText })}
-            <input
+            <TextField
               data-autofocus
               value={typed}
               onInput={(e) => setTyped((e.target as HTMLInputElement).value)}
               onKeyDown={(e) => e.key === 'Enter' && canConfirm && close(true)}
-              class="mt-1 block w-full rounded-lg border border-line bg-glass px-3 py-2"
+              class="mt-1 block w-full"
             />
           </label>
         )}

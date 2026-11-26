@@ -4,7 +4,7 @@ import { saveSettings, settings } from '../state/settings';
 import { modal, showToast } from '../state/ui';
 import * as repo from '../lib/db/repo';
 import type { SavedPrompt } from '../lib/db/schema';
-import { Button, Icon, Modal } from './ui';
+import { Button, Icon, IconButton, Modal, TextArea, TextField } from './ui';
 import { t } from './messages';
 
 export function SystemPromptModal() {
@@ -25,8 +25,8 @@ export function SystemPromptModal() {
   return (
     <Modal title={t('sys.title')} onClose={() => (modal.value = null)} wide>
       <div class="space-y-4">
-        <textarea
-          class="h-48 w-full rounded-lg border border-line bg-glass p-3 text-sm"
+        <TextArea
+          class="h-48 w-full"
           placeholder={t('sys.placeholder')}
           value={text}
           onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
@@ -69,8 +69,8 @@ export function SystemPromptModal() {
               setName('');
             }}
           >
-            <input
-              class="flex-1 rounded-lg border border-line bg-glass px-3 py-1.5 text-sm"
+            <TextField
+              class="flex-1"
               placeholder={t('sys.namePlaceholder')}
               value={name}
               onInput={(e) => setName((e.target as HTMLInputElement).value)}
@@ -87,15 +87,15 @@ export function SystemPromptModal() {
                   <div class="truncate text-sm font-medium">{p.name}</div>
                   <div class="truncate text-xs text-muted">{p.content}</div>
                 </button>
-                <Button
-                  aria-label={t('sys.deleteNamed', { name: p.name })}
+                <IconButton
+                  label={t('sys.deleteNamed', { name: p.name })}
                   onClick={async () => {
                     await repo.deletePrompt(p.id);
                     setSaved(saved.filter((x) => x.id !== p.id));
                   }}
                 >
                   <Icon name="trash" class="size-3.5" />
-                </Button>
+                </IconButton>
               </li>
             ))}
             {saved.length === 0 && <li class="text-xs text-muted">{t('sys.none')}</li>}

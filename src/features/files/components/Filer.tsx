@@ -6,7 +6,7 @@ import { getImage } from '../../../lib/db/images';
 import { sidebarOpen } from '../../../state/ui';
 import { confirmAndDelete, deleteImages, ImageThumb, lightbox } from '../../images';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { Button, Icon, Segmented, Spinner, cx } from '../../../components/ui';
+import { Button, Icon, IconButton, Segmented, Select, Spinner, cx } from '../../../components/ui';
 import { filterItems, previewText, sortItems, type FilerItem } from '../filer';
 import {
   deleteFiles,
@@ -141,15 +141,15 @@ export function Filer() {
       {/* While items are selected, their actions cover the header (no layout shift under the pointer) */}
       <div class="relative mx-2 mt-2 sm:mx-3 md:ml-0 md:mr-3 md:mt-0">
         <header class="glass flex min-h-12 flex-wrap items-center gap-2 rounded-2xl px-3 py-1.5">
-          <Button class="md:hidden" aria-label={t('menu')} onClick={() => (sidebarOpen.value = true)}>
+          <IconButton class="md:hidden" label={t('menu')} onClick={() => (sidebarOpen.value = true)}>
             <Icon name="menu" />
-          </Button>
+          </IconButton>
           <h2 class="truncate px-1 text-sm font-medium text-ink-strong">{viewLabel(view)}</h2>
           {conv && (
             <span class="inline-flex max-w-[16rem] items-center gap-1 rounded-full bg-glass-strong py-0.5 pr-1 pl-2 text-xs">
               <Icon name="chat" class="size-3 shrink-0" />
               <span class="truncate">{convTitle(conv) ?? t('deletedConversation')}</span>
-              <button type="button" class="rounded-full p-0.5 hover:bg-glass-strong" aria-label={t('filer.clearConversation')} onClick={() => (filerConversation.value = null)}>
+              <button type="button" class="rounded-full p-0.5 hover:bg-glass-strong" aria-label={t('filer.clearConversation')} title={t('filer.clearConversation')} onClick={() => (filerConversation.value = null)}>
                 <Icon name="x" class="size-3" />
               </button>
             </span>
@@ -158,22 +158,23 @@ export function Filer() {
           <div class="ml-auto flex items-center gap-1">
             <label class="flex items-center gap-1 text-xs text-muted">
               {t('filer.sort')}
-              <select class="rounded-[10px] border border-line bg-sunken px-2 py-1 text-xs text-ink transition hover:border-line-strong" value={prefs.sort} onChange={(e) => void setFilerPrefs({ sort: (e.target as HTMLSelectElement).value as FilerSort })}>
+              <Select compact value={prefs.sort} onChange={(e) => void setFilerPrefs({ sort: (e.target as HTMLSelectElement).value as FilerSort })}>
                 {(Object.keys(SORT_KEYS) as FilerSort[]).map((k) => (
                   <option key={k} value={k}>
                     {t(SORT_KEYS[k])}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
-            <Segmented label={t('filer.layout')} index={prefs.layout === 'grid' ? 0 : 1} count={2}>
-              <button type="button" role="tab" aria-selected={prefs.layout === 'grid'} title={t('filer.grid')} aria-label={t('filer.grid')} class={cx('relative z-10 rounded-[9px] px-2 py-1', prefs.layout === 'grid' ? 'text-ink-strong' : 'text-muted hover:text-ink')} onClick={() => void setFilerPrefs({ layout: 'grid' })}>
-                <Icon name="grid" class="size-4" />
-              </button>
-              <button type="button" role="tab" aria-selected={prefs.layout === 'list'} title={t('filer.list')} aria-label={t('filer.list')} class={cx('relative z-10 rounded-[9px] px-2 py-1', prefs.layout === 'list' ? 'text-ink-strong' : 'text-muted hover:text-ink')} onClick={() => void setFilerPrefs({ layout: 'list' })}>
-                <Icon name="list" class="size-4" />
-              </button>
-            </Segmented>
+            <Segmented
+              label={t('filer.layout')}
+              items={[
+                { id: 'grid', label: t('filer.grid'), icon: 'grid', iconOnly: true },
+                { id: 'list', label: t('filer.list'), icon: 'list', iconOnly: true }
+              ]}
+              value={prefs.layout}
+              onChange={(layout) => void setFilerPrefs({ layout })}
+            />
             <Button variant="outline" class="py-1! text-sm" onClick={() => input.current?.click()} title={t('filer.uploadTitle')}>
               <Icon name="upload" />
               <span class="hidden sm:inline">{t('upload')}</span>
@@ -194,7 +195,7 @@ export function Filer() {
         </header>
         {anyPicked && (
           <div class="panel fade-in absolute inset-0 flex items-center gap-2 overflow-x-auto rounded-2xl px-3 text-sm whitespace-nowrap" role="toolbar" aria-label={t('filer.selectionActions')}>
-            <button type="button" class="rounded-lg p-1 hover:bg-glass-strong" aria-label={t('filer.clearSelection')} onClick={() => setPicked(new Set())}>
+            <button type="button" class="rounded-lg p-1 hover:bg-glass-strong" aria-label={t('filer.clearSelection')} title={t('filer.clearSelection')} onClick={() => setPicked(new Set())}>
               <Icon name="x" class="size-4" />
             </button>
             <span class="tabular-nums">{t('filer.selected', { n: formatNumber(picked.size) })}</span>

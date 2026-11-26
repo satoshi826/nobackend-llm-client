@@ -10,7 +10,7 @@ import { modal, modelPickerTarget } from '../state/ui';
 import type { ModelInfo } from '../lib/providers/types';
 import { arrangeModels, FILTER_ORDER, matchesFilter, type ModelFilter, type ModelSort } from '../lib/model-list';
 import { PRESETS } from '../lib/providers/registry';
-import { Badge, Button, Collapse, Icon, Modal, Spinner, cx, formatCtx, formatPrice } from './ui';
+import { Badge, Button, Collapse, Icon, Modal, SearchField, Select, Spinner, cx, formatCtx, formatPrice } from './ui';
 import { t } from './messages';
 
 function copyOf(providerId: string) {
@@ -206,16 +206,13 @@ export function ModelPicker() {
   );
 
   return (
-    <Modal fullOnPhone title={target.kind === 'regenerate' ? t('picker.titleRegenerate') : t('picker.title')} onClose={() => (modal.value = null)}>
+    <Modal fullOnPhone fixed title={target.kind === 'regenerate' ? t('picker.titleRegenerate') : t('picker.title')} onClose={() => (modal.value = null)}>
       <div class="space-y-3">
         <div class="flex gap-2">
-          <label class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-accent/50">
-            <Icon name="search" class="size-4 shrink-0 text-faint" />
-            <input class="w-full bg-transparent outline-none" placeholder={t('picker.searchPlaceholder')} value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label={t('picker.searchPlaceholder')} />
-          </label>
-          <select
+          <SearchField class="min-w-0 flex-1" placeholder={t('picker.searchPlaceholder')} label={t('picker.searchPlaceholder')} value={q} onInput={setQ} />
+          <Select
             aria-label={t('picker.sortLabel')}
-            class="rounded-lg border border-line bg-transparent px-2 text-sm"
+           
             value={sort}
             onChange={(e) => saveSettings({ modelSort: (e.target as HTMLSelectElement).value as ModelSort })}
           >
@@ -224,7 +221,7 @@ export function ModelPicker() {
                 {t(`picker.sort.${k}`)}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         {chips.length > 0 && (
           <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('picker.filterLabel')}>

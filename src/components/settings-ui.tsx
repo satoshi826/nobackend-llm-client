@@ -1,12 +1,8 @@
 // Building blocks of the settings screen, shared with settings sections that features register
 import type { ComponentChildren } from 'preact';
 import type { Permission } from '../lib/tools/types';
-import { cx } from './ui';
+import { Select, cx } from './ui';
 import { t } from './messages';
-
-/** A field (input / select / textarea) on glass */
-export const fieldCls = 'rounded-xl border border-transparent bg-sunken px-3 py-2 text-sm text-ink placeholder:text-faint transition hover:border-line focus:border-line-strong focus:outline-none';
-export const selectCls = 'rounded-[10px] border border-line bg-sunken px-2.5 py-1.5 text-sm text-ink transition hover:border-line-strong';
 
 /** Label of a permission choice (call it at render time: the language can change) */
 export const permLabel = (p: Permission): string => t(`perm.${p}`);
@@ -50,13 +46,13 @@ export function PermissionSelect({ label, value, onChange }: { label: string; va
   return (
     <label class="flex items-center justify-between gap-3 text-sm">
       {label}
-      <select class={selectCls} value={value} onChange={(e) => onChange((e.target as HTMLSelectElement).value as Permission)}>
+      <Select value={value} onChange={(e) => onChange((e.target as HTMLSelectElement).value as Permission)}>
         {(['ask', 'allow', 'deny'] as Permission[]).map((v) => (
           <option key={v} value={v}>
             {permLabel(v)}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }

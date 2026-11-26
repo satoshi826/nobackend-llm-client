@@ -6,7 +6,7 @@ import { conversations, openConversation, showChat } from '../../../state/conver
 import { showToast, sidebarOpen } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { Markdown } from '../../../components/Markdown';
-import { Badge, Button, Icon, Spinner } from '../../../components/ui';
+import { Badge, Button, Icon, IconButton, Select, Spinner, TextField } from '../../../components/ui';
 import { parseDelimited } from '../csv';
 import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, filesVersion, getFile, renameFile, restoreVersion, saveUserVersion } from '../state';
 import { formatChars, typeLabel } from './common';
@@ -78,13 +78,13 @@ export function FileView({ id = '' }: { id?: string }) {
   return (
     <main class="flex min-w-0 flex-1 flex-col">
       <header class="glass mx-2 mt-2 flex flex-wrap items-center gap-1 rounded-2xl px-2 py-1.5 sm:mx-3 md:ml-0 md:mr-3 md:mt-0">
-        <Button class="md:hidden" aria-label={t('menu')} onClick={() => (sidebarOpen.value = true)}>
+        <IconButton class="md:hidden" label={t('menu')} onClick={() => (sidebarOpen.value = true)}>
           <Icon name="menu" />
-        </Button>
+        </IconButton>
         {fileReturnsToChat() ? (
-          <Button aria-label={t('file.backToChat')} title={t('file.backToChat')} onClick={closeFileView}>
+          <IconButton label={t('file.backToChat')} onClick={closeFileView}>
             <Icon name="chevron-left" />
-          </Button>
+          </IconButton>
         ) : (
           <>
             <button type="button" class="rounded-lg px-2 py-1 text-sm text-muted hover:bg-glass-strong hover:text-ink-strong" onClick={() => openFiler()}>
@@ -102,8 +102,8 @@ export function FileView({ id = '' }: { id?: string }) {
               if (name.trim() && name.trim() !== f.name) void renameFile(f.id, name.trim());
             }}
           >
-            <input
-              class="w-full rounded-[10px] border border-line-strong bg-sunken px-2 py-1 text-sm text-ink-strong outline-none"
+            <TextField compact
+              class="w-full"
               value={name}
               autoFocus
               aria-label={t('file.name')}
@@ -132,8 +132,8 @@ export function FileView({ id = '' }: { id?: string }) {
           {f.versions.length > 1 && (
             <label class="flex items-center gap-1 text-xs text-muted">
               <Icon name="history" class="size-3.5" />
-              <select
-                class="rounded-[10px] border border-line bg-sunken px-2 py-0.5 text-xs text-ink transition hover:border-line-strong"
+              <Select compact
+               
                 value={String(shown.v)}
                 aria-label={t('file.versionLabel')}
                 onChange={(e) => setViewV(Number((e.target as HTMLSelectElement).value))}
@@ -144,12 +144,12 @@ export function FileView({ id = '' }: { id?: string }) {
                     {v.note ? ` · ${v.note}` : ''}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
           {!editing && (
-            <Button
-              aria-label={t('file.edit')}
+            <IconButton
+              label={t('file.edit')}
               title={t('file.editTitle')}
               onClick={() => {
                 setDraft(shown.text);
@@ -157,23 +157,23 @@ export function FileView({ id = '' }: { id?: string }) {
               }}
             >
               <Icon name="edit" />
-            </Button>
+            </IconButton>
           )}
-          <Button
-            aria-label={t('file.copy')}
+          <IconButton
+            label={t('file.copy')}
             title={t('file.copyTitle')}
             onClick={() => void navigator.clipboard.writeText(shown.text).then(() => showToast(t('file.copied')))}
           >
             <Icon name="copy" />
-          </Button>
-          <Button aria-label={t('download')} title={t('download')} onClick={() => downloadFile(f, shown)}>
+          </IconButton>
+          <IconButton label={t('download')} onClick={() => downloadFile(f, shown)}>
             <Icon name="download" />
-          </Button>
-          <Button aria-label={t('file.print')} title={t('file.printTitle')} onClick={print}>
+          </IconButton>
+          <IconButton label={t('file.print')} title={t('file.printTitle')} onClick={print}>
             <Icon name="printer" />
-          </Button>
-          <Button
-            aria-label={t('useInChat')}
+          </IconButton>
+          <IconButton
+            label={t('useInChat')}
             title={t('useInChatTitle')}
             onClick={() => {
               void attachExisting(f.id);
@@ -181,22 +181,22 @@ export function FileView({ id = '' }: { id?: string }) {
             }}
           >
             <Icon name="paperclip" />
-          </Button>
+          </IconButton>
           {conv && (
-            <Button aria-label={t('file.openSource')} title={t('file.openSourceTitle', { title: conv.title })} onClick={() => void openConversation(conv.id)}>
+            <IconButton label={t('file.openSource')} title={t('file.openSourceTitle', { title: conv.title })} onClick={() => void openConversation(conv.id)}>
               <Icon name="chat" />
-            </Button>
+            </IconButton>
           )}
-          <Button
-            aria-label={t('delete')}
-            title={t('delete')}
+          <IconButton
+            label={t('delete')}
+           
             class="hover:text-danger"
             onClick={async () => {
               if (await askConfirm({ title: t('file.deleteTitle'), message: t('file.deleteMessage', { name: f.name }), confirmLabel: t('delete'), danger: true })) await deleteFiles([f.id]);
             }}
           >
             <Icon name="trash" />
-          </Button>
+          </IconButton>
         </div>
       </header>
       {isOld && !editing && (

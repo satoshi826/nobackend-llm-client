@@ -108,7 +108,7 @@ export function SkillsAbove({ api }: { api: ComposerApi }) {
             <span key={s.id} class="inline-flex items-center gap-1 rounded-full bg-accent-soft py-0.5 pr-1 pl-2 font-mono text-xs text-accent-text">
               <Icon name="book" class="size-3" />
               {s.name}
-              <button type="button" aria-label={t('remove', { name: s.name })} class="rounded-full p-0.5 hover:bg-accent-soft" onClick={() => toggleAttachedSkill(s.id)}>
+              <button type="button" aria-label={t('remove', { name: s.name })} title={t('remove', { name: s.name })} class="rounded-full p-0.5 hover:bg-accent-soft" onClick={() => toggleAttachedSkill(s.id)}>
                 <Icon name="x" class="size-3" />
               </button>
             </span>

@@ -4,12 +4,11 @@ import { showToast } from '../../../state/ui';
 import type { Skill } from '../../../lib/db/schema';
 import { DESCRIPTION_MAX, NAME_MAX, type SkillDraft } from '../../../lib/skills/skill';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { Button, Collapse, Icon, cx } from '../../../components/ui';
+import { Button, Collapse, Icon, IconButton, TextArea, TextField } from '../../../components/ui';
 import { skillSettings, builtinSkills, downloadSkill, importSkillFiles, removeSkill, saveSkill, setBuiltinEnabled, setModelInvocable, skills } from '../state';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 
-const inputCls = 'w-full rounded-lg border border-line bg-glass px-3 py-2 text-sm';
 const EMPTY: SkillDraft = { name: '', description: '', body: '', modelInvocable: true };
 
 function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
@@ -29,8 +28,8 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
     <div class="space-y-3 rounded-lg border border-line p-3" role="group" aria-label={skill ? t('tab.editGroup') : t('tab.newSkill')}>
       <label class="block text-sm">
         {t('name')}
-        <input
-          class={cx(inputCls, 'mt-1 font-mono')}
+        <TextField
+          class="mt-1 font-mono"
           value={d.name}
           maxLength={NAME_MAX}
           placeholder="code-review"
@@ -40,8 +39,8 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
       </label>
       <label class="block text-sm">
         {t('description')}
-        <textarea
-          class={cx(inputCls, 'mt-1')}
+        <TextArea
+          class="mt-1"
           rows={2}
           maxLength={DESCRIPTION_MAX}
           value={d.description}
@@ -52,8 +51,8 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
       </label>
       <label class="block text-sm">
         {t('tab.bodyMarkdown')}
-        <textarea
-          class={cx(inputCls, 'mt-1 font-mono text-xs leading-5')}
+        <TextArea compact
+          class="mt-1 font-mono leading-5"
           rows={12}
           value={d.body}
           placeholder={t('tab.bodyPlaceholder')}
@@ -140,14 +139,14 @@ function SkillRow({ s, onEdit }: { s: Skill; onEdit(): void }) {
           </label>
         </div>
         <div class="flex shrink-0 items-center">
-          <Button aria-label={t('tab.editAria', { name: s.name })} title={t('edit')} onClick={onEdit}>
+          <IconButton label={t('tab.editAria', { name: s.name })} title={t('edit')} onClick={onEdit}>
             <Icon name="edit" class="size-4" />
-          </Button>
-          <Button aria-label={t('tab.exportAria', { name: s.name })} title={t('tab.export')} onClick={() => downloadSkill(s)}>
+          </IconButton>
+          <IconButton label={t('tab.exportAria', { name: s.name })} title={t('tab.export')} onClick={() => downloadSkill(s)}>
             <Icon name="download" class="size-4" />
-          </Button>
-          <Button
-            aria-label={t('tab.deleteAria', { name: s.name })}
+          </IconButton>
+          <IconButton
+            label={t('tab.deleteAria', { name: s.name })}
             title={t('delete')}
             onClick={() =>
               void askConfirm({ title: t('tab.deleteTitle'), message: t('tab.deleteMessage', { name: s.name }), confirmLabel: t('delete'), danger: true }).then((ok) => {
@@ -156,7 +155,7 @@ function SkillRow({ s, onEdit }: { s: Skill; onEdit(): void }) {
             }
           >
             <Icon name="trash" class="size-4" />
-          </Button>
+          </IconButton>
         </div>
       </div>
     </li>

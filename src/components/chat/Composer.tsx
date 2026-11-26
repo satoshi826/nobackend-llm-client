@@ -12,7 +12,7 @@ import { isStreaming, stopGeneration } from '../../state/runs';
 import { sendMessage } from '../../state/generation';
 import { composerFocus, composerText } from '../../state/ui';
 import { activeComposerMode, collectComposerExtras, modelSlots, visibleComposerAddons, type ComposerApi } from '../extensions';
-import { Button, Icon, cx } from '../ui';
+import { Icon, IconButton, cx } from '../ui';
 import { touchDevice } from '../device';
 import { t } from './messages';
 
@@ -144,13 +144,13 @@ export function Composer() {
           }}
         />
           {streaming ? (
-            <Button variant="primary" aria-label={t('composer.stop')} onClick={() => stopGeneration()} class="shrink-0 rounded-full! p-2!">
+            <IconButton variant="primary" label={t('composer.stop')} onClick={() => stopGeneration()} class="shrink-0 rounded-full! p-2!">
               <Icon name="stop" class="size-4" />
-            </Button>
+            </IconButton>
           ) : (
-            <Button variant="primary" aria-label={t('composer.send')} disabled={!canSend} onClick={() => void submit()} class="shrink-0 rounded-full! p-2!">
+            <IconButton variant="primary" label={t('composer.send')} disabled={!canSend} onClick={() => void submit()} class="shrink-0 rounded-full! p-2!">
               <Icon name="send" class="size-4" />
-            </Button>
+            </IconButton>
           )}
         </div>
       </div>

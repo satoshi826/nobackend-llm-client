@@ -3,8 +3,8 @@
 import type { Conversation, MessageRecord } from '../../../lib/db/schema';
 import type { Permission } from '../../../lib/tools/types';
 import { saveSettings, settings } from '../../../state/settings';
-import { Chip, Icon, cx } from '../../../components/ui';
-import { PermissionSelect, Section, Toggle, selectCls } from '../../../components/settings-ui';
+import { Chip, Icon, Select, cx } from '../../../components/ui';
+import { PermissionSelect, Section, Toggle, } from '../../../components/settings-ui';
 import type { ToolPart } from '../../../components/extensions';
 import { useEffect } from 'preact/hooks';
 import { conversations, currentConv } from '../../../state/conversations';
@@ -180,8 +180,8 @@ function DefaultModelSelect() {
     <label class="block text-sm">
       {t('settings.model')}
       <span class="block text-xs text-muted">{t('settings.modelDesc')}</span>
-      <select
-        class={cx(selectCls, 'mt-1.5 block w-full py-1.5')}
+      <Select
+        class="mt-1.5 block w-full"
         value={m ? modelRef(m) : ''}
         onChange={(e) => {
           const x = list.find((y) => modelRef(y) === (e.target as HTMLSelectElement).value);
@@ -189,7 +189,7 @@ function DefaultModelSelect() {
         }}
       >
         <ModelOptions list={list} />
-      </select>
+      </Select>
       {m && (
         <span class="mt-1 block text-xs text-muted">
           {[privacyLabelOf(m).title, cost !== undefined ? t('tool.costEach', { cost: money(cost) }) : t('settings.priceUnknown')].filter(Boolean).join(' ')}
@@ -209,11 +209,11 @@ export function ImageSettings() {
       <DefaultModelSelect />
       <label class="flex items-center justify-between gap-3 text-sm">
         {t('settings.format')}
-        <select class={selectCls} value={s.imageFormat} onChange={(e) => void saveImage({ imageFormat: (e.target as HTMLSelectElement).value as 'webp' | 'png' | 'jpeg' })}>
+        <Select value={s.imageFormat} onChange={(e) => void saveImage({ imageFormat: (e.target as HTMLSelectElement).value as 'webp' | 'png' | 'jpeg' })}>
           <option value="webp">{t('settings.webp')}</option>
           <option value="png">{t('settings.png')}</option>
           <option value="jpeg">JPEG</option>
-        </select>
+        </Select>
       </label>
       <Toggle
         checked={s.imageTool}

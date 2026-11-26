@@ -6,7 +6,7 @@ import { isStreaming } from '../../state/runs';
 import { modal, openSettings, sidebarOpen } from '../../state/ui';
 import { conversationCosts, loadConversationCost } from '../../state/costs';
 import { useEffect } from 'preact/hooks';
-import { Badge, Button, Chip, Icon, Spinner, cx } from '../ui';
+import { Badge, Button, Chip, Icon, Spinner, cx, IconButton } from '../ui';
 import { t } from './messages';
 import { formatNumber } from '../../lib/i18n';
 
@@ -55,9 +55,9 @@ export function Header() {
   const draft = isDraft.value;
   return (
     <header class="glass mx-2 mt-2 flex items-center gap-1 rounded-2xl px-2 py-1.5 sm:mx-3 md:ml-0 md:mr-3 md:mt-0">
-      <Button class="md:hidden" aria-label={t('header.menu')} onClick={() => (sidebarOpen.value = true)}>
+      <IconButton class="md:hidden" label={t('header.menu')} onClick={() => (sidebarOpen.value = true)}>
         <Icon name="menu" class="size-5" />
-      </Button>
+      </IconButton>
       <h1 class="min-w-0 truncate px-1.5 text-sm font-medium text-ink-strong">{draft ? t('header.newChat') : conv.title}</h1>
       {draft ? (
         // Before the first message, the new chat can be switched to/from a temporary (unsaved) chat here

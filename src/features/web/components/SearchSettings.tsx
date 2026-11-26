@@ -8,8 +8,8 @@ import { getPreset } from '../../../lib/providers/registry';
 import type { Permission } from '../../../lib/tools/types';
 import { KeyPanel } from '../../../components/KeyPanel';
 import { AccountRow } from '../../../components/settings/AccountRow';
-import { Icon, cx } from '../../../components/ui';
-import { PERM_LABEL, Section, Toggle, selectCls } from '../../../components/settings-ui';
+import { Icon, Select, cx } from '../../../components/ui';
+import { PERM_LABEL, Section, Toggle, } from '../../../components/settings-ui';
 import { webSettings } from '../state';
 import { t } from '../messages';
 
@@ -56,13 +56,13 @@ export function SearchSettings() {
                 {name === 'web_search' ? t('webSearch') : t('fetchPage')}
                 <span class="block text-xs text-muted">{name === 'web_search' ? t('settings.searchSends') : t('settings.fetchSends')}</span>
               </span>
-              <select class={selectCls} value={s.toolPermissions[name] ?? 'ask'} onChange={(e) => saveSettings({ toolPermissions: { ...s.toolPermissions, [name]: (e.target as HTMLSelectElement).value as Permission } })}>
+              <Select value={s.toolPermissions[name] ?? 'ask'} onChange={(e) => saveSettings({ toolPermissions: { ...s.toolPermissions, [name]: (e.target as HTMLSelectElement).value as Permission } })}>
                 {(['ask', 'allow', 'deny'] as Permission[]).map((v) => (
                   <option key={v} value={v}>
                     {PERM_LABEL[v]}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           ))}
           <div class="space-y-2">

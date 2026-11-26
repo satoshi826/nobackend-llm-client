@@ -10,8 +10,8 @@ import { getPreset } from '../../lib/providers/registry';
 import { accountById } from '../../lib/keys/accounts';
 import { askConfirm } from '../ConfirmDialog';
 
-import { Button, Icon } from '../ui';
-import { Section,  selectCls } from '../settings-ui';
+import { Button, Icon, TextField } from '../ui';
+import { Section,  } from '../settings-ui';
 import { t } from './messages';
 import { sentences } from '../messages';
 import { formatDateTime, formatNumber } from '../../lib/i18n';
@@ -120,8 +120,8 @@ export function PrivacyTab() {
           </label>
           {encrypt && (
             <div class="grid gap-2 sm:grid-cols-2">
-              <input type="password" autocomplete="new-password" class={selectCls} placeholder={t('privacy.passwordPlaceholder')} value={pw1} onInput={(e) => setPw1((e.target as HTMLInputElement).value)} aria-label={t('privacy.passwordLabel')} />
-              <input type="password" autocomplete="new-password" class={selectCls} placeholder={t('privacy.passwordConfirmPlaceholder')} value={pw2} onInput={(e) => setPw2((e.target as HTMLInputElement).value)} aria-label={t('privacy.passwordConfirmLabel')} />
+              <TextField type="password" autocomplete="new-password" placeholder={t('privacy.passwordPlaceholder')} value={pw1} onInput={(e) => setPw1((e.target as HTMLInputElement).value)} aria-label={t('privacy.passwordLabel')} />
+              <TextField type="password" autocomplete="new-password" placeholder={t('privacy.passwordConfirmPlaceholder')} value={pw2} onInput={(e) => setPw2((e.target as HTMLInputElement).value)} aria-label={t('privacy.passwordConfirmLabel')} />
             </div>
           )}
           <div class="flex flex-wrap gap-2">
@@ -160,7 +160,7 @@ export function PrivacyTab() {
               }}
             >
               <span class="text-xs text-muted">{t('privacy.fileEncrypted', { name: pendingFile.name })}</span>
-              <input type="password" autocomplete="current-password" class={selectCls} placeholder={t('privacy.password')} value={importPw} onInput={(e) => setImportPw((e.target as HTMLInputElement).value)} aria-label={t('privacy.passwordLabel')} data-autofocus />
+              <TextField type="password" autocomplete="current-password" placeholder={t('privacy.password')} value={importPw} onInput={(e) => setImportPw((e.target as HTMLInputElement).value)} aria-label={t('privacy.passwordLabel')} data-autofocus />
               <Button variant="primary" type="submit" disabled={!importPw}>
                 {t('privacy.decryptImport')}
               </Button>

@@ -4,8 +4,8 @@ import { providerById, visibleModels } from '../../state/models';
 import { saveSettings, settings } from '../../state/settings';
 import { formatNumber } from '../../lib/i18n';
 import { settingsSections } from '../extensions';
-import { Icon, cx } from '../ui';
-import { Section, Toggle, selectCls } from '../settings-ui';
+import { Icon, Select, TextField, cx } from '../ui';
+import { Section, Toggle, } from '../settings-ui';
 import { t } from './messages';
 import { around } from '../messages';
 
@@ -26,12 +26,12 @@ export function ChatTab() {
             {t('chat.temperature')}
             <span class="block text-xs text-muted">{t('chat.temperatureHint')}</span>
           </span>
-          <input
+          <TextField
             type="number"
             min={0}
             max={2}
             step={0.1}
-            class={cx(selectCls, 'w-24')}
+            class="w-24"
             value={s.temperature ?? ''}
             onChange={(e) => {
               const v = (e.target as HTMLInputElement).value;
@@ -51,35 +51,35 @@ export function ChatTab() {
         <div class={cx('grid gap-3 sm:grid-cols-2', !s.replySuggestions && 'opacity-50')}>
           <label class="flex items-center justify-between gap-3 text-sm">
             {t('chat.suggestionCount')}
-            <select disabled={!s.replySuggestions} class={selectCls} value={String(s.suggestionCount)} onChange={(e) => saveSettings({ suggestionCount: Number((e.target as HTMLSelectElement).value) })}>
+            <Select disabled={!s.replySuggestions} value={String(s.suggestionCount)} onChange={(e) => saveSettings({ suggestionCount: Number((e.target as HTMLSelectElement).value) })}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <option key={n} value={n}>
                   {t('chat.suggestionCountOption', { n })}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label class="flex items-center justify-between gap-3 text-sm">
             {t('chat.suggestionTurns')}
-            <select disabled={!s.replySuggestions} class={selectCls} value={String(s.suggestionTurns)} onChange={(e) => saveSettings({ suggestionTurns: Number((e.target as HTMLSelectElement).value) })}>
+            <Select disabled={!s.replySuggestions} value={String(s.suggestionTurns)} onChange={(e) => saveSettings({ suggestionTurns: Number((e.target as HTMLSelectElement).value) })}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <option key={n} value={n}>
                   {t('chat.suggestionTurnsOption', { n })}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
         <label class={cx('block text-sm', !s.replySuggestions && 'opacity-50')}>
           {t('chat.suggestionModel')}
-          <select disabled={!s.replySuggestions} class={cx(selectCls, 'mt-1 block w-full py-1.5')} value={s.suggestionModel} onChange={(e) => saveSettings({ suggestionModel: (e.target as HTMLSelectElement).value })}>
+          <Select disabled={!s.replySuggestions} class="mt-1 block w-full" value={s.suggestionModel} onChange={(e) => saveSettings({ suggestionModel: (e.target as HTMLSelectElement).value })}>
             <option value="">{t('chat.sameModel')}</option>
             {choices.map((m) => (
               <option key={m.providerId + m.id} value={`${m.providerId}|${m.id}`}>
                 {modelOption(m)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </Section>
       {settingsSections
@@ -96,24 +96,24 @@ export function ChatTab() {
         <Toggle checked={s.autoCompact} onChange={(v) => saveSettings({ autoCompact: v })} title={t('chat.autoCompact')} desc={t('chat.autoCompactDesc')} />
         <label class={cx('flex items-center justify-between gap-3 text-sm', !s.autoCompact && 'opacity-50')}>
           {t('chat.compactThreshold')}
-          <select disabled={!s.autoCompact} class={selectCls} value={String(Math.round(s.compactThreshold * 100))} onChange={(e) => saveSettings({ compactThreshold: Number((e.target as HTMLSelectElement).value) / 100 })}>
+          <Select disabled={!s.autoCompact} value={String(Math.round(s.compactThreshold * 100))} onChange={(e) => saveSettings({ compactThreshold: Number((e.target as HTMLSelectElement).value) / 100 })}>
             {[50, 60, 70, 80, 90].map((v) => (
               <option key={v} value={v}>
                 {t('chat.compactThresholdOption', { n: formatNumber(v) })}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label class="block text-sm">
           {t('chat.compactModel')}
-          <select class={cx(selectCls, 'mt-1 block w-full py-1.5')} value={s.compactModel} onChange={(e) => saveSettings({ compactModel: (e.target as HTMLSelectElement).value })}>
+          <Select class="mt-1 block w-full" value={s.compactModel} onChange={(e) => saveSettings({ compactModel: (e.target as HTMLSelectElement).value })}>
             <option value="">{t('chat.sameModel')}</option>
             {choices.map((m) => (
               <option key={m.providerId + m.id} value={`${m.providerId}|${m.id}`}>
                 {modelOption(m)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <Toggle
           checked={s.resendReasoning}

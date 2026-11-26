@@ -2,7 +2,7 @@
 import { useRef } from 'preact/hooks';
 import { conversations } from '../../../state/conversations';
 import { mainView } from '../../../state/ui';
-import { Button, Icon, cx, type IconName } from '../../../components/ui';
+import { Button, Icon, RowHighlight, SearchField, cx, useSelectedBox, type IconName } from '../../../components/ui';
 import { conversationsWithItems, inView } from '../filer';
 import { filerConversation, filerQuery, filerView, importFromDevice, openFiler, type FilerView } from '../state';
 import { useFilerItems, viewLabel } from './filer-items';
@@ -20,6 +20,9 @@ const VIEWS: [FilerView, IconName][] = [
 export function FilesPanel() {
   const items = useFilerItems();
   const input = useRef<HTMLInputElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  // The open view's background slides to it (like the conversation list)
+  const current = useSelectedBox(navRef, '[aria-current="page"]');
   const onFiler = mainView.value.kind === 'files';
   const view = filerView.value;
   const conv = filerConversation.value;
@@ -49,21 +52,18 @@ export function FilesPanel() {
             }
           }}
         />
-        <label class="flex items-center gap-2 rounded-lg bg-glass px-2.5 py-1.5 text-sm focus-within:ring-2 focus-within:ring-accent/50">
-          <Icon name="search" class="size-3.5 text-faint" />
-          <input
-            class="w-full bg-transparent outline-none"
-            placeholder={t('panel.search')}
-            value={filerQuery.value}
-            onInput={(e) => {
-              filerQuery.value = (e.target as HTMLInputElement).value;
-              if (!onFiler) openFiler();
-            }}
-            aria-label={t('panel.searchLabel')}
-          />
-        </label>
+        <SearchField
+          placeholder={t('panel.search')}
+          label={t('panel.searchLabel')}
+          value={filerQuery.value}
+          onInput={(v) => {
+            filerQuery.value = v;
+            if (!onFiler) openFiler();
+          }}
+        />
       </div>
-      <nav class="scroll-thin flex-1 space-y-3 overflow-y-auto px-2 pb-2" aria-label={t('panel.nav')}>
+      <nav ref={navRef} class="scroll-thin relative isolate flex-1 space-y-3 overflow-y-auto px-2 pb-2" aria-label={t('panel.nav')}>
+        <RowHighlight box={current} class="inset-x-2" />
         <ul>
           {VIEWS.map(([v, icon]) => {
             const active = onFiler && view === v && !conv;
@@ -72,7 +72,7 @@ export function FilesPanel() {
                 <button
                   type="button"
                   aria-current={active ? 'page' : undefined}
-                  class={cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm', active ? 'bg-glass-strong font-medium' : 'hover:bg-glass-strong')}
+                  class={cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm', active ? 'text-ink-strong' : 'hover:bg-glass-strong')}
                   onClick={() => openFiler(v, null)}
                 >
                   <Icon name={icon} class="size-4 shrink-0 text-muted" />
@@ -94,7 +94,7 @@ export function FilesPanel() {
                     <button
                       type="button"
                       aria-current={active ? 'page' : undefined}
-                      class={cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm', active ? 'bg-glass-strong font-medium' : 'hover:bg-glass-strong')}
+                      class={cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm', active ? 'text-ink-strong' : 'hover:bg-glass-strong')}
                       onClick={() => openFiler('all', c.id)}
                     >
                       <Icon name="chat" class="size-4 shrink-0 text-faint" />

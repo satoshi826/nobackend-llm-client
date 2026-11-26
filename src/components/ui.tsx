@@ -1,4 +1,4 @@
-import type { ComponentChildren, ButtonHTMLAttributes, RefObject } from 'preact';
+import type { ComponentChildren, ButtonHTMLAttributes, InputHTMLAttributes, RefObject, SelectHTMLAttributes, TextareaHTMLAttributes } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { useDialog } from './dialog';
 import { t } from './messages';
@@ -67,12 +67,9 @@ export function Icon({ name, class: className = 'size-4', filled }: { name: Icon
   );
 }
 
-export function Button({
-  variant = 'ghost',
-  class: className,
-  children,
-  ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'outline' | 'danger' }) {
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'outline' | 'danger' };
+
+export function Button({ variant = 'ghost', class: className, children, ...rest }: ButtonProps) {
   // primary: the one main action of a view; outline = secondary (glass); ghost: toolbar / icon buttons; danger: destructive
   const base =
     'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] text-sm font-medium transition duration-200 active:scale-[.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100';
@@ -87,6 +84,14 @@ export function Button({
       {children}
     </button>
   );
+}
+
+/**
+ * A button that shows only an icon. `label` is its accessible name and its tooltip, so neither can be forgotten;
+ * pass `title` only when the tooltip should say more than the name.
+ */
+export function IconButton({ label, ...rest }: Omit<ButtonProps, 'aria-label'> & { label: string }) {
+  return <Button aria-label={label} title={label} {...rest} />;
 }
 
 /**
@@ -112,20 +117,67 @@ export function Collapse({ open, class: className, children }: { open: boolean; 
 }
 
 /**
- * Segmented control (tabs): a sunken track with a selected segment that slides to the chosen item.
- * Children are the equal-width items (role="tab" buttons with flex-1 and relative z-10).
+ * Segmented control (a few mutually exclusive choices: sidebar tabs, layouts, ranges): a sunken track whose
+ * selected segment slides to the chosen item. Arrow keys move the choice. `stretch` makes the items share the width.
+ * An item with `iconOnly` shows just its icon; its label is the accessible name and the tooltip.
  */
-export function Segmented({ label, index, count, class: className, children }: { label: string; index: number; count: number; class?: string; children: ComponentChildren }) {
+export function Segmented<T extends string>({
+  items,
+  value,
+  onChange,
+  label,
+  size = 'md',
+  stretch,
+  class: className
+}: {
+  items: { id: NoInfer<T>; label: string; icon?: IconName; iconOnly?: boolean }[];
+  value: T;
+  onChange(id: NoInfer<T>): void;
+  label: string;
+  size?: 'sm' | 'md';
+  stretch?: boolean;
+  class?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const box = useSelectedBox(ref, '[aria-selected="true"]');
   return (
-    <div role="tablist" aria-label={label} class={cx('relative flex rounded-xl bg-sunken p-0.5', className)}>
-      {index >= 0 && (
+    <div ref={ref} role="tablist" aria-label={label} class={cx('relative rounded-xl bg-sunken p-0.5', stretch ? 'flex' : 'inline-flex', className)}>
+      {box && (
         <span
           aria-hidden="true"
-          class="absolute inset-y-0.5 left-0.5 rounded-[9px] border border-line bg-glass-strong shadow-sm transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]"
-          style={{ width: `calc((100% - 4px) / ${count})`, transform: `translateX(${index * 100}%)` }}
+          class="absolute top-0 left-0 rounded-[9px] border border-line bg-glass-strong shadow-sm transition-[translate,width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]"
+          style={{ width: `${box.w}px`, height: `${box.h}px`, translate: `${box.x}px ${box.y}px` }}
         />
       )}
-      {children}
+      {items.map((x) => (
+        <button
+          key={x.id}
+          type="button"
+          role="tab"
+          aria-selected={value === x.id}
+          tabIndex={value === x.id ? 0 : -1}
+          aria-label={x.iconOnly ? x.label : undefined}
+          title={x.iconOnly ? x.label : undefined}
+          onClick={() => onChange(x.id)}
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+            e.preventDefault();
+            const i = items.findIndex((y) => y.id === value);
+            const next = items[(i + (e.key === 'ArrowRight' ? 1 : items.length - 1)) % items.length];
+            onChange(next.id);
+            requestAnimationFrame(() => ref.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
+          }}
+          class={cx(
+            'relative z-10 flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px]',
+            size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1.5 text-sm',
+            stretch && 'flex-1',
+            value === x.id ? 'text-ink-strong' : 'text-muted hover:text-ink'
+          )}
+        >
+          {x.icon && <Icon name={x.icon} class={size === 'sm' ? 'size-3.5' : 'size-4'} />}
+          {!x.iconOnly && x.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -199,6 +251,21 @@ export function useSelectedBox(ref: RefObject<HTMLElement | null>, selector: str
   return box;
 }
 
+/**
+ * The background that slides to the selected row of a list (conversations, file views). Put it first inside the
+ * list, which must be `relative isolate`; `box` comes from useSelectedBox on that list.
+ */
+export function RowHighlight({ box, class: className }: { box: Box | null; class?: string }) {
+  if (!box) return null;
+  return (
+    <span
+      aria-hidden="true"
+      class={cx('absolute top-0 -z-10 rounded-lg bg-glass-strong transition-[translate,height] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]', className)}
+      style={{ height: `${box.h}px`, translate: `0 ${box.y}px` }}
+    />
+  );
+}
+
 /** Tabs in a column (settings on wide screens): the selected tab's background slides to it */
 export function SideTabs<T extends string>({ tabs, value, onChange, label, class: className }: { tabs: { id: T; label: string }[]; value: T; onChange(id: T): void; label?: string; class?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -227,7 +294,7 @@ export function SideTabs<T extends string>({ tabs, value, onChange, label, class
             onChange(next.id);
             requestAnimationFrame(() => ref.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
           }}
-          class={cx('relative z-10 rounded-[10px] px-3 py-2 text-left text-sm', value === x.id ? 'font-medium text-ink-strong' : 'text-muted hover:text-ink')}
+          class={cx('relative z-10 rounded-[10px] px-3 py-2 text-left text-sm', value === x.id ? 'text-ink-strong' : 'text-muted hover:text-ink')}
         >
           {x.label}
         </button>
@@ -252,7 +319,7 @@ export function TabStrip<T extends string>({ tabs, value, onChange, label, class
           role="tab"
           aria-selected={value === x.id}
           onClick={() => onChange(x.id)}
-          class={cx('shrink-0 rounded-t-lg px-3 py-2 text-sm', value === x.id ? 'font-medium text-ink-strong' : 'text-muted hover:bg-glass hover:text-ink')}
+          class={cx('shrink-0 rounded-t-lg px-3 py-2 text-sm', value === x.id ? 'text-ink-strong' : 'text-muted hover:bg-glass hover:text-ink')}
         >
           {x.label}
         </button>
@@ -265,6 +332,41 @@ export function TabStrip<T extends string>({ tabs, value, onChange, label, class
         />
       )}
     </div>
+  );
+}
+
+// ---- Fields: one look for every text field, text area, select and search box ----
+const FIELD =
+  'rounded-xl border border-transparent bg-sunken text-ink placeholder:text-faint transition hover:border-line focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-50';
+const SELECT = 'rounded-[10px] border border-line bg-sunken text-ink transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-50';
+const fieldSize = (compact?: boolean) => (compact ? 'px-2.5 py-1 text-xs' : 'px-3 py-2 text-sm');
+
+/** Text input. `compact` for dense rows (toolbars, cards) */
+export function TextField({ compact, class: className, ...rest }: InputHTMLAttributes<HTMLInputElement> & { compact?: boolean }) {
+  return <input class={cx(FIELD, fieldSize(compact), className as string)} {...rest} />;
+}
+
+/** Multi-line text input */
+export function TextArea({ compact, class: className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement> & { compact?: boolean }) {
+  return <textarea class={cx(FIELD, fieldSize(compact), className as string)} {...rest} />;
+}
+
+/** Drop-down choice */
+export function Select({ compact, class: className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement> & { compact?: boolean }) {
+  return (
+    <select class={cx(SELECT, compact ? 'px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-sm', className as string)} {...rest}>
+      {children}
+    </select>
+  );
+}
+
+/** Search box: a field with the search icon; `label` is its accessible name */
+export function SearchField({ value, onInput, placeholder, label, class: className }: { value: string; onInput(v: string): void; placeholder: string; label: string; class?: string }) {
+  return (
+    <label class={cx(FIELD, 'flex items-center gap-2 px-2.5 py-1.5 text-sm focus-within:border-line-strong', className)}>
+      <Icon name="search" class="size-3.5 shrink-0 text-faint" />
+      <input class="w-full min-w-0 bg-transparent outline-none placeholder:text-faint" placeholder={placeholder} value={value} onInput={(e) => onInput((e.target as HTMLInputElement).value)} aria-label={label} />
+    </label>
   );
 }
 
@@ -326,11 +428,11 @@ export function Modal({
       >
         <div class="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 class="font-semibold text-ink-strong">{title}</h2>
-          <Button onClick={onClose} aria-label={t('ui.close')} data-dialog-close>
+          <IconButton onClick={onClose} label={t('ui.close')} data-dialog-close>
             <Icon name="x" />
-          </Button>
+          </IconButton>
         </div>
-        {bare ? <div class="flex min-h-0 flex-1 flex-col">{children}</div> : <div class="scroll-thin overflow-y-auto p-5">{children}</div>}
+        {bare ? <div class="flex min-h-0 flex-1 flex-col">{children}</div> : <div class="scroll-thin min-h-0 flex-1 overflow-y-auto p-5">{children}</div>}
       </div>
     </div>
   );

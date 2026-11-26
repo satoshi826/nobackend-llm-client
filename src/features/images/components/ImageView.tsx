@@ -7,7 +7,7 @@ import { getImage } from '../../../lib/db/images';
 import { currentId, messages, openConversation } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
 import { modal, showToast } from '../../../state/ui';
-import { Button, Icon, Shimmer, Spinner, cx } from '../../../components/ui';
+import { Button, Icon, Shimmer, Spinner, cx, IconButton } from '../../../components/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import {
   deleteImages,
@@ -281,18 +281,18 @@ export function Lightbox() {
           {lb.index + 1} / {lb.items.length}
         </span>
         <div class="ml-auto flex flex-wrap items-center gap-1">
-          <Button class="text-white hover:bg-glass" onClick={download} aria-label={t('lb.download')} title={t('lb.download')}>
+          <IconButton class="text-white hover:bg-glass" onClick={download} label={t('lb.download')}>
             <Icon name="download" />
-          </Button>
+          </IconButton>
           {promptText && (
-            <Button
+            <IconButton
               class="text-white hover:bg-glass"
-              aria-label={t('lb.copyPrompt')}
-              title={t('lb.copyPrompt')}
+              label={t('lb.copyPrompt')}
+             
               onClick={() => void navigator.clipboard.writeText(promptText).then(() => showToast(t('lb.copied')))}
             >
               <Icon name="copy" />
-            </Button>
+            </IconButton>
           )}
           {imageReady.value && (
             <>
@@ -313,10 +313,10 @@ export function Lightbox() {
               </Button>
             </>
           )}
-          <Button
+          <IconButton
             class="text-white hover:bg-glass"
-            aria-label={t('lb.delete')}
-            title={t('lb.delete')}
+            label={t('lb.delete')}
+           
             onClick={async () => {
               const cur = lightbox.value;
               if (!cur || !(await confirmAndDelete([item.blobId]))) return;
@@ -325,7 +325,7 @@ export function Lightbox() {
             }}
           >
             <Icon name="trash" />
-          </Button>
+          </IconButton>
           {lb.fromGallery && !inThisChat && (
             <Button
               class="text-xs text-white hover:bg-glass"
@@ -338,9 +338,9 @@ export function Lightbox() {
               {t('lb.openChat')}
             </Button>
           )}
-          <Button class="text-white hover:bg-glass" onClick={close} aria-label={t('lb.close')} data-dialog-close>
+          <IconButton class="text-white hover:bg-glass" onClick={close} label={t('lb.close')} data-dialog-close>
             <Icon name="x" />
-          </Button>
+          </IconButton>
         </div>
       </div>
       {editing && (
@@ -367,10 +367,10 @@ export function Lightbox() {
         {url ? <img src={url} alt={promptText || t('lb.alt')} class="max-h-full max-w-full object-contain" /> : <Spinner class="size-6" />}
         {lb.items.length > 1 && (
           <>
-            <button type="button" class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass" onClick={() => step(-1)} aria-label={t('lb.prev')}>
+            <button type="button" class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass" onClick={() => step(-1)} aria-label={t('lb.prev')} title={t('lb.prev')}>
               <Icon name="chevron-left" />
             </button>
-            <button type="button" class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass" onClick={() => step(1)} aria-label={t('lb.next')}>
+            <button type="button" class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass" onClick={() => step(1)} aria-label={t('lb.next')} title={t('lb.next')}>
               <Icon name="chevron-right" />
             </button>
           </>

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'preact/hooks';
 import type { Part } from '../../../lib/providers/types';
 import { resolveApproval } from '../../../state/approvals';
 import { lineDiff } from '../../../lib/skills/diff';
-import { Button, Icon, cx } from '../../../components/ui';
+import { Button, Icon, Segmented, TextArea, TextField, cx } from '../../../components/ui';
 import { allSkills } from '../state';
 import { t } from '../messages';
 
@@ -16,7 +16,6 @@ interface Draft {
   model_invocable: boolean;
 }
 
-const fieldCls = 'block w-full rounded-lg border border-line bg-glass px-3 py-1.5 text-[13px]';
 
 function Diff({ before, after }: { before: string; after: string }) {
   const lines = useMemo(() => lineDiff(before, after), [before, after]);
@@ -60,20 +59,17 @@ export function SkillApproval({ p }: { p: ToolPart }) {
         {t('approval.help')}
       </p>
       {existing && (
-        <div class="mb-2 flex gap-1 text-xs" role="tablist">
-          {(['diff', 'edit'] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              role="tab"
-              aria-selected={view === v}
-              class={cx('rounded-md px-2 py-1', view === v ? 'bg-glass shadow-sm' : 'text-muted')}
-              onClick={() => setView(v)}
-            >
-              {v === 'diff' ? t('approval.tabDiff') : t('approval.tabEdit')}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label={t('approval.viewLabel')}
+          items={[
+            { id: 'diff', label: t('approval.tabDiff') },
+            { id: 'edit', label: t('approval.tabEdit') }
+          ]}
+          value={view}
+          onChange={setView}
+          size="sm"
+          class="mb-2"
+        />
       )}
       {view === 'diff' && existing ? (
         <div class="space-y-2">
@@ -93,15 +89,15 @@ export function SkillApproval({ p }: { p: ToolPart }) {
         <div class="space-y-2">
           <label class="block text-xs">
             {t('name')}
-            <input class={cx(fieldCls, 'mt-0.5 font-mono')} value={d.name} onInput={(e) => set({ name: (e.target as HTMLInputElement).value })} />
+            <TextField compact class="mt-0.5 font-mono" value={d.name} onInput={(e) => set({ name: (e.target as HTMLInputElement).value })} />
           </label>
           <label class="block text-xs">
             {t('description')}
-            <textarea class={cx(fieldCls, 'mt-0.5')} rows={2} value={d.description} onInput={(e) => set({ description: (e.target as HTMLTextAreaElement).value })} />
+            <TextArea compact class="mt-0.5" rows={2} value={d.description} onInput={(e) => set({ description: (e.target as HTMLTextAreaElement).value })} />
           </label>
           <label class="block text-xs">
             {t('body')}
-            <textarea class={cx(fieldCls, 'mt-0.5 font-mono text-xs leading-5')} rows={10} value={d.body} onInput={(e) => set({ body: (e.target as HTMLTextAreaElement).value })} />
+            <TextArea compact class="mt-0.5 font-mono leading-5" rows={10} value={d.body} onInput={(e) => set({ body: (e.target as HTMLTextAreaElement).value })} />
           </label>
           <label class="flex items-center gap-1.5 text-xs">
             <input type="checkbox" checked={d.model_invocable} onChange={(e) => set({ model_invocable: (e.target as HTMLInputElement).checked })} />
@@ -116,8 +112,8 @@ export function SkillApproval({ p }: { p: ToolPart }) {
         <Button variant="outline" onClick={() => resolveApproval(p.toolCallId, { approved: false, reason: reason || undefined })}>
           {t('approval.deny')}
         </Button>
-        <input
-          class="min-w-0 flex-1 rounded-lg border border-line bg-glass px-2 py-1 text-xs"
+        <TextField compact
+          class="min-w-0 flex-1"
           placeholder={t('approval.reason')}
           value={reason}
           onInput={(e) => setReason((e.target as HTMLInputElement).value)}

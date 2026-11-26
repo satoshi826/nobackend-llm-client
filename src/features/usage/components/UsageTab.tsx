@@ -6,7 +6,7 @@ import { summarizeUsage, type UsageRecord, type UsageTotals } from '../../../lib
 import { modelOf, providerById } from '../../../state/models';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { Button, Icon, cx } from '../../../components/ui';
+import { Button, Chip, Icon, IconButton, Segmented, cx } from '../../../components/ui';
 import { formatDate, formatNumber, formatDateTime } from '../../../lib/i18n';
 import { t } from '../messages';
 
@@ -180,23 +180,10 @@ export function UsageTab() {
       <p class="text-xs leading-5 text-muted">{t('intro')}</p>
       <BalanceSection />
       <div class="flex flex-wrap items-center gap-2">
-        <div class="flex gap-1 rounded-lg bg-glass-strong p-1" role="tablist" aria-label={t('range.label')}>
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              role="tab"
-              aria-selected={range === r}
-              onClick={() => setRange(r)}
-              class={cx('rounded-md px-3 py-1 text-sm', range === r ? 'bg-glass shadow-sm' : 'text-muted')}
-            >
-              {rangeLabel(r)}
-            </button>
-          ))}
-        </div>
-        <Button class="ml-auto text-xs" onClick={load} aria-label={t('reload')}>
+        <Segmented label={t('range.label')} items={RANGES.map((r) => ({ id: r, label: rangeLabel(r) }))} value={range} onChange={setRange} />
+        <IconButton class="ml-auto text-xs" onClick={load} label={t('reload')}>
           <Icon name="refresh" class="size-3.5" />
-        </Button>
+        </IconButton>
       </div>
       {!s ? (
         <p class="text-sm text-muted">{t('loading')}</p>
@@ -219,15 +206,21 @@ export function UsageTab() {
             <section class="space-y-2">
               <div class="flex items-center gap-2">
                 <h3 class="text-sm font-semibold">{t('byDay')}</h3>
-                <div class="ml-auto flex gap-1 text-xs" role="tablist" aria-label={t('chart.metric')}>
-                  {(['cost', 'tokens'] as const).map((m) => (
-                    <button key={m} type="button" role="tab" aria-selected={metric === m} onClick={() => setMetric(m)} class={cx('rounded-md px-2 py-0.5', metric === m ? 'bg-glass-strong' : 'text-muted')}>
-                      {m === 'cost' ? t('chart.cost') : t('chart.tokens')}
-                    </button>
-                  ))}
-                  <button type="button" aria-pressed={showDays} onClick={() => setShowDays(!showDays)} class={cx('rounded-md px-2 py-0.5', showDays ? 'bg-glass-strong' : 'text-muted')}>
+                <div class="ml-auto flex items-center gap-2">
+                  <Segmented
+                    label={t('chart.metric')}
+                    items={[
+                      { id: 'cost', label: t('chart.cost') },
+                      { id: 'tokens', label: t('chart.tokens') }
+                    ]}
+                    value={metric}
+                    onChange={setMetric}
+                    size="sm"
+                  />
+                  <Chip on={showDays} aria-pressed={showDays} onClick={() => setShowDays(!showDays)}>
+                    <Icon name="list" class="size-3.5" />
                     {t('chart.table')}
-                  </button>
+                  </Chip>
                 </div>
               </div>
               {showDays ? (

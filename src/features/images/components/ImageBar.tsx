@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { aspectsOf, hasOption } from '../providers/common';
 import { ModelOptions } from './ModelOptions';
 import { openSettings } from '../../../state/ui';
-import { Button, Icon, Spinner, cx } from '../../../components/ui';
+import { Button, Icon, Select, Spinner, TextField, cx } from '../../../components/ui';
 import {
   currentImageModel,
   defaultImageModel,
@@ -21,8 +21,6 @@ import {
   setImageDefaults
 } from '../state';
 import { imageCount, t, usd } from '../messages';
-
-const sel = 'min-w-0 rounded-md border border-line bg-glass px-1.5 py-0.5 text-xs';
 
 export function ImageBar() {
   const [details, setDetails] = useState(false);
@@ -65,11 +63,11 @@ export function ImageBar() {
   return (
     <div class="space-y-1.5 px-3 pt-2.5 text-xs" role="group" aria-label={t('bar.group')}>
       <div class="flex flex-wrap items-center gap-1.5">
-        <select
+        <Select compact
           aria-label={t('imageModel')}
           title={t('bar.thisChat')}
           data-image-model
-          class={cx(sel, 'max-w-[13rem]')}
+          class="max-w-[13rem]"
           value={m ? modelRef(m) : ''}
           onChange={(e) => {
             const x = list.find((y) => modelRef(y) === (e.target as HTMLSelectElement).value);
@@ -77,39 +75,39 @@ export function ImageBar() {
           }}
         >
           <ModelOptions list={list} defaultRef={defaultImageModel.value ? modelRef(defaultImageModel.value) : undefined} />
-        </select>
-        <select aria-label={t('bar.aspect')} class={sel} value={aspects.includes(d.aspectRatio) ? d.aspectRatio : (m?.constraints.defaultAspectRatio ?? aspects[0])} onChange={(e) => void setImageDefaults({ aspectRatio: (e.target as HTMLSelectElement).value })}>
+        </Select>
+        <Select compact aria-label={t('bar.aspect')} value={aspects.includes(d.aspectRatio) ? d.aspectRatio : (m?.constraints.defaultAspectRatio ?? aspects[0])} onChange={(e) => void setImageDefaults({ aspectRatio: (e.target as HTMLSelectElement).value })}>
           {aspects.map((a) => (
             <option key={a} value={a}>
               {a}
             </option>
           ))}
-        </select>
+        </Select>
         {!!m?.constraints.resolutions?.length && (
-          <select aria-label={m.constraints.resolutionLabel === 'quality' ? t('bar.quality') : t('bar.resolution')} title={m.constraints.resolutionLabel === 'quality' ? t('bar.quality') : t('bar.resolution')} class={sel} value={d.resolution || m.constraints.defaultResolution || m.constraints.resolutions[0]} onChange={(e) => void setImageDefaults({ resolution: (e.target as HTMLSelectElement).value })}>
+          <Select compact aria-label={m.constraints.resolutionLabel === 'quality' ? t('bar.quality') : t('bar.resolution')} title={m.constraints.resolutionLabel === 'quality' ? t('bar.quality') : t('bar.resolution')} value={d.resolution || m.constraints.defaultResolution || m.constraints.resolutions[0]} onChange={(e) => void setImageDefaults({ resolution: (e.target as HTMLSelectElement).value })}>
             {m.constraints.resolutions.map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>
             ))}
-          </select>
+          </Select>
         )}
-        <select aria-label={t('bar.count')} class={sel} value={String(d.variants)} onChange={(e) => void setImageDefaults({ variants: Number((e.target as HTMLSelectElement).value) })}>
+        <Select compact aria-label={t('bar.count')} value={String(d.variants)} onChange={(e) => void setImageDefaults({ variants: Number((e.target as HTMLSelectElement).value) })}>
           {[1, 2, 3, 4].map((n) => (
             <option key={n} value={n}>
               {imageCount(n)}
             </option>
           ))}
-        </select>
+        </Select>
         {hasOption(m, 'styles') && imageStyles.value.length > 0 && (
-          <select aria-label={t('bar.style')} class={cx(sel, 'max-w-[9rem]')} value={d.style} onChange={(e) => void setImageDefaults({ style: (e.target as HTMLSelectElement).value })}>
+          <Select compact aria-label={t('bar.style')} class="max-w-[9rem]" value={d.style} onChange={(e) => void setImageDefaults({ style: (e.target as HTMLSelectElement).value })}>
             <option value="">{t('bar.noStyle')}</option>
             {imageStyles.value.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
-          </select>
+          </Select>
         )}
         <button type="button" class="flex items-center gap-0.5 text-muted hover:text-ink" aria-expanded={details} onClick={() => setDetails(!details)}>
           {t('bar.details')}
@@ -121,15 +119,15 @@ export function ImageBar() {
       </div>
       {details && (
         <div class="grid gap-1.5 sm:grid-cols-[1fr_auto]">
-          {hasOption(m, 'negativePrompt') && <input
-            class={cx(sel, 'py-1')}
+          {hasOption(m, 'negativePrompt') && <TextField compact
+           
             placeholder={t('bar.negativePlaceholder')}
             value={d.negativePrompt}
             onInput={(e) => void setImageDefaults({ negativePrompt: (e.target as HTMLInputElement).value })}
             aria-label={t('bar.negative')}
           />}
-          {hasOption(m, 'seed') && <input
-            class={cx(sel, 'w-32 py-1 tabular-nums')}
+          {hasOption(m, 'seed') && <TextField compact
+            class="w-32 tabular-nums"
             inputMode="numeric"
             placeholder={t('bar.seedPlaceholder')}
             value={d.seed}

@@ -2,7 +2,7 @@
 // What is shown for each tool (label, icon, summary, details, approval note) comes from the tool views features register.
 import { useState } from 'preact/hooks';
 import { pendingApprovals, resolveApproval } from '../state/approvals';
-import { Button, Collapse, Icon, Shimmer, Spinner, cx } from './ui';
+import { Button, Collapse, Icon, Shimmer, Spinner, TextField, cx } from './ui';
 import { textOf, toolViewFor, type ToolPart } from './extensions';
 import { sentences, t } from './messages';
 
@@ -33,8 +33,8 @@ function ApprovalCard({ p }: { p: ToolPart }) {
         {t('tool.askRun', { tool: labelOf(p.name) })}
       </div>
       {field ? (
-        <input
-          class="block w-full rounded-lg border border-line bg-glass px-3 py-1.5 font-mono text-[13px]"
+        <TextField
+          class="block w-full font-mono"
           value={value}
           onInput={(e) => setValue((e.target as HTMLInputElement).value)}
           aria-label={t('tool.editableLabel', { label: textOf(field.label) })}
@@ -57,8 +57,8 @@ function ApprovalCard({ p }: { p: ToolPart }) {
         <Button variant="outline" onClick={() => resolveApproval(p.toolCallId, { approved: false, reason: reason || undefined })}>
           {t('tool.deny')}
         </Button>
-        <input
-          class="min-w-0 flex-1 rounded-lg border border-line bg-glass px-2 py-1 text-xs"
+        <TextField compact
+          class="min-w-0 flex-1"
           placeholder={t('tool.reasonPlaceholder')}
           value={reason}
           onInput={(e) => setReason((e.target as HTMLInputElement).value)}

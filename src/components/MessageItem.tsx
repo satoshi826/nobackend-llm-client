@@ -12,7 +12,7 @@ import { composerFocus, composerText, openModelPicker, showToast } from '../stat
 import { Markdown } from './Markdown';
 import { ToolCallCard } from './ToolCallCard';
 import { assistantExtras, toolViewFor, userMessageExtras } from './extensions';
-import { Button, Collapse, Dots, Icon, Shimmer, Spinner, cx } from './ui';
+import { Button, Collapse, Dots, Icon, IconButton, Shimmer, Spinner, TextArea, cx } from './ui';
 import { t } from './messages';
 import { formatNumber } from '../lib/i18n';
 
@@ -26,15 +26,15 @@ function SiblingNav({ m }: { m: MessageRecord }) {
   const i = sibs.findIndex((s) => s.id === m.id);
   return (
     <div class="flex items-center text-xs text-muted">
-      <Button aria-label={t('msg.prevVersion')} disabled={i <= 0 || isStreaming.value} onClick={() => switchSibling(m.id, -1)}>
+      <IconButton label={t('msg.prevVersion')} disabled={i <= 0 || isStreaming.value} onClick={() => switchSibling(m.id, -1)}>
         <Icon name="chevron-left" class="size-3.5" />
-      </Button>
+      </IconButton>
       <span class="tabular-nums">
         {i + 1}/{sibs.length}
       </span>
-      <Button aria-label={t('msg.nextVersion')} disabled={i >= sibs.length - 1 || isStreaming.value} onClick={() => switchSibling(m.id, 1)}>
+      <IconButton label={t('msg.nextVersion')} disabled={i >= sibs.length - 1 || isStreaming.value} onClick={() => switchSibling(m.id, 1)}>
         <Icon name="chevron-right" class="size-3.5" />
-      </Button>
+      </IconButton>
     </div>
   );
 }
@@ -129,8 +129,8 @@ function UserMessage({ m }: { m: MessageRecord }) {
   if (editing) {
     return (
       <div class="ml-auto w-full max-w-[85%]">
-        <textarea
-          class="w-full rounded-xl border border-line bg-glass p-3 text-[15px]"
+        <TextArea
+          class="w-full"
           rows={Math.min(12, draft.split('\n').length + 1)}
           value={draft}
           onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)}
@@ -161,11 +161,11 @@ function UserMessage({ m }: { m: MessageRecord }) {
       {textOf(m) && <UserText text={textOf(m)} />}
       <div class="mt-1 flex items-center gap-0.5 opacity-60 transition group-hover:opacity-100 focus-within:opacity-100">
         <SiblingNav m={m} />
-        <Button aria-label={t('msg.copy')} onClick={() => copy(textOf(m))}>
+        <IconButton label={t('msg.copy')} onClick={() => copy(textOf(m))}>
           <Icon name="copy" class="size-3.5" />
-        </Button>
-        <Button
-          aria-label={t('msg.edit')}
+        </IconButton>
+        <IconButton
+          label={t('msg.edit')}
           disabled={isStreaming.value}
           onClick={() => {
             setDraft(textOf(m));
@@ -173,7 +173,7 @@ function UserMessage({ m }: { m: MessageRecord }) {
           }}
         >
           <Icon name="edit" class="size-3.5" />
-        </Button>
+        </IconButton>
       </div>
     </div>
   );
@@ -253,24 +253,24 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
       {!streaming && (
         <div class="mt-1.5 flex flex-wrap items-center gap-0.5 text-xs text-muted opacity-70 transition group-hover:opacity-100 focus-within:opacity-100">
           <SiblingNav m={m} />
-          <Button aria-label={t('msg.copy')} onClick={() => copy(textOf(m))}>
+          <IconButton label={t('msg.copy')} onClick={() => copy(textOf(m))}>
             <Icon name="copy" class="size-3.5" />
-          </Button>
+          </IconButton>
           {/* One regenerate control: the arrow reruns with the same model, the chevron picks another model */}
           <span class="inline-flex items-center rounded-[10px] transition hover:bg-glass">
-            <Button aria-label={t('msg.regenerate')} title={t('msg.regenerate')} disabled={isStreaming.value} onClick={() => regenerate(m.id)} class="group/re">
+            <IconButton label={t('msg.regenerate')} disabled={isStreaming.value} onClick={() => regenerate(m.id)} class="group/re">
               <Icon name="refresh" class="size-3.5 transition-transform duration-500 group-hover/re:rotate-180" />
-            </Button>
+            </IconButton>
             {!owned && (
-              <Button
-                aria-label={t('msg.regenerateOther')}
-                title={t('msg.regenerateOther')}
+              <IconButton
+                label={t('msg.regenerateOther')}
+               
                 disabled={isStreaming.value}
                 class="-ml-1 px-1!"
                 onClick={() => openModelPicker({ kind: 'regenerate', assistantId: m.id })}
               >
                 <Icon name="chevron-down" class="size-3" />
-              </Button>
+              </IconButton>
             )}
           </span>
           <span class="ml-1 truncate" title={m.meta?.model}>

@@ -10,7 +10,7 @@ import { clearLeftoverLocalKeys, leftoverLocalKeys } from '../state/keys';
 import { dataLock, lockNow } from '../state/lock';
 import { providerById } from '../state/models';
 import { openSettings, showToast, sidebarOpen, sidebarTab } from '../state/ui';
-import { Button, Icon, Segmented, cx, useSelectedBox } from './ui';
+import { Button, Icon, IconButton, RowHighlight, SearchField, Segmented, TextField, cx, useSelectedBox } from './ui';
 import { askConfirm } from './ConfirmDialog';
 import { sidebarTabs, textOf } from './extensions';
 import { t } from './messages';
@@ -41,8 +41,8 @@ function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet
           if (title.trim()) void updateConversation({ title: title.trim() }, c.id);
         }}
       >
-        <input
-          class="w-full rounded-md border border-line bg-glass px-2 py-1 text-sm"
+        <TextField compact
+          class="w-full"
           value={title}
           autoFocus
           aria-label={t('side.renameLabel')}
@@ -66,12 +66,12 @@ function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet
       </button>
       {/* Always shown on touch devices (no hover) */}
       <div class="hidden shrink-0 items-center pr-1 group-focus-within:flex group-hover:flex [@media(hover:none)]:flex">
-        <Button aria-label={c.pinned ? t('side.unpin') : t('side.pin')} title={c.pinned ? t('side.unpin') : t('side.pin')} onClick={() => updateConversation({ pinned: c.pinned ? 0 : 1 }, c.id)} class="px-1!">
+        <IconButton label={c.pinned ? t('side.unpin') : t('side.pin')} onClick={() => updateConversation({ pinned: c.pinned ? 0 : 1 }, c.id)} class="px-1!">
           <Icon name="pin" class="size-3.5" />
-        </Button>
-        <Button
-          aria-label={t('side.rename')}
-          title={t('side.rename')}
+        </IconButton>
+        <IconButton
+          label={t('side.rename')}
+         
           onClick={() => {
             setTitle(c.title);
             setRenaming(true);
@@ -79,10 +79,10 @@ function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet
           class="px-1!"
         >
           <Icon name="edit" class="size-3.5" />
-        </Button>
-        <Button
-          aria-label={t('side.delete')}
-          title={t('side.delete')}
+        </IconButton>
+        <IconButton
+          label={t('side.delete')}
+         
           class="px-1! hover:text-danger"
           onClick={() =>
             void askConfirm({
@@ -96,7 +96,7 @@ function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet
           }
         >
           <Icon name="trash" class="size-3.5" />
-        </Button>
+        </IconButton>
       </div>
     </div>
   );
@@ -203,30 +203,20 @@ export function Sidebar() {
         aria-label={t('side.label')}
       >
         {sidebarTabs.length > 0 && (
-          <Segmented label={t('side.tabsLabel')} index={allTabs.findIndex((x) => x.id === tab)} count={allTabs.length} class="m-2">
-            {allTabs.map((x) => (
-              <button
-                key={x.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === x.id}
-                class={cx(
-                  'relative z-10 flex flex-1 items-center justify-center gap-1.5 rounded-[9px] px-2 py-1.5 text-sm transition-colors duration-200',
-                  tab === x.id ? 'font-medium text-ink-strong' : 'text-muted hover:text-ink'
-                )}
-                onClick={() => {
-                  if (x.id === 'chats') showChat();
-                  else {
-                    sidebarTab.value = x.id;
-                    sidebarTabs.find((y) => y.id === x.id)?.onSelect?.();
-                  }
-                }}
-              >
-                <Icon name={x.icon} class="size-3.5" />
-                {textOf(x.label)}
-              </button>
-            ))}
-          </Segmented>
+          <Segmented
+            label={t('side.tabsLabel')}
+            items={allTabs.map((x) => ({ id: x.id, label: textOf(x.label), icon: x.icon }))}
+            value={tab}
+            onChange={(id) => {
+              if (id === 'chats') showChat();
+              else {
+                sidebarTab.value = id;
+                sidebarTabs.find((y) => y.id === id)?.onSelect?.();
+              }
+            }}
+            stretch
+            class="m-2"
+          />
         )}
         {ActivePanel ? (
           <ActivePanel />
@@ -237,19 +227,10 @@ export function Sidebar() {
             <Icon name="plus" />
             {t('side.newChat')}
           </Button>
-          <label class="flex items-center gap-2 rounded-lg bg-glass px-2.5 py-1.5 text-sm focus-within:ring-2 focus-within:ring-accent/50">
-            <Icon name="search" class="size-3.5 text-faint" />
-            <input class="w-full bg-transparent outline-none" placeholder={t('side.searchPlaceholder')} value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label={t('side.searchLabel')} />
-          </label>
+          <SearchField placeholder={t('side.searchPlaceholder')} label={t('side.searchLabel')} value={q} onInput={setQ} />
         </div>
         <nav ref={navRef} class="scroll-thin relative isolate flex-1 space-y-3 overflow-y-auto px-2 pb-2">
-          {current && (
-            <span
-              aria-hidden="true"
-              class="absolute inset-x-2 top-0 -z-10 rounded-lg bg-glass-strong transition-[translate,height] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]"
-              style={{ height: `${current.h}px`, translate: `0 ${current.y}px` }}
-            />
-          )}
+          <RowHighlight box={current} class="inset-x-2" />
           {pinned.length > 0 && (
             <section>
               <h3 class="px-2.5 py-1 text-xs font-medium text-muted">{t('side.pinned')}</h3>
@@ -277,9 +258,9 @@ export function Sidebar() {
             {t('side.settings')}
           </Button>
           {dataLock.value === 'unlocked' && (
-            <Button aria-label={t('side.lock')} title={t('side.lockTitle')} onClick={() => void lockNow()}>
+            <IconButton label={t('side.lock')} title={t('side.lockTitle')} onClick={() => void lockNow()}>
               <Icon name="lock" />
-            </Button>
+            </IconButton>
           )}
         </div>
       </aside>

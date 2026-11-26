@@ -303,6 +303,10 @@ body {
     scale: 0.97;
     transition-duration: 80ms;
   }
+  /* Everything clickable shows the pointing hand (Tailwind's preflight leaves buttons on the arrow) */
+  :where(a[href], button, summary, select, [role='tab'], [role='menuitem'], [role='option'], [role='button'], input[type='checkbox'], input[type='radio'], label:has(> input[type='checkbox'], > input[type='radio'])):not(:disabled) {
+    cursor: pointer;
+  }
   /* Icons inside buttons answer the hover too */
   :where(button, a, [role='tab'], [role='menuitem']) > svg {
     transition: scale 200ms var(--ease-spring), rotate 300ms var(--ease-out), translate 200ms var(--ease-out), color 200ms;

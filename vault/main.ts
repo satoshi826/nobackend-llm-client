@@ -42,7 +42,8 @@ const APP_ORIGINS: string[] = [
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
-  location.origin
+  // never 'null', the origin of every sandboxed frame
+  ...(location.origin !== 'null' ? [location.origin] : [])
 ];
 /** Origin of the embedding app (only available in Chromium-based browsers) */
 const parentOrigin: string | undefined = (location as any).ancestorOrigins?.[0];

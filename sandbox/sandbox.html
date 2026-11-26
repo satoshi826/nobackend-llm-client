@@ -62,7 +62,7 @@
             done = true;
             clearTimeout(timer);
             worker.terminate();
-            port.postMessage({ type: 'result', id: d.id, ...m });
+            port.postMessage({ ...m, type: 'result', id: d.id });
           };
           const timer = setTimeout(() => finish({ logs: [], error: 'Stopped: it ran longer than ' + d.timeoutMs + ' ms.' }), d.timeoutMs);
           worker.onmessage = (m) => finish(m.data);

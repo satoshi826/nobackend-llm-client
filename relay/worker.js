@@ -8,14 +8,15 @@ const MAX_REDIRECTS = 5;
 
 /** Hosts the relay never reaches: this machine, private networks, link-local and similar */
 function isPrivateHost(host) {
-  const h = host.replace(/^\[|\]$/g, '').toLowerCase();
+  // A trailing dot names the same host ('localhost.' is localhost)
+  const h = host.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.+$/, '');
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true;
   const v4 = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
   if (v4) {
     const [a, b] = [Number(v4[1]), Number(v4[2])];
     return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
   }
-  return h.includes(':') && (h === '::1' || h === '::' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80') || h.startsWith('::ffff:'));
+  return h.includes(':') && (h === '::1' || h === '::' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80') || h.startsWith('::ffff:') || h.startsWith('64:ff9b:'));
 }
 
 /** Only public https addresses, without credentials */
@@ -60,7 +61,7 @@ export default {
     // A plain request: none of the caller's headers or cookies go on
     const res = await fetchChecked(target);
     if (!res) return new Response('Address not allowed', { status: 400, headers: cors });
-    if (!res.ok || !res.body) return new Response(null, { status: res.ok ? 502 : res.status, headers: cors });
+    if (!res.ok || !res.body) return new Response(null, { status: !res.ok && res.status >= 300 && res.status <= 599 ? res.status : 502, headers: cors });
     if (Number(res.headers.get('content-length') ?? 0) > MAX_BYTES) return new Response('Too large', { status: 413, headers: cors });
     let total = 0;
     const capped = res.body.pipeThrough(

@@ -21,7 +21,8 @@ export function fetchSettingsUrl(theme: 'dark' | 'light'): string {
 }
 
 function pageUrl(params: Record<string, string>, theme: 'dark' | 'light'): string {
+  // In the fragment: the address the model asked for must not reach the host's request logs
   const u = new URL(FETCH_URL);
-  for (const [k, v] of Object.entries({ ...params, app: location.origin, lang: getLang(), theme })) u.searchParams.set(k, v);
+  u.hash = new URLSearchParams({ ...params, app: location.origin, lang: getLang(), theme }).toString();
   return u.toString();
 }

@@ -14,6 +14,9 @@ export function fetchRoutes(env: Record<string, string | undefined>): { relay: s
   return { relay: env.VITE_FETCH_RELAY_URL || '', jina: (env.VITE_JINA_BASE_URL || 'https://r.jina.ai').replace(/\/+$/, '') };
 }
 
+/** The app's proof that it framed the page (sent once the page has loaded); the page shows nothing until then */
+export const FETCH_HELLO = { type: 'fetch-hello' } as const;
+
 export type FromFetcher =
   | { type: 'fetch-resize'; height: number }
   | { type: 'fetch-result'; ok: true; name: string; mime: string; data: ArrayBuffer; url: string; via: FetchVia }

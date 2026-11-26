@@ -56,18 +56,23 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
   return () => ctrl.abort();
 }
 
-// ---- running code: one hidden sandbox frame, jobs answered by id over its port ----
-let hidden: { frame: HTMLIFrameElement; port: Promise<MessagePort> } | null = null;
+// ---- running code: hidden sandbox frames, jobs answered by id over their ports ----
+// Worker runs share one frame (each worker is stopped after its run). A run on the page itself (dom) gets a frame of
+// its own that is removed afterwards: code there could change the page for every later run
+interface Hidden {
+  frame: HTMLIFrameElement;
+  port: Promise<MessagePort>;
+}
+let shared: Hidden | null = null;
 const pending = new Map<string, (r: RunResult) => void>();
 
-/** Drop the hidden frame (stuck in code run on its page); the next run makes a fresh one */
-function resetHidden() {
-  hidden?.frame.remove();
-  hidden = null;
+/** Drop the shared frame (stuck past its time limit); the next run makes a fresh one */
+function resetShared() {
+  shared?.frame.remove();
+  shared = null;
 }
 
-function hiddenPort(): Promise<MessagePort> {
-  if (hidden) return hidden.port;
+function hiddenFrame(): Hidden {
   const f = document.createElement('iframe');
   f.setAttribute('sandbox', SANDBOX_FLAGS);
   f.setAttribute('aria-hidden', 'true');
@@ -86,10 +91,9 @@ function hiddenPort(): Promise<MessagePort> {
     };
     return port;
   });
-  hidden = { frame: f, port };
   f.src = SANDBOX_URL;
   document.body.append(f);
-  return port;
+  return { frame: f, port };
 }
 
 export interface RunOptions {
@@ -102,18 +106,22 @@ export interface RunOptions {
 
 /** Run JavaScript in the sandbox: no network, no access to the app, stopped after timeoutMs */
 export async function runJavaScript(code: string, { timeoutMs = 10_000, files = {}, dom = false }: RunOptions = {}): Promise<RunResult> {
-  const port = await hiddenPort();
+  const own = dom ? hiddenFrame() : null;
+  const h = own ?? (shared ??= hiddenFrame());
+  const port = await h.port;
   const id = crypto.randomUUID();
   return new Promise((resolve) => {
     // A worker is stopped by the sandbox itself; code on the page (dom) is stopped by dropping the frame
     const limit = dom ? timeoutMs : timeoutMs + 2000;
     const guard = setTimeout(() => {
       pending.delete(id);
-      resetHidden();
+      if (own) own.frame.remove();
+      else resetShared();
       resolve({ logs: [], error: `Stopped: no answer within ${limit} ms.` });
     }, limit);
     pending.set(id, (r) => {
       clearTimeout(guard);
+      own?.frame.remove();
       resolve(r);
     });
     port.postMessage({ type: 'run', id, code, files, dom, timeoutMs });

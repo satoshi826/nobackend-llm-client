@@ -18,12 +18,14 @@ const APP_ORIGINS: string[] = [
     .split(',')
     .map((s: string) => s.trim())
     .filter(Boolean),
-  location.origin
+  // Our own origin (same-origin hosting); never 'null', the origin of every sandboxed frame
+  ...(location.origin !== 'null' ? [location.origin] : [])
 ];
 // The user's relay for sites that refuse browsers (e.g. relay/worker.js), and Jina Reader, the keyless fallback for reading
 const { relay: RELAY, jina: JINA } = fetchRoutes(env);
 
-const params = new URLSearchParams(location.search);
+// In the fragment, so the address the model asked for never reaches the host's request logs
+const params = new URLSearchParams(location.hash.slice(1));
 {
   const l = params.get('lang');
   setLang(l === 'ja' || l === 'en' || l === 'zh' ? l : detectLang());
@@ -132,13 +134,25 @@ async function download(u: URL, onProgress: (bytes: number) => void): Promise<{ 
 }
 
 /** Roughly how much text an HTML page shows (scripts, styles and tags left out) */
+/** Roughly how much text a page shows, from its first 2 MB, in one pass (a crafted page must not stall it) */
 function visibleTextLength(html: string): number {
-  return html
-    .replace(/<(script|style|noscript|template)[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&[#\w]+;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim().length;
+  const s = html.slice(0, 2_000_000);
+  const lower = s.toLowerCase();
+  const parts: string[] = [];
+  for (let i = 0; i < s.length; ) {
+    const lt = s.indexOf('<', i);
+    if (lt < 0) {
+      parts.push(s.slice(i));
+      break;
+    }
+    parts.push(s.slice(i, lt), ' ');
+    const hidden = /^<(script|style|noscript|template)\b/.exec(lower.slice(lt, lt + 10))?.[1];
+    const close = hidden ? lower.indexOf(`</${hidden}`, lt) : lt;
+    const gt = close < 0 ? -1 : s.indexOf('>', close);
+    if (gt < 0) break;
+    i = gt + 1;
+  }
+  return parts.join('').replace(/&[#\w]+;/g, ' ').replace(/\s+/g, ' ').trim().length;
 }
 
 /** A page as Markdown from Jina Reader (it renders the page, so it also reads pages drawn by scripts); with the user's key when set */
@@ -310,7 +324,16 @@ function render() {
   if (!matchMedia('(pointer: coarse)').matches) go.focus();
 }
 
-render();
+// Nothing is shown until the frame's parent proves it is the app it claims to be (it says hello once this page has
+// loaded): the app parameter is only a claim, and on hosts that cannot send frame-ancestors any site could frame this
+// page to trick clicks out of the user
+if (!target) render();
+else
+  addEventListener('message', function onHello(e) {
+    if (e.source !== window.parent || e.origin !== target || (e.data as { type?: string } | null)?.type !== 'fetch-hello') return;
+    removeEventListener('message', onHello);
+    render();
+  });
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape') post(settingsView ? { type: 'fetch-close' } : { type: 'fetch-result', ok: false, cancelled: true });
 });

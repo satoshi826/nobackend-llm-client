@@ -31,7 +31,7 @@ export interface FileToolDeps {
   get(id: string): Promise<FileRecord | undefined>;
   update(id: string, text: string, note?: string): Promise<FileRecord>;
   /** Fetch an address through the fetch page (the user is asked there). null when declined or failed */
-  fetch(url: string): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null>;
+  fetch(url: string, signal: AbortSignal): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null>;
 }
 
 /** What the tool card shows */
@@ -217,8 +217,8 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
       if (!fetchableUrl(url)) throw new Error(t('fetch.invalid'));
       return { url };
     },
-    async execute(i) {
-      const r = await deps.fetch(i.url);
+    async execute(i, ctx) {
+      const r = await deps.fetch(i.url, ctx.signal);
       if (!r) return { content: 'The user declined the fetch, or it did not complete. Nothing was saved.' };
       if (r.kind === 'image') return { content: `Saved the image "${r.name}" from ${i.url} in the user's Files tab. You cannot see it.`, details: { name: r.name } };
       return { content: `Saved ${JSON.stringify(r.file.name)} from ${i.url} as a file (id: ${r.file.id}, ${r.file.size} chars). Read it with read_file.`, details: details(r.file) };

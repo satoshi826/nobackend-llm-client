@@ -19,4 +19,15 @@ describe('fetching through the fetch page', () => {
     fetchRequest.value!.done(null);
     expect(await second).toBeNull();
   });
+
+  it('closes the page and resolves with nothing when the reply is stopped', async () => {
+    const ctrl = new AbortController();
+    const p = fetchFromWeb('https://a.example/x', 'save', ctrl.signal);
+    expect(fetchRequest.value).not.toBeNull();
+    ctrl.abort();
+    expect(await p).toBeNull();
+    expect(fetchRequest.value).toBeNull();
+    expect(await fetchFromWeb('https://a.example/y', 'read', ctrl.signal)).toBeNull();
+    expect(fetchRequest.value).toBeNull();
+  });
 });

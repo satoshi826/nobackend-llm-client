@@ -9,6 +9,8 @@ export interface PageText {
 
 /** Most characters of a page handed on (the model that reads it gets this much at most) */
 export const MAX_PAGE_CHARS = 60_000;
+/** HTML parsed for its text: the rest of a larger page is left out (parsing runs on the app's main thread) */
+const MAX_HTML_CHARS = 3_000_000;
 
 const DROP = new Set(['script', 'style', 'noscript', 'template', 'iframe', 'object', 'embed', 'svg', 'math', 'canvas', 'video', 'audio', 'form', 'button', 'select', 'textarea', 'input', 'nav', 'aside', 'footer']);
 const BLOCK = new Set(['p', 'div', 'section', 'article', 'main', 'header', 'figure', 'figcaption', 'dl', 'dt', 'dd', 'address', 'details', 'summary']);
@@ -110,13 +112,23 @@ function list(e: Element, base: string, out: string[], depth: number) {
 
 /** HTML as text: the main / article part when there is one, else the body */
 export function htmlToText(html: string, base: string): PageText {
-  const title = squash(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? '').trim();
+  html = html.slice(0, MAX_HTML_CHARS);
+  const title = squash(titleOf(html)).trim();
   const dom = DOMPurify.sanitize(html, { WHOLE_DOCUMENT: true, RETURN_DOM: true, FORBID_TAGS: [...DROP], KEEP_CONTENT: false }) as HTMLElement;
   const root = dom.querySelector('main, article, [role="main"]') ?? dom.querySelector('body') ?? dom;
   const out: string[] = [];
   blocks(root, base, out);
   const text = out.filter((l) => l.trim()).join('\n\n').replace(/\n{3,}/g, '\n\n');
   return { title: decodeEntities(title), text };
+}
+
+/** The <title> text, found in one pass (a crafted page must not stall a backtracking regex) */
+function titleOf(html: string): string {
+  const lower = html.toLowerCase();
+  const open = lower.indexOf('<title');
+  const start = open < 0 ? -1 : html.indexOf('>', open);
+  const end = start < 0 ? -1 : lower.indexOf('</title', start);
+  return end < 0 ? '' : html.slice(start + 1, end);
 }
 
 function decodeEntities(s: string): string {

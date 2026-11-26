@@ -2,7 +2,7 @@
 // own settings open. The page itself asks the user, fetches and keeps its settings; this only frames it and takes its answer.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { FETCH_ORIGIN, fetchPageUrl, fetchSettingsUrl } from '../lib/fetcher/config';
-import type { FromFetcher } from '../lib/fetcher/protocol';
+import { FETCH_HELLO, type FromFetcher } from '../lib/fetcher/protocol';
 import { fetchRequest, fetchSettingsOpen, type Fetched } from '../state/fetch-page';
 import { Modal } from './ui';
 import { t } from './messages';
@@ -34,7 +34,15 @@ function FetchFrame({ title, src, done }: { title: string; src: string; done(r: 
   }, []);
   return (
     <Modal title={title} onClose={() => done(null)}>
-      <iframe ref={ref} src={src} title={title} referrerpolicy="no-referrer" class="block w-full border-0" style={{ height: `${height}px` }} />
+      <iframe
+        ref={ref}
+        src={src}
+        title={title}
+        referrerpolicy="no-referrer"
+        class="block w-full border-0"
+        style={{ height: `${height}px` }}
+        onLoad={() => ref.current?.contentWindow?.postMessage(FETCH_HELLO, FETCH_ORIGIN)}
+      />
     </Modal>
   );
 }

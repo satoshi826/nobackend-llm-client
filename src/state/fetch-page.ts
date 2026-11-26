@@ -20,17 +20,22 @@ export const fetchSettingsOpen = signal(false);
 /** The address being fetched; the FetchDialog shows the fetch page for it */
 export const fetchRequest = signal<{ url: string; mode: FetchMode; done(r: Fetched | null): void } | null>(null);
 
-/** Ask the user (in the fetch page) and fetch. null when they cancel */
-export function fetchFromWeb(url: string, mode: FetchMode): Promise<Fetched | null> {
+/** Ask the user (in the fetch page) and fetch. null when they cancel or the reply is stopped (signal) */
+export function fetchFromWeb(url: string, mode: FetchMode, signal?: AbortSignal): Promise<Fetched | null> {
   fetchRequest.value?.done(null);
   return new Promise((resolve) => {
-    fetchRequest.value = {
+    if (signal?.aborted) return resolve(null);
+    const req = {
       url,
       mode,
-      done: (r) => {
-        fetchRequest.value = null;
+      done: (r: Fetched | null) => {
+        signal?.removeEventListener('abort', stop);
+        if (fetchRequest.value === req) fetchRequest.value = null;
         resolve(r);
       }
     };
+    const stop = () => req.done(null);
+    signal?.addEventListener('abort', stop, { once: true });
+    fetchRequest.value = req;
   });
 }

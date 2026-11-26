@@ -30,4 +30,11 @@ describe('page text', () => {
     const long = await pageText({ name: 'b.txt', mime: 'text/plain', data: bytes('x'.repeat(MAX_PAGE_CHARS + 10)), url: 'https://x/b.txt' }, pdf);
     expect(long.text).toMatch(/\[Cut: the first/);
   });
+
+  it('reads a crafted page in one pass (no backtracking on unclosed tags)', () => {
+    const t0 = Date.now();
+    const page = htmlToText('<title'.repeat(300_000), 'https://a.example/');
+    expect(page.title).toBe('');
+    expect(Date.now() - t0).toBeLessThan(2000);
+  });
 });

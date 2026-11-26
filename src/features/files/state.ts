@@ -331,8 +331,8 @@ registerToolProvider({
     if (!fileSettings.value.value.fileTools) return [];
     const scope = new Set(filesInHistory(history).keys());
     return makeFileTools({
-      async fetch(url) {
-        const r = await fetchFromWeb(url, 'save');
+      async fetch(url, signal) {
+        const r = await fetchFromWeb(url, 'save', signal);
         const saved = r && (await saveFetched(r, conv));
         if (saved?.kind === 'file') {
           scope.add(saved.file.id);

@@ -53,7 +53,7 @@ function ApprovalCard({ p }: { p: ToolPart }) {
           <Icon name="check" />
           {t('tool.run')}
         </Button>
-        {!pending.alwaysAsk && (
+        {pending.canAlwaysAllow && (
           <Button variant="outline" onClick={() => resolveApproval(p.toolCallId, { approved: true, always: true, input: edited })} title={t('tool.alwaysAllowTitle', { tool: labelOf(p.name) })}>
             <Icon name="check" />
             {t('tool.alwaysAllow')}

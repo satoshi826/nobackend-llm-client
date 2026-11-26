@@ -40,6 +40,7 @@ function sandboxPagePlugin(): Plugin {
         if (path !== '/sandbox/' && path !== '/sandbox/index.html') return next();
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Content-Security-Policy', sandboxCsp());
+        res.setHeader('X-DNS-Prefetch-Control', 'off');
         res.end(page());
       });
     },

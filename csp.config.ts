@@ -68,6 +68,8 @@ export function sandboxCsp(frameAncestors = true): string {
     "frame-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
+    // Peer connections are outside every fetch directive; browsers that implement this directive refuse them
+    "webrtc 'block'",
     ...(frameAncestors ? ["frame-ancestors 'self'"] : [])
   ].join('; ');
 }
@@ -133,6 +135,8 @@ export function appHeadersFile(env: Env): string {
     '',
     '/sandbox/*',
     `  Content-Security-Policy: ${sandboxCsp()}`,
+    // DNS prefetch hints could carry data in host names (CSP does not cover them)
+    '  X-DNS-Prefetch-Control: off',
     '',
     ...(vaultOrigin ? [] : ['/vault/*', `  Content-Security-Policy: ${vaultCsp(env, ["'self'"])}`, '']),
     ...(fetchOrigin ? [] : ['/fetch/*', `  Content-Security-Policy: ${fetchCsp(["'self'"])}`, ''])

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ensureHighlighter, isHighlighterReady, renderMarkdown, settledEnd } from '../lib/markdown/render';
 import { render as renderInto } from 'preact';
 import { cx } from './ui';
+import { settings } from '../state/settings';
 import { CodeRun } from './CodeRun';
 import { t } from './messages';
 
@@ -78,5 +79,5 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
     }
   };
 
-  return <div ref={ref} class={cx('md', streaming && 'streaming-caret', className)} onClick={onClick} />;
+  return <div ref={ref} class={cx('md', streaming && 'streaming-caret', !settings.value.codeRunButtons && 'md-no-run', className)} onClick={onClick} />;
 }

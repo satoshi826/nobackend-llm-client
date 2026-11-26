@@ -42,6 +42,8 @@ export interface Settings {
   replySuggestions: boolean;
   /** Developer view: show the request bodies sent for each reply (Settings → 情報) */
   developerMode: boolean;
+  /** "Run" on html / svg / js code blocks (they run in the sandbox) */
+  codeRunButtons: boolean;
   /** Include images in JSON backups (large) */
   backupIncludeImages: boolean;
   /** Bookmarked models ('providerId|modelId'), shown together at the top of the model picker */
@@ -77,6 +79,7 @@ export const DEFAULT_SETTINGS: Settings = {
   favoriteModels: [],
   replySuggestions: true,
   developerMode: false,
+  codeRunButtons: true,
   backupIncludeImages: false,
   suggestionCount: 3,
   suggestionTurns: 2,

@@ -39,7 +39,8 @@ describe('fetch page', () => {
     expect(p).toContain("form-action 'none'");
     expect(p).toContain('img-src data: blob:');
     expect(p).not.toMatch(/https?:|\*/);
-    expect(appHeadersFile({})).toContain('/sandbox/*');
+    expect(p).toContain("webrtc 'block'");
+    expect(appHeadersFile({})).toMatch(/\/sandbox\/\*\n[^/]*X-DNS-Prefetch-Control: off/);
     // the app may frame it ('self') even with the vault and fetch page elsewhere
     expect(appCsp({}, 'https://v.example', 'https://f.example')).toContain("frame-src 'self'");
   });

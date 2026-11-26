@@ -2,10 +2,14 @@
 <!--
   The sandbox: shows HTML and runs JavaScript that a model or a file supplies. The app opens it in
   <iframe sandbox="allow-scripts">, so it has no origin of its own: it cannot reach the app's storage, the key vault or
-  the page around it. Its CSP (put in by the build, and sent as a header too) blocks every network request.
-  Messages from the parent:
+  the page around it. Its CSP (put in by the build, and sent as a header too) blocks every request, and the app's own
+  frame-src keeps it from navigating to another site.
+  Talking to the app: this page says { type: 'sandbox-ready' } to its parent once; the parent answers with
+  { type: 'connect' } and a MessagePort, and everything after goes over that port, which the HTML shown here cannot
+  reach (so a page that replaced this one cannot talk to the app):
     { type: 'render', html }               replace this page with the html (its scripts run under the same CSP)
     { type: 'run', id, code, timeoutMs }   run code in a worker and answer { type: 'result', id, logs, result?, error? }
+    { type: 'ping', n }                    answered with { type: 'pong', n } while this page is not stuck
   The script is inline: a page without an origin cannot load module scripts from the server.
 -->
 <html>
@@ -13,6 +17,7 @@
     <meta charset="utf-8" />
     <!--CSP-->
     <meta name="referrer" content="no-referrer" />
+    <meta http-equiv="x-dns-prefetch-control" content="off" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   </head>
   <body>
@@ -41,7 +46,7 @@
             }
           };
         `;
-        const reply = (m) => parent.postMessage(m, '*');
+        let port = null;
 
         function run(d) {
           const url = URL.createObjectURL(new Blob([PRELUDE], { type: 'text/javascript' }));
@@ -53,7 +58,7 @@
             done = true;
             clearTimeout(timer);
             worker.terminate();
-            reply({ type: 'result', id: d.id, ...m });
+            port.postMessage({ type: 'result', id: d.id, ...m });
           };
           const timer = setTimeout(() => finish({ logs: [], error: 'Stopped: it ran longer than ' + d.timeoutMs + ' ms.' }), d.timeoutMs);
           worker.onmessage = (m) => finish(m.data);
@@ -64,10 +69,12 @@
           worker.postMessage(d.code);
         }
 
-        addEventListener('message', (e) => {
-          if (e.source !== parent) return;
+        function onPortMessage(e) {
           const d = e.data || {};
-          if (d.type === 'render' && typeof d.html === 'string') {
+          if (d.type === 'ping') port.postMessage({ type: 'pong', n: d.n });
+          else if (d.type === 'run' && typeof d.code === 'string') {
+            run({ id: d.id, code: d.code, timeoutMs: Math.min(60000, Math.max(100, Number(d.timeoutMs) || 10000)) });
+          } else if (d.type === 'render' && typeof d.html === 'string') {
             // A peer connection could carry data out past the CSP: not offered to the page (defence in depth)
             for (const k of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'RTCDataChannel']) {
               try {
@@ -75,13 +82,21 @@
               } catch {}
             }
             document.open();
-            document.write(d.html);
+            // DNS prefetch hints could carry data in host names: asked off again for the new page
+            document.write('<meta http-equiv="x-dns-prefetch-control" content="off">' + d.html);
             document.close();
-          } else if (d.type === 'run' && typeof d.code === 'string') {
-            run({ id: d.id, code: d.code, timeoutMs: Math.min(60000, Math.max(100, Number(d.timeoutMs) || 10000)) });
           }
-        });
-        reply({ type: 'sandbox-ready' });
+        }
+
+        // The one message taken from the window: the parent's port. Only once, only from the parent
+        function onConnect(e) {
+          if (e.source !== parent || port || (e.data || {}).type !== 'connect' || !e.ports[0]) return;
+          port = e.ports[0];
+          port.onmessage = onPortMessage;
+          removeEventListener('message', onConnect);
+        }
+        addEventListener('message', onConnect);
+        parent.postMessage({ type: 'sandbox-ready' }, '*');
       })();
     </script>
   </body>

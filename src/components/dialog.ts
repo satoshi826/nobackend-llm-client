@@ -3,9 +3,11 @@
 // - Tab / Shift+Tab stay inside the dialog
 // - everything outside the dialog is made inert while it is open (except live regions such as toasts)
 // - focus moves into the dialog ([data-autofocus] first, then the first field, then the first control)
-//   and returns to the previously focused element when it closes
+//   and returns to the previously focused element when it closes. On touch devices it skips unmarked fields
+//   (focusing one would bring up the on-screen keyboard)
 import { useEffect } from 'preact/hooks';
 import type { RefObject } from 'preact';
+import { touchDevice } from './device';
 
 const stack: HTMLElement[] = [];
 
@@ -16,14 +18,17 @@ function focusables(el: HTMLElement): HTMLElement[] {
   return [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => !x.closest('[inert]') && x.getClientRects().length > 0);
 }
 
+const FIELD = 'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])';
+
 function initialTarget(el: HTMLElement): HTMLElement | null {
-  return (
-    el.querySelector<HTMLElement>('[data-autofocus]') ??
-    el.querySelector<HTMLElement>('input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])') ??
-    focusables(el).find((x) => !x.hasAttribute('data-dialog-close')) ??
-    focusables(el)[0] ??
-    null
-  );
+  const marked = el.querySelector<HTMLElement>('[data-autofocus]');
+  if (marked) return marked;
+  if (!touchDevice) {
+    const field = el.querySelector<HTMLElement>(FIELD);
+    if (field) return field;
+  }
+  const controls = touchDevice ? focusables(el).filter((x) => !x.matches(FIELD)) : focusables(el);
+  return controls.find((x) => !x.hasAttribute('data-dialog-close')) ?? controls[0] ?? null;
 }
 
 /** Make every sibling along the path from el to <body> inert; returns an undo function */

@@ -13,6 +13,7 @@ import { sendMessage } from '../../state/generation';
 import { composerFocus, composerText } from '../../state/ui';
 import { activeComposerMode, collectComposerExtras, modelSlots, visibleComposerAddons, type ComposerApi } from '../extensions';
 import { Button, Icon, cx } from '../ui';
+import { touchDevice } from '../device';
 import { t } from './messages';
 
 /** The chat model, bottom right of the input box. Only "private" is marked (lock); the rest is in the tooltip */
@@ -53,8 +54,6 @@ export function Composer() {
   const boxRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const streaming = isStreaming.value;
-  // On touch devices Enter inserts a newline (send via the button)
-  const touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
   useEffect(() => {
     if (composerFocus.value) ref.current?.focus();
@@ -66,7 +65,7 @@ export function Composer() {
     el.style.height = Math.min(el.scrollHeight, 240) + 'px';
   }, [text]);
   useEffect(() => {
-    ref.current?.focus();
+    if (!touchDevice) ref.current?.focus(); // on touch devices it would bring up the keyboard over the conversation
   }, [conv.id]);
 
   const active = activeComposerMode(conv);
@@ -87,7 +86,7 @@ export function Composer() {
     target.onFiles!(files, conv);
     return true;
   };
-  const placeholder = active ? (touch ? active.mode.touchPlaceholder : active.mode.placeholder) : t('composer.placeholder');
+  const placeholder = active ? (touchDevice ? active.mode.touchPlaceholder : active.mode.placeholder) : t('composer.placeholder');
   const inside = addons.filter((a) => a.Button && a.placement === 'inside');
   const below = addons.filter((a) => a.Button && a.placement !== 'inside');
   const Slot = modelSlots.find((s) => s.when(conv))?.Component;
@@ -138,7 +137,7 @@ export function Composer() {
           }}
           onKeyDown={(e) => {
             for (const a of addons) if (a.onKeyDown?.(e, api)) return;
-            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !touch) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !touchDevice) {
               e.preventDefault();
               void submit();
             }

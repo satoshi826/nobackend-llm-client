@@ -65,7 +65,7 @@ export async function sendMessage(text: string, extras: SendExtras = {}) {
   // Auto-compaction: if the input about to be sent is likely to exceed the context-length threshold, summarize the older part first
   if (currentId.value && settings.value.autoCompact) {
     const u = contextUsage.value;
-    if (u.limit && (u.tokens + estimateTokens(text)) / u.limit >= settings.value.compactThreshold) await compactConversation(true);
+    if (u.limit && (u.total + estimateTokens(text)) / u.limit >= settings.value.compactThreshold) await compactConversation(true);
   }
   const conv = await persistDraft(text.trim() ? text : [...skills.map((s) => s.name), ...files.map((f) => f.name)].join(', '));
   const user: MessageRecord = {

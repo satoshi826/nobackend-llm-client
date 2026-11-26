@@ -4,14 +4,15 @@ import type { MessageRecord } from '../lib/db/schema';
 import * as repo from '../lib/db/repo';
 import { getPreset } from '../lib/providers/registry';
 import { formatNumber } from '../lib/i18n';
-import { estimateRequestTokens, planCompaction, summarize } from '../lib/chat/compact';
+import { buildTranscript, estimateRequest, planCompaction, summarize, summaryInstruction, type RequestEstimate } from '../lib/chat/compact';
+import { estimateTokens } from '../lib/chat/context';
 import { vaultTransport as transport } from '../lib/vault/client';
 import { settings } from './settings';
 import { authFor, keyReady } from './keys';
 import { modelOf, providerById } from './models';
 import { currentConv, currentId, currentPath, messages, putMessage, updateConversation } from './conversations';
 import { showToast } from './ui';
-import { systemPromptFor } from './tool-registry';
+import { contributedSystemNotes } from './tool-registry';
 import { controllers, setStreaming, streamingConv } from './runs';
 import { parseModelRef, providerOptionsFor, recordUsage } from './request-helpers';
 import { t } from './messages';
@@ -19,12 +20,34 @@ import { t } from './messages';
 export const compactingConv = signal<string | null>(null);
 
 // ---- Context usage and compaction ----
-export const contextUsage = computed<{ tokens: number; limit: number | null; ratio: number | null }>(() => {
+export const contextUsage = computed<RequestEstimate & { limit: number | null; ratio: number | null }>(() => {
   const conv = currentConv.value;
-  const tokens = estimateRequestTokens(currentPath.value, systemPromptFor({ conv, messageId: '', model: modelOf(conv.providerId, conv.modelId), history: currentPath.value }));
-  const limit = modelOf(conv.providerId, conv.modelId)?.contextLength ?? null;
-  return { tokens, limit, ratio: limit ? tokens / limit : null };
+  const model = modelOf(conv.providerId, conv.modelId);
+  const e = estimateRequest(currentPath.value, conv.systemPrompt.trim(), contributedSystemNotes({ conv, messageId: '', model, history: currentPath.value }));
+  const limit = model?.contextLength ?? null;
+  return { ...e, limit, ratio: limit ? e.total / limit : null };
 });
+
+/** The model that writes summaries: the one set in settings if it can be used, else the conversation's own */
+function compactionModel(): { providerId: string; modelId: string } {
+  const conv = currentConv.value;
+  const ref = parseModelRef(settings.value.compactModel);
+  return ref && modelOf(ref.providerId, ref.modelId) && keyReady(ref.providerId) ? ref : { providerId: conv.providerId, modelId: conv.modelId };
+}
+
+/** What compacting now would do: how many messages are summarized and kept, by which model, and what it sends. null when too short */
+export const compactionPreview = computed(() => {
+  const plan = planCompaction(currentPath.value);
+  if (!plan) return null;
+  const ref = compactionModel();
+  const model = modelOf(ref.providerId, ref.modelId);
+  const tokens = estimateTokens(summaryInstruction()) + estimateTokens(buildTranscript(plan, null));
+  const price = model?.pricing?.inputPerMTok;
+  return { count: plan.toSummarize.length, kept: plan.kept, model: model?.name ?? ref.modelId, tokens, inputUsd: price != null ? (tokens * price) / 1e6 : null };
+});
+
+/** The compaction in effect (the last one on the current path) */
+export const lastCompaction = computed(() => currentPath.value.findLast((m) => m.compaction)?.compaction ?? null);
 
 /** Summarize the older part and add a compaction node (the original history is kept). Returns true if compacted */
 export async function compactConversation(auto = false): Promise<boolean> {
@@ -35,8 +58,7 @@ export async function compactConversation(auto = false): Promise<boolean> {
     if (!auto) showToast(t('compact.tooShort'));
     return false;
   }
-  let ref = parseModelRef(settings.value.compactModel);
-  if (!ref || !modelOf(ref.providerId, ref.modelId) || !keyReady(ref.providerId)) ref = { providerId: conv.providerId, modelId: conv.modelId };
+  const ref = compactionModel();
   const cfg = providerById(ref.providerId);
   if (!cfg) return false;
   const ctrl = new AbortController();

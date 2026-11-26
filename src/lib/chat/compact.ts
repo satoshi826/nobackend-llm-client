@@ -3,9 +3,9 @@
 // - The most recent exchanges are kept verbatim, not summarized (their details are the most likely to be needed)
 // - If there was a previous compaction, re-summarize "previous summary + the conversation since"
 import type { MessageRecord } from '../db/schema';
-import type { AuthRef, ChatMessage, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
+import type { AuthRef, ChatMessage, Part, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
 import { getAdapter } from '../providers/registry';
-import { estimateTokens, inputBudget, messageTokens } from './context';
+import { estimateTokens, inputBudget } from './context';
 import { buildRequestMessages } from './request';
 import { t as tc } from './messages';
 
@@ -17,6 +17,8 @@ export interface CompactionPlan {
   previousSummary: string | null;
   /** Messages to summarize this time */
   toSummarize: MessageRecord[];
+  /** Messages kept verbatim after them */
+  kept: number;
   /** Everything up to (and including) this message is replaced by the summary */
   coversUntilId: string;
 }
@@ -41,7 +43,7 @@ export function planCompaction(path: MessageRecord[], keepRecent = KEEP_RECENT):
   while (cut > 0 && candidates[cut].role !== 'user') cut--;
   if (cut <= 0) return null;
   const toSummarize = candidates.slice(0, cut);
-  return { previousSummary, toSummarize, coversUntilId: toSummarize[toSummarize.length - 1].id };
+  return { previousSummary, toSummarize, kept: candidates.length - cut, coversUntilId: toSummarize[toSummarize.length - 1].id };
 }
 
 /** The summarizing instruction (in the UI language) */
@@ -106,7 +108,41 @@ export async function summarize(plan: CompactionPlan, o: SummarizeOptions): Prom
   return out;
 }
 
-/** Estimated input tokens if the current path were sent (taking compaction into account) */
-export function estimateRequestTokens(path: MessageRecord[], systemPrompt: string): number {
-  return buildRequestMessages(path, systemPrompt).reduce((n, m) => n + messageTokens(m), 0);
+/** Estimated input tokens if the current path were sent (taking compaction into account), by where they come from */
+export interface RequestEstimate {
+  /** The conversation's own instructions (system prompt) */
+  instructions: number;
+  /** What features add to the system prompt */
+  notes: number;
+  /** The last compaction's summary */
+  summary: number;
+  /** The messages' own text */
+  messages: number;
+  /** What features add to messages when sending (attached files, skills, notes for images) */
+  attachments: number;
+  /** Tool calls and their results */
+  tools: number;
+  /** Messages sent besides the system prompt */
+  count: number;
+  total: number;
+}
+
+const textTokens = (parts: Part[]) => parts.reduce((n, p) => n + (p.type === 'text' ? estimateTokens(p.text) : 0), 0);
+
+export function estimateRequest(path: MessageRecord[], instructions: string, notes: string): RequestEstimate {
+  const e = { instructions: estimateTokens(instructions), notes: estimateTokens(notes), summary: 0, messages: 0, attachments: 0, tools: 0, count: 0, total: 0 };
+  const stored = new Map(path.map((m) => [m.id, m]));
+  for (const m of buildRequestMessages(path, [instructions, notes].filter(Boolean).join('\n\n'))) {
+    if (m.role === 'system') continue;
+    const sent = textTokens(m.parts);
+    const own = Math.min(sent, textTokens(stored.get(m.id)?.parts ?? []));
+    e.count++;
+    e.messages += own + 4; // + the role etc. (as messageTokens)
+    e.attachments += sent - own;
+    for (const p of m.parts) if (p.type === 'tool') e.tools += estimateTokens(p.argsText) + estimateTokens(typeof p.modelOutput === 'string' ? p.modelOutput : JSON.stringify(p.modelOutput ?? ''));
+  }
+  const last = path.findLast((m) => m.compaction)?.compaction;
+  if (last) e.summary = estimateTokens(last.summary);
+  e.total = e.instructions + e.notes + e.summary + e.messages + e.attachments + e.tools;
+  return e;
 }

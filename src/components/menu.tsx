@@ -87,8 +87,8 @@ export function Popover({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       onClose();
-      // A menu hands focus back to the control that opened it (a suggestion list leaves focus in the input)
-      if (role === 'menu') {
+      // A menu or dialog hands focus back to the control that opened it (a suggestion list leaves focus in the input)
+      if (role !== 'listbox') {
         e.stopPropagation();
         (anchor?.matches('button') ? anchor : anchor?.querySelector<HTMLElement>('button'))?.focus();
       }

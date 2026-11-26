@@ -9,6 +9,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { lazyComponent } from './components/lazy';
 import { SystemPromptModal } from './components/SystemPromptModal';
+import { FetchDialog } from './components/FetchDialog';
 import { cx, Spinner } from './components/ui';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { mainViews, overlays } from './components/extensions';
@@ -125,6 +126,7 @@ export function App() {
       {overlays.map((O, i) => (
         <O key={i} />
       ))}
+      <FetchDialog />
       <ConfirmDialog />
       <Toast />
     </div>

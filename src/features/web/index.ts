@@ -1,11 +1,10 @@
-// Web search feature: the chat provider's own search (native), or Tavily + Jina Reader tools as the fallback.
+// The web feature: searching (the chat provider's own search, or the Tavily tool) and reading pages (fetch_url).
 // On by default; turned off in Settings → Web 検索 (no per-conversation switch).
 // Importing this module registers it with the core through extension points.
 import { registerSettingsTab, registerToolView } from '../../components/extensions';
 import { SearchResults } from './components/Web';
 import { lazyComponent } from '../../components/lazy';
 import { t } from './messages';
-import { formatNumber } from '../../lib/i18n';
 import './state';
 
 export { searchRouteFor } from './state';
@@ -25,15 +24,19 @@ registerToolView({
   },
   Detail: SearchResults
 });
+// fetch_url asks in the fetch page, not on a card: the card shows what was asked of the page and where it came from
 registerToolView({
   names: ['fetch_url'],
   label: () => t('fetchPage'),
   icon: 'globe',
-  editableField: { key: 'url', label: 'URL' },
-  approvalNote: () => t('card.fetchNote'),
+  summary: (p) => {
+    const i = p.input as { url?: string; prompt?: string } | undefined;
+    return i?.url ? `${i.url}${i.prompt ? ` — ${t('card.prompt')}: ${i.prompt}` : ''}` : undefined;
+  },
   doneStatus: (p) => {
-    const d = p.uiDetails as { chars?: number; truncated?: boolean } | undefined;
-    return t(d?.truncated ? 'card.charsPartial' : 'card.chars', { n: formatNumber(d?.chars ?? 0) });
+    const d = p.uiDetails as { title?: string; url?: string; via?: string } | undefined;
+    if (!d?.url) return undefined;
+    return t(d.via === 'jina' ? 'card.readJina' : 'card.read', { title: d.title ? `「${d.title}」` : new URL(d.url).host });
   }
 });
 registerSettingsTab({

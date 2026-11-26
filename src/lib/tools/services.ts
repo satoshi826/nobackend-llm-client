@@ -24,21 +24,10 @@ export const SERVICES: Record<string, ToolService> = {
     get keyGuide() {
       return t('tavily.keyGuide');
     }
-  },
-  jina: {
-    id: 'jina',
-    get label() {
-      return t('jina.label');
-    },
-    baseUrl: env.VITE_JINA_BASE_URL || 'https://r.jina.ai',
-    keyOptional: true,
-    get keyGuide() {
-      return t('jina.keyGuide');
-    }
   }
 };
 
-export const SERVICE_ORDER = ['tavily', 'jina'] as const;
+export const SERVICE_ORDER = ['tavily'] as const;
 
 export function serviceById(id: string): ToolService | undefined {
   return SERVICES[id];

@@ -5,11 +5,16 @@ import { settings } from '../../state/settings';
 import { SandboxSettings } from './Settings';
 import { registerToolProvider } from '../../state/tool-registry';
 import { RunOutput } from './RunOutput';
-import { RUN_JAVASCRIPT, runJavaScriptTool } from './tool';
+import { conversationFile } from '../files';
+import { makeRunJavaScriptTool, RUN_JAVASCRIPT } from './tool';
 import { t } from './messages';
 
 // Turned off in settings ("使わない"), the tool is not offered at all
-registerToolProvider({ id: 'sandbox', tools: ({ model }) => (model?.capabilities.tools && settings.value.toolPermissions[RUN_JAVASCRIPT] !== 'deny' ? [runJavaScriptTool] : []) });
+registerToolProvider({
+  id: 'sandbox',
+  tools: ({ conv, model, history }) =>
+    model?.capabilities.tools && settings.value.toolPermissions[RUN_JAVASCRIPT] !== 'deny' ? [makeRunJavaScriptTool((id) => conversationFile(conv, history, id))] : []
+});
 // Its own tab: the sandbox serves both chat (code blocks, the tool) and files (HTML / SVG previews)
 registerSettingsTab({ id: 'sandbox', label: () => t('tabLabel'), icon: 'code', Component: SandboxSettings });
 

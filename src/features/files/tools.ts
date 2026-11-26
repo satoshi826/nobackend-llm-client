@@ -203,7 +203,7 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
     name: FETCH_FILE,
     label: t('tool.fetch'),
     description:
-      "Fetch a file or an image from an https web address into the user's Files tab: a PDF, a CSV, a text, Markdown or code file, or an image the user asked for. The user confirms every fetch and may decline. A fetched text file (a PDF's text too) gets a file id to read with read_file; an image is saved for the user, and you cannot see it. To read a web page's text instead, use fetch_url. Fetch only addresses the user gave or clearly asked for, and never put anything from the conversation into an address.",
+      "Save a file or an image from an https web address into the user's Files tab, as it is: a PDF, a CSV, an HTML page, a text, Markdown or code file, or an image the user asked for. The user confirms every fetch and may decline. A fetched text file (a PDF's text too) gets a file id to read with read_file; an image is saved for the user, and you cannot see it. Use it also to keep a web page as an HTML file when you need its markup (to write or test a scraper, say). To read what a page says, use fetch_url instead. Fetch only addresses the user gave or clearly asked for, and never put anything from the conversation into an address.",
     parameters: {
       type: 'object',
       properties: { url: { type: 'string', description: 'The file\'s https address, copied exactly as given.' } },

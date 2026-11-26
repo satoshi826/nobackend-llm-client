@@ -1,15 +1,16 @@
-// Settings → Web 検索: on/off, the route per connection, Tavily instead of native search, tool permissions, service keys
+// Settings → Web 検索: searching (on/off, the route per connection, Tavily instead of native search, the Tavily key)
+// and reading pages (fetch_url: on/off and the model that reads them)
 import { useState } from 'preact/hooks';
 import { saveSettings, settings } from '../../../state/settings';
-import { enabledProviders } from '../../../state/models';
+import { enabledProviders, providerById, visibleModels } from '../../../state/models';
+import { keyStatus } from '../../../state/keys';
 import { accountById } from '../../../lib/keys/accounts';
 import { SERVICE_ORDER } from '../../../lib/tools/services';
 import { getPreset } from '../../../lib/providers/registry';
-import type { Permission } from '../../../lib/tools/types';
 import { KeyPanel } from '../../../components/KeyPanel';
 import { AccountRow } from '../../../components/settings/AccountRow';
 import { Icon, Select, cx } from '../../../components/ui';
-import { PERM_LABEL, Section, Toggle, } from '../../../components/settings-ui';
+import { PermissionSelect, Section, Toggle } from '../../../components/settings-ui';
 import { webSettings } from '../state';
 import { t } from '../messages';
 
@@ -18,6 +19,8 @@ export function SearchSettings() {
   const w = webSettings.value.value;
   const [open, setOpen] = useState('');
   const provs = enabledProviders.value;
+  const reads = s.toolPermissions.fetch_url !== 'deny';
+  const choices = visibleModels.value.filter((m) => keyStatus(m.providerId).present);
   return (
     <div class="space-y-6">
       <Section>
@@ -48,24 +51,13 @@ export function SearchSettings() {
             />
           </Section>
         )}
-        <Section title={t('settings.fallbackTitle')}>
-          <p class="text-xs text-muted">{t('settings.fallbackDesc')}</p>
-          {(['web_search', 'fetch_url'] as const).map((name) => (
-            <label key={name} class="flex items-center justify-between gap-3 text-sm">
-              <span>
-                {name === 'web_search' ? t('webSearch') : t('fetchPage')}
-                <span class="block text-xs text-muted">{name === 'web_search' ? t('settings.searchSends') : t('settings.fetchSends')}</span>
-                {name === 'fetch_url' && s.toolPermissions[name] === 'allow' && <span class="block text-xs text-warn">{t('settings.fetchAllowWarning')}</span>}
-              </span>
-              <Select value={s.toolPermissions[name] ?? 'ask'} onChange={(e) => saveSettings({ toolPermissions: { ...s.toolPermissions, [name]: (e.target as HTMLSelectElement).value as Permission } })}>
-                {(['ask', 'allow', 'deny'] as Permission[]).map((v) => (
-                  <option key={v} value={v}>
-                    {PERM_LABEL[v]}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          ))}
+        <Section title={t('settings.tavilyTitle')}>
+          <p class="text-xs text-muted">{t('settings.tavilyDesc')}</p>
+          <PermissionSelect
+            label={`${t('webSearch')}（${t('settings.searchSends')}）`}
+            value={s.toolPermissions.web_search ?? 'ask'}
+            onChange={(v) => saveSettings({ toolPermissions: { ...s.toolPermissions, web_search: v } })}
+          />
           <div class="space-y-2">
             {SERVICE_ORDER.map((id) => {
               const a = accountById(id)!;
@@ -78,6 +70,21 @@ export function SearchSettings() {
           </div>
         </Section>
       </div>
+      <Section title={t('settings.readTitle')}>
+        <p class="text-xs text-muted">{t('settings.readDesc')}</p>
+        <Toggle checked={reads} onChange={(v) => saveSettings({ toolPermissions: { ...s.toolPermissions, fetch_url: v ? 'ask' : 'deny' } })} title={t('settings.readToggle')} />
+        <label class={cx('block text-sm', !reads && 'opacity-50')}>
+          {t('settings.readerModel')}
+          <Select disabled={!reads} class="mt-1 block w-full" value={w.readerModel} onChange={(e) => void webSettings.save({ readerModel: (e.target as HTMLSelectElement).value })}>
+            <option value="">{t('settings.sameModel')}</option>
+            {choices.map((m) => (
+              <option key={m.providerId + m.id} value={`${m.providerId}|${m.id}`}>
+                {`${providerById(m.providerId)?.name ?? m.providerId} / ${m.name}`}
+              </option>
+            ))}
+          </Select>
+        </label>
+      </Section>
     </div>
   );
 }

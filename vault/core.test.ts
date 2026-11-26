@@ -41,12 +41,10 @@ describe('key vault: send request validation', () => {
 });
 
 describe('key vault: web search services', () => {
-  it('attaches Tavily / Jina keys only to their own hosts', () => {
+  it('attaches the Tavily key only to its own host', () => {
     expect(allowedHosts('tavily')).toEqual(['api.tavily.com']);
-    expect(allowedHosts('jina')).toEqual(['r.jina.ai']);
     expect(validateRequest(req({ providerId: 'tavily', url: 'https://api.tavily.com/search' }))).toBeNull();
     expect(validateRequest(req({ providerId: 'tavily', url: 'https://api.venice.ai/api/v1/chat/completions' }))).not.toBeNull();
-    expect(validateRequest(req({ providerId: 'jina', method: 'GET', body: undefined, url: 'https://r.jina.ai/https://example.com/' }))).toBeNull();
   });
 });
 

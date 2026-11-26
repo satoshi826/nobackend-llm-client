@@ -4,9 +4,14 @@
 /** Largest file the fetch page passes on */
 export const MAX_FETCH_BYTES = 20 * 1024 * 1024;
 
+/** read: a page's text for a model to read (may fall back to Jina Reader); save: a file kept as it is */
+export type FetchMode = 'read' | 'save';
+/** How it was fetched: straight from the site, through the user's relay, or as text from Jina Reader (read only) */
+export type FetchVia = 'direct' | 'relay' | 'jina';
+
 export type FromFetcher =
   | { type: 'fetch-resize'; height: number }
-  | { type: 'fetch-result'; ok: true; name: string; mime: string; data: ArrayBuffer; url: string; relayed: boolean }
+  | { type: 'fetch-result'; ok: true; name: string; mime: string; data: ArrayBuffer; url: string; via: FetchVia }
   | { type: 'fetch-result'; ok: false; cancelled: boolean; message?: string };
 
 /** Only https addresses are fetched (no http, no data:, no file:, no credentials in the address) */

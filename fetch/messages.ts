@@ -4,6 +4,13 @@ import { defineMessages } from '../src/lib/i18n';
 export const t = defineMessages(
   {
     title: 'Web からファイルを取得しますか？',
+    titleRead: 'Web ページを読みますか？',
+    read: '読む',
+    noteJina: '直接取れないときや、本文がほとんどないとき（スクリプトで描くページ）は、Jina Reader（{jina}）経由で本文を取ります。アドレスは {jina} にも送られます。',
+    jinaEmpty: 'Jina Reader からも本文を取れませんでした。',
+    remember: '{host} は今後確認しない',
+    allowedList: '確認しないサイト: {hosts}',
+    forgetAll: 'すべて取り消す',
     from: '取得先',
     noteDirect: 'このページから {host} に直接アクセスします。アドレスに含まれる内容は {host} に送られます。',
     noteRelay: '{host} が直接の取得を許していないときは、中継サーバー {relay} を通します（アドレスは中継サーバーにも送られます）。',
@@ -22,6 +29,13 @@ export const t = defineMessages(
   {
     en: {
       title: 'Fetch a file from the web?',
+      titleRead: 'Read a web page?',
+      read: 'Read',
+      noteJina: 'If it can’t be fetched directly, or the page holds almost no text (drawn by scripts), its text is taken through Jina Reader ({jina}). The address is sent to {jina} too.',
+      jinaEmpty: 'Jina Reader couldn’t get any text from it either.',
+      remember: 'Don’t ask again for {host}',
+      allowedList: 'Sites not asked about: {hosts}',
+      forgetAll: 'Forget all',
       from: 'From',
       noteDirect: 'This page connects to {host} directly. Whatever the address contains is sent to {host}.',
       noteRelay: 'If {host} does not allow fetching directly, the relay server {relay} is used (the address is sent to the relay too).',
@@ -39,6 +53,13 @@ export const t = defineMessages(
     },
     zh: {
       title: '要从网络获取文件吗？',
+      titleRead: '要读取网页吗？',
+      read: '读取',
+      noteJina: '无法直接获取，或页面几乎没有正文（由脚本绘制）时，会通过 Jina Reader（{jina}）获取正文。地址也会发送给 {jina}。',
+      jinaEmpty: 'Jina Reader 也没能取得正文。',
+      remember: '以后不再询问 {host}',
+      allowedList: '不再询问的网站：{hosts}',
+      forgetAll: '全部撤销',
       from: '来源',
       noteDirect: '此页面将直接访问 {host}。地址中包含的内容会发送给 {host}。',
       noteRelay: '如果 {host} 不允许直接获取，将通过中转服务器 {relay} 获取（地址也会发送给中转服务器）。',

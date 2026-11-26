@@ -22,7 +22,7 @@ The UI is available in Japanese, English and Simplified Chinese (automatic, or c
 - **Sandbox**: HTML and SVG files open as a page, html / svg / js code blocks get a Run button, and chat models can run JavaScript (`run_javascript`, asks first) for exact calculations. All of it runs in an isolated frame with no network and no access to the app.
 - **Files**: ask for a report, notes or a translation and the model saves it as a file (Markdown, CSV, …) in the Files tab, writing long documents in parts and keeping every version. The Files tab is a file manager (cards or list, sorting, search inside files, views by type and by conversation, multi-select, drag-and-drop upload). Attach text files, CSV, code or PDFs (text is extracted in the browser) from your device or from saved files. View, edit, download or print to PDF.
 - **Reply suggestions**: short follow-ups under the latest reply; tap one to put it in the input box. Count, how many recent exchanges to use, and the model are configurable.
-- **Web search**: the provider's built-in search (Anthropic, Gemini, Groq, OpenRouter, Venice), or tools (Tavily search and Jina Reader page fetch, each run after your approval).
+- **Web**: search with the provider's built-in search (Anthropic, Gemini, Groq, OpenRouter, Venice) or the Tavily tool; models read pages (HTML, text, PDF) with `fetch_url`, where a separate call takes out only what was asked before the model sees it (like Claude Code's WebFetch); and bring files in with `fetch_file`. Every fetch is confirmed in the fetch page, which can remember sites you allow.
 - **Skills**: SKILL.md-compatible instruction files. The model loads a skill's body only when it needs it, or you can attach one with `/name`. Ask it to "turn this into a skill" and it drafts one, which is saved after you approve it.
 - **Long conversations**: compaction (manual or automatic), prompt caching, and a context-length safeguard.
 - **Usage**: tokens and cost per day, provider and model, recorded only in this browser. Balance and balance alert for DeepSeek, NanoGPT, OpenRouter (the key's limit left) and Venice.
@@ -39,7 +39,7 @@ npm run dev       # http://localhost:5173
 ### Try it without real APIs (mock server)
 
 ```bash
-npm run mock      # Venice / Anthropic / Tavily / Jina-compatible mock on :8787
+npm run mock      # Venice / Anthropic / Tavily / Jina Reader-compatible mock on :8787
 VITE_VENICE_BASE_URL=http://localhost:8787/api/v1 \
 VITE_ANTHROPIC_BASE_URL=http://localhost:8787/anthropic/v1 \
 VITE_TAVILY_BASE_URL=http://localhost:8787/tavily \
@@ -52,7 +52,7 @@ npm run dev
 **Keywords** in a message change the mock's behaviour:
 
 - General: `思考` / `think`, `コード`, `長文`, `エラー`, `残高`, `画像`, `xss`, `盗用`.
-- Tool-based web search: `検索`, `読んで`.
+- Tool-based web search: `検索`, `読んで` (after a search). Reading a page directly: `ページを読んで`.
 - Skills: `スキル` loads the first skill.
 - Skill creator: `作って` / `直して` calls `save_skill` in a skill-creator conversation.
 - Sandbox: `実行できる例` answers with runnable JS and HTML code blocks, `計算して` calls `run_javascript`, `ページを作って` creates an HTML file.
@@ -111,9 +111,12 @@ Use subdomains of one custom domain (three Workers or Pages sites, free). Two di
 
 `npm run build` puts each page's CSP in its HTML as well as in `_headers`, so a host that ignores `_headers` (GitHub Pages) still enforces it. What a `<meta>` CSP cannot carry is lost there: `frame-ancestors` (other sites may embed the pages) and the other headers (`nosniff`, `Referrer-Policy`, COOP). Prefer Cloudflare for daily use.
 
-### Fetching files from the web
+### Reading pages and fetching files from the web
 
-Ask in a chat and the model's `fetch_file` tool brings a file or an image from an https address into the Files tab. The app itself never reaches arbitrary addresses: a separate fetch page (`/fetch/`, its own CSP) does, and it asks you before every fetch, showing the address. Text, CSV, code and PDFs become files the model can read; images are saved as images (up to 20 MB; no SVG).
+Models reach the web in two ways, both through a separate fetch page (`/fetch/`, its own CSP) that shows the address and asks you first; tick "don't ask again" to remember a site (kept in the fetch page's storage, with "forget all" there). The app itself never reaches arbitrary addresses.
+
+- **Read** (`fetch_url`, with what the model wants from the page): the page (HTML, text or PDF) becomes text in the app, and a separate call with no tools answers the request from it. Only that answer reaches the conversation's model, so instructions planted in the page have little hold. The reading model is the conversation's unless you pick one in Settings → Web 検索. Pages that refuse direct fetching go through your relay (below), and pages that hold almost no text in their HTML (drawn by scripts) are read through Jina Reader (`r.jina.ai`, keyless).
+- **Save** (`fetch_file`): a file or an image is kept in the Files tab as it is. Text, CSV, HTML, code and PDFs become files the model can read; images are saved as images (up to 20 MB; no SVG). To work with a page's markup (a scraper, say), save it and have the model read it, or try code on it with `run_javascript`.
 
 A browser can only fetch from sites that allow it (CORS): file and image hosts often do (GitHub raw files, Wikimedia, many CDNs), ordinary web pages often don't. For those, you can deploy your own relay (optional):
 

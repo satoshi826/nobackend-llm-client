@@ -57,17 +57,23 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
 }
 
 // ---- running code: one hidden sandbox frame, jobs answered by id over its port ----
-let hidden: Promise<MessagePort> | null = null;
+let hidden: { frame: HTMLIFrameElement; port: Promise<MessagePort> } | null = null;
 const pending = new Map<string, (r: RunResult) => void>();
 
+/** Drop the hidden frame (stuck in code run on its page); the next run makes a fresh one */
+function resetHidden() {
+  hidden?.frame.remove();
+  hidden = null;
+}
+
 function hiddenPort(): Promise<MessagePort> {
-  if (hidden) return hidden;
+  if (hidden) return hidden.port;
   const f = document.createElement('iframe');
   f.setAttribute('sandbox', SANDBOX_FLAGS);
   f.setAttribute('aria-hidden', 'true');
   f.tabIndex = -1;
   f.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
-  hidden = connect(f).then((port) => {
+  const port = connect(f).then((port) => {
     port.onmessage = (e) => {
       const d = e.data as { type?: string; id?: string } & RunResult;
       if (d?.type !== 'result' || typeof d.id !== 'string') return;
@@ -80,26 +86,37 @@ function hiddenPort(): Promise<MessagePort> {
     };
     return port;
   });
+  hidden = { frame: f, port };
   f.src = SANDBOX_URL;
   document.body.append(f);
-  return hidden;
+  return port;
 }
 
-/** Run JavaScript in the sandbox (a worker there): no network, no access to the app, stopped after timeoutMs */
-export async function runJavaScript(code: string, timeoutMs = 10_000): Promise<RunResult> {
+export interface RunOptions {
+  timeoutMs?: number;
+  /** Text files the code reads as `files` ({ name: text }) */
+  files?: Record<string, string>;
+  /** Run on the sandbox page instead of a worker, so the code has DOMParser (stopped by removing the frame) */
+  dom?: boolean;
+}
+
+/** Run JavaScript in the sandbox: no network, no access to the app, stopped after timeoutMs */
+export async function runJavaScript(code: string, { timeoutMs = 10_000, files = {}, dom = false }: RunOptions = {}): Promise<RunResult> {
   const port = await hiddenPort();
   const id = crypto.randomUUID();
   return new Promise((resolve) => {
-    // The sandbox stops the worker itself; this only covers a sandbox that never answers
+    // A worker is stopped by the sandbox itself; code on the page (dom) is stopped by dropping the frame
+    const limit = dom ? timeoutMs : timeoutMs + 2000;
     const guard = setTimeout(() => {
       pending.delete(id);
-      resolve({ logs: [], error: `No answer from the sandbox within ${timeoutMs + 2000} ms.` });
-    }, timeoutMs + 2000);
+      resetHidden();
+      resolve({ logs: [], error: `Stopped: no answer within ${limit} ms.` });
+    }, limit);
     pending.set(id, (r) => {
       clearTimeout(guard);
       resolve(r);
     });
-    port.postMessage({ type: 'run', id, code, timeoutMs });
+    port.postMessage({ type: 'run', id, code, files, dom, timeoutMs });
   });
 }
 

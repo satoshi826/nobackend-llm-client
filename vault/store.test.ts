@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { encryptSecret } from '../src/lib/crypto/passphrase';
 import { clearAll, lock, removePassphrase, revealKey, saveKey, setPassphrase, status, unlock, unwrapDataKey, vaultState, wrapDataKey } from './store';
 
-// tavily / jina do no key check (network) on save, so only the store's behaviour is exercised
+// tavily does no key check (network) on save, so only the store's behaviour is exercised
 const PASS = 'correct horse battery';
 
 async function rawPut(rec: unknown) {
@@ -33,16 +33,16 @@ describe('key vault store', () => {
     expect(pid1).toBeTruthy();
     expect(await status('tavily')).toMatchObject({ encrypted: true, locked: false });
     // Keys saved after setting a passphrase are encrypted automatically
-    await saveKey('jina', 'jina-2');
-    expect(await status('jina')).toMatchObject({ encrypted: true, locked: false });
+    await saveKey('tavily', 'tvly-2');
+    expect(await status('tavily')).toMatchObject({ encrypted: true, locked: false });
 
     lock();
     expect(await vaultState()).toMatchObject({ hasPassphrase: true, locked: true });
-    expect(await status('jina')).toMatchObject({ present: true, locked: true });
-    expect((await saveKey('jina', 'x')).ok).toBe(false);
+    expect(await status('tavily')).toMatchObject({ present: true, locked: true });
+    expect((await saveKey('tavily', 'x')).ok).toBe(false);
     expect((await unlock('wrong passphrase')).ok).toBe(false);
     expect((await unlock(PASS)).ok).toBe(true);
-    expect(await status('tavily')).toMatchObject({ locked: false, last4: 'vly-1'.slice(-4) });
+    expect(await status('tavily')).toMatchObject({ locked: false, last4: 'vly-2'.slice(-4) });
 
     expect((await setPassphrase('another passphrase', 'wrong one!')).ok).toBe(false);
     // Wrap / unwrap the data key (anything without the marker is refused)
@@ -56,7 +56,7 @@ describe('key vault store', () => {
     expect((await setPassphrase(PASS, 'another passphrase')).ok).toBe(true);
     expect((await removePassphrase('wrong one!')).ok).toBe(false);
     expect((await removePassphrase(PASS)).ok).toBe(true);
-    expect(await status('jina')).toMatchObject({ encrypted: false, locked: false });
+    expect(await status('tavily')).toMatchObject({ encrypted: false, locked: false });
     expect(await vaultState()).toMatchObject({ hasPassphrase: false, locked: false });
 
     await clearAll();
@@ -83,12 +83,12 @@ describe('key vault store', () => {
   it('adopts the passphrase of keys encrypted by the old per-key scheme', { timeout: 30_000 }, async () => {
     await clearAll();
     await rawPut({ id: 'tavily', hosts: ['api.tavily.com'], createdAt: 1, enc: await encryptSecret('tvly-old', PASS) });
-    await rawPut({ id: 'jina', hosts: ['r.jina.ai'], createdAt: 1, key: 'jina-plain' });
+    await rawPut({ id: 'openrouter', hosts: ['openrouter.ai'], createdAt: 1, key: 'or-plain' });
     lock();
     expect(await vaultState()).toMatchObject({ hasPassphrase: true, locked: true });
     expect((await unlock(PASS)).ok).toBe(true);
     // Keys left in plaintext are encrypted with the same passphrase too
-    expect(await status('jina')).toMatchObject({ encrypted: true, locked: false });
+    expect(await status('openrouter')).toMatchObject({ encrypted: true, locked: false });
     lock();
     expect((await unlock(PASS)).ok).toBe(true);
     expect(await status('tavily')).toMatchObject({ locked: false, last4: '-old' });

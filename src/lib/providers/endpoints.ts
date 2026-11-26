@@ -63,7 +63,7 @@ export function parseCustomProviders(json: string | undefined): CustomProviderDe
   return raw.map((r: any, i) => {
     const where = `VITE_CUSTOM_PROVIDERS[${i}]`;
     if (typeof r?.id !== 'string' || !ID_RE.test(r.id)) throw new Error(tp('custom.badId', { where }));
-    if (BUILTIN_BASE_URLS[r.id] || r.id === 'tavily' || r.id === 'jina' || seen.has(r.id)) throw new Error(tp('custom.duplicateId', { where, id: r.id }));
+    if (BUILTIN_BASE_URLS[r.id] || r.id === 'tavily' || seen.has(r.id)) throw new Error(tp('custom.duplicateId', { where, id: r.id }));
     seen.add(r.id);
     let u: URL;
     try {

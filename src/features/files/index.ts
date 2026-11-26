@@ -1,11 +1,10 @@
 // Files feature: documents the model writes, files the user attaches, and the Files tab.
 // Importing this module registers everything with the core through extension points;
 // the core never imports anything from here.
-import { registerComposerAddon, registerMainView, registerOverlay, registerSettingsTab, registerSidebarTab, registerToolView, registerUserMessageExtra } from '../../components/extensions';
+import { registerComposerAddon, registerMainView, registerSettingsTab, registerSidebarTab, registerToolView, registerUserMessageExtra } from '../../components/extensions';
 import { lazyComponent } from '../../components/lazy';
 import { AttachButton, AttachmentChips } from './components/Composer';
 import { FilesPanel } from './components/FilesPanel';
-import { FetchDialog } from './components/FetchDialog';
 import { FileToolDetail, UserAttachments } from './components/Message';
 import { openFiler, pendingAttachments, takeAttachments, uploadFiles } from './state';
 import { FILE_TOOL_NAMES, fileToolLabel } from './tools';
@@ -13,10 +12,11 @@ import { t } from './messages';
 import { registerMessageTransform } from '../../lib/chat/request';
 import { attachmentsTransform } from './transform';
 
-export { openFile, openFiler } from './state';
+export { conversationFile, openFile, openFiler } from './state';
+/** Text of a PDF (or other attachable file), for reading pages fetched from the web */
+export { extractText } from './extract';
 
 // The fetch page, while the user is asked about an address the model wants to fetch (fetch_file)
-registerOverlay(FetchDialog);
 registerSidebarTab({ id: 'files', label: () => t('files'), icon: 'files', Panel: FilesPanel, onSelect: () => openFiler() });
 // The file manager and the file screen load their code when first opened
 registerMainView({ kind: 'files', Component: lazyComponent(() => import('./components/Filer').then((m) => m.Filer)) });

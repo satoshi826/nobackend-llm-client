@@ -66,7 +66,7 @@ export function PrivacyTab() {
       }
     ),
     [accountById('tavily')!.host, t('privacy.destTavily')],
-    [accountById('jina')!.host, t('privacy.destJina')],
+    [t('privacy.destPages'), t('privacy.destPagesText')],
     ...enabledProviders.value.flatMap((p) => getPreset(p.preset).copy?.extraDestinations ?? []),
     [t('privacy.destOrigin'), t('privacy.destOriginText')]
   ];

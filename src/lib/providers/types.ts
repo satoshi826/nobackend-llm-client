@@ -183,7 +183,7 @@ export interface ProviderError {
  * Keys are held by the key vault (a separate page), which attaches them only for allowed hosts.
  */
 export interface AuthRef {
-  /** Account ID (an LLM provider preset ID, or tavily / jina) */
+  /** Account ID (an LLM provider preset ID, or tavily) */
   keyId: string;
 }
 

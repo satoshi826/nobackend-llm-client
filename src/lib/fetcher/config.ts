@@ -2,15 +2,17 @@
 // - unset: /fetch/ on the app's own origin (one deployment)
 // - VITE_FETCH_URL set: a fetch page on a separate origin, out of reach of scripts running in the app
 import { getLang } from '../i18n';
+import type { FetchMode } from './protocol';
 
 const SAME_ORIGIN_PATH = '/fetch/';
 export const FETCH_URL: string = (import.meta as any).env?.VITE_FETCH_URL || (typeof location !== 'undefined' ? new URL(SAME_ORIGIN_PATH, location.origin).toString() : SAME_ORIGIN_PATH);
 export const FETCH_ORIGIN = typeof location !== 'undefined' ? new URL(FETCH_URL, location.origin).origin : '';
 
 /** The fetch page for one address, told which app opened it (it answers only to allowed app origins) */
-export function fetchPageUrl(url: string, theme: 'dark' | 'light'): string {
+export function fetchPageUrl(url: string, mode: FetchMode, theme: 'dark' | 'light'): string {
   const u = new URL(FETCH_URL);
   u.searchParams.set('url', url);
+  u.searchParams.set('mode', mode);
   u.searchParams.set('app', location.origin);
   u.searchParams.set('lang', getLang());
   u.searchParams.set('theme', theme);

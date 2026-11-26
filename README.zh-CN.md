@@ -22,7 +22,7 @@
 - **文件**: 让模型"整理成报告"，它会把文档（Markdown、CSV 等）保存到"文件"标签页；长文档分段写入，并保留所有版本。"文件"标签页是一个文件管理器（卡片/列表视图、排序、按内容搜索、按类型和对话浏览、多选、拖放导入）。可以从设备或已保存的文件中附加文本、CSV、代码或 PDF（在浏览器内提取文字）。支持查看、编辑、下载和打印（保存为 PDF）。
 - **图像生成**（Venice、OpenAI、Gemini、OpenRouter、NanoGPT、DeepInfra、Together；按指令编辑支持 Gemini、NanoGPT、OpenAI、OpenRouter、Venice；放大和去除背景仅限 Venice）: 输入框的图像模式（模型、宽高比、分辨率、1–4 张、风格、反向提示词、种子），"相同设置再生成"/"生成相似图像"，放大、编辑、去除背景，图库，以及可选的让聊天模型生成图像的工具。图像保存在本地（设置口令后加密）。
 - **回复建议**: 在最新回答下方给出几条简短的后续回复，点击即可填入输入框。数量、参考最近几轮对话以及使用的模型都可以设置。
-- **网页搜索**: 提供商内置的搜索（Anthropic、Gemini、Groq、OpenRouter、Venice），或工具方式（Tavily 搜索、Jina Reader 获取网页正文，均需你批准后执行）。
+- **网络**: 用提供商内置的搜索（Anthropic、Gemini、Groq、OpenRouter、Venice）或 Tavily 工具搜索；模型用 `fetch_url` 读取网页（HTML、文本、PDF），由另一次调用只提取所需内容后再交给模型（与 Claude Code 的 WebFetch 相同的方式）；用 `fetch_file` 导入文件。所有获取都在获取页面中确认，并可记住你允许的网站。
 - **技能（Skills）**: 兼容 SKILL.md 的操作说明。模型只在需要时才读取正文，你也可以用 `/名称` 手动指定。在对话中让它"把这个做成技能"，模型会起草一份，经你批准后保存。
 - **长对话**: 对话压缩（手动或自动）、提示缓存、上下文长度保护。
 - **用量**: 按天、提供商、模型统计 token 数和费用，记录只保存在本浏览器中。可查看 DeepSeek、NanoGPT、OpenRouter（此密钥额度的剩余）和 Venice 的余额，余额异常下降时会提醒。
@@ -39,7 +39,7 @@ npm run dev       # http://localhost:5173
 ### 不用真实 API 试用（模拟服务器）
 
 ```bash
-npm run mock      # 兼容 Venice / Anthropic / Tavily / Jina 的模拟服务器（:8787）
+npm run mock      # 兼容 Venice / Anthropic / Tavily / Jina Reader 的模拟服务器（:8787）
 VITE_VENICE_BASE_URL=http://localhost:8787/api/v1 \
 VITE_ANTHROPIC_BASE_URL=http://localhost:8787/anthropic/v1 \
 VITE_TAVILY_BASE_URL=http://localhost:8787/tavily \
@@ -52,7 +52,7 @@ npm run dev
 消息中的**关键词**会改变模拟服务器的行为:
 
 - 通用: `思考` / `think`、`コード`、`長文`、`エラー`、`残高`、`画像`、`xss`、`盗用`
-- 工具方式的网页搜索: `検索`、`読んで`
+- 工具方式的网页搜索: `検索`、`読んで`（搜索之后）。直接读取网页: `ページを読んで`
 - 技能: `スキル` 会读取列表中的第一个技能
 - 使用 skill-creator 的对话: `作って` / `直して` 会调用 save_skill
 
@@ -110,9 +110,12 @@ VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.c
 
 `npm run build` 会把每个页面的 CSP 同时写入 `_headers` 和 HTML，因此不读取 `_headers` 的主机（GitHub Pages）也会执行 CSP。但 `<meta>` 形式的 CSP 写不了的内容会失去：`frame-ancestors`（其他网站可以嵌入这些页面）以及其他响应头（`nosniff`、`Referrer-Policy`、COOP）。日常使用推荐 Cloudflare。
 
-### 从网络导入文件
+### 读取网页、从网络导入文件
 
-在对话中提出请求后，模型的 `fetch_file` 工具会把 https 地址上的文件或图像导入“文件”标签。应用本身不会连接任意地址：由独立的获取页面（`/fetch/`，有自己的 CSP）获取，并且每次都会先显示地址并征求确认。文本、CSV、代码和 PDF 会成为模型可以读取的文件；图像按图像保存（最大 20 MB，不支持 SVG）。
+模型接触网络的方式有两种，都由独立的获取页面（`/fetch/`，有自己的 CSP）先显示地址并征求确认；选择“以后不再询问”会记住该网站（保存在获取页面的存储中，“全部撤销”也在那里）。应用本身不会连接任意地址。
+
+- **读取**（`fetch_url`，同时给出想从网页了解的内容）: 在应用内把网页（HTML、文本或 PDF）转为正文，由一次不带工具的独立调用根据正文回答请求。对话模型只收到这个回答，因此网页中植入的指令不容易产生影响。读取所用的模型与对话相同，或在 设置 → 网页搜索 中选择。无法直接获取的网页经由中转服务器（见下文），HTML 中几乎没有正文的网页（由脚本绘制）经由 Jina Reader（`r.jina.ai`，无需密钥）读取。
+- **导入**（`fetch_file`）: 把文件或图像原样保存到“文件”标签。文本、CSV、HTML、代码和 PDF 会成为模型可以读取的文件；图像按图像保存（最大 20 MB，不支持 SVG）。需要处理网页的 HTML（例如写爬虫）时，可以保存后让模型读取，或用 `run_javascript` 试运行。
 
 浏览器只能从允许跨源读取的网站获取（CORS）：文件和图像的分发站点（GitHub raw 文件、Wikimedia、许多 CDN）通常允许，普通网页通常不允许。对于这些网站，可以部署自己的中转服务器（可选）：
 

@@ -1,7 +1,8 @@
 // Builds the security headers (Cloudflare Pages _headers format) in one place.
 // The app and the key vault get separate allowed destinations (least privilege):
-//   app:   only requests that need no key (model lists, keyless Jina Reader, providers used without a key)
-//   vault: requests that carry a key (LLMs, Tavily, Jina)
+//   app:   only requests that need no key (model lists, providers used without a key)
+//   vault: requests that carry a key (LLMs, Tavily)
+// Web pages are fetched only by the fetch page (its own CSP), never by the app
 // Provider destinations come from src/lib/providers/endpoints.ts (including VITE_CUSTOM_PROVIDERS at build time).
 import { appDirectOrigins, keyedProviderOrigins, type Env } from './src/lib/providers/endpoints';
 
@@ -16,7 +17,6 @@ function origin(url: string | undefined, fallback: string): string {
 export function serviceOrigins(env: Env) {
   return {
     tavily: origin(env.VITE_TAVILY_BASE_URL, 'https://api.tavily.com'),
-    jina: origin(env.VITE_JINA_BASE_URL, 'https://r.jina.ai'),
     /** LLM providers the app calls directly */
     appProviders: appDirectOrigins(env),
     /** LLM providers the vault calls with a key attached */
@@ -35,7 +35,7 @@ export function appCsp(env: Env, vaultOrigin?: string, fetchOrigin?: string): st
     "style-src 'self'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
-    `connect-src 'self' ${[...o.appProviders, o.jina].join(' ')}`,
+    `connect-src 'self' ${o.appProviders.join(' ')}`,
     // 'self': the sandbox (/sandbox/), and the vault and the fetch page while they are hosted with the app. Once those
     // have their own origins their same-origin copies are not built, so no framed page on this origin can reach out
     `frame-src ${["'self'", vaultOrigin, fetchOrigin].filter(Boolean).join(' ')}`,
@@ -101,7 +101,7 @@ export function vaultCsp(env: Env, appOrigins: string[]): string {
     "default-src 'none'",
     "script-src 'self'",
     "style-src 'self'",
-    `connect-src ${[...o.keyedProviders, o.tavily, o.jina].join(' ')}`,
+    `connect-src ${[...o.keyedProviders, o.tavily].join(' ')}`,
     "base-uri 'none'",
     "form-action 'none'",
     `frame-ancestors ${appOrigins.join(' ')}`,

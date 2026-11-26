@@ -324,15 +324,19 @@ describe('tool execution loop', () => {
   });
 });
 
-import { fetchUrlTool, webSearchTool } from '../../features/web/tools';
+import { makeFetchUrlTool, webSearchTool } from '../../features/web/tools';
 describe('web tool argument validation', () => {
   it('rejects an empty query and clamps the count to 1–10', () => {
     expect(() => webSearchTool.prepare({ query: ' ' })).toThrow();
     expect(webSearchTool.prepare({ query: 'a', max_results: 99 }).max_results).toBe(10);
   });
-  it('does not fetch non-http(s) URLs or URLs with credentials', () => {
-    expect(() => fetchUrlTool.prepare({ url: 'file:///etc/passwd' })).toThrow();
-    expect(() => fetchUrlTool.prepare({ url: 'https://u:p@example.com/' })).toThrow();
-    expect(fetchUrlTool.prepare({ url: 'https://example.com/a' }).url).toBe('https://example.com/a');
+  it('reads only plain https URLs, and only with a prompt', () => {
+    const fetchUrl = makeFetchUrlTool(async () => ({ content: '' }));
+    expect(() => fetchUrl.prepare({ url: 'file:///etc/passwd', prompt: 'x' })).toThrow();
+    expect(() => fetchUrl.prepare({ url: 'http://example.com/', prompt: 'x' })).toThrow();
+    expect(() => fetchUrl.prepare({ url: 'https://u:p@example.com/', prompt: 'x' })).toThrow();
+    expect(() => fetchUrl.prepare({ url: 'https://example.com/a', prompt: ' ' })).toThrow();
+    expect(fetchUrl.prepare({ url: 'https://example.com/a', prompt: 'the price' })).toEqual({ url: 'https://example.com/a', prompt: 'the price' });
+    expect(fetchUrl.confirmsItself).toBe(true);
   });
 });

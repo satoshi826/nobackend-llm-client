@@ -520,6 +520,20 @@ const server = http.createServer(async (req, res) => {
       res.write('data: [DONE]\n\n');
       return res.end();
     }
+    // The page reader (fetch_url's separate call): answers from the page it was given
+    if (String(sys ?? '').startsWith('You read one web page')) {
+      const page = /<page>\n([\s\S]*?)\n<\/page>/.exec(userText)?.[1] ?? '';
+      const ans = `抜き出し（モック）: ページは ${page.length} 文字。冒頭: ${page.slice(0, 40).replace(/\s+/g, ' ')}`;
+      for (const p of chunked(ans)) await send({ content: p });
+      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
+    // "ページを読んで": read a page straight away (fetch_url, no search first)
+    if (toolNames.includes('fetch_url') && lastMsg?.role === 'user' && userText.includes('ページを読んで')) {
+      await send({ content: 'ページを読みます。' });
+      return finishTools('fetch_url', { url: 'https://example.com/', prompt: 'このページの目的' });
+    }
     if (toolNames.includes('web_search') && lastMsg?.role === 'user' && last.includes('検索')) {
       await send({ content: '調べてみます。' });
       return finishTools('web_search', { query: last.replace(/検索して?/, '').trim() || last, max_results: 3 });
@@ -527,7 +541,7 @@ const server = http.createServer(async (req, res) => {
     if (lastMsg?.role === 'tool') {
       const fetched = msgs.some((m) => m.role === 'assistant' && m.tool_calls?.some((c) => c.function?.name === 'fetch_url'));
       if (toolNames.includes('fetch_url') && last.includes('読んで') && !fetched) {
-        return finishTools('fetch_url', { url: 'https://example.com/article-1' });
+        return finishTools('fetch_url', { url: 'https://example.com/article-1', prompt: '記事の要点' });
       }
       const toolOut = msgs.filter((m) => m.role === 'tool').map((m) => m.content).join('\n');
       const ans = `検索結果をもとに回答します。\n\n- 1 件目の記事によると、例示用のドメインが存在します [1]。\n- 2 件目も参考になります [2]。\n\n（ツール結果 ${toolOut.length} 文字を受け取りました。${toolOut.includes('信頼できない') ? '注意書き付き。' : ''}）`;

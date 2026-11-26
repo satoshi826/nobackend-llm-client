@@ -261,3 +261,30 @@ hr {
     transform: rotate(360deg);
   }
 }
+/* A button that reads as a link (e.g. "forget all" on the fetch page) */
+.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.link:hover {
+  color: var(--ink-strong);
+}
+/* A checkbox with its label on one line (e.g. "don't ask again" on the fetch page) */
+label.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 400;
+}
+label.check > input[type='checkbox'] {
+  display: inline-block;
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}

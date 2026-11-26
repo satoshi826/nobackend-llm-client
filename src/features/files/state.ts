@@ -16,6 +16,7 @@ import { extractText } from './extract';
 import { FILE_TOOL_NAMES, filesNote, makeFileTools, type FileToolDetails } from './tools';
 import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
+import { fetchFromWeb, type Fetched } from '../../state/fetch-page';
 
 /** Let chat models write and read files (create_file / append_file / edit_file / read_file) */
 export const fileSettings = defineFeatureSettings('files', { fileTools: true }, (old) => pickLegacy(old, { fileTools: true }));
@@ -238,32 +239,7 @@ export async function bringIn(files: File[], source: ImageSource = { kind: 'uplo
   return done.filter(Boolean).length;
 }
 
-// ---- fetching from the web (through the fetch page, which asks the user) ----
-export interface Fetched {
-  name: string;
-  mime: string;
-  data: ArrayBuffer;
-  url: string;
-  relayed: boolean;
-}
-
-/** The address the model asked to fetch; the FetchDialog overlay shows the fetch page for it */
-export const fetchRequest = signal<{ url: string; done(r: Fetched | null): void } | null>(null);
-
-/** Ask the user (in the fetch page) and fetch. null when the user cancels */
-export function fetchFromWeb(url: string): Promise<Fetched | null> {
-  fetchRequest.value?.done(null);
-  return new Promise((resolve) => {
-    fetchRequest.value = {
-      url,
-      done: (r) => {
-        fetchRequest.value = null;
-        resolve(r);
-      }
-    };
-  });
-}
-
+// ---- fetching from the web (through the fetch page: state/fetch-page.ts) ----
 /** What a fetch became: a file the model can read, or an image */
 export type SavedFetch = { kind: 'file'; file: FileRecord } | { kind: 'image'; id: string; name: string };
 
@@ -329,6 +305,13 @@ export async function takeAttachments(): Promise<Attachment[]> {
 
 // ---- tools for the model ----
 /** Files the model may use in a conversation: attached to it, or created / changed by file tools in it */
+/** A file this conversation may read (made, fetched or attached in it): its name and current text, for other features' tools */
+export async function conversationFile(conv: Conversation, history: MessageRecord[], id: string): Promise<{ name: string; text: string } | undefined> {
+  const f = await fdb.getFile(id);
+  if (!f || (f.conversationId !== conv.id && !filesInHistory(history).has(id))) return undefined;
+  return { name: f.name, text: fdb.currentText(f) };
+}
+
 export function filesInHistory(history: MessageRecord[]): Map<string, { name: string; size: number }> {
   const out = new Map<string, { name: string; size: number }>();
   for (const m of history) {
@@ -349,7 +332,7 @@ registerToolProvider({
     const scope = new Set(filesInHistory(history).keys());
     return makeFileTools({
       async fetch(url) {
-        const r = await fetchFromWeb(url);
+        const r = await fetchFromWeb(url, 'save');
         const saved = r && (await saveFetched(r, conv));
         if (saved?.kind === 'file') {
           scope.add(saved.file.id);

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useDialog } from '../../../components/dialog';
 import type { ImageParams, MessageRecord } from '../../../lib/db/schema';
 import type { Part } from '../../../lib/providers/types';
-import { getImage } from '../../../lib/db/images';
+import { getImage, getImageThumb } from '../../../lib/db/images';
 import { currentId, messages, openConversation } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
 import { modal, showToast } from '../../../state/ui';
@@ -24,26 +24,46 @@ import { t, usd } from '../messages';
 
 type FilePart = Extract<Part, { type: 'file' }>;
 
-/** Object URLs for stored images (decrypted on demand; kept until the page reloads, which locking does) */
-const urls = new Map<string, Promise<string | null>>();
-function imageUrl(blobId: string): Promise<string | null> {
-  let p = urls.get(blobId);
-  if (!p) {
-    p = getImage(blobId)
-      .then((b) => (b ? URL.createObjectURL(b) : null))
-      .catch(() => null);
-    urls.set(blobId, p);
+/**
+ * Object URLs of stored images (decrypted on demand), per image and size. Each is counted while on screen;
+ * ones no longer shown are kept for a while (going back to them is instant) and then freed, oldest first
+ */
+type UrlEntry = { url: Promise<string | null>; users: number };
+const urls = new Map<string, UrlEntry>();
+const KEEP_UNUSED = 60;
+
+function acquireUrl(key: string, load: () => Promise<Blob | null>): Promise<string | null> {
+  let e = urls.get(key);
+  if (!e) e = { url: load().then((b) => (b ? URL.createObjectURL(b) : null)).catch(() => null), users: 0 };
+  // Map order is recency: the most recently used come last
+  urls.delete(key);
+  urls.set(key, e);
+  e.users++;
+  return e.url;
+}
+
+function releaseUrl(key: string) {
+  const e = urls.get(key);
+  if (!e) return;
+  e.users--;
+  let unused = [...urls.values()].filter((x) => x.users <= 0).length;
+  for (const [k, x] of urls) {
+    if (unused <= KEEP_UNUSED) break;
+    if (x.users > 0) continue;
+    urls.delete(k);
+    unused--;
+    void x.url.then((u) => u && URL.revokeObjectURL(u));
   }
-  return p;
 }
 
 /** Forget (and free) the object URLs of deleted images */
 function releaseImageUrls(ids: string[]) {
-  for (const id of ids) {
-    const p = urls.get(id);
-    urls.delete(id);
-    void p?.then((u) => u && URL.revokeObjectURL(u));
-  }
+  for (const id of ids)
+    for (const key of [`full:${id}`, `thumb:${id}`]) {
+      const e = urls.get(key);
+      urls.delete(key);
+      void e?.url.then((u) => u && URL.revokeObjectURL(u));
+    }
 }
 
 /** Ask, then delete images (also used by the file manager) */
@@ -61,25 +81,44 @@ export async function confirmAndDelete(ids: string[]): Promise<boolean> {
   return true;
 }
 
-export function useImageUrl(blobId: string | undefined): string | null | undefined {
+/** The object URL of an image: the full image, or its thumbnail. Loads only once `enabled` (e.g. on screen) */
+export function useImageUrl(blobId: string | undefined, size: 'full' | 'thumb' = 'full', enabled = true): string | null | undefined {
   const [url, setUrl] = useState<string | null | undefined>(undefined);
   useEffect(() => {
-    let alive = true;
     setUrl(undefined);
-    if (blobId) void imageUrl(blobId).then((u) => alive && setUrl(u));
+    if (!blobId || !enabled) return;
+    let alive = true;
+    const key = `${size}:${blobId}`;
+    void acquireUrl(key, () => (size === 'thumb' ? getImageThumb(blobId) : getImage(blobId))).then((u) => alive && setUrl(u));
     return () => {
       alive = false;
+      releaseUrl(key);
     };
-  }, [blobId]);
+  }, [blobId, size, enabled]);
   return url;
 }
 
-export function ImageThumb({ blobId, alt, onOpen, class: className }: { blobId: string; alt: string; onOpen(): void; class?: string }) {
-  const url = useImageUrl(blobId);
+/** Whether the element is on screen or about to be (for loading only what can be seen) */
+function useNearScreen(ref: { current: Element | null }): boolean {
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || near) return;
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && setNear(true), { rootMargin: '400px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near]);
+  return near;
+}
+
+/** An image in a grid or an answer: its thumbnail (`full` for a single large image), loaded when it comes near the screen */
+export function ImageThumb({ blobId, alt, onOpen, full, class: className }: { blobId: string; alt: string; onOpen(): void; full?: boolean; class?: string }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const url = useImageUrl(blobId, full ? 'full' : 'thumb', useNearScreen(ref));
   return (
-    <button type="button" class={cx('group relative overflow-hidden rounded-lg bg-glass-strong', className)} onClick={onOpen} aria-label={t('thumb.open', { alt })}>
+    <button ref={ref} type="button" class={cx('group relative overflow-hidden rounded-lg bg-glass-strong', className)} onClick={onOpen} aria-label={t('thumb.open', { alt })}>
       {url ? (
-        <img src={url} alt={alt} class="h-full w-full object-cover transition group-hover:scale-[1.02]" loading="lazy" decoding="async" />
+        <img src={url} alt={alt} class="h-full w-full object-cover transition group-hover:scale-[1.02]" decoding="async" />
       ) : url === null ? (
         <span class="grid h-full w-full place-items-center text-xs text-faint">{t('thumb.failed')}</span>
       ) : (
@@ -115,6 +154,7 @@ export function ReplyImages({ m }: { m: MessageRecord }) {
           key={f.blobId}
           blobId={f.blobId}
           alt={t('thumb.alt', { n: i + 1 })}
+          full={files.length === 1}
           class={files.length === 1 ? 'aspect-auto max-h-[28rem]' : 'aspect-square'}
           onOpen={() => (lightbox.value = { items, index: i })}
         />
@@ -153,7 +193,8 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
               key={f.blobId}
               blobId={f.blobId}
               alt={t('thumb.alt', { n: i + 1 })}
-              class={files.length === 1 ? 'aspect-auto max-h-[28rem]' : 'aspect-square'}
+              full={files.length === 1}
+          class={files.length === 1 ? 'aspect-auto max-h-[28rem]' : 'aspect-square'}
               onOpen={() => (lightbox.value = { items, index: i })}
             />
           ))}
@@ -218,7 +259,7 @@ export function ToolImages({ blobIds, conversationId, messageId }: { blobIds: st
   return (
     <div class={cx('grid gap-2 py-1', blobIds.length === 1 ? 'max-w-md grid-cols-1' : 'max-w-xl grid-cols-2')}>
       {blobIds.map((id, i) => (
-        <ImageThumb key={id} blobId={id} alt={t('thumb.alt', { n: i + 1 })} class={blobIds.length === 1 ? 'max-h-[28rem]' : 'aspect-square'} onOpen={() => (lightbox.value = { items, index: i })} />
+        <ImageThumb key={id} blobId={id} alt={t('thumb.alt', { n: i + 1 })} full={blobIds.length === 1} class={blobIds.length === 1 ? 'max-h-[28rem]' : 'aspect-square'} onOpen={() => (lightbox.value = { items, index: i })} />
       ))}
     </div>
   );

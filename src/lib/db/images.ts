@@ -1,6 +1,6 @@
 // Image storage (generated images). Images of temporary chats stay in memory only.
 // With a passphrase (a data key is set) the bytes are encrypted with the same data key as conversations.
-import { db, type BlobRecord } from './schema';
+import { db, type BlobRecord, type SealedBytes } from './schema';
 import { currentDataKey, DataLockedError } from './sealed';
 import { openBytes, sealBytes, type DataKey } from '../crypto/data';
 import { registerDataTable } from './data-tables';
@@ -15,6 +15,44 @@ export interface ImageMeta {
   mime: string;
 }
 
+async function seal(key: DataKey, blob: Blob): Promise<SealedBytes> {
+  const s = await sealBytes(key, await blob.arrayBuffer());
+  return { iv: s.iv, data: new Blob([s.data], { type: blob.type }) };
+}
+
+async function open(key: DataKey, s: SealedBytes, mime: string): Promise<Blob> {
+  return new Blob([await openBytes(key, { iv: s.iv, data: await s.data.arrayBuffer() })], { type: s.data.type || mime });
+}
+
+/** Stored form of an image's bytes: encrypted when a data key is given */
+async function stored(blob: Blob, key: DataKey | null): Promise<Pick<BlobRecord, 'blob' | 'enc'>> {
+  return key ? { enc: await seal(key, blob) } : { blob };
+}
+
+/** Longest side of a thumbnail (sharp in a grid tile on a 2x screen) */
+const THUMB_SIZE = 480;
+
+/** A small copy for grids and previews (null where the browser cannot draw off screen) */
+async function makeThumb(blob: Blob): Promise<Blob | null> {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const scale = Math.min(1, THUMB_SIZE / Math.max(bmp.width, bmp.height));
+    const canvas = new OffscreenCanvas(Math.max(1, Math.round(bmp.width * scale)), Math.max(1, Math.round(bmp.height * scale)));
+    canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close();
+    // WebP keeps transparency (background removal); a browser that cannot write it gives PNG
+    const thumb = await canvas.convertToBlob({ type: 'image/webp', quality: 0.8 });
+    return thumb.size < blob.size ? thumb : blob;
+  } catch {
+    return null;
+  }
+}
+
+async function storedThumb(blob: Blob, key: DataKey | null): Promise<BlobRecord['thumb']> {
+  const thumb = await makeThumb(blob);
+  return thumb ? (key ? seal(key, thumb) : thumb) : undefined;
+}
+
 /** Save an image (encrypted when a data key is set) */
 export async function putImage(meta: ImageMeta, blob: Blob, temporary: boolean): Promise<void> {
   const base = { ...meta, createdAt: Date.now(), size: blob.size };
@@ -23,14 +61,14 @@ export async function putImage(meta: ImageMeta, blob: Blob, temporary: boolean):
     return;
   }
   const key = currentDataKey();
-  await db().blobs.put(key ? { ...base, enc: await sealBytes(key, await blob.arrayBuffer()) } : { ...base, blob });
+  await db().blobs.put({ ...base, ...(await stored(blob, key)), thumb: await storedThumb(blob, key) });
 }
 
 async function toBlob(rec: BlobRecord, key: DataKey | null = currentDataKey()): Promise<Blob> {
   if (rec.blob) return rec.blob;
   if (!rec.enc) throw new Error(t('images.noData'));
   if (!key) throw new DataLockedError();
-  return new Blob([await openBytes(key, rec.enc)], { type: rec.mime });
+  return open(key, rec.enc, rec.mime);
 }
 
 export async function getImage(id: string): Promise<Blob | null> {
@@ -38,10 +76,28 @@ export async function getImage(id: string): Promise<Blob | null> {
   return rec ? toBlob(rec) : null;
 }
 
+/** The thumbnail of an image (made and saved on first use for images stored before thumbnails existed) */
+export async function getImageThumb(id: string): Promise<Blob | null> {
+  const m = mem.get(id);
+  if (m) return toBlob(m);
+  const rec = await db().blobs.get(id);
+  if (!rec) return null;
+  const key = currentDataKey();
+  if (rec.thumb instanceof Blob) return rec.thumb;
+  if (rec.thumb) {
+    if (!key) throw new DataLockedError();
+    return open(key, rec.thumb, rec.mime);
+  }
+  const full = await toBlob(rec, key);
+  const thumb = await makeThumb(full);
+  if (thumb) await db().blobs.update(id, { thumb: key ? await seal(key, thumb) : thumb });
+  return thumb ?? full;
+}
+
 /** Image records without the bytes, newest first (for the gallery) */
-export async function listImages(): Promise<Omit<BlobRecord, 'blob' | 'enc'>[]> {
+export async function listImages(): Promise<Omit<BlobRecord, 'blob' | 'enc' | 'thumb'>[]> {
   const rows = await db().blobs.orderBy('createdAt').reverse().toArray();
-  const strip = ({ blob: _b, enc: _e, ...rest }: BlobRecord) => rest;
+  const strip = ({ blob: _b, enc: _e, thumb: _t, ...rest }: BlobRecord) => rest;
   return [...[...mem.values()].sort((a, b) => b.createdAt - a.createdAt).map(strip), ...rows.map(strip)];
 }
 
@@ -69,8 +125,9 @@ export async function resealImages(from: DataKey | null, to: DataKey | null, onP
     const already = to ? !!rec.enc && from === to : !!rec.blob;
     if (!already) {
       const blob = await toBlob(rec, from);
-      const { blob: _b, enc: _e, ...meta } = rec;
-      await db().blobs.put(to ? { ...meta, enc: await sealBytes(to, await blob.arrayBuffer()) } : { ...meta, blob });
+      // The thumbnail is made again from the image (under the new key, or plain)
+      const { blob: _b, enc: _e, thumb: _t, ...meta } = rec;
+      await db().blobs.put({ ...meta, ...(await stored(blob, to)), thumb: await storedThumb(blob, to) });
     }
     onProgress?.(++done, ids.length);
   }
@@ -118,7 +175,7 @@ export async function importImages(list: ExportedImage[], conversationIds: Set<s
     const blob = base64ToBlob(im.data, im.mime);
     const key = currentDataKey();
     const base = { id: im.id, conversationId: im.conversationId, messageId: im.messageId, createdAt: im.createdAt, mime: im.mime, size: blob.size };
-    await db().blobs.put(key ? { ...base, enc: await sealBytes(key, await blob.arrayBuffer()) } : { ...base, blob });
+    await db().blobs.put({ ...base, ...(await stored(blob, key)) });
     n++;
   }
   return n;

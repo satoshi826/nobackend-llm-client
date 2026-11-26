@@ -157,6 +157,15 @@ export interface SettingRecord {
   value: unknown;
 }
 
+/**
+ * Encrypted bytes. The ciphertext is kept as a Blob, so reading a record does not load it: IndexedDB keeps a Blob
+ * on disk until it is read
+ */
+export interface SealedBytes {
+  iv: string;
+  data: Blob;
+}
+
 /** A stored image. With a passphrase the bytes are encrypted (enc) instead of kept as a Blob */
 export interface BlobRecord {
   id: string;
@@ -166,7 +175,9 @@ export interface BlobRecord {
   mime: string;
   size: number;
   blob?: Blob;
-  enc?: { iv: string; data: ArrayBuffer };
+  enc?: SealedBytes;
+  /** A small copy for grids and previews (encrypted like the image); made when first needed for older images */
+  thumb?: Blob | SealedBytes;
 }
 
 export interface ModelRecord extends ModelInfo {
@@ -206,6 +217,17 @@ export class AppDB extends Dexie {
     this.version(6).stores({ files: 'id, updatedAt, conversationId, kind' });
     // v7: usage records indexed by conversation (the header shows each conversation's cost)
     this.version(7).stores({ usage: 'id, at, providerId, conversationId' });
+    // v8: encrypted image bytes kept as Blobs (were ArrayBuffers, which every read of a record loaded into memory)
+    this.version(8)
+      .stores({ blobs: 'id, conversationId, createdAt' })
+      .upgrade((tx) =>
+        tx
+          .table('blobs')
+          .toCollection()
+          .modify((r: { enc?: { iv: string; data: Blob | ArrayBuffer } }) => {
+            if (r.enc && !(r.enc.data instanceof Blob)) r.enc = { iv: r.enc.iv, data: new Blob([r.enc.data]) };
+          })
+      );
     // v4: usage records (survive deleting conversations). Rebuilt from the usage of existing answers
     this.version(4)
       .stores({ usage: 'id, at, providerId' })

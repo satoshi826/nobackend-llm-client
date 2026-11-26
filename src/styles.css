@@ -242,7 +242,7 @@ body {
 /* ---- Scrollbars: thin rounded thumbs on a transparent track, everywhere ----
    Chrome ignores ::-webkit-scrollbar once scrollbar-width / scrollbar-color are set, so the standard
    properties are only for Firefox. */
-::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background-color: var(--line-strong);

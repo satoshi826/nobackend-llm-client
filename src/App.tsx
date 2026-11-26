@@ -81,7 +81,7 @@ export function App() {
     );
   }
   return (
-    <div class="relative isolate flex h-full md:gap-3 md:p-3">
+    <div class="relative isolate flex h-full md:gap-3 md:py-3 md:pl-3">
       <SkyGlow />
       {dataWork.value && (
         <div class="backdrop fixed inset-0 z-[60] grid place-items-center text-sm" role="status" aria-live="polite">

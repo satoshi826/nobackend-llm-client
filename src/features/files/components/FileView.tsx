@@ -77,7 +77,7 @@ export function FileView({ id = '' }: { id?: string }) {
 
   return (
     <main class="flex min-w-0 flex-1 flex-col">
-      <header class="glass mx-2 mt-2 flex flex-wrap items-center gap-1 rounded-2xl px-2 py-1.5 sm:mx-3 md:mx-0 md:mt-0">
+      <header class="glass mx-2 mt-2 flex flex-wrap items-center gap-1 rounded-2xl px-2 py-1.5 sm:mx-3 md:ml-0 md:mr-3 md:mt-0">
         <Button class="md:hidden" aria-label={t('menu')} onClick={() => (sidebarOpen.value = true)}>
           <Icon name="menu" />
         </Button>
@@ -200,7 +200,7 @@ export function FileView({ id = '' }: { id?: string }) {
         </div>
       </header>
       {isOld && !editing && (
-        <div class="flex flex-wrap items-center gap-2 mx-2 mt-2 rounded-2xl border border-warn/40 bg-warn-soft px-4 py-2 sm:mx-3 md:mx-0 text-sm text-warn">
+        <div class="flex flex-wrap items-center gap-2 mx-2 mt-2 rounded-2xl border border-warn/40 bg-warn-soft px-4 py-2 sm:mx-3 md:ml-0 md:mr-3 text-sm text-warn">
           {t('file.oldVersion', { v: shown.v, latest: latest.v })}
           <Button
             variant="outline"
@@ -246,7 +246,7 @@ export function FileView({ id = '' }: { id?: string }) {
           </div>
         </div>
       ) : (
-        <div class="scroll-thin min-h-0 flex-1 overflow-y-auto px-2 sm:px-3 md:px-0">
+        <div class="scroll-thin min-h-0 flex-1 overflow-y-auto px-2 sm:px-3 md:pl-0 md:pr-3">
           <div ref={body} class="glass rise mx-auto my-3 w-full max-w-3xl rounded-[22px] px-5 py-6 sm:my-4 sm:px-8">
             <FileBody text={shown.text} ext={ext} />
           </div>

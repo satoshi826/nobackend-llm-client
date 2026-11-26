@@ -54,7 +54,7 @@ export function Header() {
   const conv = currentConv.value;
   const draft = isDraft.value;
   return (
-    <header class="glass mx-2 mt-2 flex items-center gap-1 rounded-2xl px-2 py-1.5 sm:mx-3 md:mx-0 md:mt-0">
+    <header class="glass mx-2 mt-2 flex items-center gap-1 rounded-2xl px-2 py-1.5 sm:mx-3 md:ml-0 md:mr-3 md:mt-0">
       <Button class="md:hidden" aria-label={t('header.menu')} onClick={() => (sidebarOpen.value = true)}>
         <Icon name="menu" class="size-5" />
       </Button>

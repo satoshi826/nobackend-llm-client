@@ -139,7 +139,7 @@ export function Filer() {
       }}
     >
       {/* While items are selected, their actions cover the header (no layout shift under the pointer) */}
-      <div class="relative mx-2 mt-2 sm:mx-3 md:mx-0 md:mt-0">
+      <div class="relative mx-2 mt-2 sm:mx-3 md:ml-0 md:mr-3 md:mt-0">
         <header class="glass flex min-h-12 flex-wrap items-center gap-2 rounded-2xl px-3 py-1.5">
           <Button class="md:hidden" aria-label={t('menu')} onClick={() => (sidebarOpen.value = true)}>
             <Icon name="menu" />
@@ -224,7 +224,7 @@ export function Filer() {
         )}
       </div>
 
-      <div class="scroll-thin min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+      <div class="scroll-thin min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 md:pr-7">
         {!items ? (
           <p class="flex items-center gap-2 text-sm text-muted">
             <Spinner class="size-4" />

@@ -12,7 +12,7 @@ import { askConfirm } from '../../../components/ConfirmDialog';
 import {
   deleteImages,
   estimateCost,
-  editorFor,
+  editTargetFor,
   imageAction,
   imageModelOf,
   lightbox,
@@ -272,7 +272,7 @@ export function ToolImages({ blobIds, conversationId, messageId }: { blobIds: st
 }
 
 /** The estimated cost of an edit, for the button titles */
-function costText(p: Pick<ImageParams, 'op' | 'providerId' | 'scale'>): string {
+function costText(p: Pick<ImageParams, 'op' | 'providerId' | 'scale'> & { model?: string }): string {
   const cost = estimateCost({ model: '', prompt: '', variants: 1, safeMode: false, format: 'png', ...p });
   return cost === undefined ? t('lb.costUnknown') : t('lb.cost', { cost: usd(cost, 2) });
 }
@@ -310,10 +310,11 @@ export function Lightbox() {
   const source = msg ? messages.value.find((m) => m.id === msg.parentId) : undefined;
   const promptText = msg?.image?.params.prompt || source?.imageRequest?.prompt || '';
   // Edits run on the provider that made the image when it offers them, else on another one with a key
-  const from = msg?.meta?.providerId;
-  const upscaler = editorFor('upscale', from);
-  const bgRemover = editorFor('remove-bg', from);
-  const editor = editorFor('edit', from);
+  const from = { providerId: msg?.meta?.providerId, model: msg?.meta?.model };
+  const upscaler = editTargetFor('upscale', from)?.provider;
+  const bgRemover = editTargetFor('remove-bg', from)?.provider;
+  const editor = editTargetFor('edit', from);
+  const editorName = editor && (editor.model ? (imageModelOf(editor.provider.id, editor.model)?.name ?? editor.model) : editor.provider.label);
   const chat = item.conversationId;
   const inThisChat = !!chat && currentId.value === chat;
   // Saved images outlive their conversation, and brought-in images have none: those are edited in a new chat
@@ -369,7 +370,7 @@ export function Lightbox() {
             </Button>
           )}
           {editor && (
-            <Button class={cx('text-xs text-white hover:bg-glass', editing && 'bg-glass-strong')} disabled={isStreaming.value} aria-pressed={editing} title={t('lb.editTitle', { cost: costText({ op: 'edit', providerId: editor.id }) })} onClick={() => setEditing(!editing)}>
+            <Button class={cx('text-xs text-white hover:bg-glass', editing && 'bg-glass-strong')} disabled={isStreaming.value} aria-pressed={editing} title={t('lb.editTitle', { model: editorName!, cost: costText({ op: 'edit', providerId: editor.provider.id, model: editor.model }) })} onClick={() => setEditing(!editing)}>
               <Icon name="wand" class="size-4" />
               {t('lb.edit')}
             </Button>

@@ -25,6 +25,8 @@ export interface ImageModelInfo {
   pricing: { generation?: number; source?: 'api' | 'table'; asOf?: string };
   /** Most images one request can make (default 4) */
   maxImages?: number;
+  /** Edits an image from a prompt: 'also' (and makes images from text), 'only' (not offered for making images) */
+  edits?: 'also' | 'only';
   /** Options the bar shows for this model (missing = all of them, as for Venice) */
   options?: { seed?: boolean; negativePrompt?: boolean; styles?: boolean; enhance?: boolean };
   offline?: boolean;
@@ -73,6 +75,15 @@ export function generationCost(p: ImageParams, m: ImageModelInfo | undefined): n
   const each = sizeOf(m, p)?.price ?? m?.pricing.generation;
   return each === undefined ? undefined : each * imageCount(p, m);
 }
+
+/** An image as base64, and as a data: URL (how the edit APIs take the image) */
+export async function blobToBase64(b: Blob): Promise<string> {
+  const bytes = new Uint8Array(await b.arrayBuffer());
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+export const blobToDataUrl = async (b: Blob) => `data:${b.type || 'image/png'};base64,${await blobToBase64(b)}`;
 
 /** Whether the bar should offer an option for this model */
 export const hasOption = (m: ImageModelInfo | undefined, k: keyof NonNullable<ImageModelInfo['options']>) => !m?.options || !!m.options[k];

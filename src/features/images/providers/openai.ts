@@ -1,13 +1,14 @@
 // OpenAI Images API (POST /v1/images/generations).
 // The model list needs the key (/v1/models, filtered to image models). GPT Image models always return
 // base64; aspect ratios map to the sizes the model accepts, and "quality" takes the resolution menu.
-// Prices are a dated table (the API lists none).
+// Prices are a dated table (the API lists none). GPT Image edits an image too (POST /v1/images/edits, as JSON
+// with the image as a data: URL).
 import type { ProviderConfig, Transport } from '../../../lib/providers/types';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { ImageApiError, jsonPost, perImage, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { ImageApiError, blobToDataUrl, jsonPost, perImage, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const AS_OF = '2026-11';
@@ -42,6 +43,8 @@ export function mapOpenAIImageModel(raw: any, providerId = 'openai'): ImageModel
       tierLabel: 'quality'
     },
     pricing: row ? { source: 'table', asOf: AS_OF } : {},
+    // GPT Image edits images (DALL·E 3 does not)
+    ...(dalle ? {} : { edits: 'also' as const }),
     options: { seed: false, negativePrompt: false, styles: false, enhance: false }
   };
 }
@@ -60,6 +63,11 @@ export function buildOpenAIImageBody(p: ImageParams, n: number, m?: ImageModelIn
   if (isDalle(p.model)) body.response_format = 'b64_json';
   else body.output_format = p.format;
   return body;
+}
+
+/** POST /images/edits as JSON: the image goes as a data: URL */
+export function buildOpenAIEditBody(p: ImageParams, image: string): Record<string, unknown> {
+  return { model: p.model, prompt: p.prompt, images: [{ image_url: image }], n: 1, output_format: 'png' };
 }
 
 async function generate(p: ImageParams, m: ImageModelInfo | undefined, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
@@ -88,5 +96,11 @@ export const openaiImageProvider: ImageProvider = {
     return (Array.isArray(data?.data) ? data.data : []).map((r: unknown) => mapOpenAIImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
   },
   generate: (p, m, c) => generate(p, m, c.config, c.transport, c.auth, c.signal),
+  async edit(source, p, c) {
+    const res = await sendImageRequest(c.transport, joinUrl(c.config.baseUrl, 'images/edits'), jsonPost(buildOpenAIEditBody(p, await blobToDataUrl(source)), c.signal), c.auth);
+    const b64 = (await res.json())?.data?.[0]?.b64_json;
+    if (typeof b64 !== 'string') throw new ImageApiError({ kind: 'bad-request', message: t('err.noImage') });
+    return base64ToBlob(b64, 'image/png');
+  },
   privacyLabel: () => ({ tone: 'zinc', label: 'OpenAI', title: t('privacy.openaiTitle') })
 };

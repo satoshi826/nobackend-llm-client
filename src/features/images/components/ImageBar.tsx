@@ -11,7 +11,7 @@ import {
   setConversationImageModel,
   estimateCost,
   imageSettings,
-  imageModels,
+  generationModels,
   imageModelsError,
   imageReady,
   imageStyles,
@@ -44,7 +44,7 @@ export function ImageBar() {
     );
   const d = imageSettings.value.value.imageDefaults;
   const m = currentImageModel.value;
-  const list = imageModels.value;
+  const list = generationModels.value;
   if (!list.length)
     return (
       <div class="flex items-center gap-2 px-3 pt-2.5 text-xs text-muted">

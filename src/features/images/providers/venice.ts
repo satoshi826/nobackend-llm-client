@@ -7,7 +7,7 @@ import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { ImageApiError, DEFAULT_ASPECTS, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { ImageApiError, DEFAULT_ASPECTS, blobToBase64, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 
 export { ImageApiError, DEFAULT_ASPECTS, type ImageModelInfo };
 import { t } from '../messages';
@@ -165,13 +165,6 @@ export async function generateImages(cfg: ProviderConfig, auth: AuthRef | undefi
   };
 }
 
-async function blobToBase64(b: Blob): Promise<string> {
-  const bytes = new Uint8Array(await b.arrayBuffer());
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-
 /** Endpoints that take one image and return raw image bytes */
 async function imageToImage(cfg: ProviderConfig, auth: AuthRef | undefined, transport: Transport, path: string, body: Record<string, unknown>, fallbackMime: string, signal?: AbortSignal): Promise<Blob> {
   const res = await send(transport, joinUrl(cfg.baseUrl, path), json(body, signal), auth);
@@ -211,6 +204,7 @@ export const veniceImageProvider: ImageProvider = {
   generate: (p, m, c) => generateImages(c.config, c.auth, c.transport, p, m, c.signal),
   upscale: (source, scale, c) => upscaleImage(c.config, c.auth, c.transport, source, scale, c.signal),
   edit: (source, p, c) => editImage(c.config, c.auth, c.transport, source, p, c.signal),
+  ownEditModel: true,
   removeBackground: (source, c) => removeBackground(c.config, c.auth, c.transport, source, c.signal),
   editCost: veniceEditCost,
   privacyLabel: (m) =>

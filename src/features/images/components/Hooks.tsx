@@ -14,7 +14,7 @@ import {
   defaultImageModel,
   estimateCost,
   imageModelFor,
-  imageModels,
+  generationModels,
   imageReady,
   imageSettings,
   loadImageModels,
@@ -176,7 +176,7 @@ function DefaultModelSelect() {
   useEffect(() => {
     void loadImageModels();
   }, [imageReady.value]);
-  const list = imageModels.value;
+  const list = generationModels.value;
   const m = defaultImageModel.value;
   if (!list.length) return <p class="text-xs text-muted">{t('settings.noModels', { providers: imageProviderNames() })}</p>;
   const cost = m ? estimateCost({ ...toolParams(undefined, {}), providerId: m.providerId, model: m.id }) : undefined;

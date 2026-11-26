@@ -37,7 +37,10 @@ export interface ImageProvider {
   listStyles?(ctx: ImageCallContext): Promise<string[]>;
   generate(p: ImageParams, model: ImageModelInfo | undefined, ctx: ImageCallContext): Promise<GeneratedImages>;
   upscale?(source: Blob, scale: 2 | 4, ctx: ImageCallContext): Promise<Blob>;
+  /** Edit from p.prompt with the model p.model (a model whose `edits` is set, or '' with ownEditModel) */
   edit?(source: Blob, p: ImageParams, ctx: ImageCallContext): Promise<Blob>;
+  /** Edits run on the provider's own edit model, so no model of the list is needed (Venice) */
+  ownEditModel?: boolean;
   removeBackground?(source: Blob, ctx: ImageCallContext): Promise<Blob>;
   /** Estimated USD of an edit (upscale, edit, background removal); undefined when unknown. Generating is priced from the model's sizes */
   editCost?(p: ImageParams): number | undefined;

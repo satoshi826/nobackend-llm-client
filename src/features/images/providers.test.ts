@@ -1,8 +1,8 @@
 // Image providers other than Venice: model mapping, request bodies, costs
 import { describe, expect, it } from 'vitest';
-import { mapOpenRouterImageModel, openrouterImageProvider, priceFromEndpoints } from './providers/openrouter';
-import { buildGeminiImageBody, geminiImageProvider, mapGeminiImageModel } from './providers/gemini';
-import { buildOpenAIImageBody, mapOpenAIImageModel, openAISize, openaiImageProvider } from './providers/openai';
+import { buildOpenRouterEditBody, mapOpenRouterImageModel, openrouterImageProvider, priceFromEndpoints } from './providers/openrouter';
+import { buildGeminiEditBody, buildGeminiImageBody, geminiImageProvider, mapGeminiImageModel } from './providers/gemini';
+import { buildOpenAIEditBody, buildOpenAIImageBody, mapOpenAIImageModel, openAISize, openaiImageProvider } from './providers/openai';
 import { generationCost, hasOption, sizeOf } from './providers/common';
 import type { ImageParams } from '../../lib/db/schema';
 import type { ProviderConfig, Transport } from '../../lib/providers/types';
@@ -108,5 +108,23 @@ describe('image sizes', () => {
     // A tier of another model (Venice's "2K") falls back to this model's default tier
     expect(sizeOf(m, { size: '2:3 2K', aspectRatio: '2:3', resolution: '2K' })?.id).toBe('2:3 medium');
     expect(sizeOf(m, { aspectRatio: '16:9' })?.id).toBe('1:1 medium');
+  });
+});
+
+describe('image editing', () => {
+  const png = 'data:image/png;base64,AAAA';
+  it('marks the models that edit, and those that only edit', () => {
+    expect(mapOpenAIImageModel({ id: 'gpt-image-1' })?.edits).toBe('also');
+    expect(mapOpenAIImageModel({ id: 'dall-e-3' })?.edits).toBeUndefined();
+    expect(mapGeminiImageModel({ name: 'models/gemini-2.5-flash-image', supportedGenerationMethods: ['generateContent'] })?.edits).toBe('also');
+    const range = (min: number, max: number) => ({ id: 'x/y', supported_parameters: { input_references: { type: 'range', min, max } } });
+    expect(mapOpenRouterImageModel(range(0, 16))?.edits).toBe('also');
+    expect(mapOpenRouterImageModel(range(1, 8))?.edits).toBe('only');
+    expect(mapOpenRouterImageModel({ id: 'x/z', supported_parameters: {} })?.edits).toBeUndefined();
+  });
+  it('sends the image inside JSON (the key vault sends text bodies only)', () => {
+    expect(buildOpenAIEditBody(params({ model: 'gpt-image-1', prompt: '帽子を足す' }), png)).toEqual({ model: 'gpt-image-1', prompt: '帽子を足す', images: [{ image_url: png }], n: 1, output_format: 'png' });
+    expect(buildOpenRouterEditBody(params({ model: 'krea/k3-edit' }), png)).toMatchObject({ model: 'krea/k3-edit', input_references: [{ type: 'image_url', image_url: { url: png } }], response_format: 'b64_json' });
+    expect(buildGeminiEditBody('明るく', 'image/webp', 'AAAA')).toEqual({ contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/webp', data: 'AAAA' } }, { text: '明るく' }] }], generationConfig: { responseModalities: ['IMAGE'] } });
   });
 });

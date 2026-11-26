@@ -9,7 +9,7 @@
 import type { AuthRef, ProviderConfig, Transport } from '../../../lib/providers/types';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import type { ImageProvider } from './types';
-import { DEFAULT_ASPECTS, ImageApiError, imageCount, jsonPost, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { DEFAULT_ASPECTS, ImageApiError, blobToDataUrl, imageCount, jsonPost, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const num = (x: unknown): number | undefined => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
@@ -61,6 +61,8 @@ export function mapNanoImageModel(raw: any, providerId = 'nanogpt'): ImageModelI
     constraints: { sizes: names.map((n) => ({ id: n, price: num(prices[n]) })), defaultSize: names[0], promptCharacterLimit: num(raw?.supported_parameters?.max_prompt_characters) },
     pricing: { source: 'api' },
     maxImages: num(raw?.supported_parameters?.max_images),
+    // image_to_image: takes an image to edit; models named "…edit" only edit
+    ...(raw?.capabilities?.image_to_image ? { edits: /(^|[/-])edit/i.test(id) ? ('only' as const) : ('also' as const) } : {}),
     options: { seed: false, negativePrompt: false, styles: false, enhance: false }
   };
 }
@@ -77,6 +79,11 @@ export const nanogptImageProvider: ImageProvider = {
   generate(p, m, c) {
     const size = sizeOf(m, p)?.id;
     return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: imageCount(p, m), ...(size ? { size } : {}), response_format: 'b64_json' }, c.signal);
+  },
+  // The image goes as imageDataUrl (a data: URL, up to 4 MB)
+  async edit(source, p, c) {
+    const { images } = await generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: 1, imageDataUrl: await blobToDataUrl(source), response_format: 'b64_json' }, c.signal);
+    return images[0];
   },
   privacyLabel: () => ({ tone: 'zinc', label: 'NanoGPT', title: t('privacy.nanogptTitle') })
 };

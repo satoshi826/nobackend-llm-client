@@ -27,6 +27,13 @@ describe('open-model hosts: images', () => {
     const single = mapNanoImageModel({ id: 'k', architecture: { input_modalities: ['text'] }, pricing: { per_image: { '2048x2048': 0.063 } }, supported_parameters: { resolutions: ['2048x2048'], max_images: 1 } })!;
     expect(generationCost(params({ variants: 4 }), single)).toBeCloseTo(0.063);
   });
+  it('mark NanoGPT models that edit an image, and those that only edit', () => {
+    const m = (id: string, image_to_image: boolean) => mapNanoImageModel({ id, architecture: { input_modalities: ['text', 'image'] }, capabilities: { image_generation: true, image_to_image } })!;
+    expect(m('nano-banana-2', true).edits).toBe('also');
+    expect(m('nano-banana-edit', true).edits).toBe('only');
+    expect(m('qwen-image-2.1/edit', true).edits).toBe('only');
+    expect(m('flux-dev', false).edits).toBeUndefined();
+  });
   it('read DeepInfra text-to-image models and their price per image', () => {
     const m = mapDeepInfraImageModel({ id: 'PrunaAI/p-image', metadata: { tags: ['image-gen'], pricing: { per_image_unit: 0.005 } } })!;
     expect(generationCost(params({ variants: 3 }), m)).toBeCloseTo(0.015);

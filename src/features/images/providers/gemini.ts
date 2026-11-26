@@ -1,12 +1,13 @@
 // Gemini image models (generateContent with responseModalities IMAGE).
 // The model list needs the key (the Gemini models list, filtered to image models). One image per request.
 // Prices are a dated table (the API lists none); unknown models show "費用不明".
+// Editing sends the image (inline, base64) with the instruction to the same generateContent.
 import type { ProviderConfig, Transport } from '../../../lib/providers/types';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { ImageApiError, jsonPost, perImage, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { ImageApiError, blobToBase64, jsonPost, perImage, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const ASPECTS = ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '16:9', '9:16', '21:9'];
@@ -38,6 +39,8 @@ export function mapGeminiImageModel(raw: any, providerId = 'gemini'): ImageModel
       tierLabel: 'resolution'
     },
     pricing: price ? { generation: price.generation, source: 'table', asOf: AS_OF } : {},
+    // An image and an instruction in one request edits it
+    edits: 'also',
     options: { seed: true, negativePrompt: false, styles: false, enhance: false }
   };
 }
@@ -55,14 +58,22 @@ export function buildGeminiImageBody(p: ImageParams, seed?: number, m?: ImageMod
   };
 }
 
+/** Edit: the image (inline, base64) and the instruction as one user turn */
+export function buildGeminiEditBody(prompt: string, mimeType: string, data: string): Record<string, unknown> {
+  return { contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data } }, { text: prompt }] }], generationConfig: { responseModalities: ['IMAGE'] } };
+}
+
+/** The images of a generateContent answer; thought images (interim drafts) are skipped */
+async function imagesOf(res: Response): Promise<Blob[]> {
+  const data = await res.json();
+  const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
+  return parts.filter((x) => x?.inlineData?.data && !x.thought).map((x) => base64ToBlob(String(x.inlineData.data), String(x.inlineData.mimeType ?? 'image/png')));
+}
+
+const contentUrl = (cfg: ProviderConfig, model: string) => joinUrl(cfg.baseUrl, `models/${encodeURIComponent(model)}:generateContent`);
+
 async function generate(p: ImageParams, m: ImageModelInfo | undefined, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
-  const results = await perImage(p.variants, async (i) => {
-    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, `models/${encodeURIComponent(p.model)}:generateContent`), jsonPost(buildGeminiImageBody(p, p.seed !== undefined ? p.seed + i : undefined, m), signal), auth);
-    const data = await res.json();
-    const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
-    // Thought images (interim drafts) are skipped
-    return parts.filter((x) => x?.inlineData?.data && !x.thought).map((x) => base64ToBlob(String(x.inlineData.data), String(x.inlineData.mimeType ?? 'image/png')));
-  });
+  const results = await perImage(p.variants, async (i) => imagesOf(await sendImageRequest(transport, contentUrl(cfg, p.model), jsonPost(buildGeminiImageBody(p, p.seed !== undefined ? p.seed + i : undefined, m), signal), auth)));
   const images = results.flat();
   if (!images.length) throw new ImageApiError({ kind: 'bad-request', message: t('err.noImage') });
   return { images };
@@ -79,5 +90,10 @@ export const geminiImageProvider: ImageProvider = {
     return (Array.isArray(data?.models) ? data.models : []).map((r: unknown) => mapGeminiImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
   },
   generate: (p, m, c) => generate(p, m, c.config, c.transport, c.auth, c.signal),
+  async edit(source, p, c) {
+    const [image] = await imagesOf(await sendImageRequest(c.transport, contentUrl(c.config, p.model), jsonPost(buildGeminiEditBody(p.prompt, source.type || 'image/png', await blobToBase64(source)), c.signal), c.auth));
+    if (!image) throw new ImageApiError({ kind: 'bad-request', message: t('err.noImage') });
+    return image;
+  },
   privacyLabel: () => ({ tone: 'zinc', label: 'Gemini', title: t('privacy.geminiTitle') })
 };

@@ -109,10 +109,36 @@ export const readyImageProviders = computed(() => imageProviderList().filter((p)
 /** Image generation needs the key of at least one image provider */
 export const imageReady = computed(() => readyImageProviders.value.length > 0);
 
-/** The provider that runs an edit: the image's own provider when it offers the edit, else the first ready one that does */
-export function editorFor(op: EditOp, preferred?: string): ImageProvider | undefined {
+/** Where an edit runs: a provider, and the model for edits from a prompt ('' = the provider's own) */
+export interface EditTarget {
+  provider: ImageProvider;
+  model: string;
+}
+
+/**
+ * Where an edit of an image runs. from: the provider and model that made it.
+ * Upscale and background removal: that provider when it offers them, else the first ready one that does.
+ * Edit from a prompt: the model that made the image when it edits, else that provider's own edit model, else the
+ * current image model when it edits, else a provider with its own edit model, else any model that edits.
+ */
+export function editTargetFor(op: EditOp, from: { providerId?: string; model?: string } = {}): EditTarget | undefined {
   const able = readyImageProviders.value.filter((p) => !!p[EDIT_METHOD[op]]);
-  return able.find((p) => p.id === preferred) ?? able[0];
+  if (op !== 'edit') {
+    const provider = able.find((p) => p.id === from.providerId) ?? able[0];
+    return provider && { provider, model: '' };
+  }
+  const byModel = (m: ImageModelInfo | undefined): EditTarget | undefined => {
+    const provider = m?.edits && able.find((p) => p.id === m.providerId);
+    return provider ? { provider, model: m!.id } : undefined;
+  };
+  const own = (p: ImageProvider | undefined): EditTarget | undefined => (p?.ownEditModel ? { provider: p, model: '' } : undefined);
+  return (
+    byModel(imageModelOf(from.providerId, from.model)) ??
+    own(able.find((p) => p.id === from.providerId)) ??
+    byModel(currentImageModel.value) ??
+    own(able.find((p) => p.ownEditModel)) ??
+    byModel(imageModels.value.find((m) => byModel(m)))
+  );
 }
 
 /** v2: models describe their sizes as one list */
@@ -160,6 +186,9 @@ export function imageModelOf(providerId: string | undefined, id: string | undefi
   return imageModels.value.find((m) => m.id === id && (!providerId || m.providerId === providerId));
 }
 
+/** Models that make images from text (edit-only models are left out of the menus) */
+export const generationModels = computed(() => imageModels.value.filter((m) => m.edits !== 'only'));
+
 /** "provider|model" (how a model choice is stored on a conversation) */
 export const modelRef = (m: { providerId: string; id: string }) => `${m.providerId}|${m.id}`;
 function byRef(ref: string | undefined): ImageModelInfo | undefined {
@@ -169,7 +198,7 @@ function byRef(ref: string | undefined): ImageModelInfo | undefined {
 
 /** The default model: the one chosen in settings, else one its provider marks as default (Venice does), else the first one */
 export const defaultImageModel = computed(() => {
-  const list = imageModels.value;
+  const list = generationModels.value;
   const d = imageSettings.value.value.imageDefaults;
   return imageModelOf(d.providerId || undefined, d.model || undefined) ?? list.find((m) => m.traits.includes('default')) ?? list[0];
 });
@@ -293,18 +322,18 @@ async function addUserRequest(conv: Conversation, p: ImageParams, text: string) 
   await runImageJob(conv.id, user.id);
 }
 
-/** Upscale / remove the background of / edit an image. from: the provider that made it (preferred for the edit) */
-export async function imageAction(op: EditOp, sourceBlobId: string, opts: { scale?: 2 | 4; prompt?: string; from?: string } = {}) {
-  const editor = editorFor(op, opts.from);
-  if (!editor) return;
+/** Upscale / remove the background of / edit an image. from: the provider and model that made it (see editTargetFor) */
+export async function imageAction(op: EditOp, sourceBlobId: string, opts: { scale?: 2 | 4; prompt?: string; from?: { providerId?: string; model?: string } } = {}) {
+  const target = editTargetFor(op, opts.from);
+  if (!target) return;
   const text = op === 'upscale' ? t('request.upscaleText', { scale: opts.scale ?? 2 }) : op === 'remove-bg' ? t('request.removeBgText') : (opts.prompt ?? '').trim();
   if (!text) return;
   // In a new chat (an image whose conversation was deleted) the request starts a saved conversation
   const conv = await persistDraft(text);
   const p: ImageParams = {
     op,
-    providerId: editor.id,
-    model: '',
+    providerId: target.provider.id,
+    model: target.model,
     prompt: op === 'edit' ? text : '',
     variants: 1,
     safeMode: false,
@@ -372,7 +401,9 @@ async function call(p: ImageParams, signal: AbortSignal): Promise<{ blobs: Blob[
 
 /** What a request costs (estimate; undefined when unknown) */
 export function estimateCost(p: ImageParams): number | undefined {
-  return p.op === 'generate' ? generationCost(p, imageModelOf(p.providerId, p.model)) : imageProviderOf(p.providerId)?.editCost?.(p);
+  if (p.op === 'generate') return generationCost(p, imageModelOf(p.providerId, p.model));
+  // An edit on a model of the list costs about one image of that model
+  return imageProviderOf(p.providerId)?.editCost?.(p) ?? (p.model ? generationCost({ ...p, variants: 1 }, imageModelOf(p.providerId, p.model)) : undefined);
 }
 
 /** Who sees the prompt for a model (input box, tool approval card) */

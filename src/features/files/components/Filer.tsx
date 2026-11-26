@@ -9,7 +9,7 @@ import { confirmAndDelete, deleteImages, ImageThumb, lightbox } from '../../imag
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { Button, Checkbox, Chip, EmptyState, Icon, IconButton, SearchField, Segmented, Spinner, cx, useDebounced, type IconName } from '../../../components/ui';
-import { conversationsWithItems, filterItems, NATURAL_ORDER, previewText, sortItems, type FilerItem } from '../filer';
+import { filterItems, NATURAL_ORDER, previewText, sortItems, type FilerItem } from '../filer';
 import {
   deleteFiles,
   downloadFile,
@@ -33,7 +33,6 @@ import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 
 const SORT_KEYS = { updated: 'sort.updated', name: 'sort.name', type: 'sort.type', size: 'sort.size' } as const;
-const VIEWS: FilerView[] = ['all', 'text', 'image', 'document', 'upload'];
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${formatNumber(n)} B`;
@@ -199,9 +198,8 @@ export function Filer() {
           <IconButton class="md:hidden" label={t('menu')} onClick={() => (sidebarOpen.value = true)}>
             <Icon name="menu" />
           </IconButton>
-          <SearchField class="min-w-0 flex-1 md:max-w-md" placeholder={t('filer.search')} label={t('filer.searchLabel')} value={filerQuery.value} onInput={(v) => (filerQuery.value = v)} />
+          <SearchField class="min-w-0 flex-1 md:max-w-xs" placeholder={t('filer.search')} label={t('filer.searchLabel')} value={filerQuery.value} onInput={(v) => (filerQuery.value = v)} />
           <div class="ml-auto flex shrink-0 items-center gap-0.5">
-            <FilterMenu items={all} />
             <SortMenu prefs={prefs} />
             {/* On phones the layout is chosen in the sort menu, to leave room for the search */}
             <span class="hidden sm:block">
@@ -311,64 +309,6 @@ function Choice({ on, icon, onSelect, children }: { on: boolean; icon?: IconName
 }
 
 const MenuLabel = ({ children }: { children: string }) => <div class="px-2.5 pt-1.5 pb-1 text-xs font-medium text-muted">{children}</div>;
-
-/** Filter by type and by chat (the sidebar's Files panel offers the common ones as shortcuts) */
-function FilterMenu({ items }: { items: FilerItem[] | null }) {
-  const [open, setOpen] = useState(false);
-  const anchor = useRef<HTMLSpanElement>(null);
-  const view = filerView.value;
-  const conv = filerConversation.value;
-  const active = view !== 'all' || !!conv;
-  // Only chats that still exist (items of deleted chats stay, without a chat filter)
-  const convs = items ? conversationsWithItems(items).filter((c) => convTitle(c.id) !== undefined) : [];
-  return (
-    <span ref={anchor} class="relative">
-      <IconButton label={t('filter.button')} aria-haspopup="menu" aria-expanded={open} class={cx(open && 'bg-glass-strong')} onClick={() => setOpen(!open)}>
-        <Icon name="filter" />
-      </IconButton>
-      {active && <span class="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-accent" aria-hidden="true" />}
-      {open && (
-        <Popover anchor={anchor.current} onClose={() => setOpen(false)} placement="bottom-end" label={t('filter.button')} class="w-64">
-          <MenuLabel>{t('filter.kind')}</MenuLabel>
-          {VIEWS.map((v) => (
-            <Choice key={v} on={view === v} icon={VIEW_ICONS[v]} onSelect={() => (filerView.value = v)}>
-              {viewLabel(v)}
-            </Choice>
-          ))}
-          {convs.length > 0 && (
-            <>
-              <MenuSeparator />
-              <MenuLabel>{t('filter.conversation')}</MenuLabel>
-              <Choice on={!conv} onSelect={() => (filerConversation.value = null)}>
-                {t('filter.anyConversation')}
-              </Choice>
-              {convs.map((c) => (
-                <Choice key={c.id} on={conv === c.id} icon="chat" onSelect={() => (filerConversation.value = c.id)}>
-                  {convTitle(c.id) ?? t('deletedConversation')}
-                </Choice>
-              ))}
-            </>
-          )}
-          {active && (
-            <>
-              <MenuSeparator />
-              <MenuItem
-                icon={<Icon name="x" class="mt-0.5 size-4 shrink-0" />}
-                onSelect={() => {
-                  filerView.value = 'all';
-                  filerConversation.value = null;
-                  setOpen(false);
-                }}
-              >
-                {t('filter.clear')}
-              </MenuItem>
-            </>
-          )}
-        </Popover>
-      )}
-    </span>
-  );
-}
 
 /** Sort key and direction; the layout too (on phones the layout switch is only here) */
 function SortMenu({ prefs }: { prefs: FilerPrefs }) {

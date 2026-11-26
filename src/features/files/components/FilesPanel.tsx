@@ -1,4 +1,4 @@
-// The Files tab in the sidebar: shortcuts to the file manager's filters (the same state as its filter menu)
+// The Files tab in the sidebar: the file manager's filters (by type, or by chat)
 import { useRef } from 'preact/hooks';
 import { mainView } from '../../../state/ui';
 import { Icon, RowHighlight, cx, useSelectedBox } from '../../../components/ui';
@@ -27,7 +27,6 @@ export function FilesPanel() {
       <RowHighlight box={current} class="inset-x-2" />
       <ul>
         {VIEWS.map((v) => {
-          // A shortcut is highlighted when the filters are exactly it (the filter menu can combine a type and a chat)
           const active = onFiler && view === v && !conv;
           return (
             <li key={v}>

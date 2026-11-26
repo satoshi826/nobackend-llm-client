@@ -7,9 +7,10 @@ import { showToast, sidebarOpen } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { Markdown } from '../../../components/Markdown';
 import { Badge, Button, Icon, IconButton, Select, Spinner, TextField } from '../../../components/ui';
+import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
 import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, filesVersion, getFile, renameFile, restoreVersion, saveUserVersion } from '../state';
-import { formatChars, typeLabel } from './common';
+import { FileIcon, formatChars, typeLabel } from './common';
 import { formatDateTime, formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 
@@ -122,7 +123,7 @@ export function FileView({ id = '' }: { id?: string }) {
               setRenaming(true);
             }}
           >
-            <Icon name={f.kind === 'upload' ? 'paperclip' : 'file'} class="size-4 shrink-0 text-muted" />
+            <FileIcon f={f} class="size-4 shrink-0 text-muted" />
             <span class="truncate text-sm font-medium text-ink-strong">{f.name}</span>
           </button>
         )}
@@ -146,33 +147,8 @@ export function FileView({ id = '' }: { id?: string }) {
               </Select>
             </label>
           )}
-          {!editing && (
-            <IconButton
-              label={t('file.edit')}
-              title={t('file.editTitle')}
-              onClick={() => {
-                setDraft(shown.text);
-                setEditing(true);
-              }}
-            >
-              <Icon name="edit" />
-            </IconButton>
-          )}
-          <IconButton
-            label={t('file.copy')}
-            title={t('file.copyTitle')}
-            onClick={() => void navigator.clipboard.writeText(shown.text).then(() => showToast(t('file.copied')))}
-          >
-            <Icon name="copy" />
-          </IconButton>
-          <IconButton label={t('download')} onClick={() => downloadFile(f, shown)}>
-            <Icon name="download" />
-          </IconButton>
-          <IconButton label={t('file.print')} title={t('file.printTitle')} onClick={print}>
-            <Icon name="printer" />
-          </IconButton>
-          <IconButton
-            label={t('useInChat')}
+          <Button
+            class="text-sm"
             title={t('useInChatTitle')}
             onClick={() => {
               void attachExisting(f.id);
@@ -180,21 +156,30 @@ export function FileView({ id = '' }: { id?: string }) {
             }}
           >
             <Icon name="paperclip" />
-          </IconButton>
-          {conv && (
-            <IconButton label={t('file.openSource')} title={t('file.openSourceTitle', { title: conv.title })} onClick={() => void openConversation(conv.id)}>
-              <Icon name="chat" />
-            </IconButton>
+            <span class="hidden sm:inline">{t('useInChat')}</span>
+          </Button>
+          {!editing && (
+            <Button
+              class="text-sm"
+              title={t('file.editTitle')}
+              onClick={() => {
+                setDraft(shown.text);
+                setEditing(true);
+              }}
+            >
+              <Icon name="edit" />
+              <span class="hidden sm:inline">{t('file.edit')}</span>
+            </Button>
           )}
-          <IconButton
-            label={t('delete')}
-            variant="remove"
-            onClick={async () => {
+          <MoreMenu
+            onCopy={() => void navigator.clipboard.writeText(shown.text).then(() => showToast(t('file.copied')))}
+            onDownload={() => downloadFile(f, shown)}
+            onPrint={print}
+            source={conv ? { title: conv.title, open: () => void openConversation(conv.id) } : null}
+            onDelete={async () => {
               if (await askConfirm({ title: t('file.deleteTitle'), message: t('file.deleteMessage', { name: f.name }), confirmLabel: t('delete'), danger: true })) await deleteFiles([f.id]);
             }}
-          >
-            <Icon name="trash" />
-          </IconButton>
+          />
         </div>
       </header>
       {isOld && !editing && (
@@ -290,4 +275,34 @@ function FileBody({ text, ext }: { text: string; ext: string }) {
     }
   }
   return <pre class="font-mono text-sm break-words whitespace-pre-wrap">{text}</pre>;
+}
+
+/** The less frequent actions of a file, with delete set apart at the end */
+function MoreMenu({ onCopy, onDownload, onPrint, source, onDelete }: { onCopy(): void; onDownload(): void; onPrint(): void; source: { title: string; open(): void } | null; onDelete(): void }) {
+  const [open, setOpen] = useState(false);
+  const anchor = useRef<HTMLSpanElement>(null);
+  const item = (icon: Parameters<typeof Icon>[0]['name'], run: () => void) => ({ icon: <Icon name={icon} class="mt-0.5 size-4 shrink-0 text-muted" />, onSelect: () => (setOpen(false), run()) });
+  return (
+    <span ref={anchor}>
+      <IconButton label={t('file.more')} aria-haspopup="menu" aria-expanded={open} class={open ? 'bg-glass-strong' : undefined} onClick={() => setOpen(!open)}>
+        <Icon name="more" />
+      </IconButton>
+      {open && (
+        <Popover anchor={anchor.current} onClose={() => setOpen(false)} placement="bottom-end" label={t('file.more')} class="w-60">
+          <MenuItem {...item('copy', onCopy)}>{t('file.copyTitle')}</MenuItem>
+          <MenuItem {...item('download', onDownload)}>{t('download')}</MenuItem>
+          <MenuItem {...item('printer', onPrint)}>{t('file.print')}</MenuItem>
+          {source && (
+            <MenuItem {...item('chat', source.open)}>
+              <span class="block truncate">{t('file.openSourceTitle', { title: source.title })}</span>
+            </MenuItem>
+          )}
+          <MenuSeparator />
+          <MenuItem icon={<Icon name="trash" class="mt-0.5 size-4 shrink-0" />} class="text-danger! hover:bg-danger-soft! focus-visible:bg-danger-soft!" onSelect={() => (setOpen(false), onDelete())}>
+            {t('file.deleteTitle')}
+          </MenuItem>
+        </Popover>
+      )}
+    </span>
+  );
 }

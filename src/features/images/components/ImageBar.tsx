@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { aspectsOf, hasOption } from '../providers/common';
 import { ModelOptions } from './ModelOptions';
 import { openSettings } from '../../../state/ui';
-import { Button, Chevron, Collapse, Select, Spinner, TextField } from '../../../components/ui';
+import { Button, Chevron, Collapse, Select, Spinner, TextField, Checkbox } from '../../../components/ui';
 import {
   currentImageModel,
   defaultImageModel,
@@ -135,10 +135,9 @@ export function ImageBar() {
             onInput={(e) => void setImageDefaults({ seed: (e.target as HTMLInputElement).value.replace(/[^\d-]/g, '') })}
             aria-label={t('bar.seed')}
           />}
-          {hasOption(m, 'enhance') && <label class="flex items-center gap-1.5 text-muted sm:col-span-2">
-            <input type="checkbox" checked={d.enhancePrompt} onChange={(e) => void setImageDefaults({ enhancePrompt: (e.target as HTMLInputElement).checked })} />
+          {hasOption(m, 'enhance') && <Checkbox class="text-muted sm:col-span-2" checked={d.enhancePrompt} onChange={(v) => void setImageDefaults({ enhancePrompt: v })}>
             {t('bar.enhance')}
-          </label>}
+          </Checkbox>}
         </div>
       </Collapse>
     </div>

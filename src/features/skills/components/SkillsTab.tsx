@@ -4,7 +4,7 @@ import { showToast } from '../../../state/ui';
 import type { Skill } from '../../../lib/db/schema';
 import { DESCRIPTION_MAX, NAME_MAX, type SkillDraft } from '../../../lib/skills/skill';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { Button, Chevron, Collapse, EmptyState, Icon, IconButton, TextArea, TextField } from '../../../components/ui';
+import { Button, Chevron, Collapse, EmptyState, Icon, IconButton, TextArea, TextField, Checkbox } from '../../../components/ui';
 import { skillSettings, builtinSkills, downloadSkill, importSkillFiles, removeSkill, saveSkill, setBuiltinEnabled, setModelInvocable, skills } from '../state';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
@@ -59,13 +59,12 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
           onInput={(e) => set({ body: (e.target as HTMLTextAreaElement).value })}
         />
       </label>
-      <label class="flex items-start gap-2 text-sm">
-        <input type="checkbox" class="mt-1" checked={d.modelInvocable} onChange={(e) => set({ modelInvocable: (e.target as HTMLInputElement).checked })} />
+      <Checkbox class="text-sm" checked={d.modelInvocable} onChange={(v) => set({ modelInvocable: v })}>
         <span>
           {t('invocable')}
           <span class="block text-xs text-muted">{t('tab.invocableHelp')}</span>
         </span>
-      </label>
+      </Checkbox>
       {error && (
         <p role="alert" class="text-xs text-danger">
           {error}
@@ -101,10 +100,9 @@ function BuiltinRow({ s }: { s: Skill }) {
             <p class="mt-1 text-xs text-muted">{t('tab.unlocksSave')}</p>
           )}
           <div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
-            <label class="flex items-center gap-1.5">
-              <input type="checkbox" checked={on} onChange={(e) => void setBuiltinEnabled(s.name, (e.target as HTMLInputElement).checked)} />
+            <Checkbox checked={on} onChange={(v) => void setBuiltinEnabled(s.name, v)}>
               {t('tab.use')}
-            </label>
+            </Checkbox>
             <button type="button" class="flex items-center gap-1 text-muted hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>
               {t('tab.body')}
               <Chevron open={open} />
@@ -134,10 +132,9 @@ function SkillRow({ s, onEdit }: { s: Skill; onEdit(): void }) {
             )}
           </div>
           <p class="mt-0.5 line-clamp-2 text-xs text-muted">{s.description}</p>
-          <label class="mt-2 flex items-center gap-1.5 text-xs">
-            <input type="checkbox" checked={s.modelInvocable} onChange={(e) => void setModelInvocable(s.id, (e.target as HTMLInputElement).checked)} />
+          <Checkbox class="mt-2 text-xs" checked={s.modelInvocable} onChange={(v) => void setModelInvocable(s.id, v)}>
             {t('invocable')}
-          </label>
+          </Checkbox>
         </div>
         <div class="flex shrink-0 items-center">
           <IconButton label={t('tab.editAria', { name: s.name })} title={t('edit')} onClick={onEdit}>

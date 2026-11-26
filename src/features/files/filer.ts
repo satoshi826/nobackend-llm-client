@@ -1,7 +1,7 @@
 // The file manager's items: files and images in one list, with filtering and sorting (pure)
 import { currentText, extOf } from '../../lib/db/files';
 import type { BlobRecord, FileRecord } from '../../lib/db/schema';
-import type { FilerSort, FilerView } from './state';
+import type { FilerOrder, FilerSort, FilerView } from './state';
 import { locale } from '../../lib/i18n';
 import { t } from './messages';
 
@@ -25,14 +25,12 @@ export function toItems(files: FileRecord[], images: ImageMeta[], convTitle: (id
   ];
 }
 
-export const RECENT_MS = 7 * 86400_000;
-
-export function inView(it: FilerItem, view: FilerView, now = Date.now()): boolean {
+export function inView(it: FilerItem, view: FilerView): boolean {
   switch (view) {
     case 'all':
       return true;
-    case 'recent':
-      return now - it.updatedAt < RECENT_MS;
+    case 'text':
+      return it.type === 'file';
     case 'image':
       return it.type === 'image';
     default:
@@ -49,24 +47,28 @@ function searchText(f: FileRecord): string {
   return s;
 }
 
-export function filterItems(items: FilerItem[], o: { view: FilerView; conversationId: string | null; query: string }, now = Date.now()): FilerItem[] {
+export function filterItems(items: FilerItem[], o: { view: FilerView; conversationId: string | null; query: string }): FilerItem[] {
   const q = o.query.trim().toLowerCase();
   return items.filter(
     (it) =>
-      inView(it, o.view, now) &&
+      inView(it, o.view) &&
       (!o.conversationId || it.conversationId === o.conversationId) &&
       (!q || it.name.toLowerCase().includes(q) || (it.type === 'file' && searchText(it.file).includes(q)))
   );
 }
 
-export function sortItems(items: FilerItem[], sort: FilerSort): FilerItem[] {
+/** The direction a sort starts in: newest and largest first, names and types from A */
+export const NATURAL_ORDER: Record<FilerSort, FilerOrder> = { updated: 'desc', name: 'asc', type: 'asc', size: 'desc' };
+
+export function sortItems(items: FilerItem[], sort: FilerSort, order: FilerOrder = NATURAL_ORDER[sort]): FilerItem[] {
+  const dir = order === 'asc' ? 1 : -1;
   const byName = (a: FilerItem, b: FilerItem) => a.name.localeCompare(b.name, locale());
   const cmp: Record<FilerSort, (a: FilerItem, b: FilerItem) => number> = {
-    updated: (a, b) => b.updatedAt - a.updatedAt,
-    name: byName,
-    type: (a, b) => a.ext.localeCompare(b.ext) || byName(a, b),
-    // Images are measured in bytes and files in characters: compare files with files and images with images
-    size: (a, b) => (a.type === b.type ? b.size - a.size : a.type === 'file' ? -1 : 1)
+    updated: (a, b) => dir * (a.updatedAt - b.updatedAt),
+    name: (a, b) => dir * byName(a, b),
+    type: (a, b) => dir * (a.ext.localeCompare(b.ext) || byName(a, b)),
+    // Images are measured in bytes and files in characters: files come first, each group in the chosen direction
+    size: (a, b) => (a.type === b.type ? dir * (a.size - b.size) : a.type === 'file' ? -1 : 1)
   };
   return [...items].sort(cmp[sort]);
 }
@@ -87,6 +89,6 @@ export function conversationsWithItems(items: FilerItem[]): { id: string; count:
 /** The first lines of a text file, for a card preview */
 export function previewText(text: string, ext: string, max = 280): string {
   let t = text.slice(0, max * 2);
-  if (ext === 'md' || ext === 'markdown') t = t.replace(/^#{1,6}\s+/gm, '').replace(/[*_`>]/g, '');
+  if (ext === 'md' || ext === 'markdown') t = t.replace(/^#{1,6}\s+/gm, '').replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '').replace(/[*_`>]/g, '');
   return t.split('\n').filter((l) => l.trim()).slice(0, 8).join('\n').slice(0, max);
 }

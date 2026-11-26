@@ -7,7 +7,7 @@ import { providerSettingsOf, saveSettings, setProviderSetting, settings } from '
 import { vaultIsolated, VAULT_ORIGIN } from '../../lib/vault/client';
 import { getPreset } from '../../lib/providers/registry';
 import { KeyPanel, VaultSecurityPanel } from '../KeyPanel';
-import { Icon, Select, cx } from '../ui';
+import { Icon, Select, cx, Checkbox } from '../ui';
 import { Section, Toggle, } from '../settings-ui';
 import { AccountRow } from './AccountRow';
 import { t } from './messages';
@@ -71,10 +71,9 @@ export function ConnectionsTab() {
                 open={open === p.id}
                 onToggle={() => setOpen(open === p.id ? '' : p.id)}
                 right={
-                  <label class="flex shrink-0 items-center gap-1.5 text-xs">
-                    <input type="checkbox" checked={on} onChange={(e) => setProviderEnabled(p.id, (e.target as HTMLInputElement).checked)} />
+                  <Checkbox class="shrink-0 text-xs" checked={on} onChange={(v) => setProviderEnabled(p.id, v)}>
                     {t('conn.use')}
-                  </label>
+                  </Checkbox>
                 }
               >
                 {on ? <ProviderDetails id={p.id} /> : <p class="text-xs text-muted">{sentences(getPreset(p.preset).tagline, t('conn.enableHint'))}</p>}

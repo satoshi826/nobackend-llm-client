@@ -61,18 +61,20 @@ function changed() {
 export const getFile = fdb.getFile;
 
 // ---- the file manager (#/files) and single files (#/f/<id>) in the main area ----
-export type FilerView = 'all' | 'recent' | 'document' | 'upload' | 'image';
+export type FilerView = 'all' | 'text' | 'image' | 'document' | 'upload';
 export type FilerSort = 'updated' | 'name' | 'type' | 'size';
+export type FilerOrder = 'asc' | 'desc';
 export interface FilerPrefs {
   layout: 'grid' | 'list';
   sort: FilerSort;
+  order: FilerOrder;
 }
 
 export const filerView = signal<FilerView>('all');
 /** Only items made in / attached to this conversation */
 export const filerConversation = signal<string | null>(null);
 export const filerQuery = signal('');
-export const filerPrefs = signal<FilerPrefs>({ layout: 'grid', sort: 'updated' });
+export const filerPrefs = signal<FilerPrefs>({ layout: 'grid', sort: 'updated', order: 'desc' });
 
 const PREFS_KEY = 'ui:filer';
 let prefsLoaded = false;

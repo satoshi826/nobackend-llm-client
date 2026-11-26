@@ -3,7 +3,7 @@ import { useMemo, useState } from 'preact/hooks';
 import type { Part } from '../../../lib/providers/types';
 import { resolveApproval } from '../../../state/approvals';
 import { lineDiff } from '../../../lib/skills/diff';
-import { Button, Icon, Segmented, TextArea, TextField, cx } from '../../../components/ui';
+import { Button, Icon, Segmented, TextArea, TextField, cx, Checkbox } from '../../../components/ui';
 import { allSkills } from '../state';
 import { t } from '../messages';
 
@@ -99,10 +99,9 @@ export function SkillApproval({ p }: { p: ToolPart }) {
             {t('body')}
             <TextArea compact class="mt-0.5 font-mono leading-5" rows={10} value={d.body} onInput={(e) => set({ body: (e.target as HTMLTextAreaElement).value })} />
           </label>
-          <label class="flex items-center gap-1.5 text-xs">
-            <input type="checkbox" checked={d.model_invocable} onChange={(e) => set({ model_invocable: (e.target as HTMLInputElement).checked })} />
+          <Checkbox class="text-xs" checked={d.model_invocable} onChange={(v) => set({ model_invocable: v })}>
             {t('invocable')}
-          </label>
+          </Checkbox>
         </div>
       )}
       <div class="mt-2 flex flex-wrap items-center gap-2">

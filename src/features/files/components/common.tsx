@@ -22,5 +22,5 @@ export function typeLabel(f: Pick<FileRecord, 'name' | 'source'>): string {
 }
 
 export function FileIcon({ f, class: cls = 'size-4' }: { f: Pick<FileRecord, 'kind'>; class?: string }) {
-  return <Icon name={f.kind === 'upload' ? 'paperclip' : 'file'} class={cls} />;
+  return <Icon name={f.kind === 'upload' ? 'upload' : 'sparkle'} class={cls} />;
 }

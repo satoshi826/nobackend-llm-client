@@ -10,7 +10,7 @@ import { getPreset } from '../../lib/providers/registry';
 import { accountById } from '../../lib/keys/accounts';
 import { askConfirm } from '../ConfirmDialog';
 
-import { Button, Icon, Spinner, TextField } from '../ui';
+import { Button, Icon, Spinner, TextField, Checkbox } from '../ui';
 import { Section,  } from '../settings-ui';
 import { t } from './messages';
 import { sentences } from '../messages';
@@ -111,13 +111,12 @@ export function PrivacyTab() {
           </div>
         )}
         <div class="space-y-2 rounded-lg border border-line p-3">
-          <label class="flex items-start gap-2">
-            <input type="checkbox" class="mt-1" checked={encrypt} onChange={(e) => setEncrypt((e.target as HTMLInputElement).checked)} />
+          <Checkbox checked={encrypt} onChange={setEncrypt}>
             <span>
               {t('privacy.encrypt')}
               <span class="block text-xs text-muted">{t('privacy.encryptDesc')}</span>
             </span>
-          </label>
+          </Checkbox>
           {encrypt && (
             <div class="grid gap-2 sm:grid-cols-2">
               <TextField type="password" autocomplete="new-password" placeholder={t('privacy.passwordPlaceholder')} value={pw1} onInput={(e) => setPw1((e.target as HTMLInputElement).value)} aria-label={t('privacy.passwordLabel')} />
@@ -180,8 +179,7 @@ export function PrivacyTab() {
             }}
           />
         </div>
-        <label class="flex items-start gap-2 text-sm">
-          <input type="checkbox" class="mt-1" checked={s.backupIncludeImages} onChange={(e) => saveSettings({ backupIncludeImages: (e.target as HTMLInputElement).checked })} />
+        <Checkbox class="text-sm" checked={s.backupIncludeImages} onChange={(v) => void saveSettings({ backupIncludeImages: v })}>
           <span>
             {t('privacy.includeImages')}
             <span class="block text-xs text-muted">
@@ -192,7 +190,7 @@ export function PrivacyTab() {
               )}
             </span>
           </span>
-        </label>
+        </Checkbox>
         <p class="text-xs text-muted">
           {sentences(s.lastBackupAt ? t('privacy.lastBackup', { date: formatDateTime(s.lastBackupAt) }) : t('privacy.noBackupYet'), t('privacy.noKeysInBackup'))}
         </p>

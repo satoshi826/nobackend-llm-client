@@ -6,10 +6,13 @@ import { imagesVersion } from '../../images';
 import { toItems, type FilerItem } from '../filer';
 import { fileList, filesVersion, imageList, refreshFiles, refreshImages, type FilerView } from '../state';
 import { getLang } from '../../../lib/i18n';
+import type { IconName } from '../../../components/ui';
 import { t } from '../messages';
 
-const VIEW_KEYS = { all: 'view.all', recent: 'view.recent', document: 'view.document', upload: 'view.upload', image: 'view.image' } as const;
+const VIEW_KEYS = { all: 'view.all', text: 'view.text', image: 'view.image', document: 'view.document', upload: 'view.upload' } as const;
 export const viewLabel = (v: FilerView) => t(VIEW_KEYS[v]);
+/** One icon per kind, wherever kinds appear (filters, cards, the list, a file's header) */
+export const VIEW_ICONS: Record<FilerView, IconName> = { all: 'files', text: 'file', image: 'image', document: 'sparkle', upload: 'upload' };
 
 export const convTitle = (id?: string) => (id ? conversations.value.find((c) => c.id === id)?.title : undefined);
 

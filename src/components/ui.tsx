@@ -9,7 +9,7 @@ export function cx(...xs: (string | false | null | undefined)[]): string {
 
 export type IconName =
   | 'menu' | 'plus' | 'settings' | 'send' | 'stop' | 'copy' | 'refresh' | 'edit' | 'trash' | 'pin' | 'chevron-left'
-  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star' | 'image' | 'expand' | 'wand' | 'scissors' | 'paperclip' | 'file' | 'files' | 'chat' | 'printer' | 'history' | 'grid' | 'list' | 'clock';
+  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star' | 'image' | 'expand' | 'wand' | 'scissors' | 'paperclip' | 'file' | 'files' | 'chat' | 'printer' | 'history' | 'grid' | 'list' | 'clock' | 'filter' | 'sort' | 'more';
 
 const PATHS: Record<IconName, string> = {
   menu: 'M4 6h16M4 12h16M4 18h16',
@@ -56,7 +56,10 @@ const PATHS: Record<IconName, string> = {
   history: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 8v4l3 2',
   grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
   list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
-  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2'
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2',
+  filter: 'M4 5h16l-6 7.5V19l-4 2v-8.5L4 5Z',
+  sort: 'M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4',
+  more: 'M5 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM19 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z'
 };
 
 export function Icon({ name, class: className = 'size-4', filled }: { name: IconName; class?: string; filled?: boolean }) {
@@ -94,6 +97,55 @@ export function Button({ variant = 'ghost', class: className, children, ...rest 
  */
 export function IconButton({ label, ...rest }: Omit<ButtonProps, 'aria-label'> & { label: string }) {
   return <Button aria-label={label} title={label} {...rest} />;
+}
+
+/**
+ * A checkbox in the app's look (the browser's own box does not fit the glass). Controlled: `checked` is the truth
+ * and is put back into the DOM after every render, since the browser flips the box on click before onChange
+ * decides (a Shift-click may select a range and keep it checked). onChange gets the click, for Shift / Ctrl.
+ * With children it is a labelled row; without, `label` names it. round: the selection mark on cards.
+ */
+export function Checkbox({
+  checked,
+  onChange,
+  label,
+  round,
+  disabled,
+  class: className,
+  children
+}: {
+  checked: boolean;
+  onChange(next: boolean, e: MouseEvent): void;
+  label?: string;
+  round?: boolean;
+  disabled?: boolean;
+  class?: string;
+  children?: ComponentChildren;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    if (ref.current && ref.current.checked !== checked) ref.current.checked = checked;
+  });
+  return (
+    <label class={cx('inline-flex items-start gap-2', disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', className)} onClick={(e) => e.stopPropagation()}>
+      <span class={cx('relative grid shrink-0 place-items-center', round ? 'size-5' : 'mt-0.5 size-4')}>
+        <input
+          ref={ref}
+          type="checkbox"
+          class={cx(
+            'peer absolute inset-0 m-0 cursor-[inherit] appearance-none border transition duration-200 checked:border-accent checked:bg-accent',
+            round ? 'rounded-full border-white/70 bg-black/35 backdrop-blur-sm' : 'rounded-[5px] border-line-strong bg-sunken hover:border-ink/50'
+          )}
+          checked={checked}
+          disabled={disabled}
+          aria-label={children ? undefined : label}
+          onClick={(e) => onChange(!checked, e)}
+        />
+        <Icon name="check" class={cx('pointer-events-none relative text-accent-ink opacity-0 transition-opacity peer-checked:opacity-100', round ? 'size-3.5' : 'size-3')} />
+      </span>
+      {children}
+    </label>
+  );
 }
 
 /** The arrow of anything that opens and closes: at the right end, pointing down, turned up while open */

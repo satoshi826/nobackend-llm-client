@@ -318,9 +318,10 @@ export function Modal({
         aria-label={title}
         class={cx(
           'frosted rise-glass flex w-full flex-col sm:max-h-[92dvh] sm:rounded-[22px]',
-          fullOnPhone ? 'h-dvh max-h-dvh rounded-none border-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] sm:h-auto sm:border sm:pt-0 sm:pb-0' : 'max-h-[92dvh] rounded-t-[22px]',
+          fullOnPhone ? 'max-h-dvh rounded-none border-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] sm:border sm:pt-0 sm:pb-0' : 'max-h-[92dvh] rounded-t-[22px]',
           wide ? 'sm:max-w-3xl' : 'sm:max-w-lg',
-          fixed && (fullOnPhone ? 'sm:h-[min(44rem,92dvh)]' : 'h-[92dvh] sm:h-[min(44rem,92dvh)]')
+          // Height (one place, so the classes never compete): fixed keeps it whatever the content; otherwise it follows the content
+          fixed ? (fullOnPhone ? 'h-dvh' : 'h-[92dvh]') + ' sm:h-[min(44rem,92dvh)]' : fullOnPhone && 'h-dvh sm:h-auto'
         )}
       >
         <div class="flex items-center justify-between border-b border-line px-5 py-3">

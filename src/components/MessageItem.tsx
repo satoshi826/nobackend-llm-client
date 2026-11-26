@@ -9,6 +9,7 @@ import { isStreaming } from '../state/runs';
 import { suggestingFor } from '../state/suggestions';
 import { modelOf } from '../state/models';
 import { settings } from '../state/settings';
+import { RequestView, useRequestToggle } from './RequestView';
 import { composerFocus, composerText, openModelPicker, showToast } from '../state/ui';
 import { Markdown } from './Markdown';
 import { ToolCallCard } from './ToolCallCard';
@@ -241,6 +242,8 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
   const estimated = m.meta?.costUsd == null && usage ? estimateCost(usage, model?.pricing) : undefined;
   // A feature answers this message itself (e.g. images): no waiting text, no "another model"
   const owned = assistantExtras.some((x) => x.owns?.(m));
+  const req = useRequestToggle(m.id);
+  const showReq = settings.value.developerMode && req.available;
   return (
     <div class="group">
       {m.parts.map((p, i) => {
@@ -295,6 +298,11 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
               </IconButton>
             )}
           </span>
+          {showReq && (
+            <IconButton label={t('msg.request')} aria-pressed={req.open} class={cx(req.open && 'bg-glass-strong')} onClick={req.toggle}>
+              <Icon name="code" class="size-3.5" />
+            </IconButton>
+          )}
           <span class="ml-1 truncate" title={m.meta?.model}>
             {model?.name ?? m.meta?.model}
           </span>
@@ -327,6 +335,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
           )}
         </div>
       )}
+      {showReq && req.open && <RequestView replyId={m.id} />}
     </div>
   );
 }

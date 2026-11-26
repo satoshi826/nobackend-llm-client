@@ -5,7 +5,8 @@ import { APP_BUILD, checkForUpdate, isDevBuild, newerBuild, shortCommit, updateC
 import { showToast } from '../../state/ui';
 import { formatDateTime } from '../../lib/i18n';
 import { Button, Chevron, Collapse, Icon, Spinner } from '../ui';
-import { Section } from '../settings-ui';
+import { Section, Toggle } from '../settings-ui';
+import { saveSettings, settings } from '../../state/settings';
 import { t } from './messages';
 
 function Row({ label, children }: { label: string; children: preact.ComponentChildren }) {
@@ -130,6 +131,9 @@ export function AboutTab() {
     <div class="space-y-6">
       <Version />
       <Diagnostics />
+      <Section title={t('about.developer')}>
+        <Toggle checked={settings.value.developerMode} onChange={(v) => saveSettings({ developerMode: v })} title={t('about.devRequests')} desc={t('about.devRequestsDesc')} />
+      </Section>
     </div>
   );
 }

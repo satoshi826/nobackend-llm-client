@@ -40,6 +40,8 @@ export interface Settings {
   autoLockMinutes: number;
   /** Show reply suggestions after an answer */
   replySuggestions: boolean;
+  /** Developer view: show the request bodies sent for each reply (Settings → 情報) */
+  developerMode: boolean;
   /** Include images in JSON backups (large) */
   backupIncludeImages: boolean;
   /** Bookmarked models ('providerId|modelId'), shown together at the top of the model picker */
@@ -74,6 +76,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoLockMinutes: 0,
   favoriteModels: [],
   replySuggestions: true,
+  developerMode: false,
   backupIncludeImages: false,
   suggestionCount: 3,
   suggestionTurns: 2,

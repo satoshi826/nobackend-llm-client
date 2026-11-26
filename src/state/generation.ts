@@ -18,6 +18,7 @@ import { accountById } from '../lib/keys/accounts';
 import { contributedBuiltinWebSearch, contributedDynamicTools, contributedTools, requestHandlerFor, systemPromptFor, type ToolProviderContext } from './tool-registry';
 import { controllers, setStreaming, streamingConv } from './runs';
 import { balances, fetchBalance, updateBalance } from './balance';
+import { recordingTransport } from './sent-requests';
 import { providerOptionsFor, recordUsage } from './request-helpers';
 import { waitForApproval } from './approvals';
 import { cancelSuggestions, suggestReplies } from './suggestions';
@@ -125,7 +126,7 @@ async function generateReply(convId: string, parentUserId: string) {
       provider: cfg,
       preset: getPreset(cfg.preset),
       auth: authFor(cfg.id),
-      transport,
+      transport: settings.value.developerMode ? recordingTransport(transport, draft.id) : transport,
       model: conv.modelId,
       history,
       systemPrompt,

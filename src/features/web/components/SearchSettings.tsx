@@ -1,4 +1,4 @@
-// Settings → Web: searching (on/off, connection search or Tavily, the route each connection ends up with, the Tavily
+// Settings → Web: searching (on/off, the model's built-in search or Tavily, the route each connection ends up with, the Tavily
 // key) and fetching pages (fetch_url on/off, the model that reads pages, the ways the fetch page tries)
 import { useState } from 'preact/hooks';
 import { saveSettings, settings } from '../../../state/settings';
@@ -28,7 +28,7 @@ export function SearchSettings() {
   const relay = FETCH_ROUTES.relay && new URL(FETCH_ROUTES.relay).host;
   const ways = [
     [t('settings.viaDirect'), t('settings.viaDirectDesc')],
-    [t('settings.viaRelay'), relay ? t('settings.viaRelayDesc', { host: relay }) : t('settings.noRelay')],
+    ...(relay ? [[t('settings.viaRelay'), t('settings.viaRelayDesc', { host: relay })]] : []),
     [t('settings.viaJina'), t('settings.viaJinaDesc', { host: new URL(FETCH_ROUTES.jina).host })]
   ];
   return (
@@ -112,6 +112,7 @@ export function SearchSettings() {
               </li>
             ))}
           </ol>
+          {!relay && <p class="text-xs text-muted">{t('settings.noRelay')}</p>}
         </div>
       </Section>
     </div>

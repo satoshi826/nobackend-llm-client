@@ -21,7 +21,7 @@ function PrivacyBadge({ m }: { m: ModelInfo }) {
   if (m.privacy === 'private')
     return (
       <Badge tone="green" title={copyOf(m.providerId).private ?? t('picker.privateTitle')}>
-        <Icon name="lock" class="size-3" />
+        <Icon name="eye-off" class="size-3" />
         private
       </Badge>
     );

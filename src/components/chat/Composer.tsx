@@ -39,7 +39,7 @@ function ModelButton() {
 ${note}` : t('header.chooseModel')}
       aria-label={`${t('header.chooseModel')}: ${model?.name ?? conv.modelId}`}
     >
-      {model?.privacy === 'private' && <Icon name="lock" class="size-3 shrink-0 text-ok" />}
+      {model?.privacy === 'private' && <Icon name="eye-off" class="size-3 shrink-0 text-ok" />}
       <span class="max-w-[9rem] truncate sm:max-w-[14rem]">{model?.name ?? (conv.modelId || t('header.noModel'))}</span>
       <Icon name="chevron-down" class="size-3 shrink-0 text-faint transition-transform duration-200 group-hover:translate-y-px" />
     </button>

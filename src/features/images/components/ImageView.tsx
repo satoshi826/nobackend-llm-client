@@ -111,14 +111,18 @@ function useNearScreen(ref: { current: Element | null }): boolean {
   return near;
 }
 
-/** An image in a grid or an answer: its thumbnail (`full` for a single large image), loaded when it comes near the screen */
+/**
+ * An image in a grid or an answer: its thumbnail, loaded when it comes near the screen. The caller gives the box a
+ * fixed shape (aspect class), so nothing moves when the image arrives. full: a single image in an answer, shown
+ * whole (letterboxed in its box) at full resolution
+ */
 export function ImageThumb({ blobId, alt, onOpen, full, class: className }: { blobId: string; alt: string; onOpen(): void; full?: boolean; class?: string }) {
   const ref = useRef<HTMLButtonElement>(null);
   const url = useImageUrl(blobId, full ? 'full' : 'thumb', useNearScreen(ref));
   return (
     <button ref={ref} type="button" class={cx('group relative overflow-hidden rounded-lg bg-glass-strong', className)} onClick={onOpen} aria-label={t('thumb.open', { alt })}>
       {url ? (
-        <img src={url} alt={alt} class="h-full w-full object-cover transition group-hover:scale-[1.02]" decoding="async" />
+        <img src={url} alt={alt} class={cx('h-full w-full transition group-hover:scale-[1.02]', full ? 'object-contain' : 'object-cover')} decoding="async" />
       ) : url === null ? (
         <span class="grid h-full w-full place-items-center text-xs text-faint">{t('thumb.failed')}</span>
       ) : (
@@ -155,7 +159,7 @@ export function ReplyImages({ m }: { m: MessageRecord }) {
           blobId={f.blobId}
           alt={t('thumb.alt', { n: i + 1 })}
           full={files.length === 1}
-          class={files.length === 1 ? 'aspect-auto max-h-[28rem]' : 'aspect-square'}
+          class={files.length === 1 ? 'aspect-[4/3]' : 'aspect-square'}
           onOpen={() => (lightbox.value = { items, index: i })}
         />
       ))}
@@ -194,7 +198,7 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
               blobId={f.blobId}
               alt={t('thumb.alt', { n: i + 1 })}
               full={files.length === 1}
-          class={files.length === 1 ? 'aspect-auto max-h-[28rem]' : 'aspect-square'}
+          class={files.length === 1 ? 'aspect-[4/3]' : 'aspect-square'}
               onOpen={() => (lightbox.value = { items, index: i })}
             />
           ))}
@@ -259,7 +263,7 @@ export function ToolImages({ blobIds, conversationId, messageId }: { blobIds: st
   return (
     <div class={cx('grid gap-2 py-1', blobIds.length === 1 ? 'max-w-md grid-cols-1' : 'max-w-xl grid-cols-2')}>
       {blobIds.map((id, i) => (
-        <ImageThumb key={id} blobId={id} alt={t('thumb.alt', { n: i + 1 })} full={blobIds.length === 1} class={blobIds.length === 1 ? 'max-h-[28rem]' : 'aspect-square'} onOpen={() => (lightbox.value = { items, index: i })} />
+        <ImageThumb key={id} blobId={id} alt={t('thumb.alt', { n: i + 1 })} full={blobIds.length === 1} class={blobIds.length === 1 ? 'aspect-[4/3]' : 'aspect-square'} onOpen={() => (lightbox.value = { items, index: i })} />
       ))}
     </div>
   );
@@ -347,6 +351,7 @@ export function Lightbox() {
                 2×
               </Button>
               <Button class="text-xs text-white hover:bg-glass" disabled={isStreaming.value} title={t('lb.upscaleTitle', { scale: 4, cost: usd(estimateCost({ ...OP_BASE, op: 'upscale', scale: 4 }) ?? 0, 2) })} onClick={() => void act(() => imageAction('upscale', item.blobId, { scale: 4 }))}>
+                <Icon name="expand" class="size-4" />
                 4×
               </Button>
               <Button class="text-xs text-white hover:bg-glass" disabled={isStreaming.value} title={t('lb.removeBgTitle')} onClick={() => void act(() => imageAction('remove-bg', item.blobId))}>

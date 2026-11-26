@@ -38,4 +38,4 @@ The first wave fits `openai-compatible.ts` if presets can declare:
 - **Model list mapper**: per-provider parsing of context length, capabilities and prices (NanoGPT `?detailed=true`, DeepInfra `metadata`, Cerebras `/public/v1/models`, Novita, Chutes), and whether listing needs a key.
 - **Cost from the response** where given (NanoGPT `usage.cost`, xAI `cost_in_usd_ticks`), falling back to list prices.
 - **Body filtering** for providers that reject unknown parameters.
-- **Private / zero-retention flag** per model where the list provides one (NanoGPT `privacy.zero_data_retention`, Chutes TEE), shown with the existing lock icon.
+- **Private / zero-retention flag** per model where the list provides one (NanoGPT `privacy.zero_data_retention`, Chutes TEE), shown with the existing private mark (the eye-off icon).

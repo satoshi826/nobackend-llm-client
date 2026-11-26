@@ -165,13 +165,13 @@ export function Sidebar() {
       setHits(new Map());
       return;
     }
-    let cancelled = false;
+    const ctrl = new AbortController();
     const timer = setTimeout(async () => {
-      const r = await searchMessages(q);
-      if (!cancelled) setHits(new Map(r.map((h) => [h.conversationId, h])));
+      const r = await searchMessages(q, ctrl.signal);
+      if (!ctrl.signal.aborted) setHits(new Map(r.map((h) => [h.conversationId, h])));
     }, 200);
     return () => {
-      cancelled = true;
+      ctrl.abort();
       clearTimeout(timer);
     };
   }, [q]);

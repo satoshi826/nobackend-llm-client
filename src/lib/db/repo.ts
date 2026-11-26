@@ -62,7 +62,8 @@ export async function putMessage(m: MessageRecord, temporary: boolean): Promise<
     return;
   }
   const copy = structuredClone(m);
-  searchCache.set(copy.id, copy);
+  // The decrypted copy for search is needed only when stored text is encrypted
+  if (currentDataKey()) searchCache.set(copy.id, copy);
   await db().messages.put(await seal('messages', copy));
 }
 
@@ -73,8 +74,11 @@ export interface SearchHit {
   snippet: string;
 }
 
-/** Full-text search over conversation text (case-insensitive substring match). Returns the first match per conversation. */
-export async function searchMessages(query: string, limit = 50): Promise<SearchHit[]> {
+/**
+ * Full-text search over conversation text (case-insensitive substring match). Returns the first match per conversation.
+ * signal: stops the scan once a newer search has started
+ */
+export async function searchMessages(query: string, signal?: AbortSignal, limit = 50): Promise<SearchHit[]> {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const hits = new Map<string, SearchHit>();
@@ -98,7 +102,7 @@ export async function searchMessages(query: string, limit = 50): Promise<SearchH
     await db()
       .messages.orderBy('createdAt')
       .reverse()
-      .until(() => hits.size >= limit)
+      .until(() => hits.size >= limit || !!signal?.aborted)
       .each(consider);
     return [...hits.values()];
   }
@@ -108,6 +112,7 @@ export async function searchMessages(query: string, limit = 50): Promise<SearchH
     searchCacheFull = true;
   }
   for (const m of [...searchCache.values()].sort((a, b) => b.createdAt - a.createdAt)) {
+    if (signal?.aborted) break;
     consider(m);
     if (hits.size >= limit) break;
   }

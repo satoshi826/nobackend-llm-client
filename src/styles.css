@@ -286,7 +286,7 @@ body {
 .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
 
 /* Respect reduced-motion preferences */
-/* ---- Motion for every interactive element (docs/design-system.md §2.5) ----
+/* ---- Motion for every interactive element (docs/design-system.md §3.5) ----
    Base layer, so a component's own transition / transform utilities still win. */
 @layer base {
   :root {

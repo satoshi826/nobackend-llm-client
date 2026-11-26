@@ -1,5 +1,5 @@
 // Balance monitoring: if the balance dropped by more than what this app spent (cost),
-// warn that the key may be in use elsewhere (docs/design.md §5.3-7).
+// warn that the key may be in use elsewhere.
 
 export interface BalanceReading {
   usd: number;

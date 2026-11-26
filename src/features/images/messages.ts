@@ -1,4 +1,4 @@
-// Image feature messages (Japanese is the reference; see docs/specs/i18n.md)
+// Image feature messages (Japanese is the reference; see docs/writing.md)
 import { defineMessages, formatNumber } from '../../lib/i18n';
 
 export const t = defineMessages(

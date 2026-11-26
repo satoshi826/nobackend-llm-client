@@ -1,6 +1,6 @@
 // Passphrase encryption of API keys (WebCrypto: PBKDF2-SHA256 → AES-GCM-256).
 // Goal: avoid plaintext exposure on disk, in backups, or when someone else gets hold of the device.
-// Note: while unlocked the plaintext is in memory, so this is no defence against XSS (docs/design.md §5.3).
+// Note: while unlocked the plaintext is in memory, so this is no defence against XSS.
 import { t } from './messages';
 
 export interface EncryptedBlob {

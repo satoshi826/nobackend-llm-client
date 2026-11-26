@@ -5,7 +5,7 @@ import { t as tp } from '../messages';
 
 const BASE_URL = builtinBaseUrl('openrouter', (import.meta as any).env ?? {});
 
-/** Search results per search (OpenRouter bills per search request; see docs/specs/web-and-images.md §2.2) */
+/** Search results per search (OpenRouter bills per search request) */
 const MAX_RESULTS = 5;
 
 /**

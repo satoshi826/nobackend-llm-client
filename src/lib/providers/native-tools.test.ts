@@ -1,4 +1,4 @@
-// Native web search and image output (docs/specs/web-and-images.md): request shapes and stream parsing per provider
+// Native web search and image output: request shapes and stream parsing per provider
 import { describe, expect, it } from 'vitest';
 import { anthropicAdapter, buildAnthropicBody, toAnthropic } from './anthropic';
 import { buildGeminiBody, geminiAdapter, toGemini } from './gemini';

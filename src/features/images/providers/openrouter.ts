@@ -1,4 +1,4 @@
-// OpenRouter image API (docs/specs/image-providers.md §4): keyless model list (/images/models),
+// OpenRouter image API: keyless model list (/images/models),
 // prices per model from /images/models/{id}/endpoints (fetched when the model is chosen),
 // POST /images with response_format b64_json. The request's reported cost is recorded as spend.
 import type { ProviderConfig, Transport } from '../../../lib/providers/types';

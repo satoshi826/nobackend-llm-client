@@ -1,23 +1,44 @@
 # Design system — "Moonlight"
 
-Status: direction chosen 2026-11-25 (A. Glass, Moonlight variant). Mock-ups: the design canvas "nobackend LLM client — デザインの方向性（仮 UI）", artboards A (layout) and A-5 Moonlight (colors). Tokens below are the source of truth; `src/styles.css` implements them as CSS variables / Tailwind theme values.
+The rules every screen follows: principles for judgment calls (§1), concrete rules with how to check them (§2), and the tokens (§3). It states what is true now; how and why it got here is in the git history. `src/styles.css` implements the tokens: change a value in both, in the same commit.
 
 ## 1. Principles
 
 1. **Quiet glass on a dark night.** A near-black ground, a few large, slow, desaturated light blobs behind, and translucent "glass" panels on top. The light sets the mood; it never competes with the text.
 2. **Color means something.** Silver is the only accent (focus, selection, the primary action). Green = protected / private, amber = relayed / caution, rose = danger / error. Features do not get their own colors (no violet skills, green attachments, fuchsia images, sky web search): they are told apart by icon and label.
-3. **One way to do each thing.** One button set, one chip, one card, one field style, one dialog. A new screen is built from these, not restyled locally.
-4. **Motion explains, never decorates.** Things appear (rise / fade), the background drifts slowly, controls respond on hover/press. Everything stops under `prefers-reduced-motion`.
-5. **Text first.** Body copy stays high-contrast (≥ 4.5:1 on its glass); secondary text never drops below 4.5:1 at ≤ 14 px.
+3. **Consistent everywhere.** The same kind of thing looks, moves and reads the same wherever it appears, so what the user learns in one place holds in every other: the app's model is learned by using it. Before adding UI, find where the app already does the same thing and do it that way.
+4. **Shared components, not copies.** UI that should be the same is one component (`components/ui.tsx`, `components/settings-ui.tsx`), used everywhere; a screen never re-creates it with its own markup and classes. A continuous setting, for example, is always the shared `Slider`, never a bare range input. Copies drift apart, and a fix then reaches only one of them.
+5. **Icons carry meaning.** Actions, navigation and kinds of things get an icon, so they are recognized at a glance, in any of the three languages and in narrow space. One meaning has one icon everywhere; icon-only buttons always have `aria-label` and a tooltip.
+6. **Motion explains, never decorates.** Things appear (rise / fade), the background drifts slowly, controls respond on hover/press. Everything stops under `prefers-reduced-motion`.
+7. **Text first.** Body copy stays high-contrast (≥ 4.5:1 on its glass); secondary text never drops below 4.5:1 at ≤ 14 px.
 
-## 2. Tokens
+## 2. Rules
 
-### 2.1 Color
+- **A container keeps its size.** Switching tabs, selection or hover never resizes a dialog, panel or row, and never moves what is around it. *Why:* a moving frame shifts what the user was about to press. *Check:* switch every tab / item and measure the container.
+- **Text is never crushed.** A control with a label never shrinks below its text; in a row that runs out of room, the free text wraps instead. *Check:* every screen at 320 px wide.
+- **Scroll areas reach the edge of their surface.** No empty strip is left beside a scrollbar. *Check:* scroll every long area at 1100 px wide.
+- **Clickable looks clickable, and only that.** Everything clickable has the pointer cursor, a hover state and the press response; nothing else has them; disabled controls show not-allowed. *Check:* hover each control.
+- **Fit the input device.** On touch devices no text field is focused automatically unless typing is the only way on (the on-screen keyboard would cover the screen); anything shown only on hover is always shown on touch. Enter in the composer inserts a newline on touch devices. *Check:* open the screen with touch emulation (375 px) and watch the keyboard and focus.
+- **Selection is shown one way.** The selected item gets a background that slides to it (segmented controls, side tabs, the conversation list), or, in a row of text tabs, an underline that slides. *Check:* any new selectable list uses the same shared highlight.
+- **Every interactive element is reachable by keyboard.** Visible `:focus-visible` ring, Tab stays inside an open dialog, Esc closes the topmost one, focus returns to the opener. *Check:* go through the screen with Tab, Enter and Esc.
+- **No browser dialogs.** No `alert()` / `confirm()` / `prompt()`; confirmations are in-app dialogs.
+
+### When UI changes
+
+1. Find where the app already does the same thing; reuse that component or extract a shared one (§1.3, §1.4).
+2. View the screen at 320, 768 and 1100 px, and once with touch emulation.
+3. Switch every tab / mode on the screen and confirm nothing resizes or shifts.
+4. Go through it with the keyboard only.
+5. If a problem slipped through, name the principle or rule it broke; if none covers it, propose one for this document, then check the rest of the app against it.
+
+## 3. Tokens
+
+### 3.1 Color
 
 | Token | Value | Use |
 |---|---|---|
 | `--bg` | `#07080d` | Page ground |
-| `--glow-1` / `--glow-2` / `--glow-3` | `#64748b` / `#6366f1` / `#94a3b8` | Background light blobs (opacity `--glow-o1..3` 0.30 / 0.24 / 0.13, blur 110–120 px). These are the Moonlight set; Settings → 表示 can pick another of the ten sets (`GLOW_PRESETS` in `state/background.ts`), set the drift speed 0–3× (the running animations' playbackRate, so the light never jumps; 0 holds it), or replace the light with a solid colour or the user's picture (darkened by a `--bg` overlay so text stays readable) |
+| `--glow-1` / `--glow-2` / `--glow-3` | `#64748b` / `#6366f1` / `#94a3b8` | Background light blobs (opacity 0.30 / 0.24 / 0.13, blur 110–120 px): the Moonlight set and the default. Settings → 表示 → 背景 can pick another light set and its drift speed (0 holds it still; a change never makes the light jump), or replace the light with a solid colour or the user's picture, darkened so text stays readable |
 | `--glass` | `rgba(255,255,255,.06)` | Panels (sidebar, header, cards, composer) |
 | `--glass-strong` | `rgba(255,255,255,.10)` | Raised / hovered glass, active row |
 | `--sunken` | `rgba(0,0,0,.25)` | Fields, segmented controls inside glass |
@@ -36,21 +57,21 @@ Status: direction chosen 2026-11-25 (A. Glass, Moonlight variant). Mock-ups: the
 
 **Dark only for now**: the light theme is not offered (`DARK_ONLY` in `state/settings.ts`; the theme picker is hidden and the stored setting is kept). When it comes back, it uses the same token names with light values (`:root` in `src/styles.css`): ground `#eceef4`, white glass, slate accent `#334155`.
 
-### 2.2 Glass
+### 3.2 Glass
 
 `background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(24px) saturate(140%)`. Floating surfaces (composer, menus, toasts) add `box-shadow: 0 20px 60px rgba(0,0,0,.35)`. Glass is never stacked more than two deep (panel → card inside); a third layer uses `--glass-sunken`.
 
-### 2.3 Type
+### 3.3 Type
 
 Inter + Noto Sans JP (system fallback). Sizes: 12 (captions, badges), 13 (chips, secondary), 14 (UI default), 15 (message body, input), 18 (section titles), 24 (screen titles). Weights 400 / 500 / 600. Line height 1.7–1.8 for message text, 1.4 for UI.
 
-### 2.4 Space, radius, size
+### 3.4 Space, radius, size
 
 - Spacing scale (px): 4, 6, 8, 12, 16, 20, 24, 32.
 - Radius: 10 (buttons, chips that are not pills), 12–14 (rows, fields, small cards), 18 (message bubbles, cards), 22 (panels, composer), 999 (pills, badges, round buttons).
 - Control heights: 34 (compact chips / toolbar buttons), 40 (default buttons, fields), 44 (primary actions, send). Touch targets ≥ 44 px on touch devices.
 
-### 2.5 Motion
+### 3.5 Motion
 
 | Name | Spec |
 |---|---|
@@ -66,48 +87,3 @@ Inter + Noto Sans JP (system fallback). Sizes: 12 (captions, badges), 13 (chips,
 | `shimmer` | "Working…" text sweep 2.2 s linear |
 
 All animations are disabled under `prefers-reduced-motion: reduce`.
-
-## 3. Components
-
-- **Button**: `primary` (accent fill, accent-ink text; one per view), `secondary` (glass + line), `ghost` (transparent, glass-strong on hover), `danger` (danger-soft fill, danger text). Icon-only buttons are round or square, always with `aria-label`.
-- **Chip / toggle chip** (`Chip`): pill, 32 px; off = glass + line; on = accent-soft + strong text + `aria-pressed`.
-- **Badge**: pill, 12 px, soft background of its meaning color (ok / warn / neutral). `private` keeps its name and lock icon.
-- **Field**: glass-sunken, radius 12, no visible border until hover/focus (line-strong), focus ring = accent 2 px.
-- **Segmented control** (`Segmented`: sidebar tabs, theme picker, grid / list): sunken track, glass-strong selected segment that slides to the chosen item.
-- **Side tabs** (`SideTabs`: settings on wide screens): a column of tabs on the left whose highlight slides to the selected one (arrow keys move). The settings dialog has a fixed size (`Modal fixed`), so switching tabs never resizes it; the content scrolls on its own.
-- **Tab strip** (`TabStrip`: settings on phones): text tabs with an accent underline that slides to the selected tab; the panel fades in.
-- **Scrollbars**: everywhere thin rounded thumbs on a transparent track, a little brighter while the pointer is over the area; the chat list's bar stays between the floating header and the input box. Chrome drops `::-webkit-scrollbar` styles when `scrollbar-width` / `scrollbar-color` are set, so those are for Firefox only.
-- **Slider** (`Slider` in ui.tsx, `.slider`): label and current value (`format`) on one line, a thin track below filled up to the value in the accent colour; the white knob grows on hover and while dragged. Use it for any continuous setting instead of a bare range input.
-- **Switch** (`Toggle` in settings-ui, `.switch`): text left, switch right; the knob slides with a slight spring and stretches while pressed.
-- **Accordion** (`Collapse`; `<details>` where supported): height and opacity animate open and closed; the chevron rotates.
-- **Menu / popover** (`components/menu.tsx`: `Popover`, `MenuItem`, `MenuSeparator`): every floating list uses it. It renders in a portal on `<body>` (inside glass, a backdrop-filter only blurs that glass, so a menu in the composer could not blur the page), places itself from its anchor and flips when there is no room, and closes on Escape or a press outside. It is an opaque `panel` with a strong blur, radius 16, and opens with `pop` (fade + scale from .96). Arrow keys move between items.
-- **Card**: glass, radius 18; tool cards and file cards use it; the header row is 13 px muted with an icon.
-- **Dialog**: a `frosted` window — translucent, with what shows through strongly blurred (48 px) — over the `backdrop` utility, which neither darkens nor blurs the page (a backdrop-filter there would stop the window's own blur). Radius 22, max width 640 (wide 900); focus handling as `useDialog`. On phones large dialogs (settings, model picker: `Modal fullOnPhone`) fill the screen; small ones are bottom sheets. Menus stay nearly opaque `panel`s.
-- **Toast**: floating glass, bottom center, above the composer.
-
-## 4. Screen patterns
-
-- **Shell**: 16 px outer padding on desktop; sidebar and main are separate glass panels with a 16 px gap. On phones the sidebar becomes a full-height glass drawer over the scrim; the main area loses its outer padding.
-- **Chat**: header is a glass bar; messages sit directly on the background (no panel) inside a 720–760 px column; the composer is floating glass anchored to the bottom.
-- **Lists** (conversations, files list view, settings rows): rows on glass, active row glass-strong; no zebra stripes.
-- **File manager**: cards on glass; previews on glass-sunken.
-
-## 5. Writing
-
-See [specs/i18n.md](specs/i18n.md) (wording rules for all three languages).
-
-## 6. Implementation notes
-
-- Tokens live in `src/styles.css` (`:root` light values, `.dark` overrides, exposed to Tailwind through `@theme inline` as `bg-glass`, `text-ink`, `border-line`, …). Components use the tokens through a small set of shared classes / components in `components/ui.tsx`; features never introduce their own colors.
-- The key vault page (`vault/style.css`) uses the same variable names.
-
-## 7. Decisions (2026-11-25)
-
-- Applied to every screen; dark is the default theme.
-- Composer: one line by default (attach | text | send), floating over the messages with a darker glass (`glass-deep`); 画像 / スキル as chips below the box with the model on the right of that row (the model moved out of the header). Placeholder is just 「メッセージを入力」. Web search has no chip (on by default, off in settings).
-- Header: conversation title, temporary chat, context meter, 指示.
-- No "relayed" badge on answers or in the composer (the model picker still shows it where models are chosen); "private" keeps its lock.
-- Regenerate and "regenerate with another model" are one control.
-- Settings gain 表示 (theme, language) and 機能 (image and file sections).
-- Model-picker capability badges are neutral; only private / relayed / deprecated keep meaning colors.
-- Not done yet (deliberately): a "…" menu per message, context meter / compaction split, moving 指示 into a menu, hover-only answer meta.

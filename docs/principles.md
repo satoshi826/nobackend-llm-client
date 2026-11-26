@@ -1,0 +1,59 @@
+# nobackend-llm-client — Principles
+
+What this app is and the rules every change keeps. It states what is true now; how and why it got here is in the git history. UI rules are in [design-system.md](design-system.md), UI wording in [writing.md](writing.md). Setup and deployment are in the [README](../README.md).
+
+## 1. Purpose
+
+A chat client for LLM APIs that runs entirely in the browser, for people who want less-censored or open-weight models without leaving logs in a SaaS product, and without hosting a server or running a model locally.
+
+- **Bring your own key, no backend.** Static files only. The browser talks to each provider's API directly with the user's key.
+- **General-purpose.** Chat, web search, files, images, skills and an agent-style tool loop.
+- **Not goals:** accounts, sync between devices, analytics, role-play features, adding providers from the UI at runtime.
+
+## 2. Security
+
+Threats the design holds against, and the rule that holds each one.
+
+- **The app never holds an API key.** Only the key vault page reads, stores, shows or sends keys; the app asks the vault to make keyed requests and never sees the value. *Why:* an XSS in the app must not be able to read keys. A vault on a separate origin isolates keys even from that.
+- **A key goes only to its provider's fixed hosts.** Allowed hosts are fixed at build time; the vault refuses any other host, refuses redirects and drops auth headers the app sends. Providers cannot be added at runtime. *Why:* a script or a prompt must not be able to send a key elsewhere. *Check:* vault tests.
+- **No script but our own.** Every document has a strict CSP (no inline script, `script-src 'self'`), Trusted Types, sanitized Markdown, and external images are never fetched. No analytics or third-party scripts; host features that inject scripts (e.g. Cloudflare Web Analytics, Rocket Loader) stay off. *Check:* CSP tests, production headers locally (README).
+- **With a passphrase, everything personal is encrypted at rest.** Keys, conversations, files, images, saved prompts and skills; only what is needed for ordering and indexing stays plain. The whole app is hidden behind a lock screen until unlocked, unlock is per tab and per reload, and locking drops all decrypted data from memory. *Why:* someone with the device or a copy of the browser profile must not read anything.
+- **Showing a saved key asks for the passphrase again,** even while unlocked. *Why:* an unlocked device left alone must not give a key away.
+- **Tool results are untrusted input.** They are marked as untrusted for the model; tools that send data out of the browser ask first unless they send only a search query; creating or changing a skill always asks. *Why:* prompt injection through pages and search results.
+- **Leaked keys are limited.** The app tells users to use spend-limited keys, and warns when a provider balance drops more than this app spent.
+- **Out of scope:** a malicious build of the app itself (self-deploy instead of trusting a distributor), a compromised browser or OS, and a conversation while it is unlocked and on screen.
+
+## 3. Data
+
+- **Everything stays in this browser.** Conversations, files, images, settings and the usage log live in IndexedDB of this origin; nothing is sent anywhere except the requests the user makes to providers and services they enabled.
+- **Temporary chats are never written** (not to the database, not to the usage log).
+- **Backups never contain keys or the data key.** They can be encrypted with a separate password.
+- **The background picture is stored unencrypted** (downscaled, with the settings) and is included in backups.
+- **Data is per origin.** Moving the app to another URL means export, import and entering the keys again.
+- **Storage changes migrate existing data.** A schema change never drops what users have stored.
+
+## 4. Providers and features
+
+- **No provider is privileged.** With none enabled, the user chooses one.
+- **Provider differences live in the provider's own definition** (preset / adapter). App code has no branches per provider; wire formats never leak into features.
+- **The UI shows capabilities, not routes.** The user turns on what they want (web search, images); the app picks how (the provider's own feature, an app tool, or a direct service call). Which route was used shows only where it matters (an answer's sources, the settings of each connection).
+- **Results are normalized** whatever the route: search results become sources, images become stored images, so display, backup, deletion and regeneration treat them the same.
+- **Costs are shown honestly.** Reported costs as reported, estimates marked as estimates, unknown as unknown.
+
+## 5. Code structure
+
+- **Dependencies point one way:** `lib` → `state` → `components` → `features`. `lib` never imports state, UI or features; the core never imports a feature; a feature uses another only through its `index.ts`; the vault imports nothing from the app. *Check:* `npm run lint:deps` (part of `npm run build`).
+- **Features join through extension points.** A feature registers itself; adding one never means editing the core. A new extension point is added only when a second feature needs the same hook, or a feature would otherwise have to edit a core file.
+- **The first screen loads only what it shows.** Other screens and large libraries load when first opened.
+- **The vault page has no framework** and builds its DOM with `createElement` / `textContent` only.
+- **Boundaries narrow upstream shapes.** Provider responses and stored records are turned into the app's own types where they enter; the rest of the code never sees a provider's raw shape.
+
+## 6. Language
+
+- The UI is in Japanese (reference), English and Simplified Chinese; every text exists in all three. Prompts the app sends to models follow the UI language. Wording rules: [writing.md](writing.md).
+
+## 7. Verifying a change
+
+- `npm test`, `npm run typecheck` and `npm run lint:deps` pass.
+- Behavior is checked in the browser, against the mock server when it needs a provider (README).
+- UI changes go through the design system's checklist ([design-system.md](design-system.md) §2).

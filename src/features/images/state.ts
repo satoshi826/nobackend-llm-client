@@ -28,7 +28,7 @@ import { imageProviderList, imageProviderOf, registerImageProvider, type ImageCa
 import { makeImageTool, type ImageToolInput } from './tool';
 import { t } from './messages';
 
-// Image providers in menu order (docs/specs/image-providers.md). A provider is offered once its key is set.
+// Image providers in menu order. A provider is offered once its key is set.
 registerImageProvider(veniceImageProvider);
 registerImageProvider(openrouterImageProvider);
 registerImageProvider(geminiImageProvider);

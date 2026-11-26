@@ -2,7 +2,7 @@
 // - the vault attaches the key in the x-api-key header (preset.keyHeader)
 // - calling directly from the browser needs the anthropic-dangerous-direct-browser-access header (preset extraHeaders)
 // - extended thinking is not used (combined with tool calls it would require sending signed thinking blocks back)
-// - web search is Anthropic's server tool (docs/specs/web-and-images.md §2.2). The basic version is used:
+// - web search is Anthropic's server tool. The basic version is used:
 //   the dynamic-filtering versions add code execution blocks and a container to echo back.
 //   A step that used server tools is kept verbatim (provider-content) and sent back as is while the turn runs
 //   (required after pause_turn); later turns send only the answer text.

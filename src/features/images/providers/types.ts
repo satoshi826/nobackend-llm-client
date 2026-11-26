@@ -1,4 +1,4 @@
-// Image providers: one adapter per service (Venice, OpenRouter, Gemini, OpenAI; see docs/specs/image-providers.md).
+// Image providers: one adapter per service (Venice, OpenRouter, Gemini, OpenAI).
 // The image state calls providers only through this interface.
 import type { ImageParams } from '../../../lib/db/schema';
 import type { AuthRef, ProviderConfig, Transport } from '../../../lib/providers/types';

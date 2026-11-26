@@ -115,7 +115,7 @@ async function generateReply(convId: string, parentUserId: string) {
   const toolCtx: ToolProviderContext = { conv, messageId: draft.id, model, history };
   const tools = contributedTools(toolCtx);
   const systemPrompt = systemPromptFor(toolCtx);
-  // The provider's own web search, when the web feature chose that route (docs/specs/web-and-images.md §2)
+  // The provider's own web search, when the web feature chose that route
   const nativeSearch = contributedBuiltinWebSearch(toolCtx);
   const providerOptions = providerOptionsFor(cfg.id, 'chat', nativeSearch);
   let imageCount = 0;

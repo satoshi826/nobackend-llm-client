@@ -1,4 +1,4 @@
-// Checks the dependency rules of docs/specs/architecture.md §2 (no tooling needed):
+// Checks the dependency rules of docs/principles.md §5 (no tooling needed):
 //   lib → state → components → features, one way only; features use each other only through index.ts;
 //   only src/main.tsx loads features; the key vault does not depend on the app.
 // Tests are exempt (they may wire features together). Exit code 1 when a rule is broken.

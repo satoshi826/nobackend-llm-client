@@ -1,4 +1,4 @@
-// Gemini image models (generateContent with responseModalities IMAGE; docs/specs/image-providers.md §4).
+// Gemini image models (generateContent with responseModalities IMAGE).
 // The model list needs the key (the Gemini models list, filtered to image models). One image per request.
 // Prices are a dated table (the API lists none); unknown models show "費用不明".
 import type { ProviderConfig, Transport } from '../../../lib/providers/types';

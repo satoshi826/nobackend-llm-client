@@ -1,4 +1,4 @@
-// OpenAI Images API (POST /v1/images/generations; docs/specs/image-providers.md §4).
+// OpenAI Images API (POST /v1/images/generations).
 // The model list needs the key (/v1/models, filtered to image models). GPT Image models always return
 // base64; aspect ratios map to the sizes the model accepts, and "quality" takes the resolution menu.
 // Prices are a dated table (the API lists none).

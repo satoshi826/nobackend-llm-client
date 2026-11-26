@@ -1,5 +1,5 @@
 // Web search: which route a reply uses, and the tools / native search it contributes to a reply.
-// Routes (docs/specs/web-and-images.md §2): the chat provider's own search (native), Tavily + Jina tools, or none.
+// Routes: the chat provider's own search (native), Tavily + Jina tools, or none.
 import { getPreset } from '../../lib/providers/registry';
 import { keyReady } from '../../state/keys';
 import { modelOf, providerById } from '../../state/models';

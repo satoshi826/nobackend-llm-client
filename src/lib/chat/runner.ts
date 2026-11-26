@@ -47,7 +47,7 @@ export interface RunOptions {
   toolContext?: Omit<ToolContext, 'signal'>;
   permissionFor?(tool: Tool): Permission;
   requestApproval?(req: ApprovalRequest): Promise<ApprovalDecision>;
-  /** Use the provider's own web search for this reply (docs/specs/web-and-images.md §2) */
+  /** Use the provider's own web search for this reply */
   webSearch?: 'auto' | 'on';
   /** Ask for images in the reply (models that output images) */
   imageOutput?: boolean;

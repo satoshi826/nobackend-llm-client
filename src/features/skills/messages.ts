@@ -1,4 +1,4 @@
-// UI text of the Skills feature (Japanese is the reference; see docs/specs/i18n.md)
+// UI text of the Skills feature (Japanese is the reference; see docs/writing.md)
 import { defineMessages } from '../../lib/i18n';
 
 export const t = defineMessages(

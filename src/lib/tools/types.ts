@@ -1,4 +1,4 @@
-// Tool types (docs/design.md §9.3)
+// Tool types
 import type { AuthRef, ToolDefinition, Transport } from '../providers/types';
 
 export type ToolRisk = 'read' | 'write' | 'exec' | 'network';

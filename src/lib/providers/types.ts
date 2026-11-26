@@ -1,4 +1,4 @@
-// Type definitions for the provider layer (docs/design.md §3.3)
+// Type definitions for the provider layer
 // This layer does not depend on UI or DB.
 
 export type AdapterKind = 'openai-compatible' | 'anthropic' | 'gemini';
@@ -23,7 +23,7 @@ export interface ModelCapabilities {
   reasoningEffort?: string[];
   webSearch?: boolean;
   jsonSchema?: boolean;
-  /** Replies can contain generated images (native image output, docs/specs/web-and-images.md §3) */
+  /** Replies can contain generated images (native image output) */
   imageOutput?: boolean;
 }
 

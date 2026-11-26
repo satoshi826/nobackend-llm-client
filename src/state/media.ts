@@ -1,4 +1,4 @@
-// Images that come back inside a chat reply (native image output, docs/specs/web-and-images.md §3).
+// Images that come back inside a chat reply (native image output).
 // They are stored like generated images (lib/db/images), so the gallery, backups and deletion handle them.
 import { signal } from '@preact/signals';
 import type { Conversation } from '../lib/db/schema';

@@ -1,4 +1,4 @@
-// Adapter for the native Gemini API (generateContent), docs/specs/web-and-images.md §4.
+// Adapter for the native Gemini API (generateContent).
 // The OpenAI-compatible endpoint cannot use Google Search grounding, so Gemini uses its own API:
 // - key in the x-goog-api-key header (preset.keyHeader; attached by the key vault)
 // - streamGenerateContent?alt=sse; parts: text, thought summaries (thought: true), functionCall, inlineData (images)

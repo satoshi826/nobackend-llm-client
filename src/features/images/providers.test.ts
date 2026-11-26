@@ -1,4 +1,4 @@
-// Image providers other than Venice (docs/specs/image-providers.md): model mapping, request bodies, costs
+// Image providers other than Venice: model mapping, request bodies, costs
 import { describe, expect, it } from 'vitest';
 import { mapOpenRouterImageModel, openrouterImageProvider, priceFromEndpoints } from './providers/openrouter';
 import { buildGeminiImageBody, geminiImageProvider, mapGeminiImageModel } from './providers/gemini';

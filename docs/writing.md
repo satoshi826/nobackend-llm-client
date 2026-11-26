@@ -1,10 +1,11 @@
-# i18n: how UI text is written and translated
+# Writing UI text
+
+Rules for every text the app shows, in all three languages. It states what is true now; the history is in git.
 
 Languages: Japanese (reference), English, Simplified Chinese. The language setting is in Settings → 表示 (auto follows the browser). Model-facing prompts follow the UI language too, so answers come back in it.
 
 ## Code
 
-- API: `src/lib/i18n/index.ts` — `defineMessages(ja, { en, zh })` returns `t(key, params)`; `formatNumber`, `formatDate`, `formatDateTime`, `formatTime`, `formatList`, `getLang`.
 - Each folder keeps its messages next to its code in `messages.ts`, exporting `t` (several folders' messages in one file: import with an alias, e.g. `import { t as tf } from '../files/messages'`). TypeScript enforces the same keys in every language.
 - Keys are camelCase and grouped by prefix (`filer.upload`, `filer.emptyHint`).
 - Never build sentences from fragments: one template with `{placeholders}` per sentence (word order differs between languages).
@@ -12,7 +13,7 @@ Languages: Japanese (reference), English, Simplified Chinese. The language setti
 - Numbers and dates go through the formatters (no bare `toLocaleString()`).
 - Not translated: product and provider names (Venice, OpenRouter, Tavily, Jina Reader, Anthropic, ...), model ids, code, file extensions, `API`, `private` (Venice's mode name, shown as is).
 
-## Japanese wording rules (applied while extracting)
+## Japanese wording rules
 
 - Buttons and menu items: short, no です/ます (保存, 削除, 書き出す, アップロード).
 - Help text and descriptions: です・ます, one or two sentences.

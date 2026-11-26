@@ -78,23 +78,34 @@ export function locale(l: Lang = current): string {
   return { ja: 'ja-JP', en: 'en-US', zh: 'zh-CN' }[l];
 }
 
+// Creating an Intl formatter is far slower than using one (tens of µs against under 1 µs), and lists format
+// one value per row: formatters are kept per locale and options
+const formatters = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat | Intl.ListFormat>();
+function formatter<F extends Intl.NumberFormat | Intl.DateTimeFormat | Intl.ListFormat>(kind: string, opts: object | undefined, make: (loc: string) => F): F {
+  const loc = locale();
+  const key = `${kind}|${loc}|${opts ? JSON.stringify(opts) : ''}`;
+  let f = formatters.get(key) as F | undefined;
+  if (!f) formatters.set(key, (f = make(loc)));
+  return f;
+}
+
 export function formatNumber(n: number, opts?: Intl.NumberFormatOptions): string {
-  return new Intl.NumberFormat(locale(), opts).format(n);
+  return formatter('n', opts, (loc) => new Intl.NumberFormat(loc, opts)).format(n);
 }
 
 export function formatDate(ts: number | Date, opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }): string {
-  return new Intl.DateTimeFormat(locale(), opts).format(ts);
+  return formatter('d', opts, (loc) => new Intl.DateTimeFormat(loc, opts)).format(ts);
 }
 
 export function formatDateTime(ts: number | Date, opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' }): string {
-  return new Intl.DateTimeFormat(locale(), opts).format(ts);
+  return formatDate(ts, opts);
 }
 
 export function formatTime(ts: number | Date): string {
-  return new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit' }).format(ts);
+  return formatDate(ts, { hour: '2-digit', minute: '2-digit' });
 }
 
 /** Join a list the way the language does ("A, B and C" / "A、B、C") */
 export function formatList(items: string[]): string {
-  return new Intl.ListFormat(locale(), { style: 'short', type: 'conjunction' }).format(items);
+  return formatter('l', undefined, (loc) => new Intl.ListFormat(loc, { style: 'short', type: 'conjunction' })).format(items);
 }

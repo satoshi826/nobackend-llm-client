@@ -64,13 +64,48 @@ function SkyGlow() {
   );
 }
 
+// Small components of their own for state that changes often (toasts, modals, data work), so a change
+// re-renders only them, not the sidebar and the conversation
+function DataWork() {
+  if (!dataWork.value) return null;
+  return (
+    <div class="backdrop fixed inset-0 z-[60] grid place-items-center text-sm" role="status" aria-live="polite">
+      <div class="panel rise flex items-center gap-2 rounded-2xl px-4 py-3">
+        <Spinner class="size-4" />
+        {dataWork.value}
+      </div>
+    </div>
+  );
+}
+
+function Modals() {
+  const m = modal.value;
+  return m === 'models' ? <ModelPicker /> : m === 'settings' ? <SettingsModal /> : m === 'system' ? <SystemPromptModal /> : null;
+}
+
+function Toast() {
+  const toastNow = toast.value;
+  if (!toastNow) return null;
+  return (
+    <div
+      data-live
+      role={toastNow.kind === 'error' ? 'alert' : 'status'}
+      class={cx(
+        'panel rise fixed bottom-28 left-1/2 z-[80] -translate-x-1/2 rounded-2xl px-4 py-2.5 text-sm',
+        toastNow.kind === 'error' ? 'text-danger' : 'text-ink-strong'
+      )}
+    >
+      {toastNow.text}
+    </div>
+  );
+}
+
 export function App() {
   // Reading the language here re-renders the whole tree when it changes (messages are read during render)
   void uiLang.value;
   if (!ready.value) {
     return <div class="grid h-full place-items-center text-sm text-muted">{t('app.loading')}</div>;
   }
-  const toastNow = toast.value;
   if (dataLock.value === 'locked' || dataLock.value === 'lost') {
     return (
       <div class="relative isolate h-full">
@@ -83,35 +118,15 @@ export function App() {
   return (
     <div class="relative isolate flex h-full md:gap-3 md:py-3 md:pl-3">
       <SkyGlow />
-      {dataWork.value && (
-        <div class="backdrop fixed inset-0 z-[60] grid place-items-center text-sm" role="status" aria-live="polite">
-          <div class="panel rise flex items-center gap-2 rounded-2xl px-4 py-3">
-            <Spinner class="size-4" />
-            {dataWork.value}
-          </div>
-        </div>
-      )}
+      <DataWork />
       <Sidebar />
       <MainArea />
-      {modal.value === 'models' && <ModelPicker />}
-      {modal.value === 'settings' && <SettingsModal />}
-      {modal.value === 'system' && <SystemPromptModal />}
+      <Modals />
       {overlays.map((O, i) => (
         <O key={i} />
       ))}
       <ConfirmDialog />
-      {toastNow && (
-        <div
-          data-live
-          role={toastNow.kind === 'error' ? 'alert' : 'status'}
-          class={cx(
-            'panel rise fixed bottom-28 left-1/2 z-[80] -translate-x-1/2 rounded-2xl px-4 py-2.5 text-sm',
-            toastNow.kind === 'error' ? 'text-danger' : 'text-ink-strong'
-          )}
-        >
-          {toastNow.text}
-        </div>
-      )}
+      <Toast />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 import { readdirSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { appHeadersFile } from './csp.config';
+import { appHeadersFile, appPagePolicies, cspMetaTag, separateOrigins } from './csp.config';
 
 /** Generates _headers (CSP and other security headers) */
 function headersPlugin(env: Record<string, string | undefined>): Plugin {
@@ -13,6 +13,18 @@ function headersPlugin(env: Record<string, string | undefined>): Plugin {
     apply: 'build',
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: '_headers', source: appHeadersFile(env) });
+    }
+  };
+}
+
+/** Puts each page's CSP in its HTML too, for hosts that do not send _headers (GitHub Pages) */
+function cspMetaPlugin(policies: Record<string, string>): Plugin {
+  return {
+    name: 'csp-meta',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html, ctx) => (policies[ctx.path] ? html.replace('<head>', `<head>\n    ${cspMetaTag(policies[ctx.path])}`) : html)
     }
   };
 }
@@ -97,15 +109,19 @@ export default defineConfig(({ mode, command }) => {
   const info = command === 'build' ? buildInfo(env) : { version: 'dev', commit: 'dev', builtAt: '' };
   return {
     define: { __APP_BUILD__: JSON.stringify(info) },
-    plugins: [preact(), tailwindcss(), headersPlugin(env), pdfCmapsPlugin(), serviceWorkerPlugin(), versionFilePlugin(info)],
+    plugins: [preact(), tailwindcss(), headersPlugin(env), cspMetaPlugin(appPagePolicies(env)), pdfCmapsPlugin(), serviceWorkerPlugin(), versionFilePlugin(info)],
     build: {
       target: 'es2022',
       emptyOutDir: true,
       sourcemap: false,
       modulePreload: { polyfill: false }, // emit no inline script (for CSP script-src 'self')
       rollupOptions: {
-        // The app, and the key vault and the fetch page hosted on the same origin (/vault/, /fetch/)
-        input: { main: resolve(__dirname, 'index.html'), vault: resolve(__dirname, 'vault/index.html'), fetch: resolve(__dirname, 'fetch/index.html') },
+        // The app, and the key vault and the fetch page on the same origin (/vault/, /fetch/) unless they have their own
+        input: {
+          main: resolve(__dirname, 'index.html'),
+          ...(separateOrigins(env).vaultOrigin ? {} : { vault: resolve(__dirname, 'vault/index.html') }),
+          ...(separateOrigins(env).fetchOrigin ? {} : { fetch: resolve(__dirname, 'fetch/index.html') })
+        },
         // Emit .mjs assets (the pdf.js worker) as .js so every static host serves them as JavaScript
         output: { assetFileNames: (info: { names?: string[] }) => (info.names?.[0]?.endsWith('.mjs') ? 'assets/[name]-[hash].js' : 'assets/[name]-[hash][extname]') }
       }

@@ -4,14 +4,16 @@
 // The app is then built with VITE_FETCH_URL pointing at it. Also generates the page's _headers (CSP).
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { resolve } from 'node:path';
-import { fetchHeadersFile } from './csp.config';
+import { cspMetaTag, fetchHeadersFile, fetchPagePolicy } from './csp.config';
 
 function fetchHeaders(env: Record<string, string | undefined>): Plugin {
   return {
     name: 'fetch-headers',
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: '_headers', source: fetchHeadersFile(env) });
-    }
+    },
+    // The same CSP in the HTML, for hosts that do not send _headers
+    transformIndexHtml: { order: 'post', handler: (html) => html.replace('<head>', `<head>\n    ${cspMetaTag(fetchPagePolicy(env))}`) }
   };
 }
 

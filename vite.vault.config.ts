@@ -3,14 +3,16 @@
 // Also generates the vault's _headers (CSP).
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { resolve } from 'node:path';
-import { vaultHeadersFile } from './csp.config';
+import { cspMetaTag, vaultHeadersFile, vaultPagePolicy } from './csp.config';
 
 function vaultHeaders(env: Record<string, string | undefined>): Plugin {
   return {
     name: 'vault-headers',
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: '_headers', source: vaultHeadersFile(env) });
-    }
+    },
+    // The same CSP in the HTML, for hosts that do not send _headers
+    transformIndexHtml: { order: 'post', handler: (html) => html.replace('<head>', `<head>\n    ${cspMetaTag(vaultPagePolicy(env))}`) }
   };
 }
 

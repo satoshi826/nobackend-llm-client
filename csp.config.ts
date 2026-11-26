@@ -36,7 +36,8 @@ export function appCsp(env: Env, vaultOrigin?: string, fetchOrigin?: string): st
     "img-src 'self' data: blob:",
     "font-src 'self'",
     `connect-src 'self' ${[...o.appProviders, o.jina].join(' ')}`,
-    `frame-src ${["'self'", vaultOrigin, fetchOrigin].filter(Boolean).join(' ')}`,
+    // 'self' only while the vault or the fetch page is hosted with the app
+    `frame-src ${[!vaultOrigin || !fetchOrigin ? "'self'" : undefined, vaultOrigin, fetchOrigin].filter(Boolean).join(' ')}`,
     "worker-src 'self'",
     "manifest-src 'self'",
     "base-uri 'none'",
@@ -93,8 +94,7 @@ export function vaultCsp(env: Env, appOrigins: string[]): string {
  * The app switches views via #, so no other path ever returns HTML (404).
  */
 export function appHeadersFile(env: Env): string {
-  const vaultOrigin = env.VITE_VAULT_URL ? new URL(env.VITE_VAULT_URL).origin : undefined;
-  const fetchOrigin = env.VITE_FETCH_URL ? new URL(env.VITE_FETCH_URL).origin : undefined;
+  const { vaultOrigin, fetchOrigin } = separateOrigins(env);
   const app = `  Content-Security-Policy: ${appCsp(env, vaultOrigin, fetchOrigin)}`;
   return [
     '/*',
@@ -108,23 +108,59 @@ export function appHeadersFile(env: Env): string {
     '/index.html',
     app,
     '',
-    '/vault/*',
-    `  Content-Security-Policy: ${vaultCsp(env, ["'self'"])}`,
-    '',
-    '/fetch/*',
-    `  Content-Security-Policy: ${fetchCsp(["'self'"])}`,
-    ''
+    ...(vaultOrigin ? [] : ['/vault/*', `  Content-Security-Policy: ${vaultCsp(env, ["'self'"])}`, '']),
+    ...(fetchOrigin ? [] : ['/fetch/*', `  Content-Security-Policy: ${fetchCsp(["'self'"])}`, ''])
   ].join('\n');
 }
 
-/** _headers for a fetch page hosted on a separate origin */
-export function fetchHeadersFile(env: Env): string {
-  const appOrigins = (env.VITE_APP_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  return ['/*', `  Content-Security-Policy: ${fetchCsp(appOrigins.length ? appOrigins : ["'self'"])}`, ...COMMON.map((h) => '  ' + h), '  Cross-Origin-Resource-Policy: same-origin', ''].join('\n');
+/**
+ * The vault and the fetch page on origins of their own (VITE_VAULT_URL / VITE_FETCH_URL). Then the app build leaves
+ * out its same-origin copies: a page on the app's origin that may reach any address (the fetch page) or that holds
+ * the keys (the vault) would be within reach of a script running in the app.
+ */
+export function separateOrigins(env: Env): { vaultOrigin?: string; fetchOrigin?: string } {
+  return {
+    vaultOrigin: env.VITE_VAULT_URL ? new URL(env.VITE_VAULT_URL).origin : undefined,
+    fetchOrigin: env.VITE_FETCH_URL ? new URL(env.VITE_FETCH_URL).origin : undefined
+  };
 }
 
-/** _headers for a vault hosted on a separate origin */
-export function vaultHeadersFile(env: Env): string {
-  const appOrigins = (env.VITE_APP_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  return ['/*', `  Content-Security-Policy: ${vaultCsp(env, appOrigins.length ? appOrigins : ["'self'"])}`, ...COMMON.map((h) => '  ' + h), '  Cross-Origin-Resource-Policy: same-origin', ''].join('\n');
+/** The CSPs of the app build's pages, by page path */
+export function appPagePolicies(env: Env): Record<string, string> {
+  const { vaultOrigin, fetchOrigin } = separateOrigins(env);
+  return {
+    '/index.html': appCsp(env, vaultOrigin, fetchOrigin),
+    ...(vaultOrigin ? {} : { '/vault/index.html': vaultCsp(env, ["'self'"]) }),
+    ...(fetchOrigin ? {} : { '/fetch/index.html': fetchCsp(["'self'"]) })
+  };
 }
+
+/**
+ * The same CSP as a <meta> tag, for hosts that send no headers of their own (GitHub Pages). A meta CSP cannot carry
+ * frame-ancestors, so there other sites can still embed the pages; everything else applies.
+ */
+export function cspMetaTag(policy: string): string {
+  const kept = policy
+    .split('; ')
+    .filter((d) => !/^(frame-ancestors|report-uri|report-to|sandbox)\b/.test(d))
+    .join('; ');
+  return `<meta http-equiv="Content-Security-Policy" content="${kept.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" />`;
+}
+
+/** The apps allowed to embed a vault or fetch page on its own origin (VITE_APP_ORIGIN, comma-separated) */
+function embeddingApps(env: Env): string[] {
+  const list = (env.VITE_APP_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return list.length ? list : ["'self'"];
+}
+
+/** CSP of a fetch page / vault hosted on a separate origin */
+export const fetchPagePolicy = (env: Env) => fetchCsp(embeddingApps(env));
+export const vaultPagePolicy = (env: Env) => vaultCsp(env, embeddingApps(env));
+
+const separateHeaders = (policy: string) => ['/*', `  Content-Security-Policy: ${policy}`, ...COMMON.map((h) => '  ' + h), '  Cross-Origin-Resource-Policy: same-origin', ''].join('\n');
+
+/** _headers for a fetch page hosted on a separate origin */
+export const fetchHeadersFile = (env: Env) => separateHeaders(fetchPagePolicy(env));
+
+/** _headers for a vault hosted on a separate origin */
+export const vaultHeadersFile = (env: Env) => separateHeaders(vaultPagePolicy(env));

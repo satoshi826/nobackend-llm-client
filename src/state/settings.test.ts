@@ -1,23 +1,16 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, migrateSettings } from './settings';
+import { DEFAULT_SETTINGS, settingsFrom } from './settings';
 import { PRESETS } from '../lib/providers/registry';
 import { PASSTHROUGH_HEADERS } from '../lib/vault/protocol';
 
-describe('settings migration', () => {
-  it('starts with no provider for a fresh install', () => {
-    expect(migrateSettings({}).enabledProviders).toEqual([]);
+describe('stored settings', () => {
+  it('start with no provider for a fresh install', () => {
+    expect(settingsFrom({}).enabledProviders).toEqual([]);
   });
-  it('keeps Venice for people who used the Venice-first version', () => {
-    const s = migrateSettings({ lastModelId: 'x', includeVeniceSystemPrompt: true, searchEngine: 'venice', showAnonymized: true });
-    expect(s.enabledProviders).toEqual(['venice']);
-    expect(s.providerSettings).toEqual({ venice: { includeSystemPrompt: true } });
-    expect('includeVeniceSystemPrompt' in s).toBe(false);
-    expect('showAnonymized' in s).toBe(false);
-  });
-  it('leaves an explicit provider list alone', () => {
-    expect(migrateSettings({ enabledProviders: ['openrouter'] }).enabledProviders).toEqual(['openrouter']);
-    expect(migrateSettings({ toolPermissions: { web_search: 'allow' } }).toolPermissions).toEqual({ ...DEFAULT_SETTINGS.toolPermissions, web_search: 'allow' });
+  it('keep what was stored and fill the rest from the defaults', () => {
+    expect(settingsFrom({ enabledProviders: ['openrouter'] }).enabledProviders).toEqual(['openrouter']);
+    expect(settingsFrom({ toolPermissions: { web_search: 'allow' } }).toolPermissions).toEqual({ ...DEFAULT_SETTINGS.toolPermissions, web_search: 'allow' });
   });
 });
 

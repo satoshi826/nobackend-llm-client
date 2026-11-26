@@ -83,26 +83,13 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export const settings = signal<Settings>(DEFAULT_SETTINGS);
 
-/** Bring stored settings to the current shape (including migration of settings from earlier versions) */
-export function migrateSettings(raw: Record<string, unknown>): Settings {
-  const { showAnonymized: _a, includeVeniceSystemPrompt: legacyVenicePrompt, ...rest } = raw as Partial<Settings> & {
-    showAnonymized?: unknown;
-    includeVeniceSystemPrompt?: boolean;
-  };
-  const stored: Partial<Settings> = rest;
-  // Venice-specific settings move to providerSettings
-  if (legacyVenicePrompt) stored.providerSettings = { ...stored.providerSettings, venice: { ...stored.providerSettings?.venice, includeSystemPrompt: true } };
-  // Venice used to be always enabled. Do not remove it from the settings of people who were using it
-  if (!('enabledProviders' in stored) && Object.keys(raw).length) stored.enabledProviders = ['venice'];
-  return {
-    ...DEFAULT_SETTINGS,
-    ...stored,
-    toolPermissions: { ...DEFAULT_SETTINGS.toolPermissions, ...(stored.toolPermissions ?? {}) }
-  };
+/** Stored settings over the defaults (tool permissions merged one by one) */
+export function settingsFrom(stored: Partial<Settings>): Settings {
+  return { ...DEFAULT_SETTINGS, ...stored, toolPermissions: { ...DEFAULT_SETTINGS.toolPermissions, ...(stored.toolPermissions ?? {}) } };
 }
 
 export async function loadSettings() {
-  settings.value = migrateSettings(await repo.getSetting<Record<string, unknown>>('settings', {}));
+  settings.value = settingsFrom(await repo.getSetting<Partial<Settings>>('settings', {}));
   applyTheme();
   applyLanguage();
 }

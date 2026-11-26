@@ -114,11 +114,11 @@ export async function importAll(raw: unknown): Promise<ImportResult> {
 
 /** Keep only well-formed image request fields */
 function cleanImageParams(x: any): ImageParams | undefined {
-  if (!x || typeof x !== 'object' || !['generate', 'upscale', 'edit', 'remove-bg'].includes(x.op)) return undefined;
+  if (!x || typeof x !== 'object' || !['generate', 'upscale', 'edit', 'remove-bg'].includes(x.op) || !isStr(x.providerId)) return undefined;
   const str = (v: unknown) => (isStr(v) ? v : undefined);
   return {
     op: x.op,
-    providerId: str(x.providerId) ?? 'venice',
+    providerId: x.providerId,
     model: str(x.model) ?? '',
     prompt: str(x.prompt) ?? '',
     negativePrompt: str(x.negativePrompt),

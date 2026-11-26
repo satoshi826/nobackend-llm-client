@@ -40,13 +40,22 @@ export function inView(it: FilerItem, view: FilerView, now = Date.now()): boolea
   }
 }
 
+// Lowercased text of each file record for search (records are replaced when they change, so the object is the key):
+// typing in the search box does not lowercase every file again on each keystroke
+const lowerText = new WeakMap<FileRecord, string>();
+function searchText(f: FileRecord): string {
+  let s = lowerText.get(f);
+  if (s === undefined) lowerText.set(f, (s = currentText(f).toLowerCase()));
+  return s;
+}
+
 export function filterItems(items: FilerItem[], o: { view: FilerView; conversationId: string | null; query: string }, now = Date.now()): FilerItem[] {
   const q = o.query.trim().toLowerCase();
   return items.filter(
     (it) =>
       inView(it, o.view, now) &&
       (!o.conversationId || it.conversationId === o.conversationId) &&
-      (!q || it.name.toLowerCase().includes(q) || (it.type === 'file' && currentText(it.file).toLowerCase().includes(q)))
+      (!q || it.name.toLowerCase().includes(q) || (it.type === 'file' && searchText(it.file).includes(q)))
   );
 }
 

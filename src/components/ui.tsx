@@ -256,6 +256,16 @@ export function Slider({
   );
 }
 
+/** The value as it was once it stopped changing for `ms` (for work that should not run on every keystroke) */
+export function useDebounced<T>(value: T, ms = 200): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
+}
+
 type Box = { x: number; y: number; w: number; h: number };
 
 /**

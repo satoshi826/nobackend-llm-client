@@ -6,7 +6,7 @@ import { getImage } from '../../../lib/db/images';
 import { sidebarOpen } from '../../../state/ui';
 import { confirmAndDelete, deleteImages, ImageThumb, lightbox } from '../../images';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { Button, EmptyState, Icon, IconButton, Segmented, Select, Spinner, cx } from '../../../components/ui';
+import { Button, EmptyState, Icon, IconButton, Segmented, Select, Spinner, cx, useDebounced } from '../../../components/ui';
 import { filterItems, previewText, sortItems, type FilerItem } from '../filer';
 import {
   deleteFiles,
@@ -60,7 +60,9 @@ export function Filer() {
   const prefs = filerPrefs.value;
   const view = filerView.value;
   const conv = filerConversation.value;
-  const items = useMemo(() => (all ? sortItems(filterItems(all, { view, conversationId: conv, query: filerQuery.value }), prefs.sort) : null), [all, view, conv, filerQuery.value, prefs.sort]);
+  // Searching reads file contents: wait until typing pauses
+  const query = useDebounced(filerQuery.value, 150);
+  const items = useMemo(() => (all ? sortItems(filterItems(all, { view, conversationId: conv, query }), prefs.sort) : null), [all, view, conv, query, prefs.sort]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const lastIndex = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);

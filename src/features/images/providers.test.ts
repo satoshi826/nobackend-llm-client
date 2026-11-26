@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { mapOpenRouterImageModel, openrouterImageProvider, priceFromEndpoints } from './providers/openrouter';
 import { buildGeminiImageBody, geminiImageProvider, mapGeminiImageModel } from './providers/gemini';
-import { buildOpenAIImageBody, estimateOpenAICost, mapOpenAIImageModel, openaiImageProvider, sizeOf } from './providers/openai';
-import { hasOption } from './providers/common';
+import { buildOpenAIImageBody, mapOpenAIImageModel, openAISize, openaiImageProvider } from './providers/openai';
+import { generationCost, hasOption, sizeOf } from './providers/common';
 import type { ImageParams } from '../../lib/db/schema';
 import type { ProviderConfig, Transport } from '../../lib/providers/types';
 
@@ -25,7 +25,8 @@ function recorder(reply: (url: string, body: any) => unknown) {
 describe('OpenRouter image provider', () => {
   it('maps models with their supported parameters', () => {
     const m = mapOpenRouterImageModel({ id: 'a/b', name: 'B', supported_parameters: { resolution: { type: 'enum', values: ['1K', '2K'] }, seed: { type: 'boolean' }, aspect_ratio: { type: 'enum', values: ['1:1', '16:9', 'auto'] } } })!;
-    expect(m.constraints).toMatchObject({ aspectRatios: ['1:1', '16:9'], resolutions: ['1K', '2K'], defaultResolution: '1K' });
+    expect(m.constraints.sizes.map((s) => s.id)).toEqual(['1:1 1K', '1:1 2K', '16:9 1K', '16:9 2K']);
+    expect(m.constraints.defaultSize).toBe('1:1 1K');
     expect(hasOption(m, 'seed')).toBe(true);
     expect(hasOption(m, 'negativePrompt')).toBe(false);
   });
@@ -48,11 +49,11 @@ describe('Gemini image provider', () => {
   it('lists only image models, with sizes on Gemini 3', () => {
     expect(mapGeminiImageModel({ name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] })).toBeNull();
     const flash = mapGeminiImageModel({ name: 'models/gemini-2.5-flash-image', displayName: 'Flash Image', supportedGenerationMethods: ['generateContent'] })!;
-    expect(flash.constraints.resolutions).toBeUndefined();
+    expect(flash.constraints.sizes.every((s) => !s.tier)).toBe(true);
     expect(flash.pricing.generation).toBe(0.039);
     const pro = mapGeminiImageModel({ name: 'models/gemini-3-pro-image-preview', supportedGenerationMethods: ['generateContent'] })!;
-    expect(pro.constraints.resolutions).toEqual(['1K', '2K', '4K']);
-    expect(geminiImageProvider.estimateCost(params({ model: pro.id, resolution: '4K', variants: 2 }), pro)).toBeCloseTo(0.48);
+    expect(pro.constraints.sizes.filter((s) => s.aspect === '1:1').map((s) => s.tier)).toEqual(['1K', '2K', '4K']);
+    expect(generationCost(params({ model: pro.id, size: '16:9 4K', variants: 2 }), pro)).toBeCloseTo(0.48);
   });
   it('asks for images only, with aspect ratio, size and seed', () => {
     expect(buildGeminiImageBody(params({ model: 'gemini-3-pro-image', aspectRatio: '16:9', resolution: '2K' }), 5)).toEqual({
@@ -71,14 +72,22 @@ describe('Gemini image provider', () => {
 describe('OpenAI image provider', () => {
   it('maps GPT Image and DALL·E 3 and ignores other models', () => {
     expect(mapOpenAIImageModel({ id: 'gpt-4o' })).toBeNull();
-    expect(mapOpenAIImageModel({ id: 'gpt-image-1' })?.constraints).toMatchObject({ aspectRatios: ['1:1', '3:2', '2:3'], resolutions: ['low', 'medium', 'high'], resolutionLabel: 'quality' });
-    expect(mapOpenAIImageModel({ id: 'dall-e-3' })?.constraints.resolutions).toEqual(['standard', 'hd']);
+    const gpt = mapOpenAIImageModel({ id: 'gpt-image-1' })!;
+    expect([...new Set(gpt.constraints.sizes.map((s) => s.aspect))]).toEqual(['1:1', '3:2', '2:3']);
+    expect(gpt.constraints).toMatchObject({ defaultSize: '1:1 medium', tierLabel: 'quality' });
+    expect(
+      mapOpenAIImageModel({ id: 'dall-e-3' })
+        ?.constraints.sizes.filter((s) => s.aspect === '1:1')
+        .map((s) => s.tier)
+    ).toEqual(['standard', 'hd']);
   });
   it('maps aspect ratios to sizes and estimates from the price table', () => {
-    expect(sizeOf(params({ model: 'gpt-image-1', aspectRatio: '3:2' }))).toBe('1536x1024');
-    expect(sizeOf(params({ model: 'dall-e-3', aspectRatio: '9:16' }))).toBe('1024x1792');
-    expect(estimateOpenAICost(params({ model: 'gpt-image-1', resolution: 'high', variants: 2 }), undefined)).toBeCloseTo(0.334);
-    expect(estimateOpenAICost(params({ model: 'gpt-image-9' }), undefined)).toBeUndefined();
+    const gpt = mapOpenAIImageModel({ id: 'gpt-image-1' })!;
+    expect(openAISize(params({ model: 'gpt-image-1', size: '3:2 high' }), gpt)).toEqual({ size: '1536x1024', quality: 'high' });
+    expect(openAISize(params({ model: 'dall-e-3', aspectRatio: '9:16' })).size).toBe('1024x1792');
+    expect(generationCost(params({ model: 'gpt-image-1', size: '1:1 high', variants: 2 }), gpt)).toBeCloseTo(0.334);
+    expect(generationCost(params({ model: 'gpt-image-1', size: '3:2 high' }), gpt)).toBeCloseTo(0.25);
+    expect(generationCost(params({ model: 'gpt-image-9' }), mapOpenAIImageModel({ id: 'gpt-image-9' })!)).toBeUndefined();
   });
   it('builds the body (n for GPT Image, b64_json for DALL·E 3)', async () => {
     expect(buildOpenAIImageBody(params({ model: 'gpt-image-1', resolution: 'low', format: 'webp' }), 2)).toEqual({ model: 'gpt-image-1', prompt: '猫', n: 2, size: '1024x1024', quality: 'low', output_format: 'webp' });
@@ -88,5 +97,16 @@ describe('OpenAI image provider', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe('https://oa/v1/images/generations');
     expect(r.images).toHaveLength(2);
+  });
+});
+
+describe('image sizes', () => {
+  const m = mapOpenAIImageModel({ id: 'gpt-image-1' })!;
+  it('finds a size by id, by aspect ratio and tier, by aspect in the default tier, else the default', () => {
+    expect(sizeOf(m, { size: '3:2 low' })?.id).toBe('3:2 low');
+    expect(sizeOf(m, { aspectRatio: '2:3', resolution: 'high' })?.id).toBe('2:3 high');
+    // A tier of another model (Venice's "2K") falls back to this model's default tier
+    expect(sizeOf(m, { size: '2:3 2K', aspectRatio: '2:3', resolution: '2K' })?.id).toBe('2:3 medium');
+    expect(sizeOf(m, { aspectRatio: '16:9' })?.id).toBe('1:1 medium');
   });
 });

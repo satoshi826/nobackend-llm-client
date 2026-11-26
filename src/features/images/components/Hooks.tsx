@@ -73,8 +73,8 @@ export function UserImageRequest({ m }: { m: MessageRecord }) {
       <Icon name="image" class="size-3.5" />
       {r.op === 'generate'
         ? r.variants > 1
-          ? t('request.generateMany', { aspect: r.aspectRatio ?? '', n: r.variants })
-          : t('request.generate', { aspect: r.aspectRatio ?? '' })
+          ? t('request.generateMany', { size: r.aspectRatio ?? r.size ?? '', n: r.variants })
+          : t('request.generate', { size: r.aspectRatio ?? r.size ?? '' })
         : r.op === 'upscale'
           ? t('request.upscale')
           : r.op === 'edit'
@@ -99,6 +99,8 @@ interface ToolRequest {
   negativePrompt?: string;
   aspectRatio?: string;
   resolution?: string;
+  /** The size id, shown for sizes without an aspect ratio */
+  size?: string;
   costUsd?: number;
   costEstimated?: boolean;
 }
@@ -121,6 +123,7 @@ function ToolRequestDetails({ p, ran }: { p: ToolPart; ran?: ToolRequest & { mod
       negativePrompt: params.negativePrompt,
       aspectRatio: params.aspectRatio,
       resolution: params.resolution,
+      size: params.size,
       costUsd: estimateCost(params),
       costEstimated: true
     };
@@ -139,7 +142,7 @@ function ToolRequestDetails({ p, ran }: { p: ToolPart; ran?: ToolRequest & { mod
         {row(t('detail.model'), `${req.model}（${req.provider}）`)}
         {row(t('detail.prompt'), req.prompt, true)}
         {row(t('detail.negative'), req.negativePrompt, true)}
-        {row(t('detail.size'), [req.aspectRatio, req.resolution].filter(Boolean).join(' / '))}
+        {row(t('detail.size'), [req.aspectRatio, req.resolution].filter(Boolean).join(' / ') || req.size)}
         {row(t('detail.cost'), cost)}
       </dl>
       {!ran && <p class="mt-2 text-faint">{t('detail.planned')}</p>}

@@ -39,8 +39,8 @@ export interface ImageProvider {
   upscale?(source: Blob, scale: 2 | 4, ctx: ImageCallContext): Promise<Blob>;
   edit?(source: Blob, p: ImageParams, ctx: ImageCallContext): Promise<Blob>;
   removeBackground?(source: Blob, ctx: ImageCallContext): Promise<Blob>;
-  /** Estimated price in USD; undefined when unknown */
-  estimateCost(p: ImageParams, model: ImageModelInfo | undefined): number | undefined;
+  /** Estimated USD of an edit (upscale, edit, background removal); undefined when unknown. Generating is priced from the model's sizes */
+  editCost?(p: ImageParams): number | undefined;
   /** Who sees the prompt, for the header badge and the tool approval card */
   privacyLabel(model: ImageModelInfo | undefined): { tone: 'green' | 'amber' | 'zinc'; label: string; title: string };
 }

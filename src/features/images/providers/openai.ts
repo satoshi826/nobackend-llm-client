@@ -7,7 +7,7 @@ import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { ImageApiError, jsonPost, perImage, sendImageRequest, type ImageModelInfo } from './common';
+import { ImageApiError, jsonPost, perImage, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const AS_OF = '2026-11';
@@ -27,6 +27,8 @@ export function mapOpenAIImageModel(raw: any, providerId = 'openai'): ImageModel
   if (!isOpenAIImageModel(id)) return null;
   const dalle = isDalle(id);
   const qualities = dalle ? ['standard', 'hd'] : ['low', 'medium', 'high'];
+  const sizes = dalle ? DALLE_SIZES : GPT_SIZES;
+  const row = PRICES.find((p) => p.match.test(id));
   return {
     providerId,
     id,
@@ -34,39 +36,33 @@ export function mapOpenAIImageModel(raw: any, providerId = 'openai'): ImageModel
     privacy: 'unknown',
     traits: [],
     constraints: {
-      aspectRatios: Object.keys(dalle ? DALLE_SIZES : GPT_SIZES),
-      defaultAspectRatio: '1:1',
-      resolutions: qualities,
-      defaultResolution: dalle ? 'standard' : 'medium',
-      resolutionLabel: 'quality'
+      // Square and other sizes cost differently, per quality
+      sizes: sizeGrid(Object.keys(sizes), qualities, (aspect, quality) => (row ? (sizes[aspect] === '1024x1024' ? row.square : row.wide)[quality!] : undefined)),
+      defaultSize: dalle ? '1:1 standard' : '1:1 medium',
+      tierLabel: 'quality'
     },
-    pricing: PRICES.some((p) => p.match.test(id)) ? { source: 'table', asOf: AS_OF } : {},
+    pricing: row ? { source: 'table', asOf: AS_OF } : {},
     options: { seed: false, negativePrompt: false, styles: false, enhance: false }
   };
 }
 
-export function sizeOf(p: ImageParams): string {
+/** The pixel size and quality OpenAI takes for a request */
+export function openAISize(p: ImageParams, m?: ImageModelInfo): { size: string; quality?: string } {
+  const s = sizeOf(m, p);
   const table = isDalle(p.model) ? DALLE_SIZES : GPT_SIZES;
-  return table[p.aspectRatio ?? '1:1'] ?? '1024x1024';
+  return { size: table[s?.aspect ?? p.aspectRatio ?? '1:1'] ?? '1024x1024', quality: s?.tier ?? p.resolution };
 }
 
-export function estimateOpenAICost(p: ImageParams, m: ImageModelInfo | undefined): number | undefined {
-  if (p.op !== 'generate') return undefined;
-  const row = PRICES.find((x) => x.match.test(p.model));
-  const quality = p.resolution ?? m?.constraints.defaultResolution ?? 'medium';
-  const each = row ? (sizeOf(p) === '1024x1024' ? row.square : row.wide)[quality] : undefined;
-  return each === undefined ? undefined : each * Math.max(1, p.variants);
-}
-
-export function buildOpenAIImageBody(p: ImageParams, n: number): Record<string, unknown> {
-  const body: Record<string, unknown> = { model: p.model, prompt: p.prompt, n, size: sizeOf(p) };
-  if (p.resolution) body.quality = p.resolution;
+export function buildOpenAIImageBody(p: ImageParams, n: number, m?: ImageModelInfo): Record<string, unknown> {
+  const { size, quality } = openAISize(p, m);
+  const body: Record<string, unknown> = { model: p.model, prompt: p.prompt, n, size };
+  if (quality) body.quality = quality;
   if (isDalle(p.model)) body.response_format = 'b64_json';
   else body.output_format = p.format;
   return body;
 }
 
-async function generate(p: ImageParams, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
+async function generate(p: ImageParams, m: ImageModelInfo | undefined, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
   const url = joinUrl(cfg.baseUrl, 'images/generations');
   const mime = isDalle(p.model) ? 'image/png' : `image/${p.format === 'jpeg' ? 'jpeg' : p.format}`;
   const read = async (res: Response) => {
@@ -75,8 +71,8 @@ async function generate(p: ImageParams, cfg: ProviderConfig, transport: Transpor
   };
   // DALL·E 3 makes one image per request; GPT Image takes n
   const images = isDalle(p.model)
-    ? (await perImage(p.variants, async () => read(await sendImageRequest(transport, url, jsonPost(buildOpenAIImageBody(p, 1), signal), auth)))).flat()
-    : await read(await sendImageRequest(transport, url, jsonPost(buildOpenAIImageBody(p, Math.min(4, Math.max(1, p.variants))), signal), auth));
+    ? (await perImage(p.variants, async () => read(await sendImageRequest(transport, url, jsonPost(buildOpenAIImageBody(p, 1, m), signal), auth)))).flat()
+    : await read(await sendImageRequest(transport, url, jsonPost(buildOpenAIImageBody(p, Math.min(4, Math.max(1, p.variants)), m), signal), auth));
   if (!images.length) throw new ImageApiError({ kind: 'bad-request', message: t('err.noImage') });
   return { images };
 }
@@ -91,7 +87,6 @@ export const openaiImageProvider: ImageProvider = {
     const data = await res.json();
     return (Array.isArray(data?.data) ? data.data : []).map((r: unknown) => mapOpenAIImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
   },
-  generate: (p, _m, c) => generate(p, c.config, c.transport, c.auth, c.signal),
-  estimateCost: estimateOpenAICost,
+  generate: (p, m, c) => generate(p, m, c.config, c.transport, c.auth, c.signal),
   privacyLabel: () => ({ tone: 'zinc', label: 'OpenAI', title: t('privacy.openaiTitle') })
 };

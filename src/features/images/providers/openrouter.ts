@@ -6,7 +6,7 @@ import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { DEFAULT_ASPECTS, ImageApiError, jsonPost, perImage, sendImageRequest, type ImageModelInfo } from './common';
+import { DEFAULT_ASPECTS, ImageApiError, jsonPost, perImage, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const enumOf = (sp: any, k: string): string[] | undefined => (sp?.[k]?.type === 'enum' && Array.isArray(sp[k].values) ? sp[k].values.map(String).filter((v: string) => v !== 'auto') : undefined);
@@ -23,10 +23,9 @@ export function mapOpenRouterImageModel(raw: any, providerId = 'openrouter'): Im
     privacy: 'unknown',
     traits: [],
     constraints: {
-      aspectRatios: aspects?.length ? aspects : DEFAULT_ASPECTS,
-      resolutions: resolutions?.length ? resolutions : undefined,
-      defaultResolution: resolutions?.includes('1K') ? '1K' : resolutions?.[0],
-      resolutionLabel: 'resolution'
+      sizes: sizeGrid(aspects?.length ? aspects : DEFAULT_ASPECTS, resolutions ?? []),
+      defaultSize: [aspects?.includes('1:1') || !aspects?.length ? '1:1' : aspects[0], resolutions?.includes('1K') ? '1K' : resolutions?.[0]].filter(Boolean).join(' '),
+      tierLabel: 'resolution'
     },
     pricing: {},
     options: { seed: sp.seed?.type === 'boolean' || !!sp.seed, negativePrompt: false, styles: false, enhance: false }
@@ -41,10 +40,13 @@ export function priceFromEndpoints(json: any): number | undefined {
   return typeof line?.cost_usd === 'number' ? line.cost_usd : undefined;
 }
 
-async function generate(p: ImageParams, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
+async function generate(p: ImageParams, m: ImageModelInfo | undefined, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
   const body: Record<string, unknown> = { model: p.model, prompt: p.prompt, response_format: 'b64_json', output_format: p.format };
-  if (p.aspectRatio) body.aspect_ratio = p.aspectRatio;
-  if (p.resolution) body.resolution = p.resolution;
+  const s = sizeOf(m, p);
+  const aspect = s?.aspect ?? p.aspectRatio;
+  const tier = s?.tier ?? p.resolution;
+  if (aspect) body.aspect_ratio = aspect;
+  if (tier) body.resolution = tier;
   if (p.seed !== undefined) body.seed = p.seed;
   // One image per request (the API has no image count); variants run in parallel
   const results = await perImage(p.variants, async (i) => {
@@ -74,7 +76,6 @@ export const openrouterImageProvider: ImageProvider = {
     const price = priceFromEndpoints(await res.json());
     return price === undefined ? m : { ...m, pricing: { generation: price, source: 'api' } };
   },
-  generate: (p, _m, c) => generate(p, c.config, c.transport, c.auth, c.signal),
-  estimateCost: (p, m) => (p.op === 'generate' && m?.pricing.generation !== undefined ? m.pricing.generation * Math.max(1, p.variants) : undefined),
+  generate: (p, m, c) => generate(p, m, c.config, c.transport, c.auth, c.signal),
   privacyLabel: () => ({ tone: 'zinc', label: 'OpenRouter', title: t('privacy.openrouterTitle') })
 };

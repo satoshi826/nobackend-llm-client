@@ -6,7 +6,7 @@ import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { ImageApiError, jsonPost, perImage, sendImageRequest, type ImageModelInfo } from './common';
+import { ImageApiError, jsonPost, perImage, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const ASPECTS = ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '16:9', '9:16', '21:9'];
@@ -33,28 +33,31 @@ export function mapGeminiImageModel(raw: any, providerId = 'gemini'): ImageModel
     privacy: 'unknown',
     traits: [],
     constraints: {
-      aspectRatios: ASPECTS,
-      defaultAspectRatio: '1:1',
-      ...(sized(id) ? { resolutions: ['1K', '2K', '4K'], defaultResolution: '1K', resolutionLabel: 'resolution' as const } : {})
+      sizes: sizeGrid(ASPECTS, sized(id) ? ['1K', '2K', '4K'] : [], (_a, tier) => (tier ? price?.resolutions?.[tier] : undefined)),
+      defaultSize: sized(id) ? '1:1 1K' : '1:1',
+      tierLabel: 'resolution'
     },
-    pricing: price ? { generation: price.generation, resolutions: price.resolutions, source: 'table', asOf: AS_OF } : {},
+    pricing: price ? { generation: price.generation, source: 'table', asOf: AS_OF } : {},
     options: { seed: true, negativePrompt: false, styles: false, enhance: false }
   };
 }
 
-export function buildGeminiImageBody(p: ImageParams, seed?: number): Record<string, unknown> {
+export function buildGeminiImageBody(p: ImageParams, seed?: number, m?: ImageModelInfo): Record<string, unknown> {
   const imageConfig: Record<string, unknown> = {};
-  if (p.aspectRatio) imageConfig.aspectRatio = p.aspectRatio;
-  if (p.resolution && sized(p.model)) imageConfig.imageSize = p.resolution;
+  const s = sizeOf(m, p);
+  const aspect = s?.aspect ?? p.aspectRatio;
+  const tier = s?.tier ?? p.resolution;
+  if (aspect) imageConfig.aspectRatio = aspect;
+  if (tier && sized(p.model)) imageConfig.imageSize = tier;
   return {
     contents: [{ role: 'user', parts: [{ text: p.prompt }] }],
     generationConfig: { responseModalities: ['IMAGE'], ...(Object.keys(imageConfig).length ? { imageConfig } : {}), ...(seed !== undefined ? { seed } : {}) }
   };
 }
 
-async function generate(p: ImageParams, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
+async function generate(p: ImageParams, m: ImageModelInfo | undefined, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
   const results = await perImage(p.variants, async (i) => {
-    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, `models/${encodeURIComponent(p.model)}:generateContent`), jsonPost(buildGeminiImageBody(p, p.seed !== undefined ? p.seed + i : undefined), signal), auth);
+    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, `models/${encodeURIComponent(p.model)}:generateContent`), jsonPost(buildGeminiImageBody(p, p.seed !== undefined ? p.seed + i : undefined, m), signal), auth);
     const data = await res.json();
     const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
     // Thought images (interim drafts) are skipped
@@ -75,12 +78,6 @@ export const geminiImageProvider: ImageProvider = {
     const data = await res.json();
     return (Array.isArray(data?.models) ? data.models : []).map((r: unknown) => mapGeminiImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
   },
-  generate: (p, _m, c) => generate(p, c.config, c.transport, c.auth, c.signal),
-  estimateCost(p, m) {
-    if (p.op !== 'generate' || !m) return undefined;
-    const res = p.resolution ?? m.constraints.defaultResolution;
-    const each = (res ? m.pricing.resolutions?.[res] : undefined) ?? m.pricing.generation;
-    return each === undefined ? undefined : each * Math.max(1, p.variants);
-  },
+  generate: (p, m, c) => generate(p, m, c.config, c.transport, c.auth, c.signal),
   privacyLabel: () => ({ tone: 'zinc', label: 'Gemini', title: t('privacy.geminiTitle') })
 };

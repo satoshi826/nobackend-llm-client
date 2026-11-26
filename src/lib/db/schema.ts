@@ -34,6 +34,9 @@ export interface ImageParams {
   model: string;
   prompt: string;
   negativePrompt?: string;
+  /** The model's size (ImageSize.id); requests saved before it have only the aspect ratio and resolution */
+  size?: string;
+  /** The size's aspect ratio and tier, kept with it for the providers that send them and for display */
   aspectRatio?: string;
   resolution?: string;
   variants: number;

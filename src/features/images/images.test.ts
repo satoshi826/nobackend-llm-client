@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildGenerateBody, estimateImageCost, generateImages, ImageApiError, mapImageModel, sizeFor } from './providers/venice';
+import { buildGenerateBody, generateImages, ImageApiError, mapImageModel, sizeFor } from './providers/venice';
 import { getImage, imageUsage, listImages, putImage, resealImages, exportImages, importImages } from '../../lib/db/images';
 import { setDataKey } from '../../lib/db/sealed';
 import { generateDataKey } from '../../lib/crypto/data';
@@ -11,6 +11,8 @@ import { imageNote } from './transform';
 
 registerMessageTransform(imageNote);
 import { validate } from '../../lib/db/export';
+import { generationCost } from './providers/common';
+import { veniceEditCost } from './providers/venice';
 import { makeImageTool } from './tool';
 import type { Transport } from '../../lib/providers/types';
 
@@ -29,8 +31,15 @@ afterEach(async () => {
 describe('Venice image API', () => {
   it('maps image models', () => {
     expect(widthModel).toMatchObject({ id: 'flux', name: 'Flux', privacy: 'private', traits: ['default'], pricing: { generation: 0.01 } });
-    expect(aspectModel.constraints.resolutions).toEqual(['1K', '2K']);
-    expect(aspectModel.pricing.resolutions).toEqual({ '1K': 0.04, '2K': 0.08 });
+    expect(aspectModel.constraints.sizes).toEqual([
+      { id: '1:1 1K', aspect: '1:1', tier: '1K', price: 0.04 },
+      { id: '1:1 2K', aspect: '1:1', tier: '2K', price: 0.08 },
+      { id: '16:9 1K', aspect: '16:9', tier: '1K', price: 0.04 },
+      { id: '16:9 2K', aspect: '16:9', tier: '2K', price: 0.08 }
+    ]);
+    expect(aspectModel.constraints.defaultSize).toBe('1:1 1K');
+    // Models sized by width x height get the shared aspect ratios
+    expect(widthModel.constraints.sizes.map((s) => s.id)).toEqual(['1:1', '4:3', '3:4', '16:9', '9:16']);
   });
 
   it('sends width/height or aspect ratio depending on the model', () => {
@@ -44,10 +53,12 @@ describe('Venice image API', () => {
   });
 
   it('estimates cost per image, per resolution, and for upscale/edit', () => {
-    expect(estimateImageCost(params(), widthModel)).toBeCloseTo(0.02);
-    expect(estimateImageCost(params({ model: 'qwen', variants: 1, resolution: '2K' }), aspectModel)).toBeCloseTo(0.08);
-    expect(estimateImageCost(params({ op: 'upscale', scale: 4 }), undefined)).toBe(0.08);
-    expect(estimateImageCost(params({ op: 'remove-bg' }), undefined)).toBeUndefined();
+    expect(generationCost(params(), widthModel)).toBeCloseTo(0.02);
+    expect(generationCost(params({ model: 'qwen', variants: 1, size: '16:9 2K' }), aspectModel)).toBeCloseTo(0.08);
+    // Requests saved before size ids are priced from their aspect ratio and resolution
+    expect(generationCost(params({ model: 'qwen', variants: 1, aspectRatio: '1:1', resolution: '2K' }), aspectModel)).toBeCloseTo(0.08);
+    expect(veniceEditCost(params({ op: 'upscale', scale: 4 }))).toBe(0.08);
+    expect(veniceEditCost(params({ op: 'remove-bg' }))).toBeUndefined();
   });
 
   it('parses images and headers, and turns 422 into a suggestion', async () => {

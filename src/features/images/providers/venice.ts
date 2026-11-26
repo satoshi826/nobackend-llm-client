@@ -7,9 +7,9 @@ import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { ImageApiError, aspectsOf, DEFAULT_ASPECTS, type ImageModelInfo } from './common';
+import { ImageApiError, DEFAULT_ASPECTS, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 
-export { ImageApiError, aspectsOf, DEFAULT_ASPECTS, type ImageModelInfo };
+export { ImageApiError, DEFAULT_ASPECTS, type ImageModelInfo };
 import { t } from '../messages';
 
 export function mapImageModel(raw: any, providerId = 'venice'): ImageModelInfo | null {
@@ -17,10 +17,15 @@ export function mapImageModel(raw: any, providerId = 'venice'): ImageModelInfo |
   const spec = raw.model_spec ?? {};
   const c = spec.constraints ?? {};
   const p = spec.pricing ?? {};
-  const resolutions: Record<string, number> = {};
+  const resolutionPrices: Record<string, number> = {};
   if (p.resolutions && typeof p.resolutions === 'object') {
-    for (const [k, v] of Object.entries(p.resolutions)) if (typeof (v as any)?.usd === 'number') resolutions[k] = (v as any).usd;
+    for (const [k, v] of Object.entries(p.resolutions)) if (typeof (v as any)?.usd === 'number') resolutionPrices[k] = (v as any).usd;
   }
+  // Models with aspect ratios take aspect_ratio (and a resolution); the others take width / height
+  const aspects: string[] | undefined = Array.isArray(c.aspectRatios) && c.aspectRatios.length ? c.aspectRatios.map(String) : undefined;
+  const tiers: string[] = aspects && Array.isArray(c.resolutions) ? c.resolutions.map(String) : [];
+  const defaultAspect = (typeof c.defaultAspectRatio === 'string' && c.defaultAspectRatio) || (aspects ?? DEFAULT_ASPECTS)[0];
+  const defaultTier = typeof c.defaultResolution === 'string' && tiers.includes(c.defaultResolution) ? c.defaultResolution : tiers[0];
   return {
     providerId,
     id: String(raw.id),
@@ -30,13 +35,12 @@ export function mapImageModel(raw: any, providerId = 'venice'): ImageModelInfo |
     constraints: {
       promptCharacterLimit: typeof c.promptCharacterLimit === 'number' ? c.promptCharacterLimit : undefined,
       steps: c.steps && typeof c.steps === 'object' ? { default: c.steps.default, max: c.steps.max } : undefined,
-      widthHeightDivisor: typeof c.widthHeightDivisor === 'number' ? c.widthHeightDivisor : undefined,
-      aspectRatios: Array.isArray(c.aspectRatios) ? c.aspectRatios.map(String) : undefined,
-      defaultAspectRatio: typeof c.defaultAspectRatio === 'string' ? c.defaultAspectRatio : undefined,
-      resolutions: Array.isArray(c.resolutions) ? c.resolutions.map(String) : undefined,
-      defaultResolution: typeof c.defaultResolution === 'string' ? c.defaultResolution : undefined
+      widthHeightDivisor: aspects ? undefined : typeof c.widthHeightDivisor === 'number' ? c.widthHeightDivisor : 8,
+      sizes: sizeGrid(aspects ?? DEFAULT_ASPECTS, tiers, (_a, tier) => (tier ? resolutionPrices[tier] : undefined)),
+      defaultSize: defaultTier ? `${defaultAspect} ${defaultTier}` : defaultAspect,
+      tierLabel: 'resolution'
     },
-    pricing: { generation: typeof p.generation?.usd === 'number' ? p.generation.usd : undefined, resolutions: Object.keys(resolutions).length ? resolutions : undefined, source: 'api' },
+    pricing: { generation: typeof p.generation?.usd === 'number' ? p.generation.usd : undefined, source: 'api' },
     offline: !!spec.offline,
     deprecated: !!spec.deprecation
   };
@@ -51,14 +55,11 @@ export function sizeFor(aspect: string, divisor = 8): { width: number; height: n
   return w >= h ? { width: round(long), height: round((long * h) / w) } : { width: round((long * w) / h), height: round(long) };
 }
 
-/** Estimated USD for a request (undefined when the price is unknown) */
-export function estimateImageCost(p: ImageParams, m: ImageModelInfo | undefined): number | undefined {
+/** Estimated USD of an edit (Venice's price list; background removal has none) */
+export function veniceEditCost(p: ImageParams): number | undefined {
   if (p.op === 'upscale') return p.scale === 4 ? 0.08 : 0.02;
   if (p.op === 'edit') return 0.04 + (p.enhancePrompt ? 0.04 : 0);
-  if (p.op === 'remove-bg') return undefined;
-  const res = p.resolution ?? m?.constraints.defaultResolution;
-  const each: number | undefined = (res ? m?.pricing.resolutions?.[res] : undefined) ?? m?.pricing.generation;
-  return each === undefined ? undefined : each * Math.max(1, p.variants);
+  return undefined;
 }
 
 export function buildGenerateBody(p: ImageParams, m: ImageModelInfo | undefined): Record<string, unknown> {
@@ -75,12 +76,12 @@ export function buildGenerateBody(p: ImageParams, m: ImageModelInfo | undefined)
   if (p.style) body.style_preset = p.style;
   if (p.seed !== undefined) body.seed = p.seed;
   if (p.enhancePrompt) body.enhance_prompt = true;
-  const aspect = p.aspectRatio ?? m?.constraints.defaultAspectRatio ?? '1:1';
-  if (m?.constraints.aspectRatios?.length) {
+  const size = sizeOf(m, p);
+  const aspect = size?.aspect ?? p.aspectRatio ?? '1:1';
+  if (m && m.constraints.widthHeightDivisor === undefined) {
     // Models with aspect ratios (some reject width/height)
     body.aspect_ratio = aspect;
-    const res = p.resolution ?? m.constraints.defaultResolution;
-    if (res) body.resolution = res;
+    if (size?.tier) body.resolution = size.tier;
   } else {
     Object.assign(body, sizeFor(aspect, m?.constraints.widthHeightDivisor ?? 8));
   }
@@ -211,7 +212,7 @@ export const veniceImageProvider: ImageProvider = {
   upscale: (source, scale, c) => upscaleImage(c.config, c.auth, c.transport, source, scale, c.signal),
   edit: (source, p, c) => editImage(c.config, c.auth, c.transport, source, p, c.signal),
   removeBackground: (source, c) => removeBackground(c.config, c.auth, c.transport, source, c.signal),
-  estimateCost: estimateImageCost,
+  editCost: veniceEditCost,
   privacyLabel: (m) =>
     m?.privacy === 'private'
       ? { tone: 'green', label: 'private', title: t('privacy.privateTitle') }

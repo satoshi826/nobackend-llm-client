@@ -3,14 +3,13 @@
 // Images come back as base64 (a URL answer could not be fetched: the app reaches only fixed hosts), and their type
 // is read from the bytes, since the APIs do not say it.
 // - NanoGPT: its own image model list (no key), each model with its own size names and a price per size; the sizes
-//   are offered as they are, in the aspect menu, and sent as `size`
+//   are offered as they are (no aspect ratios) and sent as `size`
 // - DeepInfra: image models in the chat model list (tag image-gen), a price per image; sizes as width x height
 // - Together: image models in its keyed model list (type image); no prices in the list
-import type { ImageParams } from '../../../lib/db/schema';
 import type { AuthRef, ProviderConfig, Transport } from '../../../lib/providers/types';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import type { ImageProvider } from './types';
-import { DEFAULT_ASPECTS, ImageApiError, jsonPost, sendImageRequest, type ImageModelInfo } from './common';
+import { DEFAULT_ASPECTS, ImageApiError, imageCount, jsonPost, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const num = (x: unknown): number | undefined => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
@@ -44,27 +43,24 @@ async function generateImages(cfg: ProviderConfig, transport: Transport, auth: A
   return { images, ...(cost !== undefined ? { costUsd: cost } : {}) };
 }
 
-const variants = (p: ImageParams, max = 4) => Math.min(max, Math.max(1, p.variants));
-
 // ---- NanoGPT ----
 export function mapNanoImageModel(raw: any, providerId = 'nanogpt'): ImageModelInfo | null {
   const id = typeof raw?.id === 'string' ? raw.id : '';
   const inputs: string[] = raw?.architecture?.input_modalities ?? [];
   // Text-to-image only (not background removal or other image-in tools)
   if (!id || !inputs.includes('text') || raw?.capabilities?.image_generation === false) return null;
-  const sizes: string[] = Array.isArray(raw?.supported_parameters?.resolutions) ? raw.supported_parameters.resolutions.filter((s: unknown) => typeof s === 'string') : [];
-  const prices: Record<string, number> = {};
-  for (const [k, v] of Object.entries(raw?.pricing?.per_image ?? {})) if (typeof v === 'number') prices[k] = v;
+  const names: string[] = Array.isArray(raw?.supported_parameters?.resolutions) ? raw.supported_parameters.resolutions.filter((s: unknown) => typeof s === 'string') : [];
+  const prices = raw?.pricing?.per_image ?? {};
   return {
     providerId,
     id,
     name: typeof raw.name === 'string' ? raw.name : id,
     privacy: 'unknown',
-    // single: the model makes one image per request
-    traits: num(raw?.supported_parameters?.max_images) === 1 ? ['single'] : [],
-    // The provider's own size names (e.g. square_hd, landscape_16_9, 2048x2048) stand in for aspect ratios
-    constraints: { aspectRatios: sizes.length ? sizes : undefined, defaultAspectRatio: sizes[0], promptCharacterLimit: num(raw?.supported_parameters?.max_prompt_characters) },
-    pricing: Object.keys(prices).length ? { resolutions: prices, source: 'api' } : {},
+    traits: [],
+    // The provider's own size names (e.g. square_hd, landscape_16_9, 2048x2048), each with its price
+    constraints: { sizes: names.map((n) => ({ id: n, price: num(prices[n]) })), defaultSize: names[0], promptCharacterLimit: num(raw?.supported_parameters?.max_prompt_characters) },
+    pricing: { source: 'api' },
+    maxImages: num(raw?.supported_parameters?.max_images),
     options: { seed: false, negativePrompt: false, styles: false, enhance: false }
   };
 }
@@ -78,12 +74,9 @@ export const nanogptImageProvider: ImageProvider = {
     const data = await res.json();
     return (Array.isArray(data?.data) ? data.data : []).map((r: unknown) => mapNanoImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
   },
-  generate: (p, m, c) =>
-    generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: variants(p, m?.traits.includes('single') ? 1 : 4), ...(p.aspectRatio ? { size: p.aspectRatio } : {}), response_format: 'b64_json' }, c.signal),
-  estimateCost(p, m) {
-    if (p.op !== 'generate') return undefined;
-    const each = m?.pricing.resolutions?.[p.aspectRatio ?? m.constraints.defaultAspectRatio ?? ''];
-    return each === undefined ? undefined : each * variants(p, m?.traits.includes('single') ? 1 : 4);
+  generate(p, m, c) {
+    const size = sizeOf(m, p)?.id;
+    return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: imageCount(p, m), ...(size ? { size } : {}), response_format: 'b64_json' }, c.signal);
   },
   privacyLabel: () => ({ tone: 'zinc', label: 'NanoGPT', title: t('privacy.nanogptTitle') })
 };
@@ -103,7 +96,7 @@ export function mapDeepInfraImageModel(raw: any, providerId = 'deepinfra'): Imag
     name: id,
     privacy: 'unknown',
     traits: [],
-    constraints: { aspectRatios: DEFAULT_ASPECTS, defaultAspectRatio: '1:1' },
+    constraints: { sizes: sizeGrid(DEFAULT_ASPECTS), defaultSize: '1:1' },
     pricing: each !== undefined ? { generation: each, source: 'api' } : {},
     options: { seed: false, negativePrompt: false, styles: false, enhance: false }
   };
@@ -118,11 +111,10 @@ export const deepinfraImageProvider: ImageProvider = {
     const data = await res.json();
     return (Array.isArray(data?.data) ? data.data : []).map((r: unknown) => mapDeepInfraImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
   },
-  generate(p, _m, c) {
-    const [w, h] = sizeFor(p.aspectRatio);
-    return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: variants(p), size: `${w}x${h}`, response_format: 'b64_json' }, c.signal);
+  generate(p, m, c) {
+    const [w, h] = sizeFor(sizeOf(m, p)?.aspect ?? p.aspectRatio);
+    return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: imageCount(p, m), size: `${w}x${h}`, response_format: 'b64_json' }, c.signal);
   },
-  estimateCost: (p, m) => (p.op === 'generate' && m?.pricing.generation !== undefined ? m.pricing.generation * variants(p) : undefined),
   privacyLabel: () => ({ tone: 'zinc', label: 'DeepInfra', title: t('privacy.deepinfraTitle') })
 };
 
@@ -136,7 +128,7 @@ export function mapTogetherImageModel(raw: any, providerId = 'together'): ImageM
     name: typeof raw.display_name === 'string' ? raw.display_name : id,
     privacy: 'unknown',
     traits: [],
-    constraints: { aspectRatios: DEFAULT_ASPECTS, defaultAspectRatio: '1:1' },
+    constraints: { sizes: sizeGrid(DEFAULT_ASPECTS), defaultSize: '1:1' },
     pricing: {},
     options: { seed: false, negativePrompt: false, styles: false, enhance: false }
   };
@@ -153,10 +145,9 @@ export const togetherImageProvider: ImageProvider = {
     const list: unknown[] = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
     return list.map((r) => mapTogetherImageModel(r, cfg.id)).filter((m): m is ImageModelInfo => !!m);
   },
-  generate(p, _m, c) {
-    const [width, height] = sizeFor(p.aspectRatio);
-    return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: variants(p), width, height, response_format: 'base64' }, c.signal);
+  generate(p, m, c) {
+    const [width, height] = sizeFor(sizeOf(m, p)?.aspect ?? p.aspectRatio);
+    return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: imageCount(p, m), width, height, response_format: 'base64' }, c.signal);
   },
-  estimateCost: () => undefined,
   privacyLabel: () => ({ tone: 'zinc', label: 'Together', title: t('privacy.togetherTitle') })
 };

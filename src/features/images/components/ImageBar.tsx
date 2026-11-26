@@ -1,6 +1,6 @@
 // The option bar shown above the input box in image mode
 import { useEffect, useState } from 'preact/hooks';
-import { aspectsOf, hasOption } from '../providers/common';
+import { hasOption, sizeOf } from '../providers/common';
 import { ModelOptions } from './ModelOptions';
 import { openSettings } from '../../../state/ui';
 import { Button, Chevron, Collapse, Select, Spinner, TextField, Checkbox, Icon } from '../../../components/ui';
@@ -60,7 +60,16 @@ export function ImageBar() {
         )}
       </div>
     );
-  const aspects = aspectsOf(m);
+  // Menus from the model's sizes: aspect ratios, and the tiers of the chosen aspect when it has several;
+  // sizes without an aspect (named by the provider) get one size menu
+  const sizes = m?.constraints.sizes ?? [];
+  const size = sizeOf(m, d);
+  const aspects = [...new Set(sizes.flatMap((s) => (s.aspect ? [s.aspect] : [])))];
+  const tiers = sizes.filter((s) => s.aspect && s.aspect === size?.aspect);
+  const named = sizes.filter((s) => !s.aspect);
+  const tierLabel = m?.constraints.tierLabel === 'quality' ? t('bar.quality') : t('bar.resolution');
+  const chooseAspect = (aspect: string) => setImageDefaults({ aspectRatio: aspect, size: sizeOf(m, { aspectRatio: aspect, resolution: size?.tier })?.id ?? '' });
+  const counts = [1, 2, 3, 4].slice(0, m?.maxImages ?? 4);
   const cost = estimateCost(paramsFromBar(''));
   return (
     <div class="space-y-1.5 px-3 pt-2.5 text-xs" role="group" aria-label={t('bar.group')}>
@@ -78,29 +87,42 @@ export function ImageBar() {
         >
           <ModelOptions list={list} defaultRef={defaultImageModel.value ? modelRef(defaultImageModel.value) : undefined} />
         </Select>
-        <Select compact aria-label={t('bar.aspect')} value={aspects.includes(d.aspectRatio) ? d.aspectRatio : (m?.constraints.defaultAspectRatio ?? aspects[0])} onChange={(e) => void setImageDefaults({ aspectRatio: (e.target as HTMLSelectElement).value })}>
-          {aspects.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </Select>
-        {!!m?.constraints.resolutions?.length && (
-          <Select compact aria-label={m.constraints.resolutionLabel === 'quality' ? t('bar.quality') : t('bar.resolution')} title={m.constraints.resolutionLabel === 'quality' ? t('bar.quality') : t('bar.resolution')} value={d.resolution || m.constraints.defaultResolution || m.constraints.resolutions[0]} onChange={(e) => void setImageDefaults({ resolution: (e.target as HTMLSelectElement).value })}>
-            {m.constraints.resolutions.map((r) => (
-              <option key={r} value={r}>
-                {r}
+        {aspects.length > 0 && (
+          <Select compact aria-label={t('bar.aspect')} value={size?.aspect ?? ''} onChange={(e) => void chooseAspect((e.target as HTMLSelectElement).value)}>
+            {aspects.map((a) => (
+              <option key={a} value={a}>
+                {a}
               </option>
             ))}
           </Select>
         )}
-        <Select compact aria-label={t('bar.count')} value={String(d.variants)} onChange={(e) => void setImageDefaults({ variants: Number((e.target as HTMLSelectElement).value) })}>
-          {[1, 2, 3, 4].map((n) => (
-            <option key={n} value={n}>
-              {imageCount(n)}
-            </option>
-          ))}
-        </Select>
+        {tiers.length > 1 && (
+          <Select compact aria-label={tierLabel} title={tierLabel} value={size?.id ?? ''} onChange={(e) => void setImageDefaults({ size: (e.target as HTMLSelectElement).value })}>
+            {tiers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.tier}
+              </option>
+            ))}
+          </Select>
+        )}
+        {named.length > 0 && (
+          <Select compact aria-label={t('bar.size')} title={t('bar.size')} class="max-w-[10rem]" value={size?.id ?? ''} onChange={(e) => void setImageDefaults({ size: (e.target as HTMLSelectElement).value })}>
+            {named.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.id}
+              </option>
+            ))}
+          </Select>
+        )}
+        {counts.length > 1 && (
+          <Select compact aria-label={t('bar.count')} value={String(Math.min(d.variants, counts.length))} onChange={(e) => void setImageDefaults({ variants: Number((e.target as HTMLSelectElement).value) })}>
+            {counts.map((n) => (
+              <option key={n} value={n}>
+                {imageCount(n)}
+              </option>
+            ))}
+          </Select>
+        )}
         {hasOption(m, 'styles') && imageStyles.value.length > 0 && (
           <Select compact aria-label={t('bar.style')} class="max-w-[9rem]" value={d.style} onChange={(e) => void setImageDefaults({ style: (e.target as HTMLSelectElement).value })}>
             <option value="">{t('bar.noStyle')}</option>

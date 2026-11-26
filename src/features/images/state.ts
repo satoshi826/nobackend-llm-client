@@ -1,6 +1,6 @@
 // Image generation: image mode in the input box, jobs (generate / upscale / edit / background removal),
 // regeneration, the image viewer's state, and the generate_image tool for chat models.
-// Providers are reached only through the ImageProvider interface (Venice is the only one for now).
+// Providers are reached only through the ImageProvider interface.
 import { computed, effect, signal } from '@preact/signals';
 import * as repo from '../../lib/db/repo';
 import type { Conversation, ImageParams, ImageResult, MessageRecord } from '../../lib/db/schema';
@@ -23,7 +23,7 @@ import { veniceImageProvider } from './providers/venice';
 import { openrouterImageProvider } from './providers/openrouter';
 import { geminiImageProvider } from './providers/gemini';
 import { openaiImageProvider } from './providers/openai';
-import { ImageApiError, hasOption, type ImageModelInfo } from './providers/common';
+import { ImageApiError, generationCost, hasOption, sizeOf, type ImageModelInfo } from './providers/common';
 import { deepinfraImageProvider, nanogptImageProvider, togetherImageProvider } from './providers/hosts';
 import { imageProviderList, imageProviderOf, registerImageProvider, type ImageCallContext, type ImageProvider } from './providers/types';
 import { makeImageTool, type ImageToolInput } from './tool';
@@ -42,8 +42,10 @@ export interface ImageDefaults {
   /** The default image model (Settings → 機能 → 画像): used by the generate_image tool and image mode */
   providerId: string;
   model: string;
+  /** The chosen size (ImageSize.id) of the model */
+  size: string;
+  /** The chosen aspect ratio, kept when the model changes (its size ids differ) */
   aspectRatio: string;
-  resolution: string;
   variants: number;
   style: string;
   negativePrompt: string;
@@ -54,7 +56,7 @@ const DEFAULT_IMAGE_SETTINGS = {
   /** Format images are saved in */
   imageFormat: 'webp' as 'webp' | 'png' | 'jpeg',
   /** Last-used options (the image bar starts from these) */
-  imageDefaults: { providerId: '', model: '', aspectRatio: '1:1', resolution: '', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '' } as ImageDefaults,
+  imageDefaults: { providerId: '', model: '', size: '', aspectRatio: '1:1', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '' } as ImageDefaults,
   /** Let chat models create images with the generate_image tool */
   imageTool: true
 };
@@ -104,7 +106,8 @@ export const readyImageProviders = computed(() => imageProviderList().filter((p)
 /** Image generation needs the key of at least one image provider */
 export const imageReady = computed(() => readyImageProviders.value.length > 0);
 
-const cacheKey = (id: string) => `cache:imageModels:${id}`;
+/** v2: models describe their sizes as one list */
+const cacheKey = (id: string) => `cache:imageModels:v2:${id}`;
 let loading: Promise<void> | null = null;
 
 /** Image models of every provider whose key is set (each list cached for 6 hours) */
@@ -175,12 +178,12 @@ export async function setImageDefaults(patch: Partial<ImageDefaults>) {
 export async function setConversationImageModel(m: ImageModelInfo) {
   const isDefault = defaultImageModel.value && modelRef(defaultImageModel.value) === modelRef(m);
   await updateConversation({ imageModel: isDefault ? undefined : modelRef(m) });
-  await setImageDefaults({ resolution: '' });
+  await setImageDefaults({ size: '' });
 }
 
 /** Choose the default model (settings) */
 export async function setDefaultImageModel(m: ImageModelInfo) {
-  await setImageDefaults({ providerId: m.providerId, model: m.id, resolution: '' });
+  await setImageDefaults({ providerId: m.providerId, model: m.id, size: '' });
 }
 
 // Prices some providers list per model (OpenRouter) are fetched when the model is in use
@@ -189,7 +192,7 @@ effect(() => {
   for (const m of [currentImageModel.value, defaultImageModel.value]) {
     if (!m || pricingAsked.has(modelRef(m))) continue;
     const p = imageProviderOf(m.providerId);
-    if (!p?.loadPricing || m.pricing.generation !== undefined || m.pricing.resolutions) continue;
+    if (!p?.loadPricing || m.pricing.generation !== undefined || m.constraints.sizes.some((s) => s.price !== undefined)) continue;
     pricingAsked.add(modelRef(m));
     void p
       .loadPricing(m, providerConfigOf(p.account)!, plainTransport)
@@ -223,15 +226,16 @@ export function paramsFor(conv: Conversation | undefined, prompt: string): Image
   const d = imageSettings.value.value.imageDefaults;
   const m = imageModelFor(conv);
   const seed = d.seed.trim() ? Number(d.seed) : undefined;
-  const aspects = m?.constraints.aspectRatios;
+  const size = sizeOf(m, d);
   return {
     op: 'generate',
     providerId: m?.providerId ?? EDIT_PROVIDER,
     model: m?.id ?? '',
     prompt,
     negativePrompt: hasOption(m, 'negativePrompt') ? d.negativePrompt || undefined : undefined,
-    aspectRatio: (aspects?.length && !aspects.includes(d.aspectRatio) ? (m?.constraints.defaultAspectRatio ?? aspects[0]) : d.aspectRatio) || undefined,
-    resolution: (m?.constraints.resolutions?.includes(d.resolution) ? d.resolution : m?.constraints.defaultResolution) || undefined,
+    size: size?.id,
+    aspectRatio: size ? size.aspect : d.aspectRatio || undefined,
+    resolution: size?.tier,
     variants: Math.min(4, Math.max(1, d.variants)),
     style: hasOption(m, 'styles') ? d.style || undefined : undefined,
     seed: hasOption(m, 'seed') && Number.isFinite(seed) ? seed : undefined,
@@ -356,7 +360,7 @@ async function call(p: ImageParams, signal: AbortSignal): Promise<{ blobs: Blob[
 
 /** What a request costs (estimate; undefined when unknown) */
 export function estimateCost(p: ImageParams): number | undefined {
-  return imageProviderOf(p.providerId)?.estimateCost(p, imageModelOf(p.providerId, p.model));
+  return p.op === 'generate' ? generationCost(p, imageModelOf(p.providerId, p.model)) : imageProviderOf(p.providerId)?.editCost?.(p);
 }
 
 /** Who sees the prompt for a model (input box, tool approval card) */
@@ -371,7 +375,7 @@ export function currentPrivacyLabel() {
 
 /** Record an image job: the cost the provider reported, else the estimate (also counted in the conversation's total) */
 function recordImageUsage(conv: Conversation, p: ImageParams, count: number, reported?: number): number | undefined {
-  const est = reported ?? imageProviderOf(p.providerId)?.estimateCost({ ...p, variants: count }, imageModelOf(p.providerId, p.model));
+  const est = reported ?? estimateCost({ ...p, variants: count });
   recordUsage({ id: repo.newId(), conversationId: conv.id, providerId: p.providerId, model: p.model || p.op, kind: 'image', costUsd: est, costEstimated: reported === undefined, temporary: conv.temporary });
   // Image prices are estimates (and some are unknown): restart the balance comparison instead of
   // adding a guess, so the "unexplained drop" alert is not triggered by our own image spend
@@ -477,8 +481,10 @@ registerUserRequestHandler({
 export function toolParams(conv: Conversation | undefined, input: Partial<ImageToolInput>): ImageParams {
   const base = paramsFor(conv, input.prompt ?? '');
   const m = imageModelFor(conv);
-  const aspect = input.aspect_ratio && (!m?.constraints.aspectRatios?.length || m.constraints.aspectRatios.includes(input.aspect_ratio)) ? input.aspect_ratio : base.aspectRatio;
-  return { ...base, variants: 1, negativePrompt: hasOption(m, 'negativePrompt') ? input.negative_prompt : undefined, aspectRatio: aspect, seed: hasOption(m, 'seed') ? randomSeed() : undefined, enhancePrompt: false };
+  // The aspect the chat model asked for, in the bar's tier (when the image model has that aspect)
+  const asked = input.aspect_ratio ? sizeOf(m, { aspectRatio: input.aspect_ratio, resolution: base.resolution }) : undefined;
+  const sized = asked && asked.aspect === input.aspect_ratio ? { size: asked.id, aspectRatio: asked.aspect, resolution: asked.tier } : {};
+  return { ...base, ...sized, variants: 1, negativePrompt: hasOption(m, 'negativePrompt') ? input.negative_prompt : undefined, seed: hasOption(m, 'seed') ? randomSeed() : undefined, enhancePrompt: false };
 }
 
 async function runImageTool(conv: Conversation, messageId: string, input: ImageToolInput, signal: AbortSignal) {
@@ -494,7 +500,7 @@ async function runImageTool(conv: Conversation, messageId: string, input: ImageT
     blobIds: parts.map((x) => x.blobId),
     model: model?.name ?? p.model,
     blurred: !!r.blurred,
-    request: { provider: imageProviderOf(p.providerId)?.label ?? p.providerId, prompt: p.prompt, negativePrompt: p.negativePrompt, aspectRatio: p.aspectRatio, resolution: p.resolution, costUsd: cost, costEstimated: r.costUsd === undefined }
+    request: { provider: imageProviderOf(p.providerId)?.label ?? p.providerId, prompt: p.prompt, negativePrompt: p.negativePrompt, aspectRatio: p.aspectRatio, resolution: p.resolution, size: p.size, costUsd: cost, costEstimated: r.costUsd === undefined }
   };
 }
 

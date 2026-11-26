@@ -122,6 +122,7 @@ function cleanImageParams(x: any): ImageParams | undefined {
     model: str(x.model) ?? '',
     prompt: str(x.prompt) ?? '',
     negativePrompt: str(x.negativePrompt),
+    size: str(x.size),
     aspectRatio: str(x.aspectRatio),
     resolution: str(x.resolution),
     variants: Math.min(4, Math.max(1, Number(x.variants) || 1)),

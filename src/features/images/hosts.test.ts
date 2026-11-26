@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { deepinfraImageProvider, mapDeepInfraImageModel, mapNanoImageModel, mapTogetherImageModel, nanogptImageProvider, sizeFor, sniffMime } from './providers/hosts';
+import { mapDeepInfraImageModel, mapNanoImageModel, mapTogetherImageModel, sizeFor, sniffMime } from './providers/hosts';
+import { generationCost } from './providers/common';
 import type { ImageParams } from '../../lib/db/schema';
 
 const params = (o: Partial<ImageParams> = {}): ImageParams => ({ op: 'generate', providerId: 'nanogpt', model: 'm', prompt: 'a cat', variants: 2, safeMode: false, format: 'png', ...o });
@@ -15,17 +16,20 @@ describe('open-model hosts: images', () => {
       pricing: { per_image: { square: 0.1, landscape_16_9: 0.12 } },
       supported_parameters: { resolutions: ['square', 'landscape_16_9'], max_images: 4 }
     })!;
-    expect(m.constraints.aspectRatios).toEqual(['square', 'landscape_16_9']);
-    expect(nanogptImageProvider.estimateCost(params({ aspectRatio: 'landscape_16_9' }), m)).toBeCloseTo(0.24);
+    expect(m.constraints.sizes).toEqual([
+      { id: 'square', price: 0.1 },
+      { id: 'landscape_16_9', price: 0.12 }
+    ]);
+    expect(generationCost(params({ size: 'landscape_16_9' }), m)).toBeCloseTo(0.24);
     // Background removal and other image-in tools are not text-to-image
     expect(mapNanoImageModel({ id: 'bria/rmbg-3', architecture: { input_modalities: ['image'] } })).toBeNull();
     // One image per request
     const single = mapNanoImageModel({ id: 'k', architecture: { input_modalities: ['text'] }, pricing: { per_image: { '2048x2048': 0.063 } }, supported_parameters: { resolutions: ['2048x2048'], max_images: 1 } })!;
-    expect(nanogptImageProvider.estimateCost(params({ variants: 4 }), single)).toBeCloseTo(0.063);
+    expect(generationCost(params({ variants: 4 }), single)).toBeCloseTo(0.063);
   });
   it('read DeepInfra text-to-image models and their price per image', () => {
     const m = mapDeepInfraImageModel({ id: 'PrunaAI/p-image', metadata: { tags: ['image-gen'], pricing: { per_image_unit: 0.005 } } })!;
-    expect(deepinfraImageProvider.estimateCost(params({ variants: 3 }), m)).toBeCloseTo(0.015);
+    expect(generationCost(params({ variants: 3 }), m)).toBeCloseTo(0.015);
     expect(mapDeepInfraImageModel({ id: 'Bria/fibo_edit', metadata: { tags: ['image-gen'] } })).toBeNull();
     expect(mapDeepInfraImageModel({ id: 'chat', metadata: { tags: ['chat'] } })).toBeNull();
   });

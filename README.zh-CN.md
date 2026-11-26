@@ -15,7 +15,7 @@
 
 ## 功能
 
-- **提供商**: Venice、OpenRouter、Anthropic、Google Gemini、DeepSeek、Groq，以及在构建时添加的 OpenAI 兼容端点（如 Ollama）。没有哪个提供商被特殊对待，首次启动时由你选择使用哪个。
+- **提供商**: Venice、OpenRouter、Anthropic、Google Gemini、OpenAI、DeepSeek、Groq、NanoGPT、DeepInfra、Cerebras、Novita、Chutes、Together，以及在构建时添加的 OpenAI 兼容端点（如 Ollama）。没有哪个提供商被特殊对待，首次启动时由你选择使用哪个。
 - **模型列表**: 书签（跨提供方标星的模型）、排序（推荐 / 名称 / 价格 / 上下文长度）和筛选（private / 推理 / 图像 / 搜索 / 免费），并显示价格和能力。
 - **聊天**: 流式输出、显示推理过程、Markdown 和代码高亮、对话树（重新生成、编辑、换模型重新生成），以及从不保存的临时聊天（在发送第一条消息前，于聊天顶部切换）。
 - **文件**: 让模型"整理成报告"，它会把文档（Markdown、CSV 等）保存到"文件"标签页；长文档分段写入，并保留所有版本。"文件"标签页是一个文件管理器（卡片/列表视图、排序、按内容搜索、按类型和对话浏览、多选、拖放导入）。可以从设备或已保存的文件中附加文本、CSV、代码或 PDF（在浏览器内提取文字）。支持查看、编辑、下载和打印（保存为 PDF）。
@@ -160,4 +160,10 @@ VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localh
 - **Gemini**: 免费层级下，Google 可能会用你发送的内容改进其服务（付费层级不会）。
 - **DeepSeek**: 预付费，充值金额即为上限。数据由一家中国公司的服务器处理。
 - **Groq**: 免费层级有次数和 token 数限制；升级为付费时请设置支出上限。
+- **NanoGPT**: 请为密钥设置每日、每周或每月的用量上限。
+- **DeepInfra**: 请为密钥设置每月用量上限。
+- **Cerebras**: 预付费额度，余额即为上限。
+- **Novita**: 请为密钥设置预算（用量上限）。
+- **Chutes**: 尚未确认是否可以按密钥设置用量上限，请小额充值使用。
+- **Together**: 预付费，没有按密钥的上限，请小额充值使用。
 - **Tavily**（工具方式的网页搜索）: 设置用量上限。

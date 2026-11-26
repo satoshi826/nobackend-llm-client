@@ -31,6 +31,8 @@ export async function checkKey(url: string, fetchWithKey: KeyedFetch, corsHint?:
 }
 
 export function joinUrl(base: string, path: string): string {
+  // "../x" climbs out of the base path (e.g. a model list kept beside /v1)
+  if (path.startsWith('../')) return new URL(path, base.replace(/\/+$/, '') + '/').toString();
   return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
 }
 

@@ -15,7 +15,7 @@ The UI is available in Japanese, English and Simplified Chinese (automatic, or c
 
 ## Features
 
-- **Providers**: Venice, OpenRouter, Anthropic, Google Gemini, DeepSeek, Groq, plus OpenAI-compatible endpoints added at build time (e.g. Ollama). No provider is privileged; you choose which to use on first launch.
+- **Providers**: Venice, OpenRouter, Anthropic, Google Gemini, OpenAI, DeepSeek, Groq, NanoGPT, DeepInfra, Cerebras, Novita, Chutes, Together, plus OpenAI-compatible endpoints added at build time (e.g. Ollama). No provider is privileged; you choose which to use on first launch.
 - **Model list**: bookmarks (starred models across providers), sort (recommended / name / price / context length) and filter (private / reasoning / vision / search / free), with pricing and capabilities shown.
 - **Chat**: streaming, visible reasoning, Markdown and code highlighting, a conversation tree (regenerate, edit, regenerate with another model), and temporary chats that are never saved (toggle in the chat header before the first message).
 - **Image generation (Venice)**: image mode in the input box (model, aspect ratio, resolution, 1–4 images, style, negative prompt, seed), "same settings again" / "similar image", upscale, edit, background removal, a gallery, and an optional tool so chat models can create images. Images are stored locally (encrypted with a passphrase).
@@ -160,4 +160,10 @@ Always use **spend-limited keys**. If a key ever leaks, the damage stops at the 
 - **Gemini**: on the free tier, Google may use your prompts to improve its products. The paid tier doesn't.
 - **DeepSeek**: prepaid, so your balance is the limit. Data is processed by a company in China.
 - **Groq**: the free tier has rate and token limits; set a spend limit if you upgrade.
+- **NanoGPT**: set a daily, weekly or monthly spending limit on the key.
+- **DeepInfra**: set a monthly spending limit on the key.
+- **Cerebras**: prepaid credits, so your balance is the limit.
+- **Novita**: set a budget on the key.
+- **Chutes**: a per-key spending limit could not be confirmed; top up small amounts.
+- **Together**: prepaid with no per-key limit; top up small amounts.
 - **Tavily** (tool-based web search): set a usage limit.

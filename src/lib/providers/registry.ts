@@ -5,8 +5,9 @@ import { geminiAdapter } from './gemini';
 import { venicePreset } from './presets/venice';
 import { openrouterPreset } from './presets/openrouter';
 import { anthropicPreset, customPresets, deepseekPreset, geminiPreset, groqPreset, openaiPreset } from './presets/more';
+import { hostPresets } from './presets/hosts';
 
-const BUILTIN: ProviderPreset[] = [venicePreset, openrouterPreset, anthropicPreset, geminiPreset, openaiPreset, deepseekPreset, groqPreset];
+const BUILTIN: ProviderPreset[] = [venicePreset, openrouterPreset, anthropicPreset, geminiPreset, openaiPreset, deepseekPreset, groqPreset, ...hostPresets];
 
 export const PRESETS: Record<string, ProviderPreset> = Object.fromEntries([...BUILTIN, ...customPresets].map((p) => [p.id, p]));
 

@@ -10,7 +10,8 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 4. **Shared components, not copies.** UI that should be the same is one component (`components/ui.tsx`, `components/settings-ui.tsx`), used everywhere; a screen never re-creates it with its own markup and classes. A continuous setting, for example, is always the shared `Slider`, never a bare range input. Copies drift apart, and a fix then reaches only one of them.
 5. **Icons carry meaning.** Actions, navigation and kinds of things get an icon, so they are recognized at a glance, in any of the three languages and in narrow space. One meaning has one icon everywhere; icon-only buttons always have `aria-label` and a tooltip.
 6. **Motion explains, never decorates.** Things appear (rise / fade), the background drifts slowly, controls respond on hover/press. Everything stops under `prefers-reduced-motion`.
-7. **Text first.** Body copy stays high-contrast (≥ 4.5:1 on its glass); secondary text never drops below 4.5:1 at ≤ 14 px.
+7. **No layout shift.** What is on screen never moves unless the user moved it: content that arrives later (images, highlighted code, fonts, loaded data, a toast) has its space reserved or floats over the page, and nothing pushes what the user is reading or about to press.
+8. **Text first.** Body copy stays high-contrast (≥ 4.5:1 on its glass); secondary text never drops below 4.5:1 at ≤ 14 px.
 
 ## 2. Rules
 

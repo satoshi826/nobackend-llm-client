@@ -53,7 +53,7 @@ export const currentVersion = (f: FileRecord): FileVersion => f.versions[f.versi
 export const currentText = (f: FileRecord): string => currentVersion(f)?.text ?? '';
 
 /** A new file record (not saved) */
-export function newFile(o: { id: string; name: string; kind: FileRecord['kind']; text: string; by: FileVersion['by']; conversationId?: string; source?: string; mime?: string }): FileRecord {
+export function newFile(o: { id: string; name: string; kind: FileRecord['kind']; text: string; by: FileVersion['by']; conversationId?: string; source?: string; url?: string; mime?: string }): FileRecord {
   const now = Date.now();
   return {
     id: o.id,
@@ -65,6 +65,7 @@ export function newFile(o: { id: string; name: string; kind: FileRecord['kind'];
     updatedAt: now,
     size: o.text.length,
     ...(o.source ? { source: o.source } : {}),
+    ...(o.url ? { url: o.url } : {}),
     versions: [{ v: 1, at: now, text: o.text, by: o.by }]
   };
 }
@@ -156,6 +157,7 @@ export function cleanFiles(raw: unknown): FileRecord[] {
       updatedAt: Number.isFinite(f.updatedAt) ? f.updatedAt : Date.now(),
       size: versions[versions.length - 1].text.length,
       ...(isStr(f.source) ? { source: f.source.slice(0, 100) } : {}),
+      ...(isStr(f.url) && /^https:\/\//.test(f.url) ? { url: f.url.slice(0, 2000) } : {}),
       versions
     });
   }

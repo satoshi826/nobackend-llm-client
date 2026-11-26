@@ -299,13 +299,14 @@ export function Lightbox() {
   const msg = messages.value.find((m) => m.id === item.messageId);
   const source = msg ? messages.value.find((m) => m.id === msg.parentId) : undefined;
   const promptText = msg?.image?.params.prompt || source?.imageRequest?.prompt || '';
-  const inThisChat = currentId.value === item.conversationId;
-  // Saved images outlive their conversation: one whose chat was deleted is edited in a new chat
-  const chatExists = inThisChat || conversations.value.some((c) => c.id === item.conversationId);
+  const chat = item.conversationId;
+  const inThisChat = !!chat && currentId.value === chat;
+  // Saved images outlive their conversation, and brought-in images have none: those are edited in a new chat
+  const chatExists = inThisChat || (!!chat && conversations.value.some((c) => c.id === chat));
   const close = () => (lightbox.value = null);
   const act = async (fn: () => Promise<void>) => {
     if (!inThisChat) {
-      if (chatExists) await openConversation(item.conversationId);
+      if (chat && chatExists) await openConversation(chat);
       else startNewChat();
     }
     close();
@@ -317,7 +318,7 @@ export function Lightbox() {
     const a = document.createElement('a');
     a.href = url;
     const file = msg?.parts.find((p): p is FilePart => p.type === 'file' && p.blobId === item.blobId);
-    a.download = file?.name ?? `image-${item.blobId.slice(0, 8)}.png`;
+    a.download = item.name ?? file?.name ?? `image-${item.blobId.slice(0, 8)}.png`;
     a.click();
   };
   return (
@@ -370,13 +371,13 @@ export function Lightbox() {
           >
             <Icon name="trash" />
           </IconButton>
-          {lb.fromGallery && !inThisChat && chatExists && (
+          {lb.fromGallery && chat && !inThisChat && chatExists && (
             <Button
               class="text-xs text-white hover:bg-glass"
               onClick={() => {
                 close();
                 modal.value = null;
-                void openConversation(item.conversationId);
+                void openConversation(chat);
               }}
             >
               {t('lb.openChat')}

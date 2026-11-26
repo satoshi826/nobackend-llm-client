@@ -96,6 +96,21 @@ describe('image storage', () => {
     setDataKey(null);
     expect((await db().blobs.get('i1'))?.blob).toBeDefined();
   });
+  it('keeps a brought-in image\'s name and origin, encrypted with a passphrase', async () => {
+    const key = await generateDataKey();
+    setDataKey(key);
+    const info = { name: 'cat.png', source: { kind: 'web' as const, url: 'https://upload.example/cat.png' } };
+    await putImage({ id: 'w1', mime: 'image/png', info }, new Blob(['png'], { type: 'image/png' }), false);
+    const raw = await db().blobs.get('w1');
+    expect(raw?.info).toBeUndefined();
+    expect(raw?.infoEnc).toBeDefined();
+    expect(raw?.conversationId).toBeUndefined();
+    expect((await listImages()).find((i) => i.id === 'w1')?.info).toEqual(info);
+    const ex = await exportImages();
+    await db().blobs.clear();
+    expect(await importImages(ex)).toBe(1);
+    expect((await listImages()).find((i) => i.id === 'w1')?.info).toEqual(info);
+  });
   it('keeps saved images when their conversation is deleted', async () => {
     await putImage(meta('k1'), new Blob(['kept']), false);
     await repo.deleteConversation('c1');

@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { ChatMessage, ModelInfo } from '../providers/types';
 import type { UsageRecord } from '../usage';
+import type { Sealed } from '../crypto/data';
 
 export const SCHEMA_VERSION = 6;
 
@@ -122,6 +123,8 @@ export interface FileRecord {
   size: number;
   /** For uploads: where the text came from (e.g. "PDF から抽出") */
   source?: string;
+  /** The web address it was fetched from (on the user's request) */
+  url?: string;
   /** Oldest first; the last one is current. Old versions beyond a limit are dropped */
   versions: FileVersion[];
 }
@@ -166,11 +169,23 @@ export interface SealedBytes {
   data: Blob;
 }
 
-/** A stored image. With a passphrase the bytes are encrypted (enc) instead of kept as a Blob */
+/** Where an image came from when it was not made in a chat: the user's device, or a web address fetched on request */
+export type ImageSource = { kind: 'upload' } | { kind: 'web'; url: string };
+
+/** Name and origin of an image brought in by the user (images made in a chat have none) */
+export interface ImageInfo {
+  name: string;
+  source: ImageSource;
+}
+
+/**
+ * A stored image. With a passphrase the bytes are encrypted (enc) instead of kept as a Blob, and so is its
+ * info (infoEnc). Images made in a chat belong to a conversation and message; brought-in images to none.
+ */
 export interface BlobRecord {
   id: string;
-  conversationId: string;
-  messageId: string;
+  conversationId?: string;
+  messageId?: string;
   createdAt: number;
   mime: string;
   size: number;
@@ -178,6 +193,8 @@ export interface BlobRecord {
   enc?: SealedBytes;
   /** A small copy for grids and previews (encrypted like the image); made when first needed for older images */
   thumb?: Blob | SealedBytes;
+  info?: ImageInfo;
+  infoEnc?: Sealed;
 }
 
 export interface ModelRecord extends ModelInfo {

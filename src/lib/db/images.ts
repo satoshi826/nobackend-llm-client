@@ -1,8 +1,9 @@
-// Image storage (generated images). Images of temporary chats stay in memory only.
-// With a passphrase (a data key is set) the bytes are encrypted with the same data key as conversations.
-import { db, type BlobRecord, type SealedBytes } from './schema';
+// Image storage: images made in chats, and images the user brought in (uploaded or fetched from the web).
+// Images of temporary chats stay in memory only. With a passphrase (a data key is set) the bytes, the thumbnail
+// and a brought-in image's name and origin are encrypted with the same data key as conversations.
+import { db, type BlobRecord, type ImageInfo, type SealedBytes } from './schema';
 import { currentDataKey, DataLockedError } from './sealed';
-import { openBytes, sealBytes, type DataKey } from '../crypto/data';
+import { openBytes, openJSON, sealBytes, sealJSON, type DataKey } from '../crypto/data';
 import { registerDataTable } from './data-tables';
 import { t } from './messages';
 
@@ -10,9 +11,27 @@ const mem = new Map<string, BlobRecord>();
 
 export interface ImageMeta {
   id: string;
-  conversationId: string;
-  messageId: string;
   mime: string;
+  /** Made in a chat: the conversation and message it belongs to */
+  conversationId?: string;
+  messageId?: string;
+  /** Brought in by the user */
+  info?: ImageInfo;
+}
+
+/** An image record as listed: without its bytes, with its info readable */
+export type ImageListing = Omit<BlobRecord, 'blob' | 'enc' | 'thumb' | 'infoEnc'>;
+
+async function storedInfo(info: ImageInfo | undefined, key: DataKey | null): Promise<Pick<BlobRecord, 'info' | 'infoEnc'>> {
+  if (!info) return {};
+  return key ? { infoEnc: await sealJSON(key, info) } : { info };
+}
+
+async function infoOf(rec: BlobRecord, key: DataKey | null = currentDataKey()): Promise<ImageInfo | undefined> {
+  if (rec.info) return rec.info;
+  if (!rec.infoEnc) return undefined;
+  if (!key) throw new DataLockedError();
+  return openJSON<ImageInfo>(key, rec.infoEnc);
 }
 
 async function seal(key: DataKey, blob: Blob): Promise<SealedBytes> {
@@ -55,13 +74,14 @@ async function storedThumb(blob: Blob, key: DataKey | null): Promise<BlobRecord[
 
 /** Save an image (encrypted when a data key is set) */
 export async function putImage(meta: ImageMeta, blob: Blob, temporary: boolean): Promise<void> {
-  const base = { ...meta, createdAt: Date.now(), size: blob.size };
+  const { info, ...rest } = meta;
+  const base = { ...rest, createdAt: Date.now(), size: blob.size };
   if (temporary) {
-    mem.set(meta.id, { ...base, blob });
+    mem.set(meta.id, { ...base, info, blob });
     return;
   }
   const key = currentDataKey();
-  await db().blobs.put({ ...base, ...(await stored(blob, key)), thumb: await storedThumb(blob, key) });
+  await db().blobs.put({ ...base, ...(await storedInfo(info, key)), ...(await stored(blob, key)), thumb: await storedThumb(blob, key) });
 }
 
 async function toBlob(rec: BlobRecord, key: DataKey | null = currentDataKey()): Promise<Blob> {
@@ -95,10 +115,14 @@ export async function getImageThumb(id: string): Promise<Blob | null> {
 }
 
 /** Image records without the bytes, newest first (for the gallery) */
-export async function listImages(): Promise<Omit<BlobRecord, 'blob' | 'enc' | 'thumb'>[]> {
+export async function listImages(): Promise<ImageListing[]> {
   const rows = await db().blobs.orderBy('createdAt').reverse().toArray();
-  const strip = ({ blob: _b, enc: _e, thumb: _t, ...rest }: BlobRecord) => rest;
-  return [...[...mem.values()].sort((a, b) => b.createdAt - a.createdAt).map(strip), ...rows.map(strip)];
+  const strip = async (r: BlobRecord): Promise<ImageListing> => {
+    const { blob: _b, enc: _e, thumb: _t, infoEnc: _i, ...rest } = r;
+    const info = await infoOf(r);
+    return info ? { ...rest, info } : rest;
+  };
+  return Promise.all([...[...mem.values()].sort((a, b) => b.createdAt - a.createdAt), ...rows].map(strip));
 }
 
 export async function imageUsage(): Promise<{ count: number; bytes: number }> {
@@ -125,9 +149,10 @@ export async function resealImages(from: DataKey | null, to: DataKey | null, onP
     const already = to ? !!rec.enc && from === to : !!rec.blob;
     if (!already) {
       const blob = await toBlob(rec, from);
+      const info = await infoOf(rec, from);
       // The thumbnail is made again from the image (under the new key, or plain)
-      const { blob: _b, enc: _e, thumb: _t, ...meta } = rec;
-      await db().blobs.put({ ...meta, ...(await stored(blob, to)), thumb: await storedThumb(blob, to) });
+      const { blob: _b, enc: _e, thumb: _t, info: _i, infoEnc: _ie, ...meta } = rec;
+      await db().blobs.put({ ...meta, ...(await storedInfo(info, to)), ...(await stored(blob, to)), thumb: await storedThumb(blob, to) });
     }
     onProgress?.(++done, ids.length);
   }
@@ -136,8 +161,9 @@ export async function resealImages(from: DataKey | null, to: DataKey | null, onP
 // ---- Backups (optional; images are large) ----
 export interface ExportedImage {
   id: string;
-  conversationId: string;
-  messageId: string;
+  conversationId?: string;
+  messageId?: string;
+  info?: ImageInfo;
   createdAt: number;
   mime: string;
   /** base64 */
@@ -162,7 +188,7 @@ export async function exportImages(): Promise<ExportedImage[]> {
   const out: ExportedImage[] = [];
   for (const rec of await db().blobs.toArray()) {
     const blob = await toBlob(rec);
-    out.push({ id: rec.id, conversationId: rec.conversationId, messageId: rec.messageId, createdAt: rec.createdAt, mime: rec.mime, data: toBase64(await blob.arrayBuffer()) });
+    out.push({ id: rec.id, conversationId: rec.conversationId, messageId: rec.messageId, info: await infoOf(rec), createdAt: rec.createdAt, mime: rec.mime, data: toBase64(await blob.arrayBuffer()) });
   }
   return out;
 }
@@ -175,14 +201,14 @@ export async function importImages(list: ExportedImage[]): Promise<number> {
     const blob = base64ToBlob(im.data, im.mime);
     const key = currentDataKey();
     const base = { id: im.id, conversationId: im.conversationId, messageId: im.messageId, createdAt: im.createdAt, mime: im.mime, size: blob.size };
-    await db().blobs.put({ ...base, ...(await stored(blob, key)) });
+    await db().blobs.put({ ...base, ...(await storedInfo(im.info, key)), ...(await stored(blob, key)) });
     n++;
   }
   return n;
 }
 
 /** Where an image belongs (without loading its bytes) */
-export async function getImageMeta(id: string): Promise<{ conversationId: string; messageId: string; temporary: boolean } | null> {
+export async function getImageMeta(id: string): Promise<{ conversationId?: string; messageId?: string; temporary: boolean } | null> {
   const m = mem.get(id);
   if (m) return { conversationId: m.conversationId, messageId: m.messageId, temporary: true };
   const r = await db().blobs.get(id);
@@ -200,7 +226,14 @@ registerDataTable<ExportedImage>({
   clean: (raw) =>
     (Array.isArray(raw) ? raw : []).filter(
       (im: any): im is ExportedImage =>
-        !!im && typeof im.id === 'string' && typeof im.conversationId === 'string' && typeof im.messageId === 'string' && typeof im.mime === 'string' && typeof im.data === 'string' && typeof im.createdAt === 'number'
+        !!im &&
+        typeof im.id === 'string' &&
+        (im.conversationId === undefined || typeof im.conversationId === 'string') &&
+        (im.messageId === undefined || typeof im.messageId === 'string') &&
+        (im.info === undefined || (typeof im.info?.name === 'string' && (im.info.source?.kind === 'upload' || (im.info.source?.kind === 'web' && typeof im.info.source.url === 'string')))) &&
+        typeof im.mime === 'string' &&
+        typeof im.data === 'string' &&
+        typeof im.createdAt === 'number'
     ),
   importRows: (rows) => importImages(rows),
   reseal: resealImages,

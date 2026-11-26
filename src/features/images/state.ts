@@ -74,10 +74,13 @@ function callContext(providerId: string, signal?: AbortSignal): ImageCallContext
 }
 
 // ---- the image viewer ----
+/** An image in the viewer; one brought in by the user belongs to no conversation */
 export interface LightboxItem {
   blobId: string;
-  conversationId: string;
-  messageId: string;
+  conversationId?: string;
+  messageId?: string;
+  /** The file name to download it as (the file manager knows it) */
+  name?: string;
 }
 /** fromGallery: opened from the file manager (offers to open the image's conversation) */
 export const lightbox = signal<{ items: LightboxItem[]; index: number; fromGallery?: boolean } | null>(null);
@@ -432,7 +435,8 @@ export async function deleteImages(ids: string[]) {
   const byConv = new Map<string, { temporary: boolean; messageIds: Set<string> }>();
   for (const id of ids) {
     const meta = await getImageMeta(id);
-    if (!meta) continue;
+    // Brought-in images belong to no answer
+    if (!meta?.conversationId || !meta.messageId) continue;
     const g = byConv.get(meta.conversationId) ?? { temporary: meta.temporary, messageIds: new Set<string>() };
     g.messageIds.add(meta.messageId);
     byConv.set(meta.conversationId, g);

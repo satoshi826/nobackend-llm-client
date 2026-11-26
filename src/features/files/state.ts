@@ -3,8 +3,8 @@
 import { signal } from '@preact/signals';
 import * as fdb from '../../lib/db/files';
 import { getSetting, newId, setSetting } from '../../lib/db/repo';
-import { listImages } from '../../lib/db/images';
-import type { Attachment, Conversation, FileRecord, MessageRecord } from '../../lib/db/schema';
+import { listImages, putImage } from '../../lib/db/images';
+import type { Attachment, Conversation, FileRecord, ImageSource, MessageRecord } from '../../lib/db/schema';
 import type { ImageMeta } from './filer';
 import { imagesVersion } from '../images';
 import { showChat } from '../../state/conversations';
@@ -186,10 +186,10 @@ const setPending = (id: string, patch: Partial<PendingAttachment> | null) => {
 export const importing = signal<{ id: string; name: string }[]>([]);
 
 /** Read one file from the user's device into the Files tab; returns the record, or null (after a toast) */
-async function importOne(file: File, id: string, temporary: boolean): Promise<FileRecord | null> {
+async function importOne(file: File, id: string, temporary: boolean, url?: string): Promise<FileRecord | null> {
   try {
     const ex = await extractText(file);
-    const rec = fdb.newFile({ id, name: fdb.cleanFileName(file.name, 'txt'), kind: 'upload', text: ex.text, by: 'upload', source: ex.source });
+    const rec = fdb.newFile({ id, name: fdb.cleanFileName(file.name, 'txt'), kind: 'upload', text: ex.text, by: 'upload', source: ex.source, url });
     // A pdf's text is stored as text; keep the original extension visible but treat it as plain text
     if (rec.mime === 'application/pdf') rec.mime = 'text/plain';
     await fdb.putFile(rec, temporary);
@@ -202,16 +202,45 @@ async function importOne(file: File, id: string, temporary: boolean): Promise<Fi
   }
 }
 
-/** Upload from the file manager (not attached to anything) */
-export async function importFromDevice(files: File[]) {
+/** Images kept as they are; SVG is refused, since it can carry scripts */
+const IMAGE_MIME = /^image\/(png|jpeg|webp|gif|avif)$/;
+const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
+export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
+async function importImage(file: File, id: string, source: ImageSource): Promise<boolean> {
+  if (!IMAGE_MIME.test(file.type)) {
+    showToast(t(file.type === 'image/svg+xml' ? 'import.svg' : 'extract.unsupported', { name: file.name }), 'error');
+    return false;
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    showToast(t('extract.tooBig', { max: formatNumber(MAX_IMAGE_BYTES / 1024 / 1024) }), 'error');
+    return false;
+  }
+  await putImage({ id, mime: file.type, info: { name: fdb.cleanFileName(file.name, IMAGE_EXT[file.type]), source } }, file, false);
+  imagesVersion.value++;
+  return true;
+}
+
+/**
+ * Bring files into the Files tab (not attached to anything): images are kept as images, everything else as
+ * text (PDFs too). source: where they came from (the device, or a web address)
+ */
+export async function bringIn(files: File[], source: ImageSource = { kind: 'upload' }): Promise<number> {
   const jobs = files.map((f) => ({ id: newId(), file: f }));
   importing.value = [...importing.value, ...jobs.map((j) => ({ id: j.id, name: j.file.name }))];
-  const done = await Promise.all(jobs.map(async (j) => {
-    const r = await importOne(j.file, j.id, false);
-    importing.value = importing.value.filter((x) => x.id !== j.id);
-    return r;
-  }));
-  const n = done.filter(Boolean).length;
+  const done = await Promise.all(
+    jobs.map(async (j) => {
+      const r = j.file.type.startsWith('image/') ? await importImage(j.file, j.id, source) : !!(await importOne(j.file, j.id, false, source.kind === 'web' ? source.url : undefined));
+      importing.value = importing.value.filter((x) => x.id !== j.id);
+      return r;
+    })
+  );
+  return done.filter(Boolean).length;
+}
+
+/** Upload from the file manager */
+export async function importFromDevice(files: File[]) {
+  const n = await bringIn(files);
   if (n) showToast(n === 1 ? t('import.doneOne') : t('import.done', { n: formatNumber(n) }));
 }
 

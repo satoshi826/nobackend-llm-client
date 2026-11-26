@@ -1,17 +1,19 @@
 // The file manager's items: files and images in one list, with filtering and sorting (pure)
 import { currentText, extOf } from '../../lib/db/files';
-import type { BlobRecord, FileRecord } from '../../lib/db/schema';
+import type { FileRecord, ImageSource } from '../../lib/db/schema';
+import type { ImageListing } from '../../lib/db/images';
 import type { FilerOrder, FilerSort, FilerView } from './state';
 import { locale } from '../../lib/i18n';
 import { t } from './messages';
 
-export type ImageMeta = Omit<BlobRecord, 'blob' | 'enc'>;
+export type ImageMeta = ImageListing;
 
+/** kind: where it came from — made by the model ('document'), or brought in by the user ('upload': device or web) */
 export type FilerItem =
   | { type: 'file'; key: string; id: string; name: string; kind: FileRecord['kind']; ext: string; size: number; updatedAt: number; conversationId?: string; file: FileRecord }
-  | { type: 'image'; key: string; id: string; name: string; ext: string; size: number; updatedAt: number; conversationId: string; messageId: string };
+  | { type: 'image'; key: string; id: string; name: string; kind: FileRecord['kind']; ext: string; size: number; updatedAt: number; conversationId?: string; messageId?: string; source?: ImageSource };
 
-const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/webp': 'webp', 'image/jpeg': 'jpg' };
+const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/avif': 'avif' };
 
 export function toItems(files: FileRecord[], images: ImageMeta[], convTitle: (id: string) => string | undefined): FilerItem[] {
   return [
@@ -20,7 +22,8 @@ export function toItems(files: FileRecord[], images: ImageMeta[], convTitle: (id
       const ext = IMAGE_EXT[im.mime] ?? 'png';
       const d = new Date(im.createdAt);
       const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
-      return { type: 'image', key: `i:${im.id}`, id: im.id, name: `${convTitle(im.conversationId) ?? t('imageName')} ${stamp}.${ext}`, ext, size: im.size, updatedAt: im.createdAt, conversationId: im.conversationId, messageId: im.messageId };
+      const name = im.info?.name ?? `${(im.conversationId && convTitle(im.conversationId)) || t('imageName')} ${stamp}.${ext}`;
+      return { type: 'image', key: `i:${im.id}`, id: im.id, name, kind: im.info ? 'upload' : 'document', ext, size: im.size, updatedAt: im.createdAt, conversationId: im.conversationId, messageId: im.messageId, source: im.info?.source };
     })
   ];
 }
@@ -34,7 +37,7 @@ export function inView(it: FilerItem, view: FilerView): boolean {
     case 'image':
       return it.type === 'image';
     default:
-      return it.type === 'file' && it.kind === view;
+      return it.kind === view;
   }
 }
 

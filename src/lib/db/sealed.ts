@@ -28,7 +28,7 @@ export const SECRET_FIELDS = {
   messages: ['parts', 'vendorState', 'skills', 'compaction', 'error', 'suggestions', 'imageRequest', 'image', 'attachments'],
   prompts: ['name', 'content'],
   skills: ['description', 'body'],
-  files: ['name', 'versions', 'source']
+  files: ['name', 'versions', 'source', 'url']
 } as const;
 
 export type SealedTable = keyof typeof SECRET_FIELDS;

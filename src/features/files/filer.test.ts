@@ -22,7 +22,7 @@ describe('file manager items', () => {
   });
   it('filters by view, conversation and query (contents too)', () => {
     const f = (o: Partial<Parameters<typeof filterItems>[1]>) => filterItems(items, { view: 'all', conversationId: null, query: '', ...o }).map((i) => i.id);
-    expect(f({ view: 'document' })).toEqual(['a', 'c']);
+    expect(f({ view: 'document' })).toEqual(['a', 'c', 'i1', 'i2']);
     expect(f({ view: 'upload' })).toEqual(['b']);
     expect(f({ view: 'image' })).toEqual(['i1', 'i2']);
     expect(f({ view: 'text' })).toEqual(['a', 'b', 'c']);

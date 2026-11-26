@@ -152,7 +152,7 @@ export function Filer() {
   const open = (it: FilerItem) => {
     if (it.type === 'file') return void openFile(it.id);
     const imgs = list.filter((x): x is Extract<FilerItem, { type: 'image' }> => x.type === 'image');
-    lightbox.value = { items: imgs.map((x) => ({ blobId: x.id, conversationId: x.conversationId, messageId: x.messageId })), index: imgs.findIndex((x) => x.id === it.id), fromGallery: true };
+    lightbox.value = { items: imgs.map((x) => ({ blobId: x.id, conversationId: x.conversationId, messageId: x.messageId, name: x.name })), index: imgs.findIndex((x) => x.id === it.id), fromGallery: true };
   };
   const removeSelected = async () => {
     const fileIds = selected.filter((i) => i.type === 'file').map((i) => i.id);

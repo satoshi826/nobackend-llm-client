@@ -35,33 +35,38 @@ export interface BuildOptions {
  */
 export function buildRequestMessages(history: MessageRecord[], systemPrompt: string, opts: BuildOptions = {}): ChatMessage[] {
   let sys = systemPrompt.trim();
-  let rest = history;
-  let lastCompaction = -1;
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i].compaction) {
-      lastCompaction = i;
-      break;
-    }
-  }
-  if (lastCompaction >= 0) {
-    const c = history[lastCompaction].compaction!;
-    const coveredIdx = history.findIndex((m) => m.id === c.coversUntilId);
-    const summaryBlock = `${tc('summary.block')}\n\n${c.summary}`;
+  const { summary, rest } = afterCompaction(history);
+  if (summary !== null) {
+    const summaryBlock = `${tc('summary.block')}\n\n${summary}`;
     sys = sys ? `${sys}\n\n${summaryBlock}` : summaryBlock;
-    rest = history.slice(coveredIdx + 1);
   }
   const out: ChatMessage[] = [];
   if (sys) out.push({ id: 'system', role: 'system', parts: [{ type: 'text', text: sys }] });
   for (const m of rest) {
-    if (m.compaction) continue;
-    if (m.role === 'assistant' && m.status === 'error' && !m.parts.some((p) => p.type === 'text' && p.text)) continue;
-    let parts: Part[] = m.parts.filter((p) => p.type === 'text' || p.type === 'tool');
-    for (const t of transforms) parts = t(m, parts);
-    if (parts.length === 0) continue;
-    const sameModel = !!opts.model && m.meta?.providerId === opts.providerId && m.meta?.model === opts.model;
-    out.push({ id: m.id, role: m.role, parts, vendorState: opts.resendReasoning && sameModel ? m.vendorState : undefined });
+    const sent = requestMessage(m, opts);
+    if (sent) out.push(sent);
   }
   return out;
+}
+
+/** The summary in effect (the last compaction's) and the messages after the range it covers */
+export function afterCompaction(history: MessageRecord[]): { summary: string | null; rest: MessageRecord[] } {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const c = history[i].compaction;
+    if (c) return { summary: c.summary, rest: history.slice(history.findIndex((m) => m.id === c.coversUntilId) + 1) };
+  }
+  return { summary: null, rest: history };
+}
+
+/** What is sent for one stored message (null when nothing is: compaction nodes, failed answers without text) */
+export function requestMessage(m: MessageRecord, opts: BuildOptions = {}): ChatMessage | null {
+  if (m.compaction) return null;
+  if (m.role === 'assistant' && m.status === 'error' && !m.parts.some((p) => p.type === 'text' && p.text)) return null;
+  let parts: Part[] = m.parts.filter((p) => p.type === 'text' || p.type === 'tool');
+  for (const t of transforms) parts = t(m, parts);
+  if (parts.length === 0) return null;
+  const sameModel = !!opts.model && m.meta?.providerId === opts.providerId && m.meta?.model === opts.model;
+  return { id: m.id, role: m.role, parts, vendorState: opts.resendReasoning && sameModel ? m.vendorState : undefined };
 }
 
 /**

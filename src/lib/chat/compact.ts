@@ -6,7 +6,7 @@ import type { MessageRecord } from '../db/schema';
 import type { AuthRef, ChatMessage, Part, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
 import { getAdapter } from '../providers/registry';
 import { estimateTokens, inputBudget } from './context';
-import { buildRequestMessages } from './request';
+import { afterCompaction, requestMessage } from './request';
 import { t as tc } from './messages';
 
 /** Number of most recent messages kept without summarizing */
@@ -129,20 +129,40 @@ export interface RequestEstimate {
 
 const textTokens = (parts: Part[]) => parts.reduce((n, p) => n + (p.type === 'text' ? estimateTokens(p.text) : 0), 0);
 
+type MessageEstimate = { messages: number; attachments: number; tools: number } | null;
+/**
+ * Per stored message (records are replaced, never changed in place, so the object is the key): while a reply
+ * streams, only the reply is counted again, not the whole conversation on every update
+ */
+const perMessage = new WeakMap<MessageRecord, MessageEstimate>();
+
+function estimateMessage(m: MessageRecord): MessageEstimate {
+  if (perMessage.has(m)) return perMessage.get(m)!;
+  const sent = requestMessage(m);
+  let e: MessageEstimate = null;
+  if (sent) {
+    const text = textTokens(sent.parts);
+    const own = Math.min(text, textTokens(m.parts));
+    let tools = 0;
+    for (const p of sent.parts) if (p.type === 'tool') tools += estimateTokens(p.argsText) + estimateTokens(typeof p.modelOutput === 'string' ? p.modelOutput : JSON.stringify(p.modelOutput ?? ''));
+    e = { messages: own + 4, attachments: text - own, tools }; // + 4: the role etc. (as messageTokens)
+  }
+  perMessage.set(m, e);
+  return e;
+}
+
 export function estimateRequest(path: MessageRecord[], instructions: string, notes: string): RequestEstimate {
   const e = { instructions: estimateTokens(instructions), notes: estimateTokens(notes), summary: 0, messages: 0, attachments: 0, tools: 0, count: 0, total: 0 };
-  const stored = new Map(path.map((m) => [m.id, m]));
-  for (const m of buildRequestMessages(path, [instructions, notes].filter(Boolean).join('\n\n'))) {
-    if (m.role === 'system') continue;
-    const sent = textTokens(m.parts);
-    const own = Math.min(sent, textTokens(stored.get(m.id)?.parts ?? []));
+  const { summary, rest } = afterCompaction(path);
+  if (summary !== null) e.summary = estimateTokens(summary);
+  for (const m of rest) {
+    const x = estimateMessage(m);
+    if (!x) continue;
     e.count++;
-    e.messages += own + 4; // + the role etc. (as messageTokens)
-    e.attachments += sent - own;
-    for (const p of m.parts) if (p.type === 'tool') e.tools += estimateTokens(p.argsText) + estimateTokens(typeof p.modelOutput === 'string' ? p.modelOutput : JSON.stringify(p.modelOutput ?? ''));
+    e.messages += x.messages;
+    e.attachments += x.attachments;
+    e.tools += x.tools;
   }
-  const last = path.findLast((m) => m.compaction)?.compaction;
-  if (last) e.summary = estimateTokens(last.summary);
   e.total = e.instructions + e.notes + e.summary + e.messages + e.attachments + e.tools;
   return e;
 }

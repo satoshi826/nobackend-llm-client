@@ -91,18 +91,23 @@ Cloudflare Pages also works (build command `npm run build`, output directory `di
 
 **Data is per origin.** Conversations and keys belong to the URL you use. When moving (from a local trial build, from `workers.dev` to a custom domain, and so on), export a backup in Settings → Privacy & data first, then import it on the new site. Keys must be entered again.
 
-### Separate-origin key vault (recommended with a custom domain)
+### Strict setup: the vault and the fetch page on their own origins
 
-With the vault on its own origin, an XSS in the app still cannot read your keys.
+By default the key vault (`/vault/`) and the fetch page (`/fetch/`) are served from the app's own origin, which works on any host. Their limit: if a script ever ran inside the app (XSS), it could reach them, ask the vault for the keys, and use the fetch page to send data to any address. With both on origins of their own, such a script can do neither.
 
 ```bash
-# vault site (deploy dist-vault/)
+# vault site (deploy dist-vault/) and fetch page site (deploy dist-fetch/)
 VITE_APP_ORIGIN=https://app.example.com npm run build:vault
-# app site (the vault origin is added to frame-src automatically)
-VITE_VAULT_URL=https://vault.example.com/ npm run build
+VITE_APP_ORIGIN=https://app.example.com npm run build:fetch
+# app site: both origins go into frame-src, and /vault/ and /fetch/ are no longer built
+VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.com/ npm run build
 ```
 
-Use subdomains of one custom domain. Two different `*.workers.dev` / `*.pages.dev` sites count as different sites, so the vault's storage may be partitioned. The app's preview deployments can't embed a separate vault.
+Use subdomains of one custom domain (three Workers or Pages sites, free). Two different `*.workers.dev` / `*.pages.dev` sites count as different sites, so the vault's storage may be partitioned, and `*.github.io` pages share one origin. The app's preview deployments can't embed a separate vault. Keys are entered again in the new vault.
+
+### Other static hosts (GitHub Pages and the like)
+
+`npm run build` puts each page's CSP in its HTML as well as in `_headers`, so a host that ignores `_headers` (GitHub Pages) still enforces it. What a `<meta>` CSP cannot carry is lost there: `frame-ancestors` (other sites may embed the pages) and the other headers (`nosniff`, `Referrer-Policy`, COOP). Prefer Cloudflare for daily use.
 
 ### Fetching files from the web
 
@@ -117,7 +122,7 @@ cd relay && npx wrangler deploy
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<account>.workers.dev npm run build
 ```
 
-The relay only takes public https addresses, passes on none of your headers or cookies, keeps nothing, answers only to the allowed origins, checks every redirect the same way, and asks Cloudflare to cap each IP at 30 requests a minute (the allowed origin is a header any script can fake, and the relay's address is readable in the app). Cloudflare applies this cap loosely: in a test it let every request through. Addresses you fetch through it are seen by it (your own Worker). To keep the fetch page out of reach of scripts running in the app, host it on its own origin like the vault: `VITE_APP_ORIGIN=https://app.example.com npm run build:fetch` (deploy `dist-fetch/`) and build the app with `VITE_FETCH_URL=https://fetch.example.com/`.
+The relay only takes public https addresses, passes on none of your headers or cookies, keeps nothing, answers only to the allowed origins, checks every redirect the same way, and asks Cloudflare to cap each IP at 30 requests a minute (the allowed origin is a header any script can fake, and the relay's address is readable in the app). Cloudflare applies this cap loosely: in a test it let every request through. Addresses you fetch through it are seen by it (your own Worker).
 
 ### Adding providers at build time
 

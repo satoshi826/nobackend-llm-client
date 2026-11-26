@@ -91,18 +91,23 @@ curl -sI https://<你的站点>/vault/ | grep -i content-security-policy
 
 **数据按源（origin）分开保存**: 对话和密钥属于你访问的那个 URL。迁移时（从本地试用版到正式站点、从 `workers.dev` 到自定义域名等），请先在"设置 → 隐私与数据"中导出备份，再到新站点导入。密钥需要重新输入。
 
-### 把密钥保管库放在独立的源上（有自定义域名时推荐）
+### 严格配置：把保管库和获取页面放在独立的源上
 
-保管库放在独立的源上后，即使应用本体发生 XSS，也读不到你的密钥。
+默认情况下，密钥保管库（`/vault/`）和获取页面（`/fetch/`）与应用同源提供，放在任何主机上都能用。其局限是：万一应用内运行了脚本（XSS），它可以向保管库索取密钥，也可以借获取页面把数据发往任意地址。两者都放在独立的源上后，这样的脚本什么也做不了。
 
 ```bash
-# 保管库站点（部署 dist-vault/）
+# 保管库站点（部署 dist-vault/）和获取页面站点（部署 dist-fetch/）
 VITE_APP_ORIGIN=https://app.example.com npm run build:vault
-# 应用站点（保管库的源会自动加入 frame-src）
-VITE_VAULT_URL=https://vault.example.com/ npm run build
+VITE_APP_ORIGIN=https://app.example.com npm run build:fetch
+# 应用站点：两个源会加入 frame-src，且不再构建 /vault/ 和 /fetch/
+VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.com/ npm run build
 ```
 
-请使用同一自定义域名下的子域名。两个不同的 `*.workers.dev` / `*.pages.dev` 站点被视为不同站点，保管库的存储可能被分区。应用的预览部署也无法嵌入独立的保管库。
+请使用同一自定义域名下的子域名（三个 Workers 或 Pages 站点，免费）。两个不同的 `*.workers.dev` / `*.pages.dev` 站点被视为不同站点，保管库的存储可能被分区；`*.github.io` 的页面则全部同源。应用的预览部署无法嵌入独立的保管库。密钥需要在新的保管库中重新输入。
+
+### 其他静态主机（GitHub Pages 等）
+
+`npm run build` 会把每个页面的 CSP 同时写入 `_headers` 和 HTML，因此不读取 `_headers` 的主机（GitHub Pages）也会执行 CSP。但 `<meta>` 形式的 CSP 写不了的内容会失去：`frame-ancestors`（其他网站可以嵌入这些页面）以及其他响应头（`nosniff`、`Referrer-Policy`、COOP）。日常使用推荐 Cloudflare。
 
 ### 从网络导入文件
 
@@ -117,7 +122,7 @@ cd relay && npx wrangler deploy
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<账户>.workers.dev npm run build
 ```
 
-中转只连接公开的 https 地址，不转发你的请求头或 Cookie，不保存任何内容，只响应允许的源，对重定向目标做同样的检查，并向 Cloudflare 指定每个 IP 每分钟最多 30 次请求（源可以被脚本伪造，中转的地址也能从应用代码中读到）。不过 Cloudflare 只是粗略地执行这个限制，测试时所有请求都通过了。通过中转获取的地址中转（你自己的 Worker）也能看到。若要让获取页面与应用内运行的脚本隔离，可像密钥保管库一样把它放在独立的源上：`VITE_APP_ORIGIN=https://app.example.com npm run build:fetch`（部署 `dist-fetch/`），并用 `VITE_FETCH_URL=https://fetch.example.com/` 构建应用。
+中转只连接公开的 https 地址，不转发你的请求头或 Cookie，不保存任何内容，只响应允许的源，对重定向目标做同样的检查，并向 Cloudflare 指定每个 IP 每分钟最多 30 次请求（源可以被脚本伪造，中转的地址也能从应用代码中读到）。不过 Cloudflare 只是粗略地执行这个限制，测试时所有请求都通过了。通过中转获取的地址中转（你自己的 Worker）也能看到。
 
 ### 在构建时添加提供商
 

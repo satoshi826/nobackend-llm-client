@@ -91,18 +91,23 @@ Cloudflare Pages でも配信できます（ビルドコマンド `npm run build
 
 **データはオリジンごと**: 会話とキーは、開いた URL ごとに別々に保存されます。お試し用ビルドから本番へ、`workers.dev` から独自ドメインへ、などと移るときは、先に「設定 → プライバシーとデータ」でバックアップを書き出し、移った先で読み込んでください。キーは入れ直しになります。
 
-### キー金庫を別オリジンに置く（独自ドメインがあればおすすめ）
+### 厳密な構成: 金庫と取得ページを別オリジンに置く
 
-金庫を別オリジンに置くと、アプリ本体で XSS が起きてもキーは読めません。
+標準では、キー金庫（`/vault/`）と取得ページ（`/fetch/`）はアプリと同じオリジンから配信され、どこに置いても動きます。その限界は、万一アプリ内でスクリプトが動いた（XSS）場合に、金庫にキーを求めたり、取得ページを使って任意のアドレスへデータを送ったりできることです。どちらも別オリジンに置けば、そうしたスクリプトには何もできません。
 
 ```bash
-# 金庫のサイト（dist-vault/ を配信）
+# 金庫のサイト（dist-vault/ を配信）と取得ページのサイト（dist-fetch/ を配信）
 VITE_APP_ORIGIN=https://app.example.com npm run build:vault
-# 本体のサイト（金庫のオリジンは frame-src に自動で入る）
-VITE_VAULT_URL=https://vault.example.com/ npm run build
+VITE_APP_ORIGIN=https://app.example.com npm run build:fetch
+# 本体のサイト: 2 つのオリジンは frame-src に入り、/vault/ と /fetch/ はビルドされなくなる
+VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.com/ npm run build
 ```
 
-同じ独自ドメインのサブドメインに置いてください。`*.workers.dev` や `*.pages.dev` の 2 つのサイトは別サイト扱いになり、金庫の保存領域が制限されることがあります。また、本体のプレビュー用 URL からは別オリジンの金庫を埋め込めません。
+同じ独自ドメインのサブドメインに置いてください（Workers か Pages のサイト 3 つ、無料）。`*.workers.dev` や `*.pages.dev` の 2 つのサイトは別サイト扱いになり金庫の保存領域が制限されることがあり、`*.github.io` のページはすべて同じオリジンです。本体のプレビュー用 URL からは別オリジンの金庫を埋め込めません。キーは新しい金庫で入れ直しになります。
+
+### ほかの静的ホスト（GitHub Pages など）
+
+`npm run build` は各ページの CSP を `_headers` だけでなく HTML にも入れるので、`_headers` を読まないホスト（GitHub Pages）でも CSP は効きます。ただし `<meta>` の CSP に書けないものは失われます: `frame-ancestors`（ほかのサイトがページを埋め込める）と、ほかのヘッダ（`nosniff`、`Referrer-Policy`、COOP）。普段使いには Cloudflare をおすすめします。
 
 ### Web からファイルを取り込む
 
@@ -117,7 +122,7 @@ cd relay && npx wrangler deploy
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<アカウント>.workers.dev npm run build
 ```
 
-中継は公開された https のアドレスにだけ接続し、あなたのヘッダや Cookie を送らず、何も記録せず、許可したオリジンにだけ応答し、リダイレクト先も同じ基準で確かめ、1 つの IP から 1 分に 30 回までという制限を Cloudflare に指定しています（オリジンはスクリプトなら偽れ、中継のアドレスはアプリのコードから読めるため）。ただし Cloudflare はこの制限を大まかにしか適用せず、試したときはすべて通りました。中継を通したアドレスは中継（自分の Worker）にも見えます。アプリ内で動くスクリプトから取得ページを切り離したいときは、金庫と同じく別オリジンに置きます: `VITE_APP_ORIGIN=https://app.example.com npm run build:fetch`（`dist-fetch/` をデプロイ）、アプリは `VITE_FETCH_URL=https://fetch.example.com/` でビルドします。
+中継は公開された https のアドレスにだけ接続し、あなたのヘッダや Cookie を送らず、何も記録せず、許可したオリジンにだけ応答し、リダイレクト先も同じ基準で確かめ、1 つの IP から 1 分に 30 回までという制限を Cloudflare に指定しています（オリジンはスクリプトなら偽れ、中継のアドレスはアプリのコードから読めるため）。ただし Cloudflare はこの制限を大まかにしか適用せず、試したときはすべて通りました。中継を通したアドレスは中継（自分の Worker）にも見えます。
 
 ### ビルド時に接続先を足す
 

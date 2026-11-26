@@ -1,6 +1,6 @@
 # Chat providers: research notes (2026-11-26)
 
-Input for adding more chat providers. Today the app has Venice, OpenRouter, Anthropic, Gemini, OpenAI, DeepSeek and Groq. CORS was checked with `OPTIONS` preflights from a foreign origin (2026-11-25/26, no credentials sent); no provider documents CORS, so "yes" is an observation, not a promise. Facts marked *unconfirmed* came from search snippets or pages that did not load and must be checked before implementing.
+Facts about chat providers, for adding more. NanoGPT, DeepInfra, Cerebras, Novita, Chutes and Together are in the app; the others below are candidates. CORS was checked with `OPTIONS` preflights from a foreign origin (2026-11-25/26, no credentials sent); no provider documents CORS, so "yes" is an observation, not a promise. Facts marked *unconfirmed* came from search snippets or pages that did not load and must be checked before implementing.
 
 ## Summary
 
@@ -27,15 +27,5 @@ Base URLs: NanoGPT `https://api.nano-gpt.com/api/v1`, DeepInfra `https://api.dee
 
 ## Recommendation
 
-1. **First wave — OpenAI-compatible presets only** (no new adapter): NanoGPT, DeepInfra, Cerebras, Novita, Chutes, Together. All take Bearer keys, stream SSE with usage in the last chunk, and pass CORS. Four of them have keyless model lists with prices, so the model picker can show prices before a key is set. NanoGPT, DeepInfra and Novita have per-key spend caps, which matters for a client that stores keys in the browser.
-2. **Second wave — presets with small adapter options**: xAI (chat is compatible; native search needs the Responses API, so use the Tavily fallback first), Moonshot (send `reasoning_content` back), Mistral (parse `thinking` content chunks; search and images need the Agents API, so leave them out), Fireworks (model list needs its own mapper).
-3. **Later or skip**: Perplexity (the API is mid-migration and the docs say not to use keys client-side), Nebius / Hyperbolic / Alibaba (little to gain over the first wave; Alibaba has no spend cap), SambaNova and Z.ai (no CORS, would need a proxy).
-
-## What the preset layer needs
-
-The first wave fits `openai-compatible.ts` if presets can declare:
-- **Reasoning field**: `reasoning` / `reasoning_content` / inline `<think>` (already handled by `think-splitter.ts`), and whether it must be replayed in later turns.
-- **Model list mapper**: per-provider parsing of context length, capabilities and prices (NanoGPT `?detailed=true`, DeepInfra `metadata`, Cerebras `/public/v1/models`, Novita, Chutes), and whether listing needs a key.
-- **Cost from the response** where given (NanoGPT `usage.cost`, xAI `cost_in_usd_ticks`), falling back to list prices.
-- **Body filtering** for providers that reject unknown parameters.
-- **Private / zero-retention flag** per model where the list provides one (NanoGPT `privacy.zero_data_retention`, Chutes TEE), shown with the existing private mark (the eye-off icon).
+1. **Next — presets with small adapter options**: xAI (chat is compatible; native search needs the Responses API, so use the Tavily fallback first), Moonshot (send `reasoning_content` back), Mistral (parse `thinking` content chunks; search and images need the Agents API, so leave them out), Fireworks (model list needs its own mapper).
+2. **Later or skip**: Perplexity (the API is mid-migration and the docs say not to use keys client-side), Nebius / Hyperbolic / Alibaba (little to gain over the hosts already in the app; Alibaba has no spend cap), SambaNova and Z.ai (no CORS, would need a proxy).

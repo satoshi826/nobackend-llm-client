@@ -243,11 +243,13 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
         <div class="flex flex-wrap gap-1.5">
           {img.suggestion.prompt && (
             <Button class="text-xs" variant="outline" disabled={isStreaming.value} onClick={() => void retryWithSuggestion(m.id, 'prompt')} title={img.suggestion.prompt}>
+              <Icon name="wand" class="size-3.5" />
               {t('retry.prompt')}
             </Button>
           )}
           {img.suggestion.model && (
             <Button class="text-xs" variant="outline" disabled={isStreaming.value} onClick={() => void retryWithSuggestion(m.id, 'model')}>
+              <Icon name="swap" class="size-3.5" />
               {t('retry.model', { model: img.suggestion.model })}
             </Button>
           )}
@@ -385,6 +387,7 @@ export function Lightbox() {
                 void openConversation(chat);
               }}
             >
+              <Icon name="chat" class="size-3.5" />
               {t('lb.openChat')}
             </Button>
           )}
@@ -409,6 +412,7 @@ export function Lightbox() {
             aria-label={t('lb.editLabel')}
           />
           <Button variant="primary" type="submit" disabled={!prompt.trim()}>
+            <Icon name="wand" />
             {t('lb.editSubmit')}
           </Button>
         </form>

@@ -46,6 +46,7 @@ export function FileView({ id = '' }: { id?: string }) {
         <div class="text-center">
           <p>{t('file.notFound')}</p>
           <Button class="mt-3" variant="outline" onClick={closeFileView}>
+            <Icon name="chevron-left" />
             {t('file.back')}
           </Button>
         </div>
@@ -203,9 +204,11 @@ export function FileView({ id = '' }: { id?: string }) {
               showToast(t('file.restored', { v: shown.v }));
             }}
           >
+            <Icon name="history" class="size-3.5" />
             {t('file.restore')}
           </Button>
           <Button class="text-xs" onClick={() => setViewV(null)}>
+            <Icon name="chevron-right" class="size-3.5" />
             {t('file.showLatest')}
           </Button>
         </div>
@@ -233,6 +236,7 @@ export function FileView({ id = '' }: { id?: string }) {
                 showToast(t('file.savedNew'));
               }}
             >
+              <Icon name="check" />
               {t('save')}
             </Button>
           </div>

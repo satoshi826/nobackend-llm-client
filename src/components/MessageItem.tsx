@@ -168,6 +168,7 @@ function UserMessage({ m }: { m: MessageRecord }) {
               void editUserMessage(m.id, draft);
             }}
           >
+            <Icon name="send" />
             {t('msg.send')}
           </Button>
         </div>

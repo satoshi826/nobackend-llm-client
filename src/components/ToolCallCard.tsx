@@ -47,14 +47,17 @@ function ApprovalCard({ p }: { p: ToolPart }) {
       </p>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <Button variant="primary" onClick={() => resolveApproval(p.toolCallId, { approved: true, input: edited })}>
+          <Icon name="check" />
           {t('tool.run')}
         </Button>
         {!pending.alwaysAsk && (
           <Button variant="outline" onClick={() => resolveApproval(p.toolCallId, { approved: true, always: true, input: edited })} title={t('tool.alwaysAllowTitle', { tool: labelOf(p.name) })}>
+            <Icon name="check" />
             {t('tool.alwaysAllow')}
           </Button>
         )}
         <Button variant="outline" onClick={() => resolveApproval(p.toolCallId, { approved: false, reason: reason || undefined })}>
+          <Icon name="x" />
           {t('tool.deny')}
         </Button>
         <TextField compact

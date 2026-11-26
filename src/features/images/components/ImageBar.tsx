@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { aspectsOf, hasOption } from '../providers/common';
 import { ModelOptions } from './ModelOptions';
 import { openSettings } from '../../../state/ui';
-import { Button, Chevron, Collapse, Select, Spinner, TextField, Checkbox } from '../../../components/ui';
+import { Button, Chevron, Collapse, Select, Spinner, TextField, Checkbox, Icon } from '../../../components/ui';
 import {
   currentImageModel,
   defaultImageModel,
@@ -33,6 +33,7 @@ export function ImageBar() {
       <div class="flex flex-wrap items-center gap-2 px-3 pt-2.5 text-xs text-warn">
         {t('bar.needKey')}
         <Button class="text-xs" variant="outline" onClick={() => openSettings('connections')}>
+          <Icon name="key" class="size-3.5" />
           {t('bar.setKey')}
         </Button>
       </div>
@@ -47,6 +48,7 @@ export function ImageBar() {
           <>
             {t('bar.modelsFailed', { error: imageModelsError.value })}
             <Button class="text-xs" onClick={() => void loadImageModels(true)}>
+              <Icon name="refresh" class="size-3.5" />
               {t('bar.retry')}
             </Button>
           </>

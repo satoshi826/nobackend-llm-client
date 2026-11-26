@@ -75,6 +75,7 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
           {t('cancel')}
         </Button>
         <Button variant="primary" onClick={() => void save()}>
+          <Icon name="check" />
           {t('save')}
         </Button>
       </div>

@@ -4,7 +4,7 @@ import { saveSettings, settings } from '../../state/settings';
 import { showToast } from '../../state/ui';
 import { backgroundImage, backgroundOf, clearBackgroundImage, GLOW_ORDER, GLOW_PRESETS, loadBackgroundImage, MAX_SPEED, saveBackground, setBackgroundImage, type BackgroundSetting } from '../../state/background';
 import { LANGS, LANG_NAMES, type Lang } from '../../lib/i18n';
-import { Button, Segmented, Select, Slider, cx } from '../ui';
+import { Button, Segmented, Select, Slider, cx, Icon } from '../ui';
 import { Section } from '../settings-ui';
 import { t } from './messages';
 
@@ -89,9 +89,10 @@ function Background() {
           {backgroundImage.value && <img src={backgroundImage.value} alt="" class="h-28 w-48 rounded-xl border border-line object-cover" />}
           <div class="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => input.current?.click()}>
+              <Icon name="image" />
               {t('bg.choose')}
             </Button>
-            {backgroundImage.value && <Button onClick={() => void clearBackgroundImage()}>{t('bg.remove')}</Button>}
+            {backgroundImage.value && <Button onClick={() => void clearBackgroundImage()}><Icon name="x" />{t('bg.remove')}</Button>}
           </div>
           <Slider class="max-w-md" label={t('bg.dim')} value={Math.round(bg.dim * 100)} min={0} max={80} step={5} format={(v) => `${v}%`} onChange={(v) => void saveBackground({ dim: v / 100 })} />
           <p class="text-xs text-muted">{t('bg.imageNote')}</p>

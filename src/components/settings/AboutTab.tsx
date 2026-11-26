@@ -50,6 +50,7 @@ function Version() {
         <div class="flex flex-wrap gap-2">
           {newer && (
             <Button variant="primary" onClick={() => location.reload()}>
+              <Icon name="refresh" />
               {t('about.reload')}
             </Button>
           )}
@@ -112,6 +113,7 @@ function Diagnostics() {
             setOpen(!open);
           }}
         >
+          <Icon name="file" />
           {t('about.diagShow')}
           <Chevron open={open} />
         </Button>

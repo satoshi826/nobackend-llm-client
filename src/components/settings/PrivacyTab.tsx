@@ -105,6 +105,7 @@ export function PrivacyTab() {
                   );
                 }}
               >
+                <Icon name="shield" class="size-3.5" />
                 {t('privacy.requestPersist')}
               </Button>
             )}
@@ -162,6 +163,7 @@ export function PrivacyTab() {
               <span class="text-xs text-muted">{t('privacy.fileEncrypted', { name: pendingFile.name })}</span>
               <TextField type="password" autocomplete="current-password" placeholder={t('privacy.password')} value={importPw} onInput={(e) => setImportPw((e.target as HTMLInputElement).value)} aria-label={t('privacy.passwordLabel')} data-autofocus />
               <Button variant="primary" type="submit" disabled={!importPw}>
+                <Icon name="key" />
                 {t('privacy.decryptImport')}
               </Button>
               <Button onClick={() => setPendingFile(null)}>{t('privacy.cancel')}</Button>

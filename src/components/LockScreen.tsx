@@ -34,6 +34,7 @@ export function LockScreen() {
           </div>
         )}
         <Button variant="outline" class="mt-6 text-xs" onClick={forget}>
+          <Icon name={lost ? 'trash' : 'key'} class="size-3.5" />
           {lost ? t('lock.deleteEncrypted') : t('lock.forgot')}
         </Button>
       </div>

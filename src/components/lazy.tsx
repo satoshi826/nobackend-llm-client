@@ -85,6 +85,7 @@ function LoadFailed({ overlay, onDismiss }: { overlay?: boolean; onDismiss?: () 
         <div class="mt-3 flex justify-end gap-2">
           {onDismiss && <Button onClick={onDismiss}>{t('lazy.close')}</Button>}
           <Button variant="primary" onClick={() => location.reload()}>
+            <Icon name="refresh" />
             {t('lazy.reload')}
           </Button>
         </div>

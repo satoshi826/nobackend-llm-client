@@ -35,6 +35,7 @@ export function SystemPromptModal() {
         />
         <div class="flex flex-wrap gap-2">
           <Button variant="primary" onClick={apply}>
+            <Icon name="check" />
             {t('sys.apply')}
           </Button>
           <Button
@@ -44,6 +45,7 @@ export function SystemPromptModal() {
               showToast(t('sys.madeDefault'));
             }}
           >
+            <Icon name="pin" />
             {t('sys.makeDefault')}
           </Button>
           {settings.value.defaultSystemPrompt && (
@@ -53,6 +55,7 @@ export function SystemPromptModal() {
                 showToast(t('sys.defaultCleared'));
               }}
             >
+              <Icon name="x" />
               {t('sys.clearDefault')}
             </Button>
           )}
@@ -78,6 +81,7 @@ export function SystemPromptModal() {
               aria-label={t('sys.nameLabel')}
             />
             <Button type="submit" variant="outline" disabled={!name.trim() || !text.trim()}>
+              <Icon name="check" />
               {t('sys.save')}
             </Button>
           </form>

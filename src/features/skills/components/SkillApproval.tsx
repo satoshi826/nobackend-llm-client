@@ -106,9 +106,11 @@ export function SkillApproval({ p }: { p: ToolPart }) {
       )}
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <Button variant="primary" onClick={() => resolveApproval(p.toolCallId, { approved: true, input: d })}>
+          <Icon name="check" />
           {existing ? t('approval.update') : t('save')}
         </Button>
         <Button variant="outline" onClick={() => resolveApproval(p.toolCallId, { approved: false, reason: reason || undefined })}>
+          <Icon name="x" />
           {t('approval.deny')}
         </Button>
         <TextField compact

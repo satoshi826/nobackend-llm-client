@@ -78,6 +78,7 @@ export function ConfirmDialog() {
             {t('confirm.cancel')}
           </Button>
           <Button variant={s.danger ? 'danger' : 'primary'} disabled={!canConfirm} onClick={() => close(true)}>
+            <Icon name={s.danger ? 'trash' : 'check'} />
             {s.confirmLabel ?? t('confirm.ok')}
           </Button>
         </div>

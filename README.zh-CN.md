@@ -17,7 +17,7 @@
 
 - **提供商**: Venice、OpenRouter、Anthropic、Google Gemini、OpenAI、DeepSeek、Groq、NanoGPT、DeepInfra、Cerebras、Novita、Chutes、Together，以及在构建时添加的 OpenAI 兼容端点（如 Ollama）。没有哪个提供商被特殊对待，首次启动时由你选择使用哪个。
 - **模型列表**: 书签（跨提供方标星的模型）、排序（推荐 / 名称 / 价格 / 上下文长度）和筛选（private / 推理 / 图像 / 搜索 / 免费），并显示价格和能力。
-- **聊天**: 流式输出、显示推理过程、Markdown 和代码高亮、对话树（重新生成、编辑、换模型重新生成），以及从不保存的临时聊天（在发送第一条消息前，于聊天顶部切换）。
+- **聊天**: 流式输出、显示推理过程、Markdown 和代码高亮、对话树（重新生成、编辑、换模型重新生成），以及从不保存的临时对话（在发送第一条消息前，于聊天顶部切换）。
 - **沙箱**: HTML 和 SVG 文件以页面形式显示，html / svg / js 代码块带有“运行”按钮，聊天模型可以运行 JavaScript 做精确计算（`run_javascript`，运行前确认）。这些都在无法联网、也无法访问应用的隔离框架中运行。
 - **文件**: 让模型"整理成报告"，它会把文档（Markdown、CSV 等）保存到"文件"标签页；长文档分段写入，并保留所有版本。"文件"标签页是一个文件管理器（卡片/列表视图、排序、按内容搜索、按类型和对话浏览、多选、拖放导入）。可以从设备或已保存的文件中附加文本、CSV、代码或 PDF（在浏览器内提取文字）。支持查看、编辑、下载和打印（保存为 PDF）。
 - **图像生成**（Venice、OpenAI、Gemini、OpenRouter、NanoGPT、DeepInfra、Together；按指令编辑支持 Gemini、NanoGPT、OpenAI、OpenRouter、Venice；放大和去除背景仅限 Venice）: 输入框的图像模式（模型、宽高比、分辨率、1–4 张、风格、反向提示词、种子），"相同设置再生成"/"生成相似图像"，放大、编辑、去除背景，图库，以及可选的让聊天模型生成图像的工具。图像保存在本地（设置口令后加密）。
@@ -27,6 +27,7 @@
 - **长对话**: 对话压缩（手动或自动）、提示缓存、上下文长度保护。
 - **用量**: 按天、提供商、模型统计 token 数和费用，记录只保存在本浏览器中。可查看 DeepSeek、NanoGPT、OpenRouter（此密钥额度的剩余）和 Venice 的余额，余额异常下降时会提醒。
 - **数据**: 全文搜索、JSON 备份与导入（可用密码加密）、删除图像、清除全部数据、PWA、深色模式、移动端布局。
+- **开发者**: 可以查看每条回复发送给服务商的请求（JSON）（设置 → 关于 →“显示已发送的请求”）。
 
 ## 快速开始
 
@@ -39,7 +40,7 @@ npm run dev       # http://localhost:5173
 ### 不用真实 API 试用（模拟服务器）
 
 ```bash
-npm run mock      # 兼容 Venice / Anthropic / Tavily / Jina Reader 的模拟服务器（:8787）
+npm run mock      # 兼容 Venice / Anthropic / Gemini / OpenRouter / OpenAI / Tavily / Jina Reader 的模拟服务器（:8787）
 VITE_VENICE_BASE_URL=http://localhost:8787/api/v1 \
 VITE_ANTHROPIC_BASE_URL=http://localhost:8787/anthropic/v1 \
 VITE_TAVILY_BASE_URL=http://localhost:8787/tavily \
@@ -47,14 +48,17 @@ VITE_JINA_BASE_URL=http://localhost:8787/jina \
 npm run dev
 ```
 
-**模拟密钥**: Venice 用 `mock-key`，Anthropic 用 `mock-ant`，Tavily 用 `tvly-mock`。
+**模拟密钥**: Venice 用 `mock-key`，Anthropic 用 `mock-ant`，Tavily 用 `tvly-mock`。Gemini（`mock-gem`）、OpenRouter（`mock-or`，仅模型列表、余额和图像）和 OpenAI（`mock-oai`）通过 `VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`、`VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1`、`VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1` 使用。模拟服务器也提供 Venice 的图像模型并生成 PNG：图像提示词包含 `違反` 时返回内容政策拒绝（附带改写建议），包含 `ぼかし` 时返回模糊处理的结果；对聊天模型说“絵を描いて”（图像工具开启时）会调用 `generate_image`。
 
 消息中的**关键词**会改变模拟服务器的行为:
 
 - 通用: `思考` / `think`、`コード`、`長文`、`エラー`、`残高`、`画像`、`xss`、`盗用`
 - 工具方式的网页搜索: `検索`、`読んで`（搜索之后）。直接读取网页: `ページを読んで`
+- 内置搜索（Anthropic 和 Gemini 的模拟）: `検索` / `天気`
 - 技能: `スキル` 会读取列表中的第一个技能
 - 使用 skill-creator 的对话: `作って` / `直して` 会调用 save_skill
+- 文件: `レポートにまとめて` 会调用 create_file；对话中有文件时，`追記して` / `結論を直して` / `全部読んで` 会调用 append_file / edit_file / read_file
+- 沙箱: `実行できる例` 会返回可运行的 JS 和 HTML 代码块，`計算して` 会调用 run_javascript，`ページを作って` 会创建 HTML 文件
 
 ### 用生产环境的响应头检查
 
@@ -66,7 +70,7 @@ npx wrangler dev --local                         # 或用 Cloudflare 的本地�
 
 ## 部署（通过 GitHub 部署到 Cloudflare Workers）
 
-应用作为只提供静态文件的 Worker 运行（`wrangler.jsonc`，没有 Worker 代码）。密钥保管库在同一站点的 `/vault/` 下提供。
+应用作为只提供静态文件的 Worker 运行（`wrangler.jsonc`，没有 Worker 代码）。密钥保管库（`/vault/`）和获取页面（`/fetch/`）也由同一站点提供。
 
 1. 把本仓库推送到 GitHub。
 2. 在 Cloudflare 控制台打开 Workers & Pages → Create → **Import a repository**，选择该仓库。
@@ -110,17 +114,21 @@ VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.c
 
 `npm run build` 会把每个页面的 CSP 同时写入 `_headers` 和 HTML，因此不读取 `_headers` 的主机（GitHub Pages）也会执行 CSP。但 `<meta>` 形式的 CSP 写不了的内容会失去：`frame-ancestors`（其他网站可以嵌入这些页面）以及其他响应头（`nosniff`、`Referrer-Policy`、COOP）。日常使用推荐 Cloudflare。
 
+应用以从域名根目录开始的绝对路径引用 `/fetch/`、`/vault/`、`/sandbox/`、`/sw.js` 和各类资源，因此只能部署在域名的根目录（名为 `<用户名>.github.io` 的仓库，或自定义域名），不能放在 `<用户名>.github.io/<仓库名>/` 之下。
+
 ### 读取网页、从网络导入文件
 
-模型接触网络的方式有两种，都由独立的获取页面（`/fetch/`，有自己的 CSP）先显示地址并征求确认；选择“以后不再询问”会记住该网站（保存在获取页面的存储中，“全部撤销”也在那里）。应用本身不会连接任意地址。
+模型接触网络的方式有两种，都由独立的获取页面（`/fetch/`，有自己的 CSP）先显示地址并征求确认；选择“以后不再询问”会记住该网站（保存在获取页面的存储中，可在 设置 → 网页 →“获取页面设置”中移除）。应用本身既不连接任意地址，也不连接 Jina Reader。获取页面依次尝试：直接获取 → 中转服务器（已设置时）→ Jina Reader（仅限读取）。
 
-- **读取**（`fetch_url`，同时给出想从网页了解的内容）: 在应用内把网页（HTML、文本或 PDF）转为正文，由一次不带工具的独立调用根据正文回答请求。对话模型只收到这个回答，因此网页中植入的指令不容易产生影响。读取所用的模型与对话相同，或在 设置 → 网页 中选择。无法直接获取的网页经由中转服务器（见下文），HTML 中几乎没有正文的网页（由脚本绘制）经由 Jina Reader（`r.jina.ai`，无需密钥）读取。
+- **读取**（`fetch_url`，同时给出想从网页了解的内容）: 在应用内把网页（HTML、文本或 PDF）转为正文，由一次不带工具的独立调用根据正文回答请求。对话模型只收到这个回答，因此网页中植入的指令不容易产生影响。读取所用的模型与对话相同，或在 设置 → 网页 的“用于读取网页的模型”中选择。无法直接获取的网页经由中转服务器（见下文）；仍无法获取的网页，以及 HTML 中几乎没有正文（可见文字不足约 400 字）的网页（由脚本绘制），经由 Jina Reader（`r.jina.ai`）读取。
 - **导入**（`fetch_file`）: 把文件或图像原样保存到“文件”标签。文本、CSV、HTML、代码和 PDF 会成为模型可以读取的文件；图像按图像保存（最大 20 MB，不支持 SVG）。需要处理网页的 HTML（例如写爬虫）时，可以保存后让模型读取，或用 `run_javascript` 试运行。
+
+Jina Reader 无需密钥即可使用（每个 IP 地址每分钟最多 20 次）。想提高上限时，可以在获取页面设置中填写 API 密钥（可选）。该密钥以未加密的形式保存在获取页面的存储中（设置口令后也一样），只随发往 Jina Reader 的请求发送，不包含在备份中。
 
 浏览器只能从允许跨源读取的网站获取（CORS）：文件和图像的分发站点（GitHub raw 文件、Wikimedia、许多 CDN）通常允许，普通网页通常不允许。对于这些网站，可以部署自己的中转服务器（可选）：
 
 ```bash
-# 在自己的 Cloudflare 上部署中转（relay/worker.js）；在 relay/wrangler.jsonc 的 ALLOWED_ORIGINS 中填写应用的源
+# 在自己的 Cloudflare 上部署中转（relay/worker.js）；在 relay/wrangler.jsonc 的 ALLOWED_ORIGINS 中填写获取页面的源（与应用同站时即应用的源）
 cd relay && npx wrangler deploy
 # 应用：告诉获取页面中转的位置
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<账户>.workers.dev npm run build
@@ -140,6 +148,7 @@ VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localh
 | 字段 | 含义 |
 |---|---|
 | `id` | 小写字母、数字、连字符 |
+| `label` | 显示名称（省略时为 `id`） |
 | `baseUrl` | https（http 仅限本机） |
 | `keyOptional` | 无需密钥即可使用 |
 | `publicModels` | 无需密钥即可获取模型列表 |
@@ -152,7 +161,7 @@ VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localh
 
 - **没有口令时**，密钥和对话按原样保存。
 - **设置口令后**:
-  - API 密钥、对话、已保存的提示词和技能都会被加密。
+  - API 密钥、对话、文件、图像、已保存的提示词和技能都会被加密（获取页面保存的 Jina Reader 密钥和不再询问的网站除外）。
   - 解锁之前，整个应用都被锁屏隐藏。
   - 每个标签页、每次重新加载都需要重新解锁。
   - 可以用侧边栏的按钮锁定，也可以设置无操作时自动锁定。

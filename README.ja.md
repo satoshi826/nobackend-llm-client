@@ -27,6 +27,7 @@
 - **長い会話**: 会話の圧縮（手動・自動）、プロンプトキャッシュ、コンテキスト長の安全装置。
 - **使用量**: トークン数と費用を、日・接続先・モデルごとに集計します。記録はこのブラウザの中だけです。DeepSeek・NanoGPT・OpenRouter（このキーの上限の残り）・Venice は残高を表示し、急に減ったときに警告します。
 - **データ**: 全文検索、JSON のバックアップと読み込み（パスワードで暗号化も可）、画像の削除、全データ削除、PWA、ダークモード、モバイル表示。
+- **開発者向け**: 返答ごとに、接続先へ送ったリクエスト（JSON）を表示できます（設定 → 情報 →「送ったリクエストを表示する」）。
 
 ## 使い方（開発）
 
@@ -39,7 +40,7 @@ npm run dev       # http://localhost:5173
 ### 実際の API を使わずに試す（モックサーバー）
 
 ```bash
-npm run mock      # Venice / Anthropic / Tavily / Jina Reader 互換のモック（:8787）
+npm run mock      # Venice / Anthropic / Gemini / OpenRouter / OpenAI / Tavily / Jina Reader 互換のモック（:8787）
 VITE_VENICE_BASE_URL=http://localhost:8787/api/v1 \
 VITE_ANTHROPIC_BASE_URL=http://localhost:8787/anthropic/v1 \
 VITE_TAVILY_BASE_URL=http://localhost:8787/tavily \
@@ -47,14 +48,17 @@ VITE_JINA_BASE_URL=http://localhost:8787/jina \
 npm run dev
 ```
 
-**モックのキー**: Venice は `mock-key`、Anthropic は `mock-ant`、Tavily は `tvly-mock`。
+**モックのキー**: Venice は `mock-key`、Anthropic は `mock-ant`、Tavily は `tvly-mock`。Gemini（`mock-gem`）・OpenRouter（`mock-or`。モデル一覧・残高・画像だけ）・OpenAI（`mock-oai`）は、`VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`、`VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1`、`VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1` で使えます。モックは Venice の画像モデルも返して PNG を作ります。画像のプロンプトに `違反` を含めるとコンテンツポリシーによる拒否（言い換えの提案付き）、`ぼかし` を含めるとぼかした結果が返り、チャットのモデルに「絵を描いて」と頼むと（画像のツールがオンなら）`generate_image` を呼びます。
 
 **メッセージ中のキーワード**でモックの動きが変わります。
 
 - 全般: `思考` / `think`、`コード`、`長文`、`エラー`、`残高`、`画像`、`xss`、`盗用`
 - ツール方式の Web 検索: `検索`、`読んで`（検索のあと）。ページを直接読む: `ページを読んで`
+- 内蔵の検索（Anthropic と Gemini のモック）: `検索` / `天気`
 - スキル: `スキル` で一覧の先頭のスキルを読み込む
 - skill-creator を使った会話: `作って` / `直して` で save_skill を呼ぶ
+- ファイル: `レポートにまとめて` で create_file を呼ぶ。会話にファイルがあれば、`追記して` / `結論を直して` / `全部読んで` で append_file / edit_file / read_file を呼ぶ
+- サンドボックス: `実行できる例` で実行できる JS と HTML のコードブロックを返し、`計算して` で run_javascript を呼び、`ページを作って` で HTML ファイルを作る
 
 ### 本番と同じヘッダで確かめる
 
@@ -66,7 +70,7 @@ npx wrangler dev --local                         # または Cloudflare のロ�
 
 ## デプロイ（GitHub 連携で Cloudflare Workers）
 
-静的ファイルだけを配る Worker として動かします（`wrangler.jsonc`。Worker のコードはありません）。キー金庫は同じサイトの `/vault/` で配信します。
+静的ファイルだけを配る Worker として動かします（`wrangler.jsonc`。Worker のコードはありません）。キー金庫（`/vault/`）と取得用ページ（`/fetch/`）も同じサイトから配信します。
 
 1. このリポジトリを GitHub に push する。
 2. Cloudflare のダッシュボードで Workers & Pages → Create → **Import a repository** を開き、リポジトリを選ぶ。
@@ -92,12 +96,12 @@ Cloudflare Pages でも配信できます（ビルドコマンド `npm run build
 
 **データはオリジンごと**: 会話とキーは、開いた URL ごとに別々に保存されます。お試し用ビルドから本番へ、`workers.dev` から独自ドメインへ、などと移るときは、先に「設定 → プライバシーとデータ」でバックアップを書き出し、移った先で読み込んでください。キーは入れ直しになります。
 
-### 厳密な構成: 金庫と取得ページを別オリジンに置く
+### 厳密な構成: 金庫と取得用ページを別オリジンに置く
 
-標準では、キー金庫（`/vault/`）と取得ページ（`/fetch/`）はアプリと同じオリジンから配信され、どこに置いても動きます。その限界は、万一アプリ内でスクリプトが動いた（XSS）場合に、金庫にキーを求めたり、取得ページを使って任意のアドレスへデータを送ったりできることです。どちらも別オリジンに置けば、そうしたスクリプトには何もできません。
+標準では、キー金庫（`/vault/`）と取得用ページ（`/fetch/`）はアプリと同じオリジンから配信され、どこに置いても動きます。その限界は、万一アプリ内でスクリプトが動いた（XSS）場合に、金庫にキーを求めたり、取得用ページを使って任意のアドレスへデータを送ったりできることです。どちらも別オリジンに置けば、そうしたスクリプトには何もできません。
 
 ```bash
-# 金庫のサイト（dist-vault/ を配信）と取得ページのサイト（dist-fetch/ を配信）
+# 金庫のサイト（dist-vault/ を配信）と取得用ページのサイト（dist-fetch/ を配信）
 VITE_APP_ORIGIN=https://app.example.com npm run build:vault
 VITE_APP_ORIGIN=https://app.example.com npm run build:fetch
 # 本体のサイト: 2 つのオリジンは frame-src に入り、/vault/ と /fetch/ はビルドされなくなる
@@ -110,21 +114,25 @@ VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.c
 
 `npm run build` は各ページの CSP を `_headers` だけでなく HTML にも入れるので、`_headers` を読まないホスト（GitHub Pages）でも CSP は効きます。ただし `<meta>` の CSP に書けないものは失われます: `frame-ancestors`（ほかのサイトがページを埋め込める）と、ほかのヘッダ（`nosniff`、`Referrer-Policy`、COOP）。普段使いには Cloudflare をおすすめします。
 
+アプリは `/fetch/`・`/vault/`・`/sandbox/`・`/sw.js` やアセットを、すべてドメインのルートからの絶対パスで参照します。そのため、ドメインの直下（`<ユーザー名>.github.io` という名前のリポジトリか、独自ドメイン）でだけ動き、`<ユーザー名>.github.io/<リポジトリ名>/` の下では動きません。
+
 ### Web のページを読む・ファイルを取り込む
 
-モデルが Web に触れる方法は 2 つで、どちらも別の取得ページ（`/fetch/`、専用の CSP）がアドレスを見せてから確認します。「今後確認しない」を選ぶとそのサイトを覚えます（取得用ページの保存領域に保存。「すべて取り消す」もそこにあります）。アプリ本体は任意のアドレスに接続しません。
+モデルが Web に触れる方法は 2 つで、どちらも別の取得用ページ（`/fetch/`、専用の CSP）がアドレスを見せてから確認します。「今後確認しない」を選ぶとそのサイトを覚えます（取得用ページの保存領域に保存し、設定 → Web →「取得用ページの設定」で取り消せます）。アプリ本体は任意のアドレスにも Jina Reader にも接続しません。取得用ページは、直接 → 中継サーバー（設定したとき）→ Jina Reader（読むときだけ）の順に試します。
 
-- **読む**（`fetch_url`。ページから知りたいことも渡す）: ページ（HTML・テキスト・PDF）をアプリ内で本文にし、ツールのない別の呼び出しがその本文から依頼に答えます。会話のモデルに届くのはその答えだけなので、ページに仕込まれた指示の影響を受けにくくなります。読むモデルは会話と同じものか、設定 → Web で選んだものです。直接取れないページは中継サーバー（下記）を、HTML に本文がほとんどないページ（スクリプトで描くもの）は Jina Reader（`r.jina.ai`、キー不要）を通して読みます。
+- **読む**（`fetch_url`。ページから知りたいことも渡す）: ページ（HTML・テキスト・PDF）をアプリ内で本文にし、ツールのない別の呼び出しがその本文から依頼に答えます。会話のモデルに届くのはその答えだけなので、ページに仕込まれた指示の影響を受けにくくなります。読むモデルは会話と同じものか、設定 → Web の「ページの抜き出しに使うモデル」で選んだものです。直接取れないページは中継サーバー（下記）を通し、それでも取れないページと、HTML に本文がほとんどない（見える文字が 400 字ほどに満たない）ページ（スクリプトで描くもの）は Jina Reader（`r.jina.ai`）で読みます。
 - **取り込む**（`fetch_file`）: ファイルや画像をそのままファイルタブに保存します。テキスト・CSV・HTML・コード・PDF はモデルが読めるファイルに、画像は画像として保存します（20 MB まで。SVG は不可）。ページの HTML を扱いたいとき（スクレイピングなど）は、保存してモデルに読ませるか、`run_javascript` で試せます。
+
+Jina Reader はキーなしで使えます（IP アドレスごとに 1 分 20 回まで）。上限を上げたいときは、取得用ページの設定で API キーを入れます（任意）。このキーは取得用ページの保存領域に暗号化せずに保存し（パスフレーズがあっても同じ）、Jina Reader への依頼にだけ付けます。バックアップには入りません。
 
 ブラウザから取得できるのは、それを許しているサイトだけです（CORS）。ファイルや画像の配信元（GitHub の raw ファイル、Wikimedia、多くの CDN）は許していることが多く、一般の Web ページは許していないことが多いです。そうしたサイト向けに、自分の中継サーバーを置けます（任意）。
 
 ```bash
-# 中継（relay/worker.js）を自分の Cloudflare に置く。relay/wrangler.jsonc の ALLOWED_ORIGINS にアプリのオリジンを書く
+# 中継（relay/worker.js）を自分の Cloudflare に置く。relay/wrangler.jsonc の ALLOWED_ORIGINS に取得用ページのオリジン（アプリと同じサイトならアプリのオリジン）を書く
 cd relay && npx wrangler deploy
-# アプリ: 中継の場所を取得ページに伝える
+# アプリ: 中継の場所を取得用ページに伝える
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<アカウント>.workers.dev npm run build
-# 取得ページを別オリジンに置く場合は、build:fetch と本体の build の両方に同じ値を渡す（本体は 設定 → Web に表示する）
+# 取得用ページを別オリジンに置く場合は、build:fetch と本体の build の両方に同じ値を渡す（本体は 設定 → Web に表示する）
 ```
 
 中継は公開された https のアドレスにだけ接続し、あなたのヘッダや Cookie を送らず、何も記録せず、許可したオリジンにだけ応答し、リダイレクト先も同じ基準で確かめ、1 つの IP から 1 分に 30 回までという制限を Cloudflare に指定しています（オリジンはスクリプトなら偽れ、中継のアドレスはアプリのコードから読めるため）。ただし Cloudflare はこの制限を大まかにしか適用せず、試したときはすべて通りました。中継を通したアドレスは中継（自分の Worker）にも見えます。
@@ -140,6 +148,7 @@ VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localh
 | 項目 | 意味 |
 |---|---|
 | `id` | 半角の小文字・数字・ハイフン |
+| `label` | 表示名（省略すると `id`） |
 | `baseUrl` | https（http はローカルのみ） |
 | `keyOptional` | キーなしで使える |
 | `publicModels` | モデル一覧をキーなしで取れる |
@@ -152,7 +161,7 @@ VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localh
 
 - **パスフレーズがなければ**、キーも会話もそのまま保存します。
 - **パスフレーズを設定すると**:
-  - API キー・会話・保存済みのプロンプト・スキルを暗号化します。
+  - API キー・会話・ファイル・画像・保存済みのプロンプト・スキルを暗号化します（取得用ページが持つ Jina Reader のキーと確認しないサイトは除く）。
   - 解錠するまで、アプリ全体をロック画面で隠します。
   - タブごと、読み込み直すたびに解錠が必要です。
   - サイドバーのボタンでロックでき、操作がないときの自動ロックも設定できます。

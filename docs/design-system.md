@@ -44,10 +44,10 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 | `--bg` | `#07080d` | Page ground |
 | `--glow-1` / `--glow-2` / `--glow-3` | `#64748b` / `#6366f1` / `#94a3b8` | Background light blobs (opacity 0.30 / 0.24 / 0.13, blur 110–120 px): the Moonlight set and the default. Settings → 表示 → 背景 can pick another light set and its drift speed (0 holds it still; a change never makes the light jump), or replace the light with a solid colour or the user's picture, darkened so text stays readable |
 | `--glass` | `rgba(255,255,255,.06)` | Panels (sidebar, header, cards, composer) |
-| `--glass-strong` | `rgba(255,255,255,.10)` | Raised / hovered glass, active row |
+| `--glass-strong` | `rgba(255,255,255,.11)` | Raised / hovered glass, active row |
 | `--sunken` | `rgba(0,0,0,.35)` | Fields, segmented controls inside glass |
 | `--line` | `rgba(255,255,255,.12)` | Panel borders, dividers, edges of fields and selects |
-| `--line-strong` | `rgba(255,255,255,.22)` | Hover borders, focused fields |
+| `--line-strong` | `rgba(255,255,255,.24)` | Hover borders, focused fields |
 | `--ink` | `#e7e9f3` | Body |
 | `--ink-strong` | `#ffffff` | Headings, selected items |
 | `--muted` | `#a3a8bd` | Secondary text, captions |
@@ -55,19 +55,21 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 | `--accent` | `#cbd5e1` | Primary button fill, focus ring, selection |
 | `--accent-ink` | `#0b0d17` | Text/icons on `--accent` |
 | `--accent-soft` | `rgba(203,213,225,.14)` | Selected chips, the user's bubble |
+| `--accent-text` | `#e2e8f0` | Links, chips and running spinners in the accent colour |
 | `--ok` / `--ok-soft` | `#6ee7b7` / `rgba(52,211,153,.16)` | private, success |
 | `--warn` / `--warn-soft` | `#fcd34d` / `rgba(251,191,36,.14)` | relayed, caution |
 | `--danger` / `--danger-soft` | `#fda4af` / `rgba(244,63,94,.16)` | errors, destructive actions |
+| `--scrim` | `rgba(0,0,0,.5)` | Fields laid over an image |
 
 **Dark only for now**: the light theme is not offered (`DARK_ONLY` in `state/settings.ts`; the theme picker is hidden and the stored setting is kept). When it comes back, it uses the same token names with light values (`:root` in `src/styles.css`): ground `#eceef4`, white glass, slate accent `#334155`.
 
 ### 3.2 Glass
 
-`background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(24px) saturate(140%)`. Floating surfaces (composer, menus, toasts) add `box-shadow: 0 20px 60px rgba(0,0,0,.35)`. Glass is never stacked more than two deep (panel → card inside); a third layer uses `--glass-sunken`.
+`background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(36px) saturate(140%)`. Floating surfaces (composer, menus, toasts, dialogs) add `--shadow-float` (`0 20px 60px rgba(0,0,0,.35)`) and a stronger blur (40–48 px); the composer, dialogs, menus and toasts mix `--bg` into their fill so what scrolls behind them does not wash them out. Glass is never stacked more than two deep (panel → card inside); a third layer uses `--sunken`.
 
 ### 3.3 Type
 
-Inter + Noto Sans JP (system fallback). Sizes: 12 (captions, badges), 13 (chips, secondary), 14 (UI default), 15 (message body, input), 18 (section titles), 24 (screen titles). Weights 400 / 500 / 600. Line height 1.7–1.8 for message text, 1.4 for UI.
+Inter, then the system's Japanese font (Hiragino Sans, Noto Sans JP, Yu Gothic UI). Sizes: 12 (captions, badges), 13 (chips, secondary), 14 (UI default), 15 (message body, input), 18 (section titles), 24 (screen titles). Weights 400 / 500 / 600. Line height 1.7–1.8 for message text, 1.4 for UI.
 
 ### 3.4 Space, radius, size
 
@@ -80,14 +82,14 @@ Inter + Noto Sans JP (system fallback). Sizes: 12 (captions, badges), 13 (chips,
 | Name | Spec |
 |---|---|
 | `drift` | Background blobs, 22–30 s ease-in-out loop, translate ≤ 140 px, scale 0.95–1.15 |
-| `rise` | New message / card: 0.6 s cubic-bezier(.2,.7,.2,1), from 10 px below + transparent |
+| `rise` | New message / card: 0.6 s cubic-bezier(.2,.7,.2,1), from 10 px below + transparent. Frosted dialogs: 0.45 s from 12 px below and scale .98, without the fade |
 | `press` | Everything clickable: scale .97 on active, 80 ms |
 | `hover` | Color / background / border 200 ms on every interactive element (base layer in styles.css); icons in buttons grow slightly; cards that open something lift 2 px (`lift`) |
 | `slide` | Segmented / tab indicators, switch knob, drawer: 300 ms ease-out (knob: spring) |
 | `collapse` | Accordions: grid rows 0fr ↔ 1fr + opacity, 300 ms |
 | `pop` | Menus: 180 ms fade + scale from .96 |
 | `fade-in` | Settings tab panels, the selection bar: 220 ms |
-| `caret` | Streaming caret blink 1 s steps |
-| `shimmer` | "Working…" text sweep 2.2 s linear |
+| `caret` | Streaming caret pulse, 2 s |
+| `shimmer` | "Working…" text sweep 1.8 s linear |
 
 All animations are disabled under `prefers-reduced-motion: reduce`.

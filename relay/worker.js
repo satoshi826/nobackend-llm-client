@@ -1,7 +1,8 @@
 // Optional relay for the fetch page (fetch/): fetches one https address for sites that do not allow fetching from
 // a browser (no CORS). Deploy it on your own Cloudflare account and build the app with VITE_FETCH_RELAY_URL set to
-// its address (README). It keeps nothing, sends no cookies or headers of the caller, answers only to the fetch
-// page's origin(s) in ALLOWED_ORIGINS, and limits requests per client IP (LIMITER in wrangler.jsonc).
+// its address (with the fetch page on its own origin, its build:fetch too; README). It keeps nothing, sends no
+// cookies or headers of the caller, answers only to the fetch page's origin(s) in ALLOWED_ORIGINS, and limits
+// requests per client IP (LIMITER in wrangler.jsonc).
 const MAX_BYTES = 20 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
 

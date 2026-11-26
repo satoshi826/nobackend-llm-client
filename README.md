@@ -18,15 +18,16 @@ The UI is available in Japanese, English and Simplified Chinese (automatic, or c
 - **Providers**: Venice, OpenRouter, Anthropic, Google Gemini, OpenAI, DeepSeek, Groq, NanoGPT, DeepInfra, Cerebras, Novita, Chutes, Together, plus OpenAI-compatible endpoints added at build time (e.g. Ollama). No provider is privileged; you choose which to use on first launch.
 - **Model list**: bookmarks (starred models across providers), sort (recommended / name / price / context length) and filter (private / reasoning / vision / search / free), with pricing and capabilities shown.
 - **Chat**: streaming, visible reasoning, Markdown and code highlighting, a conversation tree (regenerate, edit, regenerate with another model), and temporary chats that are never saved (toggle in the chat header before the first message).
-- **Image generation** (Venice, OpenAI, Gemini, OpenRouter, NanoGPT, DeepInfra, Together; editing from instructions on Gemini, NanoGPT, OpenAI, OpenRouter and Venice; upscale and background removal on Venice): image mode in the input box (model, aspect ratio, resolution, 1–4 images, style, negative prompt, seed), "same settings again" / "similar image", upscale, edit, background removal, a gallery, and an optional tool so chat models can create images. Images are stored locally (encrypted with a passphrase).
 - **Sandbox**: HTML and SVG files open as a page, html / svg / js code blocks get a Run button, and chat models can run JavaScript (`run_javascript`, asks first) for exact calculations. All of it runs in an isolated frame with no network and no access to the app.
 - **Files**: ask for a report, notes or a translation and the model saves it as a file (Markdown, CSV, …) in the Files tab, writing long documents in parts and keeping every version. The Files tab is a file manager (cards or list, sorting, search inside files, views by type and by conversation, multi-select, drag-and-drop upload). Attach text files, CSV, code or PDFs (text is extracted in the browser) from your device or from saved files. View, edit, download or print to PDF.
+- **Image generation** (Venice, OpenAI, Gemini, OpenRouter, NanoGPT, DeepInfra, Together; editing from instructions on Gemini, NanoGPT, OpenAI, OpenRouter and Venice; upscale and background removal on Venice): image mode in the input box (model, aspect ratio, resolution, 1–4 images, style, negative prompt, seed), "same settings again" / "similar image", upscale, edit, background removal, a gallery, and an optional tool so chat models can create images. Images are stored locally (encrypted with a passphrase).
 - **Reply suggestions**: short follow-ups under the latest reply; tap one to put it in the input box. Count, how many recent exchanges to use, and the model are configurable.
 - **Web**: search with the provider's built-in search (Anthropic, Gemini, Groq, OpenRouter, Venice) or the Tavily tool; models read pages (HTML, text, PDF) with `fetch_url`, where a separate call takes out only what was asked before the model sees it (like Claude Code's WebFetch); and bring files in with `fetch_file`. Every fetch is confirmed in the fetch page, which can remember sites you allow.
 - **Skills**: SKILL.md-compatible instruction files. The model loads a skill's body only when it needs it, or you can attach one with `/name`. Ask it to "turn this into a skill" and it drafts one, which is saved after you approve it.
 - **Long conversations**: compaction (manual or automatic), prompt caching, and a context-length safeguard.
 - **Usage**: tokens and cost per day, provider and model, recorded only in this browser. Balance and balance alert for DeepSeek, NanoGPT, OpenRouter (the key's limit left) and Venice.
 - **Data**: full-text search, JSON backup/import (optionally password-encrypted), image deletion, wipe everything, PWA, dark mode, mobile layout.
+- **For developers**: each reply can show the requests (JSON) sent to the provider (Settings → About → "Show the requests sent").
 
 ## Quick start
 
@@ -39,7 +40,7 @@ npm run dev       # http://localhost:5173
 ### Try it without real APIs (mock server)
 
 ```bash
-npm run mock      # Venice / Anthropic / Tavily / Jina Reader-compatible mock on :8787
+npm run mock      # Venice / Anthropic / Gemini / OpenRouter / OpenAI / Tavily / Jina Reader-compatible mock on :8787
 VITE_VENICE_BASE_URL=http://localhost:8787/api/v1 \
 VITE_ANTHROPIC_BASE_URL=http://localhost:8787/anthropic/v1 \
 VITE_TAVILY_BASE_URL=http://localhost:8787/tavily \
@@ -47,14 +48,16 @@ VITE_JINA_BASE_URL=http://localhost:8787/jina \
 npm run dev
 ```
 
-**Mock keys**: Venice `mock-key`, Anthropic `mock-ant`, Tavily `tvly-mock`. The mock also serves Venice image models and generates PNGs; an image prompt containing `違反` returns a content-policy rejection with a suggestion, and asking a chat model "絵を描いて" (with the image tool on) calls `generate_image`.
+**Mock keys**: Venice `mock-key`, Anthropic `mock-ant`, Tavily `tvly-mock`. Gemini (`mock-gem`), OpenRouter (`mock-or`; model list, balance and images only) and OpenAI (`mock-oai`) are used with `VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`, `VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1` and `VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1`. The mock also serves Venice image models and generates PNGs; an image prompt containing `違反` returns a content-policy rejection with a suggestion, one containing `ぼかし` a blurred result, and asking a chat model "絵を描いて" (with the image tool on) calls `generate_image`.
 
 **Keywords** in a message change the mock's behaviour:
 
 - General: `思考` / `think`, `コード`, `長文`, `エラー`, `残高`, `画像`, `xss`, `盗用`.
 - Tool-based web search: `検索`, `読んで` (after a search). Reading a page directly: `ページを読んで`.
+- Built-in search (the Anthropic and Gemini mocks): `検索` / `天気`.
 - Skills: `スキル` loads the first skill.
 - Skill creator: `作って` / `直して` calls `save_skill` in a skill-creator conversation.
+- Files: `レポートにまとめて` calls `create_file`; with a file in the conversation, `追記して` / `結論を直して` / `全部読んで` call `append_file` / `edit_file` / `read_file`.
 - Sandbox: `実行できる例` answers with runnable JS and HTML code blocks, `計算して` calls `run_javascript`, `ページを作って` creates an HTML file.
 
 ### Check with production headers
@@ -67,7 +70,7 @@ npx wrangler dev --local                         # or: Cloudflare's local runtim
 
 ## Deploy (Cloudflare Workers via GitHub)
 
-The app is deployed as a Worker that only serves static files (`wrangler.jsonc`, no Worker code). The key vault is served from the same site at `/vault/`.
+The app is deployed as a Worker that only serves static files (`wrangler.jsonc`, no Worker code). The key vault (`/vault/`) and the fetch page (`/fetch/`) are served from the same site.
 
 1. Push this repository to GitHub.
 2. In Cloudflare: Workers & Pages → Create → **Import a repository**, then select it.
@@ -91,7 +94,7 @@ Then open the site, check the developer console for CSP errors, and try a spend-
 
 Cloudflare Pages also works (build command `npm run build`, output directory `dist`); `_headers` applies the same way.
 
-**Data is per origin.** Conversations and keys belong to the URL you use. When moving (from a local trial build, from `workers.dev` to a custom domain, and so on), export a backup in Settings → Privacy & data first, then import it on the new site. Keys must be entered again.
+**Data is per origin.** Conversations and keys belong to the URL you use. When moving (from a local trial build, from `workers.dev` to a custom domain, and so on), export a backup in Settings → Privacy and data first, then import it on the new site. Keys must be entered again.
 
 ### Strict setup: the vault and the fetch page on their own origins
 
@@ -111,17 +114,21 @@ Use subdomains of one custom domain (three Workers or Pages sites, free). Two di
 
 `npm run build` puts each page's CSP in its HTML as well as in `_headers`, so a host that ignores `_headers` (GitHub Pages) still enforces it. What a `<meta>` CSP cannot carry is lost there: `frame-ancestors` (other sites may embed the pages) and the other headers (`nosniff`, `Referrer-Policy`, COOP). Prefer Cloudflare for daily use.
 
+The app refers to `/fetch/`, `/vault/`, `/sandbox/`, `/sw.js` and its assets by absolute paths from the domain root, so it works only at the root of a domain (a repository named `<user>.github.io`, or a custom domain), not under `<user>.github.io/<repository>/`.
+
 ### Reading pages and fetching files from the web
 
-Models reach the web in two ways, both through a separate fetch page (`/fetch/`, its own CSP) that shows the address and asks you first; tick "don't ask again" to remember a site (kept in the fetch page's storage, with "forget all" there). The app itself never reaches arbitrary addresses.
+Models reach the web in two ways, both through a separate fetch page (`/fetch/`, its own CSP) that shows the address and asks you first; tick "Don't ask again" to remember a site (kept in the fetch page's storage; forget it under Settings → Web → "Fetch page settings"). The app itself never reaches arbitrary addresses, nor Jina Reader. The fetch page tries the site directly, then your relay (when there is one), then Jina Reader (for reading only).
 
-- **Read** (`fetch_url`, with what the model wants from the page): the page (HTML, text or PDF) becomes text in the app, and a separate call with no tools answers the request from it. Only that answer reaches the conversation's model, so instructions planted in the page have little hold. The reading model is the conversation's unless you pick one in Settings → Web. Pages that refuse direct fetching go through your relay (below), and pages that hold almost no text in their HTML (drawn by scripts) are read through Jina Reader (`r.jina.ai`, keyless).
+- **Read** (`fetch_url`, with what the model wants from the page): the page (HTML, text or PDF) becomes text in the app, and a separate call with no tools answers the request from it. Only that answer reaches the conversation's model, so instructions planted in the page have little hold. The reading model is the conversation's unless you pick one in Settings → Web ("Model that reads pages"). Pages that refuse direct fetching go through your relay (below); pages that still can't be fetched, and pages whose HTML holds almost no text (under about 400 visible characters, drawn by scripts), are read through Jina Reader (`r.jina.ai`).
 - **Save** (`fetch_file`): a file or an image is kept in the Files tab as it is. Text, CSV, HTML, code and PDFs become files the model can read; images are saved as images (up to 20 MB; no SVG). To work with a page's markup (a scraper, say), save it and have the model read it, or try code on it with `run_javascript`.
+
+Jina Reader works without a key (up to 20 requests a minute per IP address). To raise the limit, enter an API key in the fetch page's settings (optional). The key is kept unencrypted in the fetch page's storage (with a passphrase too), sent only with requests to Jina Reader, and not included in backups.
 
 A browser can only fetch from sites that allow it (CORS): file and image hosts often do (GitHub raw files, Wikimedia, many CDNs), ordinary web pages often don't. For those, you can deploy your own relay (optional):
 
 ```bash
-# relay (relay/worker.js) on your Cloudflare account; set ALLOWED_ORIGINS in relay/wrangler.jsonc to the app's origin
+# relay (relay/worker.js) on your Cloudflare account; set ALLOWED_ORIGINS in relay/wrangler.jsonc to the fetch page's origin (the app's, when they share a site)
 cd relay && npx wrangler deploy
 # app: tell the fetch page where the relay is
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<account>.workers.dev npm run build
@@ -141,6 +148,7 @@ VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localh
 | Field | Meaning |
 |---|---|
 | `id` | lowercase letters, digits, hyphens |
+| `label` | the name shown (`id` when left out) |
 | `baseUrl` | https; plain http is allowed for localhost only |
 | `keyOptional` | usable without a key |
 | `publicModels` | the model list can be fetched without a key |
@@ -153,11 +161,11 @@ There's no storage mode to choose.
 
 - **Without a passphrase**, keys and conversations are stored as-is.
 - **With a passphrase**:
-  - API keys, conversations, saved prompts and skills are encrypted.
+  - API keys, conversations, files, images, saved prompts and skills are encrypted (not the fetch page's Jina Reader key and sites not asked about).
   - The app is hidden behind a lock screen until you unlock it.
   - Each tab and each reload must be unlocked again.
   - You can lock with the sidebar button, or set an idle auto-lock.
-- **Setup**: right after you save your first key, the app offers to set one (you can skip). You can also set, change or remove it under Settings → Connections & keys. Changing or removing it requires the current passphrase.
+- **Setup**: right after you save your first key, the app offers to set one (you can skip). You can also set, change or remove it under Settings → Connections and keys. Changing or removing it requires the current passphrase.
 - **If you forget it**, nothing can be recovered. The lock screen can only wipe everything so you can start over.
 - **Backups are plain JSON unless you set a password when exporting** (on by default once a passphrase is set). Store plain backups carefully.
 

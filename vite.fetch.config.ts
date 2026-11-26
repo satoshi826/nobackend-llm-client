@@ -1,7 +1,9 @@
 // Build config for the fetch page hosted on a separate origin (optional). Outputs to dist-fetch/.
 //   VITE_APP_ORIGIN       : origin(s) of the app allowed to embed it (comma-separated), e.g. https://app.example.com
 //   VITE_FETCH_RELAY_URL  : optional relay for sites that do not allow fetching from a browser (relay/worker.js)
-// The app is then built with VITE_FETCH_URL pointing at it. Also generates the page's _headers (CSP).
+//   VITE_JINA_BASE_URL    : Jina Reader's address; only for the mock (defaults to https://r.jina.ai)
+// The app is then built with VITE_FETCH_URL pointing at it, and with the same VITE_FETCH_RELAY_URL (Settings → Web
+// shows it). Also generates the page's _headers (CSP).
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { resolve } from 'node:path';
 import { cspMetaTag, fetchHeadersFile, fetchPagePolicy } from './csp.config';

@@ -45,8 +45,8 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 | `--glow-1` / `--glow-2` / `--glow-3` | `#64748b` / `#6366f1` / `#94a3b8` | Background light blobs (opacity 0.30 / 0.24 / 0.13, blur 110–120 px): the Moonlight set and the default. Settings → 表示 → 背景 can pick another light set and its drift speed (0 holds it still; a change never makes the light jump), or replace the light with a solid colour or the user's picture, darkened so text stays readable |
 | `--glass` | `rgba(255,255,255,.06)` | Panels (sidebar, header, cards, composer) |
 | `--glass-strong` | `rgba(255,255,255,.10)` | Raised / hovered glass, active row |
-| `--sunken` | `rgba(0,0,0,.25)` | Fields, segmented controls inside glass |
-| `--line` | `rgba(255,255,255,.12)` | Panel borders, dividers |
+| `--sunken` | `rgba(0,0,0,.35)` | Fields, segmented controls inside glass |
+| `--line` | `rgba(255,255,255,.12)` | Panel borders, dividers, edges of fields and selects |
 | `--line-strong` | `rgba(255,255,255,.22)` | Hover borders, focused fields |
 | `--ink` | `#e7e9f3` | Body |
 | `--ink-strong` | `#ffffff` | Headings, selected items |

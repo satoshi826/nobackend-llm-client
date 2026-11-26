@@ -433,7 +433,7 @@ export function EmptyState({ icon, compact, class: className, children }: { icon
 
 // ---- Fields: one look for every text field, text area, select and search box ----
 const FIELD =
-  'rounded-xl border border-transparent bg-sunken text-ink placeholder:text-faint transition hover:border-line focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-50';
+  'rounded-xl border border-line bg-sunken text-ink placeholder:text-faint transition hover:border-line-strong focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-50';
 const SELECT = 'rounded-[10px] border border-line bg-sunken text-ink transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-50';
 const fieldSize = (compact?: boolean) => (compact ? 'px-2.5 py-1 text-xs' : 'px-3 py-2 text-sm');
 

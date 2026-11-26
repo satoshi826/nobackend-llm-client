@@ -117,7 +117,7 @@ cd relay && npx wrangler deploy
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<アカウント>.workers.dev npm run build
 ```
 
-中継は公開された https のアドレスにだけ接続し、あなたのヘッダや Cookie を送らず、何も記録せず、許可したオリジンにだけ応答します。中継を通したアドレスは中継（自分の Worker）にも見えます。アプリ内で動くスクリプトから取得ページを切り離したいときは、金庫と同じく別オリジンに置きます: `VITE_APP_ORIGIN=https://app.example.com npm run build:fetch`（`dist-fetch/` をデプロイ）、アプリは `VITE_FETCH_URL=https://fetch.example.com/` でビルドします。
+中継は公開された https のアドレスにだけ接続し、あなたのヘッダや Cookie を送らず、何も記録せず、許可したオリジンにだけ応答し、リダイレクト先も同じ基準で確かめ、1 つの IP から 1 分に 30 回までという制限を Cloudflare に指定しています（オリジンはスクリプトなら偽れ、中継のアドレスはアプリのコードから読めるため）。ただし Cloudflare はこの制限を大まかにしか適用せず、試したときはすべて通りました。中継を通したアドレスは中継（自分の Worker）にも見えます。アプリ内で動くスクリプトから取得ページを切り離したいときは、金庫と同じく別オリジンに置きます: `VITE_APP_ORIGIN=https://app.example.com npm run build:fetch`（`dist-fetch/` をデプロイ）、アプリは `VITE_FETCH_URL=https://fetch.example.com/` でビルドします。
 
 ### ビルド時に接続先を足す
 

@@ -117,7 +117,7 @@ cd relay && npx wrangler deploy
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<账户>.workers.dev npm run build
 ```
 
-中转只连接公开的 https 地址，不转发你的请求头或 Cookie，不保存任何内容，只响应允许的源。通过中转获取的地址中转（你自己的 Worker）也能看到。若要让获取页面与应用内运行的脚本隔离，可像密钥保管库一样把它放在独立的源上：`VITE_APP_ORIGIN=https://app.example.com npm run build:fetch`（部署 `dist-fetch/`），并用 `VITE_FETCH_URL=https://fetch.example.com/` 构建应用。
+中转只连接公开的 https 地址，不转发你的请求头或 Cookie，不保存任何内容，只响应允许的源，对重定向目标做同样的检查，并向 Cloudflare 指定每个 IP 每分钟最多 30 次请求（源可以被脚本伪造，中转的地址也能从应用代码中读到）。不过 Cloudflare 只是粗略地执行这个限制，测试时所有请求都通过了。通过中转获取的地址中转（你自己的 Worker）也能看到。若要让获取页面与应用内运行的脚本隔离，可像密钥保管库一样把它放在独立的源上：`VITE_APP_ORIGIN=https://app.example.com npm run build:fetch`（部署 `dist-fetch/`），并用 `VITE_FETCH_URL=https://fetch.example.com/` 构建应用。
 
 ### 在构建时添加提供商
 

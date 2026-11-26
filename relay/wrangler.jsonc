@@ -1,9 +1,13 @@
 // The optional fetch relay (relay/worker.js), deployed as its own Worker: `npx wrangler deploy` in this folder.
 // Set ALLOWED_ORIGINS to the origin(s) of the fetch page that may use it (the app's origin when the fetch page is
 // hosted with the app), then build the app with VITE_FETCH_RELAY_URL set to this Worker's address.
+// The Origin check stops other web pages, not scripts that send a forged Origin, and the address is readable in the
+// app's code: LIMITER asks Cloudflare to cap requests per client IP so a stranger using it cannot spend much of your
+// Workers quota. Cloudflare applies it loosely (in a test it let every request through).
 {
   "name": "nobackend-fetch-relay",
   "main": "worker.js",
   "compatibility_date": "2026-11-20",
-  "vars": { "ALLOWED_ORIGINS": "https://your-app.example.com" }
+  "vars": { "ALLOWED_ORIGINS": "https://your-app.example.com" },
+  "ratelimits": [{ "name": "LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }]
 }

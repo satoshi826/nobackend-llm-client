@@ -117,7 +117,7 @@ cd relay && npx wrangler deploy
 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<account>.workers.dev npm run build
 ```
 
-The relay only takes public https addresses, passes on none of your headers or cookies, keeps nothing, and answers only to the allowed origins. Addresses you fetch through it are seen by it (your own Worker). To keep the fetch page out of reach of scripts running in the app, host it on its own origin like the vault: `VITE_APP_ORIGIN=https://app.example.com npm run build:fetch` (deploy `dist-fetch/`) and build the app with `VITE_FETCH_URL=https://fetch.example.com/`.
+The relay only takes public https addresses, passes on none of your headers or cookies, keeps nothing, answers only to the allowed origins, checks every redirect the same way, and asks Cloudflare to cap each IP at 30 requests a minute (the allowed origin is a header any script can fake, and the relay's address is readable in the app). Cloudflare applies this cap loosely: in a test it let every request through. Addresses you fetch through it are seen by it (your own Worker). To keep the fetch page out of reach of scripts running in the app, host it on its own origin like the vault: `VITE_APP_ORIGIN=https://app.example.com npm run build:fetch` (deploy `dist-fetch/`) and build the app with `VITE_FETCH_URL=https://fetch.example.com/`.
 
 ### Adding providers at build time
 

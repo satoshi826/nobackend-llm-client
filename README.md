@@ -19,6 +19,7 @@ The UI is available in Japanese, English and Simplified Chinese (automatic, or c
 - **Model list**: bookmarks (starred models across providers), sort (recommended / name / price / context length) and filter (private / reasoning / vision / search / free), with pricing and capabilities shown.
 - **Chat**: streaming, visible reasoning, Markdown and code highlighting, a conversation tree (regenerate, edit, regenerate with another model), and temporary chats that are never saved (toggle in the chat header before the first message).
 - **Image generation** (Venice, OpenAI, Gemini, OpenRouter, NanoGPT, DeepInfra, Together; editing from instructions on Gemini, NanoGPT, OpenAI, OpenRouter and Venice; upscale and background removal on Venice): image mode in the input box (model, aspect ratio, resolution, 1–4 images, style, negative prompt, seed), "same settings again" / "similar image", upscale, edit, background removal, a gallery, and an optional tool so chat models can create images. Images are stored locally (encrypted with a passphrase).
+- **Sandbox**: HTML and SVG files open as a page, html / svg / js code blocks get a Run button, and chat models can run JavaScript (`run_javascript`, asks first) for exact calculations. All of it runs in an isolated frame with no network and no access to the app.
 - **Files**: ask for a report, notes or a translation and the model saves it as a file (Markdown, CSV, …) in the Files tab, writing long documents in parts and keeping every version. The Files tab is a file manager (cards or list, sorting, search inside files, views by type and by conversation, multi-select, drag-and-drop upload). Attach text files, CSV, code or PDFs (text is extracted in the browser) from your device or from saved files. View, edit, download or print to PDF.
 - **Reply suggestions**: short follow-ups under the latest reply; tap one to put it in the input box. Count, how many recent exchanges to use, and the model are configurable.
 - **Web search**: the provider's built-in search (Anthropic, Gemini, Groq, OpenRouter, Venice), or tools (Tavily search and Jina Reader page fetch, each run after your approval).
@@ -54,6 +55,7 @@ npm run dev
 - Tool-based web search: `検索`, `読んで`.
 - Skills: `スキル` loads the first skill.
 - Skill creator: `作って` / `直して` calls `save_skill` in a skill-creator conversation.
+- Sandbox: `実行できる例` answers with runnable JS and HTML code blocks, `計算して` calls `run_javascript`, `ページを作って` creates an HTML file.
 
 ### Check with production headers
 

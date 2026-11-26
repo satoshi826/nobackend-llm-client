@@ -36,8 +36,9 @@ export function appCsp(env: Env, vaultOrigin?: string, fetchOrigin?: string): st
     "img-src 'self' data: blob:",
     "font-src 'self'",
     `connect-src 'self' ${[...o.appProviders, o.jina].join(' ')}`,
-    // 'self' only while the vault or the fetch page is hosted with the app
-    `frame-src ${[!vaultOrigin || !fetchOrigin ? "'self'" : undefined, vaultOrigin, fetchOrigin].filter(Boolean).join(' ')}`,
+    // 'self': the sandbox (/sandbox/), and the vault and the fetch page while they are hosted with the app. Once those
+    // have their own origins their same-origin copies are not built, so no framed page on this origin can reach out
+    `frame-src ${["'self'", vaultOrigin, fetchOrigin].filter(Boolean).join(' ')}`,
     "worker-src 'self'",
     "manifest-src 'self'",
     "base-uri 'none'",
@@ -46,6 +47,28 @@ export function appCsp(env: Env, vaultOrigin?: string, fetchOrigin?: string): st
     "object-src 'none'",
     "require-trusted-types-for 'script'",
     'trusted-types dompurify app-sw app-pdf'
+  ].join('; ');
+}
+
+/**
+ * CSP for the sandbox (/sandbox/), opened in <iframe sandbox="allow-scripts"> with no origin of its own. The HTML and
+ * scripts it is given may run (inline, eval, workers from blob:), but nothing may leave: no request of any kind,
+ * images and fonts only from data: / blob:, no frames, no forms. frameAncestors: only for the header version
+ */
+export function sandboxCsp(frameAncestors = true): string {
+  return [
+    "default-src 'none'",
+    "script-src 'unsafe-inline' 'unsafe-eval' blob:",
+    "style-src 'unsafe-inline'",
+    'img-src data: blob:',
+    'font-src data:',
+    'media-src data: blob:',
+    'worker-src blob:',
+    "connect-src 'none'",
+    "frame-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    ...(frameAncestors ? ["frame-ancestors 'self'"] : [])
   ].join('; ');
 }
 
@@ -107,6 +130,9 @@ export function appHeadersFile(env: Env): string {
     '',
     '/index.html',
     app,
+    '',
+    '/sandbox/*',
+    `  Content-Security-Policy: ${sandboxCsp()}`,
     '',
     ...(vaultOrigin ? [] : ['/vault/*', `  Content-Security-Policy: ${vaultCsp(env, ["'self'"])}`, '']),
     ...(fetchOrigin ? [] : ['/fetch/*', `  Content-Security-Policy: ${fetchCsp(["'self'"])}`, ''])

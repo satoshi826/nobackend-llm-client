@@ -1,9 +1,29 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ensureHighlighter, isHighlighterReady, renderMarkdown, settledEnd } from '../lib/markdown/render';
+import { render as renderInto } from 'preact';
 import { cx } from './ui';
+import { CodeRun } from './CodeRun';
 import { t } from './messages';
 
 /** Renders Markdown (as sanitized nodes from renderMarkdown; no HTML string is inserted) */
+/** Show or hide the result of a code block's "run" button, right under the block */
+function toggleRun(btn: HTMLElement) {
+  const block = btn.closest('.code-block');
+  if (!block) return;
+  const open = block.nextElementSibling?.classList.contains('code-run') ? block.nextElementSibling : null;
+  if (open) {
+    renderInto(null, open);
+    open.remove();
+    btn.setAttribute('aria-pressed', 'false');
+    return;
+  }
+  const box = document.createElement('div');
+  box.className = 'code-run';
+  block.after(box);
+  btn.setAttribute('aria-pressed', 'true');
+  renderInto(<CodeRun kind={btn.dataset.run as 'html' | 'svg' | 'js'} code={block.querySelector('code')?.textContent ?? ''} />, box);
+}
+
 export function Markdown({ text, streaming, citations, class: className }: { text: string; streaming?: boolean; citations?: string[]; class?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [hlReady, setHlReady] = useState(isHighlighterReady());
@@ -44,6 +64,8 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
   }, [text, streaming, hlReady, citations?.join('|')]);
 
   const onClick = async (e: MouseEvent) => {
+    const runBtn = (e.target as HTMLElement).closest('[data-run]') as HTMLElement | null;
+    if (runBtn) return toggleRun(runBtn);
     const btn = (e.target as HTMLElement).closest('[data-copy]') as HTMLElement | null;
     if (!btn) return;
     const code = btn.closest('.code-block')?.querySelector('code')?.textContent ?? '';

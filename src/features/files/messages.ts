@@ -85,6 +85,10 @@ export const t = defineMessages(
 
     // sidebar panel
     'filer.search': 'ファイルを検索',
+    'file.viewAs': '表示のしかた',
+    'file.preview': 'プレビュー',
+    'file.code': 'コード',
+    'file.sandboxNote': 'スクリプトは隔離された環境で動き、ネットには接続できません',
     'filer.searchLabel': 'ファイルを検索',
     'panel.nav': 'ファイルの表示',
     'panel.byConversation': '会話ごと',
@@ -235,6 +239,10 @@ export const t = defineMessages(
       'settings.permission': 'Confirm before writing files',
 
       'filer.search': 'Search files',
+      'file.viewAs': 'Show as',
+      'file.preview': 'Preview',
+      'file.code': 'Code',
+      'file.sandboxNote': 'Scripts run in an isolated space with no network access',
       'filer.searchLabel': 'Search files',
       'panel.nav': 'File views',
       'panel.byConversation': 'By chat',
@@ -382,6 +390,10 @@ export const t = defineMessages(
       'settings.permission': '写入文件前确认',
 
       'filer.search': '搜索文件',
+      'file.viewAs': '显示方式',
+      'file.preview': '预览',
+      'file.code': '代码',
+      'file.sandboxNote': '脚本在隔离的环境中运行，无法连接网络',
       'filer.searchLabel': '搜索文件',
       'panel.nav': '文件视图',
       'panel.byConversation': '按对话',

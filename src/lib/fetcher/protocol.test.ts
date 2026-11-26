@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fetchableUrl, nameFor } from './protocol';
-import { appCsp, appHeadersFile, appPagePolicies, cspMetaTag, fetchCsp } from '../../../csp.config';
+import { appCsp, appHeadersFile, appPagePolicies, cspMetaTag, fetchCsp, sandboxCsp } from '../../../csp.config';
 
 describe('fetch page', () => {
   it('fetches only plain https addresses', () => {
@@ -27,10 +27,21 @@ describe('fetch page', () => {
   });
   it('leaves out the same-origin vault and fetch page once both have their own origins', () => {
     const env = { VITE_VAULT_URL: 'https://vault.example/', VITE_FETCH_URL: 'https://fetch.example/' };
-    expect(appCsp(env, 'https://vault.example', 'https://fetch.example')).toContain('frame-src https://vault.example https://fetch.example;');
+    expect(appCsp(env, 'https://vault.example', 'https://fetch.example')).toContain("frame-src 'self' https://vault.example https://fetch.example;");
     expect(appHeadersFile(env)).not.toMatch(/\/vault\/\*|\/fetch\/\*/);
     expect(Object.keys(appPagePolicies(env))).toEqual(['/index.html']);
     expect(Object.keys(appPagePolicies({}))).toEqual(['/index.html', '/vault/index.html', '/fetch/index.html']);
+  });
+  it('lets the sandbox run scripts but reach nothing', () => {
+    const p = sandboxCsp();
+    expect(p).toContain("connect-src 'none'");
+    expect(p).toContain("frame-src 'none'");
+    expect(p).toContain("form-action 'none'");
+    expect(p).toContain('img-src data: blob:');
+    expect(p).not.toMatch(/https?:|\*/);
+    expect(appHeadersFile({})).toContain('/sandbox/*');
+    // the app may frame it ('self') even with the vault and fetch page elsewhere
+    expect(appCsp({}, 'https://v.example', 'https://f.example')).toContain("frame-src 'self'");
   });
   it('writes the CSP as a meta tag without what a meta CSP cannot carry', () => {
     const tag = cspMetaTag(fetchCsp(["'self'"]));

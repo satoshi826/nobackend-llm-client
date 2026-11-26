@@ -214,6 +214,8 @@ body {
   @apply flex items-center justify-between bg-glass px-3 py-1 text-xs text-muted;
 }
 .md .code-copy { @apply rounded-md px-2 py-0.5 hover:bg-glass-strong; }
+.md .code-lang { @apply mr-auto; }
+.md .code-copy[aria-pressed='true'] { @apply bg-glass-strong text-ink; }
 .md pre { @apply m-0 overflow-x-auto bg-sunken p-3 text-[13px] leading-6; }
 .md pre code { @apply font-mono; }
 .md .md-img-link { @apply rounded border border-dashed border-line-strong px-2 py-0.5 no-underline; }

@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 import { readdirSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { appHeadersFile, appPagePolicies, cspMetaTag, separateOrigins } from './csp.config';
+import { appHeadersFile, appPagePolicies, cspMetaTag, sandboxCsp, separateOrigins } from './csp.config';
 
 /** Generates _headers (CSP and other security headers) */
 function headersPlugin(env: Record<string, string | undefined>): Plugin {
@@ -25,6 +25,26 @@ function cspMetaPlugin(policies: Record<string, string>): Plugin {
     transformIndexHtml: {
       order: 'post',
       handler: (html, ctx) => (policies[ctx.path] ? html.replace('<head>', `<head>\n    ${cspMetaTag(policies[ctx.path])}`) : html)
+    }
+  };
+}
+
+/** The sandbox page (sandbox/sandbox.html → /sandbox/), with its CSP put in; served by the dev server too */
+function sandboxPagePlugin(): Plugin {
+  const page = () => readFileSync(resolve(__dirname, 'sandbox/sandbox.html'), 'utf8').replace('<!--CSP-->', cspMetaTag(sandboxCsp(false)));
+  return {
+    name: 'sandbox-page',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url ?? '').split('?')[0];
+        if (path !== '/sandbox/' && path !== '/sandbox/index.html') return next();
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Content-Security-Policy', sandboxCsp());
+        res.end(page());
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'sandbox/index.html', source: page() });
     }
   };
 }
@@ -109,7 +129,7 @@ export default defineConfig(({ mode, command }) => {
   const info = command === 'build' ? buildInfo(env) : { version: 'dev', commit: 'dev', builtAt: '' };
   return {
     define: { __APP_BUILD__: JSON.stringify(info) },
-    plugins: [preact(), tailwindcss(), headersPlugin(env), cspMetaPlugin(appPagePolicies(env)), pdfCmapsPlugin(), serviceWorkerPlugin(), versionFilePlugin(info)],
+    plugins: [preact(), tailwindcss(), headersPlugin(env), cspMetaPlugin(appPagePolicies(env)), sandboxPagePlugin(), pdfCmapsPlugin(), serviceWorkerPlugin(), versionFilePlugin(info)],
     build: {
       target: 'es2022',
       emptyOutDir: true,

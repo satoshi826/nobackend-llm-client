@@ -7,7 +7,8 @@ import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { Markdown } from '../../../components/Markdown';
 import { PageHeader } from '../../../components/PageHeader';
-import { Badge, Button, Icon, IconButton, Select, Spinner, TextField } from '../../../components/ui';
+import { Badge, Button, Icon, IconButton, Segmented, Select, Spinner, TextField } from '../../../components/ui';
+import { SandboxFrame, svgPage } from '../../../components/SandboxFrame';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
 import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, filesVersion, getFile, renameFile, restoreVersion, saveUserVersion } from '../state';
@@ -264,6 +265,7 @@ export function FileView({ id = '' }: { id?: string }) {
 
 function FileBody({ text, ext }: { text: string; ext: string }) {
   if (ext === 'md' || ext === 'markdown') return <Markdown text={text} />;
+  if (ext === 'html' || ext === 'htm' || ext === 'svg') return <PageBody text={text} svg={ext === 'svg'} />;
   if (ext === 'csv' || ext === 'tsv') {
     const { rows, truncated } = parseDelimited(text, ext === 'tsv' ? '\t' : ',');
     if (rows.length > 0 && rows.length <= 1000) {
@@ -298,6 +300,32 @@ function FileBody({ text, ext }: { text: string; ext: string }) {
     }
   }
   return <pre class="font-mono text-sm break-words whitespace-pre-wrap">{text}</pre>;
+}
+
+/** An HTML or SVG file: shown as a page in the sandbox (its scripts run there, without network), or as its code */
+function PageBody({ text, svg }: { text: string; svg: boolean }) {
+  const [view, setView] = useState<'preview' | 'code'>('preview');
+  return (
+    <div class="space-y-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <Segmented
+          label={t('file.viewAs')}
+          items={[
+            { id: 'preview', label: t('file.preview'), icon: 'eye' },
+            { id: 'code', label: t('file.code'), icon: 'code' }
+          ]}
+          value={view}
+          onChange={setView}
+        />
+        {view === 'preview' && <span class="text-xs text-muted">{t('file.sandboxNote')}</span>}
+      </div>
+      {view === 'preview' ? (
+        <SandboxFrame html={svg ? svgPage(text) : text} title={t('file.preview')} class="h-[70vh]" />
+      ) : (
+        <pre class="font-mono text-sm break-words whitespace-pre-wrap">{text}</pre>
+      )}
+    </div>
+  );
 }
 
 /** The less frequent actions of a file, with delete set apart at the end */

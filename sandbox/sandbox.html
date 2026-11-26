@@ -1,0 +1,88 @@
+<!doctype html>
+<!--
+  The sandbox: shows HTML and runs JavaScript that a model or a file supplies. The app opens it in
+  <iframe sandbox="allow-scripts">, so it has no origin of its own: it cannot reach the app's storage, the key vault or
+  the page around it. Its CSP (put in by the build, and sent as a header too) blocks every network request.
+  Messages from the parent:
+    { type: 'render', html }               replace this page with the html (its scripts run under the same CSP)
+    { type: 'run', id, code, timeoutMs }   run code in a worker and answer { type: 'result', id, logs, result?, error? }
+  The script is inline: a page without an origin cannot load module scripts from the server.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!--CSP-->
+    <meta name="referrer" content="no-referrer" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <script>
+      (() => {
+        'use strict';
+        // Act only as a sandbox: without the sandbox attribute this page would run with the app's origin, and a site
+        // embedding it could have it read the app's storage. So it does nothing unless it has no origin of its own
+        if (self.origin !== 'null') {
+          document.body.textContent = 'This page only works inside the app.';
+          return;
+        }
+        // Runs inside the worker: console output is collected, the code runs as the body of an async function
+        const PRELUDE = `
+          const logs = [];
+          const show = (v) => { try { return typeof v === 'string' ? v : JSON.stringify(v, null, 2) ?? String(v); } catch { return String(v); } };
+          for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
+            console[level] = (...args) => { logs.push((level === 'log' || level === 'info' ? '' : level + ': ') + args.map(show).join(' ')); if (logs.length > 1000) logs.shift(); };
+          }
+          onmessage = async (e) => {
+            try {
+              const value = await new Function('return (async () => {\\n' + e.data + '\\n})()')();
+              postMessage({ logs, result: value === undefined ? undefined : show(value) });
+            } catch (err) {
+              postMessage({ logs, error: String((err && err.stack) || err) });
+            }
+          };
+        `;
+        const reply = (m) => parent.postMessage(m, '*');
+
+        function run(d) {
+          const url = URL.createObjectURL(new Blob([PRELUDE], { type: 'text/javascript' }));
+          const worker = new Worker(url);
+          URL.revokeObjectURL(url);
+          let done = false;
+          const finish = (m) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            worker.terminate();
+            reply({ type: 'result', id: d.id, ...m });
+          };
+          const timer = setTimeout(() => finish({ logs: [], error: 'Stopped: it ran longer than ' + d.timeoutMs + ' ms.' }), d.timeoutMs);
+          worker.onmessage = (m) => finish(m.data);
+          worker.onerror = (ev) => {
+            ev.preventDefault();
+            finish({ logs: [], error: String(ev.message || 'Error') });
+          };
+          worker.postMessage(d.code);
+        }
+
+        addEventListener('message', (e) => {
+          if (e.source !== parent) return;
+          const d = e.data || {};
+          if (d.type === 'render' && typeof d.html === 'string') {
+            // A peer connection could carry data out past the CSP: not offered to the page (defence in depth)
+            for (const k of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'RTCDataChannel']) {
+              try {
+                delete window[k];
+              } catch {}
+            }
+            document.open();
+            document.write(d.html);
+            document.close();
+          } else if (d.type === 'run' && typeof d.code === 'string') {
+            run({ id: d.id, code: d.code, timeoutMs: Math.min(60000, Math.max(100, Number(d.timeoutMs) || 10000)) });
+          }
+        });
+        reply({ type: 'sandbox-ready' });
+      })();
+    </script>
+  </body>
+</html>

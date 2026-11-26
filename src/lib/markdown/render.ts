@@ -29,6 +29,9 @@ export function isHighlighterReady(): boolean {
 
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+/** Code block languages that can be run in the sandbox, and how */
+export const RUNNABLE: Record<string, 'html' | 'svg' | 'js'> = { html: 'html', htm: 'html', svg: 'svg', js: 'js', javascript: 'js' };
+
 function makeMarked(highlight: boolean): Marked {
   const m = new Marked({ gfm: true, breaks: true });
   m.use({
@@ -57,7 +60,10 @@ function makeMarked(highlight: boolean): Marked {
         if (highlight && highlighter) body = highlighter(raw, lang);
         const codeHtml = body ?? escapeHtml(raw);
         const langLabel = lang ? `<span class="code-lang">${escapeHtml(lang)}</span>` : '<span class="code-lang">text</span>';
-        return `<div class="code-block"><div class="code-head">${langLabel}<button type="button" class="code-copy" data-copy>${escapeHtml(t('code.copy'))}</button></div><pre><code class="hljs">${codeHtml}</code></pre></div>`;
+        // HTML, SVG and JavaScript can be run in the sandbox (the Markdown component handles data-run)
+        const kind = RUNNABLE[lang];
+        const run = kind ? `<button type="button" class="code-copy" data-run="${kind}">${escapeHtml(t('code.run'))}</button>` : '';
+        return `<div class="code-block"><div class="code-head">${langLabel}${run}<button type="button" class="code-copy" data-copy>${escapeHtml(t('code.copy'))}</button></div><pre><code class="hljs">${codeHtml}</code></pre></div>`;
       }
     }
   });
@@ -87,7 +93,7 @@ const PURIFY_CONFIG = {
     'a', 'b', 'blockquote', 'br', 'button', 'code', 'del', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'input',
     'li', 'ol', 'p', 'pre', 's', 'span', 'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'ul'
   ],
-  ALLOWED_ATTR: ['href', 'title', 'class', 'type', 'checked', 'disabled', 'data-copy', 'align', 'start'],
+  ALLOWED_ATTR: ['href', 'title', 'class', 'type', 'checked', 'disabled', 'data-copy', 'data-run', 'align', 'start'],
   ALLOW_DATA_ATTR: false,
   FORBID_ATTR: ['style', 'id', 'name']
 };

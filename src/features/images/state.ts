@@ -39,7 +39,7 @@ registerImageProvider(deepinfraImageProvider);
 registerImageProvider(togetherImageProvider);
 
 export interface ImageDefaults {
-  /** The default image model (Settings → 機能 → 画像): used by the generate_image tool and image mode */
+  /** The default image model (Settings → 画像): used by the generate_image tool and image mode */
   providerId: string;
   model: string;
   /** The chosen size (ImageSize.id) of the model */

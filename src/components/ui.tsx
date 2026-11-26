@@ -9,7 +9,7 @@ export function cx(...xs: (string | false | null | undefined)[]): string {
 
 export type IconName =
   | 'menu' | 'plus' | 'settings' | 'send' | 'stop' | 'copy' | 'refresh' | 'edit' | 'trash' | 'pin' | 'chevron-left'
-  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star' | 'image' | 'expand' | 'wand' | 'scissors' | 'paperclip' | 'file' | 'files' | 'chat' | 'printer' | 'history' | 'grid' | 'list' | 'clock' | 'filter' | 'sort' | 'more' | 'link' | 'eye-off';
+  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star' | 'image' | 'expand' | 'wand' | 'scissors' | 'paperclip' | 'file' | 'files' | 'chat' | 'printer' | 'history' | 'grid' | 'list' | 'clock' | 'filter' | 'sort' | 'more' | 'link' | 'eye-off' | 'palette' | 'chart' | 'info';
 
 const PATHS: Record<IconName, string> = {
   menu: 'M4 6h16M4 12h16M4 18h16',
@@ -39,6 +39,9 @@ const PATHS: Record<IconName, string> = {
   compress: 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7',
   swap: 'M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7',
   sliders: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4',
+  palette: 'M12 22a10 10 0 1 1 10-9.5c0 2.5-2 3.5-4 3.5h-2a2 2 0 0 0-1.5 3.3c.6.8.2 2.7-2.5 2.7ZM13.5 6.5h.01M17.5 10.5h.01M8.5 7.5h.01M6.5 12.5h.01',
+  chart: 'M3 3v16a2 2 0 0 0 2 2h16M8 17v-3M13 17V9M18 17V5',
+  info: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0ZM12 16v-4M12 8h.01',
   key: 'M14 10a4 4 0 1 0-3.5 4L13 16.5V19h2.5v-2.5H18l1-1-3.6-3.6A4 4 0 0 0 14 10ZM8 10h.01',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   upload: 'M12 20V9M7 14l5-5 5 5M5 4h14',
@@ -353,7 +356,7 @@ export function RowHighlight({ box, class: className }: { box: Box | null; class
 }
 
 /** Tabs in a column (settings on wide screens): the selected tab's background slides to it */
-export function SideTabs<T extends string>({ tabs, value, onChange, label, class: className }: { tabs: { id: T; label: string }[]; value: T; onChange(id: T): void; label?: string; class?: string }) {
+export function SideTabs<T extends string>({ tabs, value, onChange, label, class: className }: { tabs: { id: T; label: string; icon?: IconName }[]; value: T; onChange(id: T): void; label?: string; class?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const bar = useSelectedBox(ref, '[aria-selected="true"]');
   return (
@@ -380,8 +383,9 @@ export function SideTabs<T extends string>({ tabs, value, onChange, label, class
             onChange(next.id);
             requestAnimationFrame(() => ref.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
           }}
-          class={cx('relative z-10 rounded-[10px] px-3 py-2 text-left text-sm', value === x.id ? 'text-ink-strong' : 'text-muted hover:text-ink')}
+          class={cx('relative z-10 flex items-center gap-2 rounded-[10px] px-3 py-2 text-left text-sm', value === x.id ? 'text-ink-strong' : 'text-muted hover:text-ink')}
         >
+          {x.icon && <Icon name={x.icon} class="size-4 shrink-0" />}
           {x.label}
         </button>
       ))}

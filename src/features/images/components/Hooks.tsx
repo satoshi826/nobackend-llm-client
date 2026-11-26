@@ -208,7 +208,7 @@ export function ImageSettings() {
   const s = { ...settings.value, ...imageSettings.value.value };
   const saveImage = imageSettings.save;
   return (
-    <Section title={t('settings.title')}>
+    <Section>
       <p class="text-xs text-muted">{t('settings.desc', { providers: imageProviderNames() })}</p>
       <DefaultModelSelect />
       <label class="flex items-center justify-between gap-3 text-sm">

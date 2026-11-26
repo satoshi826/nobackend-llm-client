@@ -3,7 +3,7 @@ import { signal } from '@preact/signals';
 
 export type ModalName = 'settings' | 'models' | 'system';
 /** Core tabs, or the id of a tab a feature registered */
-export type SettingsTab = 'connections' | 'chat' | 'appearance' | 'features' | 'privacy' | 'about' | (string & {});
+export type SettingsTab = 'connections' | 'chat' | 'appearance' | 'privacy' | 'about' | (string & {});
 
 export const modal = signal<ModalName | null>(null);
 /** What the main area shows: the chat, or a screen registered by a feature (e.g. { kind: 'files' }, { kind: 'file', id }) */

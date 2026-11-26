@@ -36,6 +36,6 @@ registerToolView({
   doneStatus: (p) => ((p.uiDetails as { updated?: boolean } | undefined)?.updated ? t('tool.updated') : t('tool.created')),
   Approval: SkillApproval
 });
-registerSettingsTab({ id: 'skills', label: () => t('tabLabel'), Component: lazyComponent(() => import('./components/SkillsTab').then((m) => m.SkillsTab)) });
+registerSettingsTab({ id: 'skills', label: () => t('tabLabel'), icon: 'book', Component: lazyComponent(() => import('./components/SkillsTab').then((m) => m.SkillsTab)) });
 
 registerMessageTransform(skillsTransform);

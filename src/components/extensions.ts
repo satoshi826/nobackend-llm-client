@@ -123,6 +123,7 @@ export interface SettingsSection {
 export interface SettingsTabDef {
   id: string;
   label: Text;
+  icon: IconName;
   Component: ComponentType;
 }
 

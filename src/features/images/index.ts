@@ -5,7 +5,7 @@ import {
   registerComposerAddon,
   registerModelSlot,
   registerOverlay,
-  registerSettingsSection,
+  registerSettingsTab,
   registerToolView,
   registerUserMessageExtra
 } from '../../components/extensions';
@@ -52,6 +52,6 @@ registerToolView({
   doneStatus: (p) => imageCount((p.uiDetails as { blobIds?: string[] } | undefined)?.blobIds?.length ?? 0),
   Detail: ImageToolDetail
 });
-registerSettingsSection({ id: 'images', tab: 'features', Component: ImageSettings });
+registerSettingsTab({ id: 'images', label: () => t('settings.title'), icon: 'image', Component: ImageSettings });
 registerOverlay(Lightbox);
 registerMessageTransform(imageNote);

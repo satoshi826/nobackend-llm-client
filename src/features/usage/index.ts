@@ -8,5 +8,6 @@ registerSettingsTab({
   id: 'usage',
   // A getter: the tab label follows the UI language
   label: () => t('tab'),
+  icon: 'chart',
   Component: lazyComponent(() => import('./components/UsageTab').then((m) => m.UsageTab))
 });

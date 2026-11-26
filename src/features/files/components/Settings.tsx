@@ -17,7 +17,7 @@ export function FilesSettings() {
   // The write tools share one setting; read_file follows it
   const perm = s.toolPermissions.create_file ?? 'allow';
   return (
-    <Section title={t('files')}>
+    <Section>
       <p class="text-xs text-muted">
         {t('settings.desc')}
         {usage ? ` ${t('settings.count', { n: formatNumber(usage.count) })}` : ''}

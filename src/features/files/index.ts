@@ -1,7 +1,7 @@
 // Files feature: documents the model writes, files the user attaches, and the Files tab.
 // Importing this module registers everything with the core through extension points;
 // the core never imports anything from here.
-import { registerComposerAddon, registerMainView, registerOverlay, registerSettingsSection, registerSidebarTab, registerToolView, registerUserMessageExtra } from '../../components/extensions';
+import { registerComposerAddon, registerMainView, registerOverlay, registerSettingsTab, registerSidebarTab, registerToolView, registerUserMessageExtra } from '../../components/extensions';
 import { lazyComponent } from '../../components/lazy';
 import { AttachButton, AttachmentChips } from './components/Composer';
 import { FilesPanel } from './components/FilesPanel';
@@ -46,5 +46,5 @@ registerToolView({
   Detail: FileToolDetail
 });
 registerUserMessageExtra(UserAttachments);
-registerSettingsSection({ id: 'files', tab: 'features', Component: lazyComponent(() => import('./components/Settings').then((m) => m.FilesSettings)) });
+registerSettingsTab({ id: 'files', label: () => t('files'), icon: 'files', Component: lazyComponent(() => import('./components/Settings').then((m) => m.FilesSettings)) });
 registerMessageTransform(attachmentsTransform);

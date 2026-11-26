@@ -200,7 +200,7 @@ export async function wipeAll(): Promise<void> {
 /** Row counts per table (diagnostics; reads no content) */
 export async function tableCounts(): Promise<Record<string, number>> {
   const d = db();
-  const names = ['conversations', 'messages', 'files', 'blobs', 'skills', 'prompts', 'usage', 'models'] as const;
+  const names = ['conversations', 'messages', 'files', 'fileVersions', 'blobs', 'skills', 'prompts', 'usage', 'models'] as const;
   const out: Record<string, number> = {};
   for (const n of names) out[n] = await d.table(n).count();
   return out;

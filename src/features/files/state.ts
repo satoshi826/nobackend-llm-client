@@ -130,16 +130,16 @@ registerRoute({
 export async function saveUserVersion(id: string, text: string) {
   const f = await fdb.getFile(id);
   if (!f) return;
-  await fdb.putFile(fdb.withVersion(f, text, 'user', t('note.userEdit')));
+  await fdb.addVersion(f, text, 'user', t('note.userEdit'));
   changed();
 }
 
 /** Make an old version current again (as a new version, so nothing is lost) */
 export async function restoreVersion(id: string, v: number) {
   const f = await fdb.getFile(id);
-  const old = f?.versions.find((x) => x.v === v);
-  if (!f || !old) return;
-  await fdb.putFile(fdb.withVersion(f, old.text, 'user', t('note.restored', { v })));
+  const text = f && (await fdb.versionText(f, v));
+  if (!f || text === undefined) return;
+  await fdb.addVersion(f, text, 'user', t('note.restored', { v }));
   changed();
 }
 
@@ -159,7 +159,7 @@ export async function deleteFiles(ids: string[]) {
   changed();
 }
 
-export function downloadFile(f: FileRecord, v = f.versions[f.versions.length - 1]) {
+export function downloadFile(f: FileRecord, v: { text: string } = f.current) {
   const url = URL.createObjectURL(new Blob([v.text], { type: `${f.mime};charset=utf-8` }));
   const a = document.createElement('a');
   a.href = url;
@@ -368,8 +368,7 @@ registerToolProvider({
       async update(id, text, note) {
         const f = await fdb.getFile(id);
         if (!f || !scope.has(id)) throw new Error(t('tool.notFound'));
-        const next = fdb.withVersion(f, text, 'model', note);
-        await fdb.putFile(next);
+        const next = await fdb.addVersion(f, text, 'model', note);
         changed();
         return next;
       }

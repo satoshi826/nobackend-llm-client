@@ -505,7 +505,7 @@ function Card({ it, picked, selecting, onToggle, onOpen }: { it: FilerItem; pick
           <span class="line-clamp-2 text-sm leading-snug text-ink-strong [overflow-wrap:anywhere]">{it.name}</span>
           <span class="mt-0.5 block truncate text-xs text-muted tabular-nums">
             {sizeLabel(it)} · {formatDate(it.updatedAt)}
-            {it.type === 'file' && it.file.versions.length > 1 ? ` · ${t('version', { v: it.file.versions[it.file.versions.length - 1].v })}` : ''}
+            {it.type === 'file' && it.file.history.length ? ` · ${t('version', { v: it.file.current.v })}` : ''}
           </span>
         </span>
       </button>

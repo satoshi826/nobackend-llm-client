@@ -106,6 +106,18 @@ export interface FileVersion {
   note?: string;
 }
 
+/** What is known about a version without its text */
+export type FileVersionInfo = Omit<FileVersion, 'text'>;
+
+/** The text of an earlier version of a file, kept apart so lists and edits never load or rewrite the history */
+export interface FileVersionText {
+  /** `${fileId}:${v}` */
+  id: string;
+  fileId: string;
+  v: number;
+  text: string;
+}
+
 /**
  * A text file: documents the model wrote (kind 'document') and files the user brought in (kind 'upload').
  * Images stay in the blobs table. name and versions are encrypted with a passphrase.
@@ -125,8 +137,10 @@ export interface FileRecord {
   source?: string;
   /** The web address it was fetched from (on the user's request) */
   url?: string;
-  /** Oldest first; the last one is current. Old versions beyond a limit are dropped */
-  versions: FileVersion[];
+  /** The current version, with its text */
+  current: FileVersion;
+  /** Earlier versions without their text, oldest first (texts: FileVersionText). Beyond a limit the oldest are dropped */
+  history: FileVersionInfo[];
 }
 
 /** Skill (SKILL.md-compatible work instructions) */
@@ -211,6 +225,7 @@ export class AppDB extends Dexie {
   skills!: Table<Skill, string>;
   usage!: Table<UsageRecord, string>;
   files!: Table<FileRecord, string>;
+  fileVersions!: Table<FileVersionText, string>;
 
   constructor(name = 'nobackend-llm-client') {
     super(name);
@@ -235,6 +250,9 @@ export class AppDB extends Dexie {
     // v7: usage records indexed by conversation (the header shows each conversation's cost)
     this.version(7).stores({ usage: 'id, at, providerId, conversationId' });
     // v8: encrypted image bytes kept as Blobs (were ArrayBuffers, which every read of a record loaded into memory)
+    // v9: earlier versions of a file in their own table (the file record keeps the current one). Records in the
+    // old shape (all versions inside, possibly encrypted) are converted when first read: lib/db/files.ts
+    this.version(9).stores({ fileVersions: 'id, fileId' });
     this.version(8)
       .stores({ blobs: 'id, conversationId, createdAt' })
       .upgrade((tx) =>

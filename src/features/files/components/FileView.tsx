@@ -1,7 +1,7 @@
 // A file in the main area: read, edit, go through versions, download, print (to PDF), use in a chat
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { currentVersion, extOf } from '../../../lib/db/files';
-import type { FileRecord } from '../../../lib/db/schema';
+import { currentVersion, extOf, versionsOf, versionText } from '../../../lib/db/files';
+import type { FileRecord, FileVersion } from '../../../lib/db/schema';
 import { conversations, openConversation, showChat } from '../../../state/conversations';
 import { showToast, sidebarOpen } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
@@ -33,6 +33,18 @@ export function FileView({ id = '' }: { id?: string }) {
     setEditing(false);
     setRenaming(false);
   }, [id]);
+  // An earlier version's text is read only when it is chosen (it is not part of the file record)
+  const [older, setOlder] = useState<FileVersion | null>(null);
+  useEffect(() => {
+    setOlder(null);
+    const meta = f && viewV !== null ? f.history.find((h) => h.v === viewV) : undefined;
+    if (!f || !meta) return;
+    let alive = true;
+    void versionText(f, meta.v).then((text) => alive && text !== undefined && setOlder({ ...meta, text }));
+    return () => {
+      alive = false;
+    };
+  }, [f, viewV]);
 
   if (f === undefined)
     return (
@@ -54,7 +66,7 @@ export function FileView({ id = '' }: { id?: string }) {
     );
 
   const latest = currentVersion(f);
-  const shown = (viewV !== null && f.versions.find((v) => v.v === viewV)) || latest;
+  const shown = older ?? latest;
   const isOld = shown.v !== latest.v;
   const conv = f.conversationId ? conversations.value.find((c) => c.id === f.conversationId) : undefined;
   const ext = extOf(f.name);
@@ -131,15 +143,15 @@ export function FileView({ id = '' }: { id?: string }) {
         <Badge>{typeLabel(f)}</Badge>
         <span class="hidden text-xs text-muted tabular-nums sm:inline">{formatChars(shown.text.length)}</span>
         <div class="ml-auto flex flex-wrap items-center gap-0.5">
-          {f.versions.length > 1 && (
+          {f.history.length > 0 && (
             <label class="flex items-center gap-1 text-xs text-muted">
               <Icon name="history" class="size-3.5" />
               <Select compact
-                value={String(shown.v)}
+                value={String(viewV ?? latest.v)}
                 aria-label={t('file.versionLabel')}
                 onChange={(e) => setViewV(Number((e.target as HTMLSelectElement).value))}
               >
-                {[...f.versions].reverse().map((v) => (
+                {versionsOf(f).reverse().map((v) => (
                   <option key={v.v} value={v.v}>
                     {v.v === latest.v ? t('file.versionLatest', { v: v.v }) : t('version', { v: v.v })} · {formatDateTime(v.at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {byLabel(v.by)}
                     {v.note ? ` · ${v.note}` : ''}

@@ -1,6 +1,8 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { cleanFileName, cleanFiles, currentText, getFile, listFiles, MAX_VERSIONS, newFile, putFile, withVersion } from '../../lib/db/files';
+import { addVersion, cleanFileName, cleanFiles, currentText, deleteFiles, getFile, listFiles, MAX_VERSIONS, newFile, putFile, versionsOf, versionText, withVersion } from '../../lib/db/files';
+import { seal, setDataKey } from '../../lib/db/sealed';
+import { generateDataKey } from '../../lib/crypto/data';
 import { exportAll, importAll } from '../../lib/db/export';
 import { db } from '../../lib/db/schema';
 import type { FileRecord, MessageRecord } from '../../lib/db/schema';
@@ -26,9 +28,9 @@ function memDeps(scope = new Set<string>()) {
     },
     get: async (id) => (scope.has(id) ? files.get(id) : undefined),
     async update(id, text, note) {
-      const f = withVersion(files.get(id)!, text, 'model', note);
-      files.set(id, f);
-      return f;
+      const { next } = withVersion(files.get(id)!, text, 'model', note);
+      files.set(id, next);
+      return next;
     },
     // Stands in for the fetch page: "decline" in the address means the user said no; .png is an image
     async fetch(url) {
@@ -53,12 +55,19 @@ describe('file names and versions', () => {
     expect(cleanFileName('  ', 'txt')).toBe('untitled.txt');
     expect(cleanFileName('a\u0000b.md')).toBe('ab.md');
   });
-  it('appends versions and keeps at most MAX_VERSIONS', () => {
+  it('appends versions and keeps at most MAX_VERSIONS, saying which texts to keep and drop', () => {
     let f = newFile({ id: 'x', name: 'a.md', kind: 'document', text: 'v1', by: 'model' });
-    for (let i = 2; i <= MAX_VERSIONS + 5; i++) f = withVersion(f, `v${i}`, 'user');
-    expect(f.versions).toHaveLength(MAX_VERSIONS);
+    const dropped: number[] = [];
+    for (let i = 2; i <= MAX_VERSIONS + 5; i++) {
+      const r = withVersion(f, `v${i}`, 'user');
+      expect(r.archived.text).toBe(`v${i - 1}`);
+      dropped.push(...r.dropped);
+      f = r.next;
+    }
+    expect(versionsOf(f)).toHaveLength(MAX_VERSIONS);
     expect(currentText(f)).toBe(`v${MAX_VERSIONS + 5}`);
-    expect(f.versions[f.versions.length - 1].v).toBe(MAX_VERSIONS + 5);
+    expect(f.current.v).toBe(MAX_VERSIONS + 5);
+    expect(dropped).toEqual([1, 2, 3, 4, 5]);
     expect(f.size).toBe(currentText(f).length);
   });
 });
@@ -73,8 +82,8 @@ describe('file tools', () => {
     await run(deps, 'edit_file', { file_id: id, find: 'intro', replace: 'Introduction', note: 'wording' });
     const f = files.get(id)!;
     expect(currentText(f)).toBe('# Title\nIntroduction\n## More');
-    expect(f.versions.map((v) => v.v)).toEqual([1, 2, 3]);
-    expect(f.versions[2].note).toBe('wording');
+    expect(versionsOf(f).map((v) => v.v)).toEqual([1, 2, 3]);
+    expect(f.current.note).toBe('wording');
     const r = await run(deps, 'read_file', { file_id: id });
     expect(r.content).toContain('Introduction');
     expect(r.content).toContain('end of file');
@@ -148,8 +157,9 @@ describe('csv preview', () => {
 
 describe('file storage and backups', () => {
   it('stores files and round-trips them through export / import', { timeout: 30_000 }, async () => {
-    const f = withVersion(newFile({ id: 'file-1', name: 'notes.md', kind: 'document', text: 'one', by: 'model', conversationId: 'c1' }), 'two', 'user');
+    const f = newFile({ id: 'file-1', name: 'notes.md', kind: 'document', text: 'one', by: 'model', conversationId: 'c1' });
     await putFile(f);
+    await addVersion(f, 'two', 'user');
     expect(currentText((await getFile('file-1'))!)).toBe('two');
     const dump = await exportAll();
     expect((dump.files as { id: string }[] | undefined)?.map((x) => x.id)).toContain('file-1');
@@ -157,7 +167,34 @@ describe('file storage and backups', () => {
     const r = await importAll(JSON.parse(JSON.stringify(dump)));
     expect(r.tables.files).toBe(1);
     const back = (await listFiles()).find((x) => x.id === 'file-1')!;
-    expect(back.versions.map((v) => v.text)).toEqual(['one', 'two']);
+    expect(currentText(back)).toBe('two');
+    expect(await versionText(back, 1)).toBe('one');
+  });
+  it('keeps earlier versions apart, and converts records in the old shape when read (encrypted too)', { timeout: 30_000 }, async () => {
+    const key = await generateDataKey();
+    setDataKey(key);
+    try {
+      // A record as stored before v9: every version inside, sealed
+      const legacy = { id: 'old-1', name: 'old.md', mime: 'text/markdown', kind: 'document', createdAt: 1, updatedAt: 2, size: 3, versions: [{ v: 1, at: 1, text: 'first', by: 'model' }, { v: 2, at: 2, text: 'new', by: 'user' }] };
+      await db().files.put(await seal('files', legacy as never));
+      const f = (await getFile('old-1'))!;
+      expect(currentText(f)).toBe('new');
+      expect(f.history.map((h) => h.v)).toEqual([1]);
+      expect(await versionText(f, 1)).toBe('first');
+      const raw = await db().files.get('old-1');
+      expect((raw as unknown as Record<string, unknown>).versions).toBeUndefined();
+      expect(JSON.stringify(raw)).not.toContain('first');
+      const text = await db().fileVersions.get('old-1:1');
+      expect(text?.text).toBeUndefined();
+      expect((text as unknown as { enc?: unknown })?.enc).toBeDefined();
+      // A new version writes only the replaced text apart
+      await addVersion(f, 'third', 'user');
+      expect(await db().fileVersions.where('fileId').equals('old-1').count()).toBe(2);
+      await deleteFiles(['old-1']);
+      expect(await db().fileVersions.where('fileId').equals('old-1').count()).toBe(0);
+    } finally {
+      setDataKey(null);
+    }
   });
   it('drops malformed file records on import', () => {
     expect(cleanFiles([{ id: 'a' }, null, { id: 'b', name: '../x', versions: [{ v: 1, text: 'ok' }] }]).map((f) => f.name)).toEqual(['x.md']);

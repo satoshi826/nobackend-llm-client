@@ -104,6 +104,21 @@ VITE_VAULT_URL=https://vault.example.com/ npm run build
 
 Use subdomains of one custom domain. Two different `*.workers.dev` / `*.pages.dev` sites count as different sites, so the vault's storage may be partitioned. The app's preview deployments can't embed a separate vault.
 
+### Fetching files from the web
+
+Ask in a chat and the model's `fetch_file` tool brings a file or an image from an https address into the Files tab. The app itself never reaches arbitrary addresses: a separate fetch page (`/fetch/`, its own CSP) does, and it asks you before every fetch, showing the address. Text, CSV, code and PDFs become files the model can read; images are saved as images (up to 20 MB; no SVG).
+
+A browser can only fetch from sites that allow it (CORS): file and image hosts often do (GitHub raw files, Wikimedia, many CDNs), ordinary web pages often don't. For those, you can deploy your own relay (optional):
+
+```bash
+# relay (relay/worker.js) on your Cloudflare account; set ALLOWED_ORIGINS in relay/wrangler.jsonc to the app's origin
+cd relay && npx wrangler deploy
+# app: tell the fetch page where the relay is
+VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<account>.workers.dev npm run build
+```
+
+The relay only takes public https addresses, passes on none of your headers or cookies, keeps nothing, and answers only to the allowed origins. Addresses you fetch through it are seen by it (your own Worker). To keep the fetch page out of reach of scripts running in the app, host it on its own origin like the vault: `VITE_APP_ORIGIN=https://app.example.com npm run build:fetch` (deploy `dist-fetch/`) and build the app with `VITE_FETCH_URL=https://fetch.example.com/`.
+
 ### Adding providers at build time
 
 `VITE_CUSTOM_PROVIDERS` takes a JSON array of OpenAI-compatible endpoints. They're added to the provider list, the vault's allowed hosts, and the CSP.

@@ -186,10 +186,10 @@ const setPending = (id: string, patch: Partial<PendingAttachment> | null) => {
 export const importing = signal<{ id: string; name: string }[]>([]);
 
 /** Read one file from the user's device into the Files tab; returns the record, or null (after a toast) */
-async function importOne(file: File, id: string, temporary: boolean, url?: string): Promise<FileRecord | null> {
+async function importOne(file: File, id: string, temporary: boolean, url?: string, conversationId?: string): Promise<FileRecord | null> {
   try {
     const ex = await extractText(file);
-    const rec = fdb.newFile({ id, name: fdb.cleanFileName(file.name, 'txt'), kind: 'upload', text: ex.text, by: 'upload', source: ex.source, url });
+    const rec = fdb.newFile({ id, name: fdb.cleanFileName(file.name, 'txt'), kind: 'upload', text: ex.text, by: 'upload', source: ex.source, url, conversationId });
     // A pdf's text is stored as text; keep the original extension visible but treat it as plain text
     if (rec.mime === 'application/pdf') rec.mime = 'text/plain';
     await fdb.putFile(rec, temporary);
@@ -207,7 +207,7 @@ const IMAGE_MIME = /^image\/(png|jpeg|webp|gif|avif)$/;
 const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
-async function importImage(file: File, id: string, source: ImageSource): Promise<boolean> {
+async function importImage(file: File, id: string, source: ImageSource, conv?: Conversation): Promise<boolean> {
   if (!IMAGE_MIME.test(file.type)) {
     showToast(t(file.type === 'image/svg+xml' ? 'import.svg' : 'extract.unsupported', { name: file.name }), 'error');
     return false;
@@ -216,7 +216,7 @@ async function importImage(file: File, id: string, source: ImageSource): Promise
     showToast(t('extract.tooBig', { max: formatNumber(MAX_IMAGE_BYTES / 1024 / 1024) }), 'error');
     return false;
   }
-  await putImage({ id, mime: file.type, info: { name: fdb.cleanFileName(file.name, IMAGE_EXT[file.type]), source } }, file, false);
+  await putImage({ id, mime: file.type, conversationId: conv?.id, info: { name: fdb.cleanFileName(file.name, IMAGE_EXT[file.type]), source } }, file, !!conv?.temporary);
   imagesVersion.value++;
   return true;
 }
@@ -236,6 +236,44 @@ export async function bringIn(files: File[], source: ImageSource = { kind: 'uplo
     })
   );
   return done.filter(Boolean).length;
+}
+
+// ---- fetching from the web (through the fetch page, which asks the user) ----
+export interface Fetched {
+  name: string;
+  mime: string;
+  data: ArrayBuffer;
+  url: string;
+  relayed: boolean;
+}
+
+/** The address the model asked to fetch; the FetchDialog overlay shows the fetch page for it */
+export const fetchRequest = signal<{ url: string; done(r: Fetched | null): void } | null>(null);
+
+/** Ask the user (in the fetch page) and fetch. null when the user cancels */
+export function fetchFromWeb(url: string): Promise<Fetched | null> {
+  fetchRequest.value?.done(null);
+  return new Promise((resolve) => {
+    fetchRequest.value = {
+      url,
+      done: (r) => {
+        fetchRequest.value = null;
+        resolve(r);
+      }
+    };
+  });
+}
+
+/** What a fetch became: a file the model can read, or an image */
+export type SavedFetch = { kind: 'file'; file: FileRecord } | { kind: 'image'; id: string; name: string };
+
+/** Keep what was fetched in the Files tab (in a chat: as part of that chat, so its tools can read it) */
+export async function saveFetched(r: Fetched, conv?: Conversation): Promise<SavedFetch | null> {
+  const file = new File([r.data], r.name, { type: r.mime });
+  const id = newId();
+  if (r.mime.startsWith('image/')) return (await importImage(file, id, { kind: 'web', url: r.url }, conv)) ? { kind: 'image', id, name: file.name } : null;
+  const rec = await importOne(file, id, !!conv?.temporary, r.url, conv?.id);
+  return rec ? { kind: 'file', file: rec } : null;
 }
 
 /** Upload from the file manager */
@@ -310,6 +348,15 @@ registerToolProvider({
     if (!fileSettings.value.value.fileTools) return [];
     const scope = new Set(filesInHistory(history).keys());
     return makeFileTools({
+      async fetch(url) {
+        const r = await fetchFromWeb(url);
+        const saved = r && (await saveFetched(r, conv));
+        if (saved?.kind === 'file') {
+          scope.add(saved.file.id);
+          changed();
+        }
+        return saved;
+      },
       async create(name, text) {
         const f = fdb.newFile({ id: newId(), name, kind: 'document', text, by: 'model', conversationId: conv.id });
         await fdb.putFile(f, !!conv.temporary);

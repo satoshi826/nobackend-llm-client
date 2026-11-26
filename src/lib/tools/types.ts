@@ -35,6 +35,11 @@ export interface Tool<I = any> {
   risk: ToolRisk;
   /** Always ask the user, whatever the settings or "always allow" say (e.g. saving a skill) */
   alwaysAsk?: boolean;
+  /**
+   * The tool asks the user itself, every time, somewhere the app cannot answer for them (e.g. fetch_file, in the
+   * fetch page): the app does not ask again, but "deny" in the settings still blocks it
+   */
+  confirmsItself?: boolean;
   /** Summary shown on the approval card (e.g. the search query) */
   summarize(input: I): string;
   /** Repair and validate broken arguments. Throws if there is a problem */

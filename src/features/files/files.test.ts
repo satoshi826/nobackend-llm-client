@@ -29,6 +29,12 @@ function memDeps(scope = new Set<string>()) {
       const f = withVersion(files.get(id)!, text, 'model', note);
       files.set(id, f);
       return f;
+    },
+    // Stands in for the fetch page: "decline" in the address means the user said no; .png is an image
+    async fetch(url) {
+      if (url.includes('decline')) return null;
+      if (url.endsWith('.png')) return { kind: 'image', name: 'cat.png' };
+      return { kind: 'file', file: await deps.create('page.txt', 'fetched text') };
     }
   };
   return { deps, files, scope };
@@ -155,5 +161,25 @@ describe('file storage and backups', () => {
   });
   it('drops malformed file records on import', () => {
     expect(cleanFiles([{ id: 'a' }, null, { id: 'b', name: '../x', versions: [{ v: 1, text: 'ok' }] }]).map((f) => f.name)).toEqual(['x.md']);
+  });
+});
+
+describe('fetch_file', () => {
+  it('only takes https addresses', () => {
+    const { deps } = memDeps();
+    expect(() => tool(deps, 'fetch_file').prepare({ url: 'http://example.com/a.txt' })).toThrow();
+    expect(() => tool(deps, 'fetch_file').prepare({ url: 'javascript:alert(1)' })).toThrow();
+    expect(tool(deps, 'fetch_file').prepare({ url: ' https://example.com/a.txt ' })).toEqual({ url: 'https://example.com/a.txt' });
+  });
+  it('asks the user itself, so the app does not ask again', () => {
+    expect(tool(memDeps().deps, 'fetch_file').confirmsItself).toBe(true);
+  });
+  it('gives the model a file id it can read, says when an image was saved, and when the user declined', async () => {
+    const { deps } = memDeps();
+    const file = await run(deps, 'fetch_file', { url: 'https://example.com/a.txt' });
+    expect(file.content).toMatch(/id: f1/);
+    expect((await run(deps, 'read_file', { file_id: 'f1' })).content).toContain('fetched text');
+    expect((await run(deps, 'fetch_file', { url: 'https://example.com/cat.png' })).content).toMatch(/image "cat.png"/);
+    expect((await run(deps, 'fetch_file', { url: 'https://example.com/decline' })).content).toMatch(/declined/);
   });
 });

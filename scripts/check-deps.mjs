@@ -36,10 +36,11 @@ const RULES = [
   { name: 'state-has-no-ui', from: /^src\/state\//, to: /^src\/(components|features)\//, why: 'state/ must not import UI or features' },
   { name: 'core-ui-knows-no-feature', from: /^src\/components\//, to: /^src\/features\//, why: 'core components use components/extensions.ts instead' },
   { name: 'only-the-entry-loads-features', from: /^src\/(?!features\/|main\.tsx$)/, to: /^src\/features\//, why: 'features are loaded from src/features/index.ts by main.tsx' },
-  { name: 'vault-is-separate', from: /^vault\//, to: /^src\/(state|components|features)\//, why: 'the key vault page must not depend on the app' }
+  { name: 'vault-is-separate', from: /^vault\//, to: /^src\/(state|components|features)\//, why: 'the key vault page must not depend on the app' },
+  { name: 'fetch-is-separate', from: /^fetch\//, to: /^src\/(state|components|features)\//, why: 'the fetch page must not depend on the app' }
 ];
 
-const files = [...walk(join(ROOT, 'src')), ...walk(join(ROOT, 'vault'))].filter((f) => !isTest(f));
+const files = [...walk(join(ROOT, 'src')), ...walk(join(ROOT, 'vault')), ...walk(join(ROOT, 'fetch'))].filter((f) => !isTest(f));
 const problems = [];
 let edges = 0;
 for (const file of files) {

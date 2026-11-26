@@ -104,6 +104,21 @@ VITE_VAULT_URL=https://vault.example.com/ npm run build
 
 请使用同一自定义域名下的子域名。两个不同的 `*.workers.dev` / `*.pages.dev` 站点被视为不同站点，保管库的存储可能被分区。应用的预览部署也无法嵌入独立的保管库。
 
+### 从网络导入文件
+
+在对话中提出请求后，模型的 `fetch_file` 工具会把 https 地址上的文件或图像导入“文件”标签。应用本身不会连接任意地址：由独立的获取页面（`/fetch/`，有自己的 CSP）获取，并且每次都会先显示地址并征求确认。文本、CSV、代码和 PDF 会成为模型可以读取的文件；图像按图像保存（最大 20 MB，不支持 SVG）。
+
+浏览器只能从允许跨源读取的网站获取（CORS）：文件和图像的分发站点（GitHub raw 文件、Wikimedia、许多 CDN）通常允许，普通网页通常不允许。对于这些网站，可以部署自己的中转服务器（可选）：
+
+```bash
+# 在自己的 Cloudflare 上部署中转（relay/worker.js）；在 relay/wrangler.jsonc 的 ALLOWED_ORIGINS 中填写应用的源
+cd relay && npx wrangler deploy
+# 应用：告诉获取页面中转的位置
+VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<账户>.workers.dev npm run build
+```
+
+中转只连接公开的 https 地址，不转发你的请求头或 Cookie，不保存任何内容，只响应允许的源。通过中转获取的地址中转（你自己的 Worker）也能看到。若要让获取页面与应用内运行的脚本隔离，可像密钥保管库一样把它放在独立的源上：`VITE_APP_ORIGIN=https://app.example.com npm run build:fetch`（部署 `dist-fetch/`），并用 `VITE_FETCH_URL=https://fetch.example.com/` 构建应用。
+
 ### 在构建时添加提供商
 
 `VITE_CUSTOM_PROVIDERS` 接收一个 OpenAI 兼容端点的 JSON 数组。它们会自动加入提供商列表、保管库的允许主机以及 CSP。

@@ -104,15 +104,15 @@ export default defineConfig(({ mode, command }) => {
       sourcemap: false,
       modulePreload: { polyfill: false }, // emit no inline script (for CSP script-src 'self')
       rollupOptions: {
-        // The app, and the key vault hosted on the same origin (/vault/)
-        input: { main: resolve(__dirname, 'index.html'), vault: resolve(__dirname, 'vault/index.html') },
+        // The app, and the key vault and the fetch page hosted on the same origin (/vault/, /fetch/)
+        input: { main: resolve(__dirname, 'index.html'), vault: resolve(__dirname, 'vault/index.html'), fetch: resolve(__dirname, 'fetch/index.html') },
         // Emit .mjs assets (the pdf.js worker) as .js so every static host serves them as JavaScript
         output: { assetFileNames: (info: { names?: string[] }) => (info.names?.[0]?.endsWith('.mjs') ? 'assets/[name]-[hash].js' : 'assets/[name]-[hash][extname]') }
       }
     },
     test: {
       environment: 'node',
-      include: ['src/**/*.test.ts', 'vault/**/*.test.ts']
+      include: ['src/**/*.test.ts', 'vault/**/*.test.ts', 'fetch/**/*.test.ts', 'relay/**/*.test.ts']
     }
   } as any;
 });

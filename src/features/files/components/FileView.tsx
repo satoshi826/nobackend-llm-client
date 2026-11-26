@@ -182,6 +182,15 @@ export function FileView({ id = '' }: { id?: string }) {
           />
         </div>
       </header>
+      {f.url && (
+        <p class="mx-3 mt-2 flex min-w-0 items-center gap-1.5 text-xs text-muted md:ml-1">
+          <Icon name="link" class="size-3.5 shrink-0" />
+          {t('fetch.source')}:
+          <a href={f.url} target="_blank" rel="noopener noreferrer nofollow" class="truncate underline hover:text-ink">
+            {f.url}
+          </a>
+        </p>
+      )}
       {isOld && !editing && (
         <div class="flex flex-wrap items-center gap-2 mx-2 mt-2 rounded-2xl border border-warn/40 bg-warn-soft px-4 py-2 sm:mx-3 md:ml-0 md:mr-3 text-sm text-warn">
           {t('file.oldVersion', { v: shown.v, latest: latest.v })}

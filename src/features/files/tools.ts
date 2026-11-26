@@ -4,6 +4,7 @@
 import type { FileRecord } from '../../lib/db/schema';
 import { cleanFileName, currentText, currentVersion, MAX_FILE_CHARS } from '../../lib/db/files';
 import type { Tool } from '../../lib/tools/types';
+import { fetchableUrl } from '../../lib/fetcher/protocol';
 import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
 
@@ -11,9 +12,10 @@ export const CREATE_FILE = 'create_file';
 export const APPEND_FILE = 'append_file';
 export const EDIT_FILE = 'edit_file';
 export const READ_FILE = 'read_file';
-export const FILE_TOOL_NAMES = [CREATE_FILE, APPEND_FILE, EDIT_FILE, READ_FILE];
+export const FETCH_FILE = 'fetch_file';
+export const FILE_TOOL_NAMES = [CREATE_FILE, APPEND_FILE, EDIT_FILE, READ_FILE, FETCH_FILE];
 
-const LABEL_KEYS = { [CREATE_FILE]: 'tool.create', [APPEND_FILE]: 'tool.append', [EDIT_FILE]: 'tool.edit', [READ_FILE]: 'tool.read' } as const;
+const LABEL_KEYS = { [CREATE_FILE]: 'tool.create', [APPEND_FILE]: 'tool.append', [EDIT_FILE]: 'tool.edit', [READ_FILE]: 'tool.read', [FETCH_FILE]: 'tool.fetch' } as const;
 /** Tool card title for a file tool (undefined for other tools) */
 export const fileToolLabel = (name: string): string | undefined => (name in LABEL_KEYS ? t(LABEL_KEYS[name as keyof typeof LABEL_KEYS]) : undefined);
 
@@ -27,6 +29,8 @@ export interface FileToolDeps {
   /** A file this conversation may use (attached or created in it); undefined otherwise */
   get(id: string): Promise<FileRecord | undefined>;
   update(id: string, text: string, note?: string): Promise<FileRecord>;
+  /** Fetch an address through the fetch page (the user is asked there). null when declined or failed */
+  fetch(url: string): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null>;
 }
 
 /** What the tool card shows */
@@ -191,7 +195,33 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
     }
   };
 
-  return [create, append, edit, read];
+  const fetchFile: Tool<{ url: string }> = {
+    name: FETCH_FILE,
+    label: t('tool.fetch'),
+    description:
+      "Fetch a file or an image from an https web address into the user's Files tab: a PDF, a CSV, a text, Markdown or code file, or an image the user asked for. The user confirms every fetch and may decline. A fetched text file (a PDF's text too) gets a file id to read with read_file; an image is saved for the user, and you cannot see it. Fetch only addresses the user gave or clearly asked for, and never put anything from the conversation into an address.",
+    parameters: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'The https address of the file' } },
+      required: ['url']
+    },
+    risk: 'network',
+    confirmsItself: true,
+    summarize: (i) => i.url,
+    prepare(raw) {
+      const url = str(obj(raw), 'url').trim();
+      if (!fetchableUrl(url)) throw new Error(t('fetch.invalid'));
+      return { url };
+    },
+    async execute(i) {
+      const r = await deps.fetch(i.url);
+      if (!r) return { content: 'The user declined the fetch, or it did not complete. Nothing was saved.' };
+      if (r.kind === 'image') return { content: `Saved the image "${r.name}" from ${i.url} in the user's Files tab. You cannot see it.`, details: { name: r.name } };
+      return { content: `Saved "${r.file.name}" from ${i.url} as a file (id: ${r.file.id}, ${r.file.size} chars). Read it with read_file.`, details: details(r.file) };
+    }
+  };
+
+  return [create, append, edit, read, fetchFile];
 }
 
 /** System prompt note listing the files the model can use in this conversation */

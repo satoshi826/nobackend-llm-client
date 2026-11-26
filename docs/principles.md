@@ -6,7 +6,7 @@ What this app is and the rules every change keeps. It states what is true now; h
 
 A chat client for LLM APIs that runs entirely in the browser, for people who want less-censored or open-weight models without leaving logs in a SaaS product, and without hosting a server or running a model locally.
 
-- **Bring your own key, no backend.** Static files only. The browser talks to each provider's API directly with the user's key.
+- **Bring your own key, no backend.** Static files only. The browser talks to each provider's API directly with the user's key. The one optional server is a fetch relay the user deploys for themselves; nothing uses it unless it is configured at build time.
 - **General-purpose.** Chat, web search, files, images, skills and an agent-style tool loop.
 - **Not goals:** accounts, sync between devices, analytics, role-play features, adding providers from the UI at runtime.
 
@@ -16,9 +16,10 @@ Threats the design holds against, and the rule that holds each one.
 
 - **The app never holds an API key.** Only the key vault page reads, stores, shows or sends keys; the app asks the vault to make keyed requests and never sees the value. *Why:* an XSS in the app must not be able to read keys. A vault on a separate origin isolates keys even from that.
 - **A key goes only to its provider's fixed hosts.** Allowed hosts are fixed at build time; the vault refuses any other host, refuses redirects and drops auth headers the app sends. Providers cannot be added at runtime. *Why:* a script or a prompt must not be able to send a key elsewhere. *Check:* vault tests.
-- **No script but our own.** Every document has a strict CSP (no inline script, `script-src 'self'`), Trusted Types, sanitized Markdown, and external images are never fetched. No analytics or third-party scripts; host features that inject scripts (e.g. Cloudflare Web Analytics, Rocket Loader) stay off. *Check:* CSP tests, production headers locally (README).
+- **No script but our own.** Every document has a strict CSP (no inline script, `script-src 'self'`), Trusted Types, sanitized Markdown, and images linked in answers are never fetched. No analytics or third-party scripts; host features that inject scripts (e.g. Cloudflare Web Analytics, Rocket Loader) stay off. *Check:* CSP tests, production headers locally (README).
 - **With a passphrase, everything personal is encrypted at rest.** Keys, conversations, files, images, saved prompts and skills; only what is needed for ordering and indexing stays plain. The whole app is hidden behind a lock screen until unlocked, unlock is per tab and per reload, and locking drops all decrypted data from memory. *Why:* someone with the device or a copy of the browser profile must not read anything.
 - **Showing a saved key asks for the passphrase again,** even while unlocked. *Why:* an unlocked device left alone must not give a key away.
+- **The web is fetched only through the fetch page, after the user confirms.** Only that page may reach arbitrary https addresses (its own CSP); it shows the address and asks before every fetch, out of the app's reach, and keeps the size and types it passes on limited. *Why:* a prompt-injected model or a script in the app must not be able to send anything out inside an address.
 - **Tool results are untrusted input.** They are marked as untrusted for the model; tools that send data out of the browser ask first unless they send only a search query; creating or changing a skill always asks. *Why:* prompt injection through pages and search results.
 - **Leaked keys are limited.** The app tells users to use spend-limited keys, and warns when a provider balance drops more than this app spent.
 - **Out of scope:** a malicious build of the app itself (self-deploy instead of trusting a distributor), a compromised browser or OS, and a conversation while it is unlocked and on screen.

@@ -104,6 +104,21 @@ VITE_VAULT_URL=https://vault.example.com/ npm run build
 
 同じ独自ドメインのサブドメインに置いてください。`*.workers.dev` や `*.pages.dev` の 2 つのサイトは別サイト扱いになり、金庫の保存領域が制限されることがあります。また、本体のプレビュー用 URL からは別オリジンの金庫を埋め込めません。
 
+### Web からファイルを取り込む
+
+チャットで頼むと、モデルの `fetch_file` ツールが https のアドレスからファイルや画像をファイルタブに取り込みます。アプリ本体は任意のアドレスに接続しません。別の取得ページ（`/fetch/`、専用の CSP）が取得し、毎回アドレスを見せてから確認します。テキスト・CSV・コード・PDF はモデルが読めるファイルに、画像は画像として保存します（20 MB まで。SVG は不可）。
+
+ブラウザから取得できるのは、それを許しているサイトだけです（CORS）。ファイルや画像の配信元（GitHub の raw ファイル、Wikimedia、多くの CDN）は許していることが多く、一般の Web ページは許していないことが多いです。そうしたサイト向けに、自分の中継サーバーを置けます（任意）。
+
+```bash
+# 中継（relay/worker.js）を自分の Cloudflare に置く。relay/wrangler.jsonc の ALLOWED_ORIGINS にアプリのオリジンを書く
+cd relay && npx wrangler deploy
+# アプリ: 中継の場所を取得ページに伝える
+VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<アカウント>.workers.dev npm run build
+```
+
+中継は公開された https のアドレスにだけ接続し、あなたのヘッダや Cookie を送らず、何も記録せず、許可したオリジンにだけ応答します。中継を通したアドレスは中継（自分の Worker）にも見えます。アプリ内で動くスクリプトから取得ページを切り離したいときは、金庫と同じく別オリジンに置きます: `VITE_APP_ORIGIN=https://app.example.com npm run build:fetch`（`dist-fetch/` をデプロイ）、アプリは `VITE_FETCH_URL=https://fetch.example.com/` でビルドします。
+
 ### ビルド時に接続先を足す
 
 `VITE_CUSTOM_PROVIDERS` に、OpenAI 互換の接続先を JSON の配列で指定します。接続先の一覧・金庫の送り先・CSP に自動で入ります。

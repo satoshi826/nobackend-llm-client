@@ -4,4 +4,5 @@ dist/
 *.log
 .try-build/
 dist-vault/
+dist-fetch/
 .wrangler

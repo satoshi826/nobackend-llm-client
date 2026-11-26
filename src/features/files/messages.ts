@@ -45,6 +45,10 @@ export const t = defineMessages(
     // reading files from the device
     'import.truncated': '「{name}」は長すぎるため、先頭 {n} 文字だけを取り込みました。',
     'import.done': '{n} 件のファイルを取り込みました',
+    'fetch.invalid': 'https で始まるアドレスを入れてください。',
+    'fetch.frame': 'Web からの取得',
+    'fetch.source': '取得元',
+    'tool.fetch': 'Web からの取得',
     'import.svg': '「{name}」は SVG のため取り込めません（中にスクリプトを含められるため）。PNG などに変換してから取り込んでください。',
     'import.doneOne': '1 件のファイルを取り込みました',
     'extract.tooBig': 'ファイルが大きすぎます（上限 {max} MB）。小さいファイルを選んでください。',
@@ -201,6 +205,10 @@ export const t = defineMessages(
 
       'import.truncated': '"{name}" is too long, so only the first {n} characters were imported.',
       'import.done': 'Imported {n} files',
+      'fetch.invalid': 'Enter an address that starts with https.',
+      'fetch.frame': 'Fetching from the web',
+      'fetch.source': 'From',
+      'tool.fetch': 'Fetch from the web',
       'import.svg': '“{name}” is an SVG and can’t be brought in (it can carry scripts). Convert it to PNG or similar first.',
       'import.doneOne': 'Imported 1 file',
       'extract.tooBig': 'The file is too large (limit {max} MB). Choose a smaller file.',
@@ -350,6 +358,10 @@ export const t = defineMessages(
 
       'import.truncated': '“{name}”过长，仅导入了前 {n} 个字符。',
       'import.done': '已导入 {n} 个文件',
+      'fetch.invalid': '请输入以 https 开头的地址。',
+      'fetch.frame': '从网络获取',
+      'fetch.source': '来源',
+      'tool.fetch': '从网络获取',
       'import.svg': '“{name}”是 SVG，无法导入（其中可能包含脚本）。请先转换为 PNG 等格式。',
       'import.doneOne': '已导入 1 个文件',
       'extract.tooBig': '文件过大（上限 {max} MB）。请选择较小的文件。',

@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && npm run lint:deps && vite build",
     "build:vault": "vite build --config vite.vault.config.ts",
+    "build:fetch": "vite build --config vite.fetch.config.ts",
     "preview:csp": "node scripts/serve-with-headers.mjs dist 4173",
     "mock": "node scripts/mock-venice.mjs 8787",
     "test": "vitest run",

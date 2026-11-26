@@ -26,8 +26,8 @@ export function serviceOrigins(env: Env) {
 
 const COMMON = ['X-Content-Type-Options: nosniff', 'Referrer-Policy: no-referrer', 'Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()'];
 
-/** CSP for the app. vaultOrigin is a separate-origin vault (just 'self' when same-origin) */
-export function appCsp(env: Env, vaultOrigin?: string): string {
+/** CSP for the app. vaultOrigin / fetchOrigin: a vault / fetch page on a separate origin ('self' covers same-origin ones) */
+export function appCsp(env: Env, vaultOrigin?: string, fetchOrigin?: string): string {
   const o = serviceOrigins(env);
   return [
     "default-src 'none'",
@@ -36,7 +36,7 @@ export function appCsp(env: Env, vaultOrigin?: string): string {
     "img-src 'self' data: blob:",
     "font-src 'self'",
     `connect-src 'self' ${[...o.appProviders, o.jina].join(' ')}`,
-    `frame-src 'self'${vaultOrigin ? ' ' + vaultOrigin : ''}`,
+    `frame-src ${["'self'", vaultOrigin, fetchOrigin].filter(Boolean).join(' ')}`,
     "worker-src 'self'",
     "manifest-src 'self'",
     "base-uri 'none'",
@@ -45,6 +45,26 @@ export function appCsp(env: Env, vaultOrigin?: string): string {
     "object-src 'none'",
     "require-trusted-types-for 'script'",
     'trusted-types dompurify app-sw app-pdf'
+  ].join('; ');
+}
+
+/**
+ * CSP for the fetch page: the one document that may reach any https address (it asks the user before each fetch).
+ * appOrigins are the apps allowed to embed it ('self' when hosted same-origin)
+ */
+export function fetchCsp(appOrigins: string[]): string {
+  return [
+    "default-src 'none'",
+    "script-src 'self'",
+    "style-src 'self'",
+    "font-src 'self'",
+    'connect-src https:',
+    "base-uri 'none'",
+    "form-action 'none'",
+    `frame-ancestors ${appOrigins.join(' ')}`,
+    "object-src 'none'",
+    "require-trusted-types-for 'script'",
+    "trusted-types 'none'"
   ].join('; ');
 }
 
@@ -74,7 +94,8 @@ export function vaultCsp(env: Env, appOrigins: string[]): string {
  */
 export function appHeadersFile(env: Env): string {
   const vaultOrigin = env.VITE_VAULT_URL ? new URL(env.VITE_VAULT_URL).origin : undefined;
-  const app = `  Content-Security-Policy: ${appCsp(env, vaultOrigin)}`;
+  const fetchOrigin = env.VITE_FETCH_URL ? new URL(env.VITE_FETCH_URL).origin : undefined;
+  const app = `  Content-Security-Policy: ${appCsp(env, vaultOrigin, fetchOrigin)}`;
   return [
     '/*',
     ...COMMON.map((h) => '  ' + h),
@@ -89,8 +110,17 @@ export function appHeadersFile(env: Env): string {
     '',
     '/vault/*',
     `  Content-Security-Policy: ${vaultCsp(env, ["'self'"])}`,
+    '',
+    '/fetch/*',
+    `  Content-Security-Policy: ${fetchCsp(["'self'"])}`,
     ''
   ].join('\n');
+}
+
+/** _headers for a fetch page hosted on a separate origin */
+export function fetchHeadersFile(env: Env): string {
+  const appOrigins = (env.VITE_APP_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return ['/*', `  Content-Security-Policy: ${fetchCsp(appOrigins.length ? appOrigins : ["'self'"])}`, ...COMMON.map((h) => '  ' + h), '  Cross-Origin-Resource-Policy: same-origin', ''].join('\n');
 }
 
 /** _headers for a vault hosted on a separate origin */

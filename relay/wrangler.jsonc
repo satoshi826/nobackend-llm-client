@@ -1,0 +1,9 @@
+// The optional fetch relay (relay/worker.js), deployed as its own Worker: `npx wrangler deploy` in this folder.
+// Set ALLOWED_ORIGINS to the origin(s) of the fetch page that may use it (the app's origin when the fetch page is
+// hosted with the app), then build the app with VITE_FETCH_RELAY_URL set to this Worker's address.
+{
+  "name": "nobackend-fetch-relay",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-20",
+  "vars": { "ALLOWED_ORIGINS": "https://your-app.example.com" }
+}

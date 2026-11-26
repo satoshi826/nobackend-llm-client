@@ -1,7 +1,6 @@
 // Builds the messages to send (history, compaction, tool calls within the same turn)
 import type { ChatMessage, Part } from '../providers/types';
 import type { MessageRecord } from '../db/schema';
-import { t as tc } from './messages';
 
 /**
  * A feature's change to what is sent for one stored message (e.g. images become a short note,
@@ -37,7 +36,7 @@ export function buildRequestMessages(history: MessageRecord[], systemPrompt: str
   let sys = systemPrompt.trim();
   const { summary, rest } = afterCompaction(history);
   if (summary !== null) {
-    const summaryBlock = `${tc('summary.block')}\n\n${summary}`;
+    const summaryBlock = `## Summary of the conversation so far\nThe earlier part of this conversation was summarized as follows. Treat it as context for the rest of the conversation.\n\n${summary}`;
     sys = sys ? `${sys}\n\n${summaryBlock}` : summaryBlock;
   }
   const out: ChatMessage[] = [];

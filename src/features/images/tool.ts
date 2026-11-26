@@ -22,13 +22,13 @@ export function makeImageTool(run: ImageToolRun): Tool<ImageToolInput> {
       return t('tool.label');
     },
     description:
-      'Generate an image from a text description and show it to the user. Write the prompt in English when possible, describing subject, style, composition and lighting. Use only when the user asks for an image.',
+      "Create an image from a text description with the user's image model and show it to the user. Use it only when the user asks for an image (a picture, an illustration, a photo, a diagram drawn as an image). Write the prompt in English when possible, describing subject, style, composition and lighting. You cannot see the result, so do not describe it as if you could.",
     parameters: {
       type: 'object',
       properties: {
-        prompt: { type: 'string', description: 'Detailed description of the image' },
-        aspect_ratio: { type: 'string', enum: ASPECTS, description: 'Default 1:1' },
-        negative_prompt: { type: 'string', description: 'Things to avoid (optional)' }
+        prompt: { type: 'string', description: 'A detailed description of the image, in English when possible.' },
+        aspect_ratio: { type: 'string', enum: ASPECTS, description: 'Optional. Width:height; default 1:1.' },
+        negative_prompt: { type: 'string', description: 'Optional. Things the image should not contain.' }
       },
       required: ['prompt']
     },
@@ -45,7 +45,8 @@ export function makeImageTool(run: ImageToolRun): Tool<ImageToolInput> {
     async execute(input, ctx) {
       const r = await run(input, ctx.signal);
       return {
-        content: t(r.blurred ? 'tool.resultBlurred' : 'tool.result', { n: r.blobIds.length, model: r.model }),
+        // For the model only: English, like the descriptions
+        content: `Created ${r.blobIds.length} image(s) with ${r.model}; they are shown to the user.${r.blurred ? ' The provider blurred them (safe mode).' : ''} You cannot see them, so do not describe them as if you could.`,
         // request: what was sent and what it cost (shown in full on the card)
         details: { blobIds: r.blobIds, model: r.model, blurred: r.blurred, request: r.request }
       };

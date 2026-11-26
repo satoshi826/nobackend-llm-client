@@ -2,7 +2,7 @@
 // - the model sees only the list of names and descriptions, and reads the body with the load_skill tool when needed (progressive loading)
 // - skills the user picks in the input box are sent with their body attached to that message
 import type { MessageRecord, Skill } from '../db/schema';
-import { formatList, formatNumber } from '../i18n';
+import { formatNumber } from '../i18n';
 import { t } from './messages';
 
 export type { Skill } from '../db/schema';
@@ -113,8 +113,8 @@ export function unlockedTools(messages: MessageRecord[], list: Pick<Skill, 'name
 export function skillCatalog(list: Pick<Skill, 'name' | 'description'>[]): string {
   if (!list.length) return '';
   return [
-    t('catalog.heading'),
-    t('catalog.intro'),
+    '## Skills',
+    'These skills are step-by-step guides for tasks. When a request matches one, load its instructions with load_skill before you start, and follow them. If none fits, you do not need one.',
     '',
     ...list.map((s) => `- ${s.name}: ${s.description.replace(/\s+/g, ' ')}`)
   ].join('\n');
@@ -133,7 +133,7 @@ export function skillBlock(s: { name: string; body: string }): string {
 /** Prepend the skills the user picked to that message */
 export function withAttachedSkills(text: string, attached: { name: string; body: string }[]): string {
   if (!attached.length) return text;
-  const names = formatList(attached.map((s) => s.name));
-  const head = `${attached.map(skillBlock).join('\n\n')}\n\n${t('attached.note', { names })}`;
+  const names = attached.map((s) => s.name).join(', ');
+  const head = `${attached.map(skillBlock).join('\n\n')}\n\nThe user picked the skills above (${names}). Follow their instructions for the request below.`;
   return text.trim() ? `${head}\n\n---\n\n${text}` : head;
 }

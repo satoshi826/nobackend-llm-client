@@ -31,9 +31,6 @@ export const t = defineMessages(
     'tool.noteCostUnknown': 'プロンプトは「{model}」（{privacy}）に送られます。費用は不明です。',
     'tool.costEach': '1 枚あたり約 {cost}。',
     'tool.noPrompt': 'prompt（画像の説明）がありません。prompt を指定してください。',
-    'tool.result': '{model} で画像を {n} 枚生成し、ユーザーに表示しました。画像が見えているかのように説明しないでください。',
-    'tool.resultBlurred':
-      '{model} で画像を {n} 枚生成し、ユーザーに表示しました。接続先がセーフモードで結果をぼかしています。画像が見えているかのように説明しないでください。',
     deleted: '（画像は削除されました）',
     // settings
     'settings.title': '画像',
@@ -190,9 +187,6 @@ export const t = defineMessages(
       'tool.noteCostUnknown': 'The prompt is sent to {model} ({privacy}). The cost is unknown.',
       'tool.costEach': 'About {cost} per image.',
       'tool.noPrompt': 'prompt (the image description) is missing. Provide a prompt.',
-      'tool.result': 'Generated {n} image(s) with {model}; they are shown to the user. Do not describe them as if you can see them.',
-      'tool.resultBlurred':
-        'Generated {n} image(s) with {model}; they are shown to the user. The provider blurred the result (safe mode). Do not describe them as if you can see them.',
       deleted: '(Image deleted)',
       'settings.title': 'Images',
       'settings.desc': 'Turn on "Image" in the input box to create images from your text, with the image models of connections whose key you set ({providers}). Images are saved in this browser and encrypted if you set a passphrase.',
@@ -340,8 +334,6 @@ export const t = defineMessages(
       'tool.noteCostUnknown': '提示词会发送到“{model}”（{privacy}）。费用未知。',
       'tool.costEach': '每张约 {cost}。',
       'tool.noPrompt': '缺少 prompt（图像描述）。请提供 prompt。',
-      'tool.result': '已使用 {model} 生成 {n} 张图像，并已展示给用户。请不要像能看到图像那样描述它们。',
-      'tool.resultBlurred': '已使用 {model} 生成 {n} 张图像，并已展示给用户。服务商以安全模式对结果做了模糊处理。请不要像能看到图像那样描述它们。',
       deleted: '（图像已删除）',
       'settings.title': '图像',
       'settings.desc': '在输入框中打开“图像”后，会根据输入的文字生成图像。可使用已登记密钥的服务商（{providers}）的图像模型。生成的图像保存在本浏览器中，设置了口令时会加密。',

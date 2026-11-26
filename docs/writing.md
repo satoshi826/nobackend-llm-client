@@ -2,7 +2,7 @@
 
 Rules for every text the app shows, in all three languages. It states what is true now; the history is in git.
 
-Languages: Japanese (reference), English, Simplified Chinese. The language setting is in Settings → 表示 (auto follows the browser). Model-facing prompts follow the UI language too, so answers come back in it.
+Languages: Japanese (reference), English, Simplified Chinese. The language setting is in Settings → 表示 (auto follows the browser). Text only the model reads (tool descriptions, system notes, the framing of tool results) is in English whatever the UI language: models follow English descriptions most reliably, and the request does not change with the language. Prompts whose output the user reads (titles, reply suggestions, summaries) follow the UI language, so answers come back in it.
 
 ## Code
 

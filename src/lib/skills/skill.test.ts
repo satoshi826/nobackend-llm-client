@@ -49,7 +49,7 @@ describe('skills sent to the model', () => {
     expect(cat).toContain('- a: does A well');
     expect(cat).toContain('load_skill');
     expect(withSkillCatalog('', [])).toBe('');
-    expect(withSkillCatalog('be nice', [{ name: 'a', description: 'A' }])).toMatch(/^be nice\n\n## スキル/);
+    expect(withSkillCatalog('be nice', [{ name: 'a', description: 'A' }])).toMatch(/^be nice\n\n## Skills\n/);
   });
   it('attached skills are prepended to the user message', () => {
     const t = withAttachedSkills('please review', [{ name: 'review', body: 'Check bugs' }]);

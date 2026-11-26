@@ -10,8 +10,6 @@ export const t = defineMessages(
     'run.forbidden': '設定でこのツールは禁止されています。',
     'run.noApprovalUi': '承認できる画面がありません。',
     'title.new': '新しいチャット',
-
-    'summary.block': '## これまでの会話の要約\n以下は、この会話の前半を要約したものです。続きの会話の文脈として扱ってください。',
     'summary.instruction': `あなたは会話の記録係です。与えられた会話を、続きの会話に必要な情報を失わないように要約してください。
 次の見出しで、箇条書き中心に日本語で書いてください（会話が別の言語なら、その言語でかまいません）。
 
@@ -53,8 +51,6 @@ export const t = defineMessages(
       'run.forbidden': 'This tool is blocked in settings.',
       'run.noApprovalUi': 'There is no screen to approve this on.',
       'title.new': 'New chat',
-
-      'summary.block': '## Summary of the conversation so far\nThe following is a summary of the earlier part of this conversation. Treat it as context for the rest of the conversation.',
       'summary.instruction': `You keep the record of a conversation. Summarize the given conversation without losing any information needed to continue it.
 Write in English under the following headings, mainly as bullet points (if the conversation is in another language, you may write in that language).
 
@@ -95,8 +91,6 @@ Write in English under the following headings, mainly as bullet points (if the c
       'run.forbidden': '此工具已在设置中被禁止。',
       'run.noApprovalUi': '没有可以进行批准的界面。',
       'title.new': '新对话',
-
-      'summary.block': '## 此前对话的摘要\n以下是本次对话前半部分的摘要。请将其作为后续对话的上下文。',
       'summary.instruction': `你是对话的记录员。请对给定的对话进行摘要，不要丢失继续对话所需的信息。
 请按以下标题，以要点列表为主，用简体中文书写（如果对话使用其他语言，也可以用该语言）。
 

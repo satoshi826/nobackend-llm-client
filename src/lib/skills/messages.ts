@@ -14,9 +14,6 @@ export const t = defineMessages(
     'parse.noFrontmatter': '先頭に「---」で囲んだ name と description がありません。SKILL.md の形式で書いてください。',
 
     // ---- Passed to the model ----
-    'catalog.heading': '## スキル',
-    'catalog.intro': '次のスキル（作業の手順書）を使えます。依頼に合うスキルがあれば、取りかかる前に load_skill ツールでその本文を読み込み、指示に従ってください。合うものがなければ使う必要はありません。',
-    'attached.note': 'ユーザーが上のスキル（{names}）を指定しました。その指示に従って、次の依頼に対応してください。',
 
     // ---- Built-in skill: skill-creator ----
     'creator.description': '新しいスキルを作る・既存のスキルを直すときに使う。「この手順をスキルにして」「スキルを作って」「〇〇のスキルを直して」と頼まれたとき。',
@@ -49,10 +46,6 @@ export const t = defineMessages(
       'validate.bodyTooLong': 'The instructions are too long. Keep them to {max} characters or fewer.',
       'parse.noFrontmatter': 'There is no name and description enclosed in "---" at the top. Write it in the SKILL.md format.',
 
-      'catalog.heading': '## Skills',
-      'catalog.intro': 'You can use the following skills (step-by-step guides for tasks). If a skill fits the request, load its body with the load_skill tool before you start and follow its instructions. If none fits, you do not need to use one.',
-      'attached.note': 'The user chose the skills above ({names}). Follow their instructions to handle the next request.',
-
       'creator.description': 'Use when creating a new skill or fixing an existing one. When asked things like "turn these steps into a skill", "make a skill" or "fix the ... skill".',
       'creator.body': `# How to create a skill
 
@@ -81,10 +74,6 @@ A skill is a set of instructions for doing a particular task. The model decides 
       'validate.bodyRequired': '请输入指令正文。',
       'validate.bodyTooLong': '正文过长。请控制在 {max} 个字符以内。',
       'parse.noFrontmatter': '开头没有用“---”包围的 name 和 description。请按 SKILL.md 的格式书写。',
-
-      'catalog.heading': '## 技能',
-      'catalog.intro': '你可以使用以下技能（任务的操作手册）。如果有符合请求的技能，请在开始之前用 load_skill 工具读取其正文，并按照其中的指令操作。如果没有合适的技能，则无需使用。',
-      'attached.note': '用户指定了上面的技能（{names}）。请按照其中的指令处理接下来的请求。',
 
       'creator.description': '在创建新技能或修改现有技能时使用。例如用户说“把这个流程做成技能”“创建一个技能”“修改某某技能”时。',
       'creator.body': `# 如何创建技能

@@ -61,12 +61,12 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
     name: CREATE_FILE,
     label: t('tool.create'),
     description:
-      'Create a new file in the user\'s Files tab, e.g. a report, notes, a translation or a table. Use it when the user asks for a document or a deliverable, or when the result is long. Markdown (.md) unless another format fits better (.csv, .json, .txt, ...). For long documents write the first part here and continue with append_file. After creating it, reply briefly (what it contains) instead of repeating the content.',
+      "Create a new text file in the user's Files tab and return its id. Use it when the user asks for a document or a deliverable (a report, notes, a translation, a table, code), or when the answer is too long for a chat message. To change a file that already exists use edit_file. Write Markdown (.md) unless another format fits better (.csv, .json, .txt, .py, ...). For a long document, write the first part here and continue with append_file. Afterwards reply briefly with what the file contains; do not repeat its text in the chat.",
     parameters: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'File name with extension, e.g. "market-report.md"' },
-        content: { type: 'string', description: 'Full text (or the first part) of the file' }
+        name: { type: 'string', description: 'Short file name with an extension, no folders, e.g. "market-report.md".' },
+        content: { type: 'string', description: 'The text of the file, or its first part when you will continue with append_file.' }
       },
       required: ['name', 'content']
     },
@@ -91,12 +91,13 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
   const append: Tool<{ file_id: string; content: string }> = {
     name: APPEND_FILE,
     label: t('tool.append'),
-    description: 'Append text to the end of a file created in this conversation (to write long documents in parts). Include a leading newline when starting a new section.',
+    description:
+      'Add text to the end of a file of this conversation, to write a long document in several calls. The text is added exactly as given, so start it with a newline when it begins a new line or section. To change text already in the file, use edit_file.',
     parameters: {
       type: 'object',
       properties: {
-        file_id: { type: 'string', description: 'id returned by create_file' },
-        content: { type: 'string', description: 'Text to add at the end' }
+        file_id: { type: 'string', description: "The file's id: from the files list in the system prompt, the result of create_file or fetch_file, or the id in an attached <file> tag." },
+        content: { type: 'string', description: 'The text to add at the end.' }
       },
       required: ['file_id', 'content']
     },
@@ -123,15 +124,15 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
     name: EDIT_FILE,
     label: t('tool.edit'),
     description:
-      'Change a file as a new version (older versions are kept). Either give the whole new text in "content", or replace one exact passage: "find" (must occur exactly once) and "replace". Read the file first if you have not seen its current text.',
+      'Change a file of this conversation (created, attached or fetched here); the old text is kept as an earlier version. Use one of two ways per call. (1) Replace one passage: set "find" to text copied exactly from the current file (same spaces, line breaks and punctuation, without the <file> tag or any notes around it; it must occur exactly once, so include a few surrounding words if needed) and "replace" to the new text (empty deletes the passage). (2) Rewrite the file: set "content" to the whole new text. If you have not read the current text, call read_file first. Never write placeholders such as "..." for unchanged parts.',
     parameters: {
       type: 'object',
       properties: {
-        file_id: { type: 'string' },
-        content: { type: 'string', description: 'Whole new text (replaces everything)' },
-        find: { type: 'string', description: 'Exact passage to replace' },
-        replace: { type: 'string', description: 'Replacement for "find"' },
-        note: { type: 'string', description: 'Short summary of the change' }
+        file_id: { type: 'string', description: "The file's id: from the files list in the system prompt, the result of create_file or fetch_file, or the id in an attached <file> tag." },
+        content: { type: 'string', description: 'Optional. The whole new text of the file (replaces everything). Do not combine with find / replace.' },
+        find: { type: 'string', description: 'Optional. A passage copied exactly from the current text that occurs exactly once.' },
+        replace: { type: 'string', description: 'The text that replaces "find" (required with find; empty deletes it).' },
+        note: { type: 'string', description: 'Optional. A few words on what changed, shown in the version history.' }
       },
       required: ['file_id']
     },
@@ -169,12 +170,12 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
   const read: Tool<{ file_id: string; offset: number }> = {
     name: READ_FILE,
     label: t('tool.read'),
-    description: `Read a file attached to or created in this conversation, ${READ_CHUNK.toLocaleString('en')} characters at a time. Use "offset" to continue where the previous read (or an attachment excerpt) stopped.`,
+    description: `Read the text of a file of this conversation (created, attached or fetched here), up to ${READ_CHUNK.toLocaleString('en')} characters per call. The text comes in a <file> tag, followed by a note with the offset to continue from when there is more. Read a file before editing it if you have not seen its current text, and continue an attachment that was cut with the offset its note gives.`,
     parameters: {
       type: 'object',
       properties: {
-        file_id: { type: 'string' },
-        offset: { type: 'number', description: 'Character offset to start from (default 0)' }
+        file_id: { type: 'string', description: "The file's id: from the files list in the system prompt, the result of create_file or fetch_file, or the id in an attached <file> tag." },
+        offset: { type: 'number', description: 'Optional. Character position to start from, 0-based; default 0. Use the offset given at the end of the previous read.' }
       },
       required: ['file_id']
     },
@@ -202,10 +203,10 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
     name: FETCH_FILE,
     label: t('tool.fetch'),
     description:
-      "Fetch a file or an image from an https web address into the user's Files tab: a PDF, a CSV, a text, Markdown or code file, or an image the user asked for. The user confirms every fetch and may decline. A fetched text file (a PDF's text too) gets a file id to read with read_file; an image is saved for the user, and you cannot see it. Fetch only addresses the user gave or clearly asked for, and never put anything from the conversation into an address.",
+      "Fetch a file or an image from an https web address into the user's Files tab: a PDF, a CSV, a text, Markdown or code file, or an image the user asked for. The user confirms every fetch and may decline. A fetched text file (a PDF's text too) gets a file id to read with read_file; an image is saved for the user, and you cannot see it. To read a web page's text instead, use fetch_url. Fetch only addresses the user gave or clearly asked for, and never put anything from the conversation into an address.",
     parameters: {
       type: 'object',
-      properties: { url: { type: 'string', description: 'The https address of the file' } },
+      properties: { url: { type: 'string', description: 'The file\'s https address, copied exactly as given.' } },
       required: ['url']
     },
     risk: 'network',
@@ -231,5 +232,5 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
 export function filesNote(files: Pick<FileRecord, 'id' | 'name' | 'size'>[]): string | undefined {
   if (!files.length) return undefined;
   const lines = files.map((f) => `- ${f.name.replace(/[\r\n]+/g, ' ')} (id: ${f.id}, ${f.size} chars)`);
-  return `## Files in this conversation\nYou can read and edit these with read_file / edit_file / append_file:\n${lines.join('\n')}`;
+  return `## Files in this conversation\nRead them with read_file and change them with edit_file or append_file, using the id:\n${lines.join('\n')}`;
 }

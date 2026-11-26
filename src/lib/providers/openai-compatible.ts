@@ -30,6 +30,12 @@ export async function checkKey(url: string, fetchWithKey: KeyedFetch, corsHint?:
   return { ok: true };
 }
 
+/** A number from a JSON number or numeric string */
+export function numberOf(x: unknown): number | undefined {
+  const n = typeof x === 'string' ? parseFloat(x) : x;
+  return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
+}
+
 export function joinUrl(base: string, path: string): string {
   // "../x" climbs out of the base path (e.g. a model list kept beside /v1)
   if (path.startsWith('../')) return new URL(path, base.replace(/\/+$/, '') + '/').toString();

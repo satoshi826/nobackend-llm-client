@@ -162,6 +162,10 @@ const server = http.createServer(async (req, res) => {
 
   // ---- Image API mocks (key mock-key). Prompt keywords: "違反" → 422 with a suggestion, "ぼかし" → blurred header ----
   if (path === '/models' && req.method === 'GET' && url.searchParams.get('type') === 'image') return json(res, 200, { object: 'list', type: 'image', data: IMAGE_MODELS });
+  if (path === '/api_keys/rate_limits' && req.method === 'GET') {
+    if (!authed(req)) return json(res, 401, { error: 'Authentication failed' });
+    return json(res, 200, { data: { balances: { USD: 42.5, DIEM: 0 } } });
+  }
   if (path.startsWith('/image/')) {
     if (!authed(req)) return json(res, 401, { error: 'Authentication failed' });
     if (path === '/image/styles' && req.method === 'GET') return json(res, 200, { object: 'list', data: ['3D Model', 'Anime', 'Cinematic', 'Comic Book'] });
@@ -315,7 +319,7 @@ const server = http.createServer(async (req, res) => {
     if (ep) return json(res, 200, { id: ep[1], endpoints: [{ provider_name: 'Mock', provider_slug: 'mock', provider_tag: 'mock', supported_parameters: {}, allowed_passthrough_parameters: [], supports_streaming: false, pricing: [{ billable: 'output_image', unit: 'image', cost_usd: ep[1].includes('seedream') ? 0.03 : 0.05 }] }] });
     if (p === '/models') return json(res, 200, { data: [{ id: 'mock/chat', name: 'Mock OR Chat', architecture: { input_modalities: ['text'], output_modalities: ['text'] }, supported_parameters: ['tools'], pricing: { prompt: '0.000001', completion: '0.000002' }, context_length: 32000 }] });
     if (req.headers.authorization !== 'Bearer mock-or') return json(res, 401, { error: { message: 'No auth credentials found', code: 401 } });
-    if (p === '/key') return json(res, 200, { data: { label: 'mock', limit: 10, usage: 1 } });
+    if (p === '/key') return json(res, 200, { data: { label: 'mock', limit: 10, usage: 1, limit_remaining: 9 } });
     if (p === '/images' && req.method === 'POST') {
       const b = await readBody(req);
       await sleep(700);

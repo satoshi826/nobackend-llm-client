@@ -17,7 +17,7 @@ import { openSettings, showToast } from './ui';
 import { accountById } from '../lib/keys/accounts';
 import { contributedBuiltinWebSearch, contributedDynamicTools, contributedTools, requestHandlerFor, systemPromptFor, type ToolProviderContext } from './tool-registry';
 import { controllers, setStreaming, streamingConv } from './runs';
-import { balances, updateBalance } from './balance';
+import { balances, fetchBalance, updateBalance } from './balance';
 import { providerOptionsFor, recordUsage } from './request-helpers';
 import { waitForApproval } from './approvals';
 import { cancelSuggestions, suggestReplies } from './suggestions';
@@ -120,6 +120,7 @@ async function generateReply(convId: string, parentUserId: string) {
   const providerOptions = providerOptionsFor(cfg.id, 'chat', nativeSearch);
   let imageCount = 0;
   try {
+    let headerBalance = false;
     const final = await runAssistant({
       provider: cfg,
       preset: getPreset(cfg.preset),
@@ -148,7 +149,10 @@ async function generateReply(convId: string, parentUserId: string) {
       draft,
       signal: ctrl.signal,
       onEvent: (ev) => {
-        if (ev.type === 'account' && ev.balanceUsd !== undefined) updateBalance(cfg.id, (b) => observeBalance(b, ev.balanceUsd!));
+        if (ev.type === 'account' && ev.balanceUsd !== undefined) {
+          headerBalance = true;
+          updateBalance(cfg.id, (b) => observeBalance(b, ev.balanceUsd!));
+        }
       },
       onUpdate: (m) => {
         liveMessages.set(m.id, { ...m, parts: m.parts.map((p) => ({ ...p })) });
@@ -162,6 +166,8 @@ async function generateReply(convId: string, parentUserId: string) {
     }
     recordUsage({ id: final.id, conversationId: conv.id, providerId: cfg.id, model: conv.modelId, kind: 'chat', usage: final.meta?.usage, costUsd: final.meta?.costUsd, temporary: conv.temporary });
     if (final.meta?.costUsd && balances.value[cfg.id]) updateBalance(cfg.id, (b) => recordSpend(b, final.meta!.costUsd!));
+    // Providers that do not send the balance with the answer are asked for it afterwards
+    if (!headerBalance) void fetchBalance(cfg.id);
     if (final.status === 'error' && final.error) showToast(final.error.message, 'error');
     void suggestReplies(conv, final, history);
   } finally {

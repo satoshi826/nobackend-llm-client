@@ -8,7 +8,7 @@ export interface BalanceReading {
 
 export interface BalanceState {
   last: BalanceReading | null;
-  /** Total cost this app has settled since last */
+  /** Total cost this app has settled since last, plus spend not yet seen in the balance */
   spentSinceLast: number;
   /** Unexplained decrease (cumulative) */
   unexplainedUsd: number;
@@ -16,14 +16,17 @@ export interface BalanceState {
 
 export const initialBalanceState = (): BalanceState => ({ last: null, spentSinceLast: 0, unexplainedUsd: 0 });
 
-/** The balance in a response header is taken as the value before that response was billed. Whatever decrease remains after subtracting our own costs so far counts as an "unexplained decrease". */
+/**
+ * Whatever decrease remains after subtracting our own costs so far counts as an "unexplained decrease". Our spend
+ * the balance does not show yet (billed later, or read before billing) carries over to the next reading.
+ */
 export function observeBalance(s: BalanceState, usd: number, at = Date.now(), tolerance = 0.01): BalanceState {
   if (!s.last) return { last: { usd, at }, spentSinceLast: 0, unexplainedUsd: s.unexplainedUsd };
-  const drop = s.last.usd - usd;
+  const drop = Math.max(0, s.last.usd - usd);
   const unexplained = drop - s.spentSinceLast;
   return {
     last: { usd, at },
-    spentSinceLast: 0,
+    spentSinceLast: Math.max(0, -unexplained),
     unexplainedUsd: s.unexplainedUsd + (unexplained > tolerance ? unexplained : 0)
   };
 }

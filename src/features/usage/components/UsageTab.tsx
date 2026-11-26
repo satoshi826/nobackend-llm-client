@@ -1,9 +1,10 @@
 // Settings > Usage: tokens and cost recorded on this device, aggregated by day, provider, and model
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { BALANCE_ALERT_USD, balances } from '../../../state/balance';
+import { BALANCE_ALERT_USD, balances, fetchBalances } from '../../../state/balance';
 import * as repo from '../../../lib/db/repo';
 import { summarizeUsage, type UsageRecord, type UsageTotals } from '../../../lib/usage';
 import { modelOf, providerById } from '../../../state/models';
+import { PRESETS } from '../../../lib/providers/registry';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { Button, Chip, EmptyState, Icon, IconButton, Segmented, cx } from '../../../components/ui';
@@ -138,8 +139,9 @@ function Table({ rows }: { rows: { key: string; label: string; sub?: string; t: 
   );
 }
 
-/** Latest balance of providers that report one (only Venice today), and what the alert means */
+/** Latest balance of providers that report one (asked again when shown), and what the alert means */
 function BalanceSection() {
+  useEffect(() => void fetchBalances(), []);
   const list = Object.entries(balances.value).filter(([, b]) => b.last);
   const usd = (n: number) => `$${formatNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return (
@@ -153,6 +155,7 @@ function BalanceSection() {
             <li key={pid} class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 py-2">
               <span class="font-medium">{providerById(pid)?.name ?? pid}</span>
               <span class="tabular-nums">{usd(b.last!.usd)}</span>
+              {PRESETS[providerById(pid)?.preset ?? '']?.balanceApi?.scope === 'key' && <span class="text-xs text-muted">{t('balance.keyLimit')}</span>}
               <span class="text-xs text-muted">{t('balance.row', { time: formatDateTime(b.last!.at) })}</span>
               {b.unexplainedUsd > 0 && <span class="text-xs text-warn">{t('balance.unexplained', { amount: usd(b.unexplainedUsd) })}</span>}
             </li>

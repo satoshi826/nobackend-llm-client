@@ -3,16 +3,12 @@
 // Their model lists carry prices, context and capabilities; each has its own shape, read here (docs/specs/provider-research.md).
 // Reasoning comes as `reasoning` / `reasoning_content` or inline <think> (all handled by the adapter); it is never sent back.
 import type { ModelInfo, ProviderPreset } from '../types';
-import { checkKey, joinUrl } from '../openai-compatible';
+import { checkKey, joinUrl, numberOf as num } from '../openai-compatible';
 import { builtinBaseUrl } from '../endpoints';
 import { t as tp } from '../messages';
 
 const env = ((import.meta as any).env ?? {}) as Record<string, string | undefined>;
 
-const num = (x: unknown): number | undefined => {
-  const n = typeof x === 'string' ? Number(x) : x;
-  return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
-};
 const str = (x: unknown): string | undefined => (typeof x === 'string' && x ? x : undefined);
 
 function model(providerId: string, id: string, name: string | undefined, extra: Partial<ModelInfo>): ModelInfo {
@@ -35,6 +31,7 @@ function host(o: {
   /** A request that fails without a valid key (none for hosts whose only cheap GET needs no key) */
   keyCheckPath?: string;
   hasPrivateModels?: boolean;
+  balanceApi?: ProviderPreset['balanceApi'];
 }): ProviderPreset {
   const corsHost = new URL(builtinBaseUrl(o.id, env) || 'https://invalid').host;
   const preset: ProviderPreset = {
@@ -64,6 +61,7 @@ function host(o: {
     browserAccess: 'direct',
     modelsPath: o.modelsPath ?? 'models',
     mapModel: o.mapModel,
+    ...(o.balanceApi ? { balanceApi: o.balanceApi } : {}),
     ...(o.keyCheckPath ? { validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, o.keyCheckPath!), f, preset.corsHint) } : {})
   };
   return preset;
@@ -76,6 +74,7 @@ export const nanogptPreset = host({
   publicModels: true,
   modelsPath: 'models?detailed=true',
   hasPrivateModels: true,
+  balanceApi: { path: '../check-balance', method: 'POST', read: (j) => num(j?.usd_balance) },
   mapModel(raw, providerId) {
     const id = str(raw?.id);
     const out: string[] = raw?.architecture?.output_modalities ?? ['text'];

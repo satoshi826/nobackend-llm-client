@@ -14,6 +14,15 @@ describe('balance monitoring', () => {
     s = observeBalance(s, 9.0);
     expect(s.unexplainedUsd).toBeCloseTo(0.9);
   });
+  it('carries spend the balance does not show yet to the next reading', () => {
+    let s = observeBalance(initialBalanceState(), 10);
+    s = recordSpend(s, 0.6);
+    s = observeBalance(s, 10); // billed later
+    expect(s.spentSinceLast).toBeCloseTo(0.6);
+    s = observeBalance(s, 9.4);
+    expect(s.unexplainedUsd).toBe(0);
+    expect(s.spentSinceLast).toBeCloseTo(0);
+  });
   it('ignores top-ups (increases)', () => {
     let s = observeBalance(initialBalanceState(), 1);
     s = observeBalance(s, 20);

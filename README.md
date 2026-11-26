@@ -24,7 +24,7 @@ The UI is available in Japanese, English and Simplified Chinese (automatic, or c
 - **Web search**: the provider's built-in search (Venice), or tools (Tavily search and Jina Reader page fetch, each run after your approval).
 - **Skills**: SKILL.md-compatible instruction files. The model loads a skill's body only when it needs it, or you can attach one with `/name`. Ask it to "turn this into a skill" and it drafts one, which is saved after you approve it.
 - **Long conversations**: compaction (manual or automatic), prompt caching, and a context-length safeguard.
-- **Usage**: tokens and cost per day, provider and model, recorded only in this browser. Balance alert for Venice.
+- **Usage**: tokens and cost per day, provider and model, recorded only in this browser. Balance and balance alert for Venice, OpenRouter (the key's limit left), DeepSeek and NanoGPT.
 - **Data**: full-text search, JSON backup/import (optionally password-encrypted), image deletion, wipe everything, PWA, dark mode, mobile layout.
 
 ## Quick start

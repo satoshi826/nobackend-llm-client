@@ -1,7 +1,7 @@
 // Built-in providers other than Venice / OpenRouter, and OpenAI-compatible providers added at build time.
 // All of them need a key to fetch the model list, so it is fetched through the key vault (modelsNeedKey).
 import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
-import { checkKey, joinUrl } from '../openai-compatible';
+import { checkKey, joinUrl, numberOf } from '../openai-compatible';
 import { builtinBaseUrl, parseCustomProviders, type CustomProviderDef } from '../endpoints';
 import { t as tp } from '../messages';
 
@@ -153,6 +153,8 @@ export const openaiPreset: ProviderPreset = {
 export const deepseekPreset: ProviderPreset = {
   id: 'deepseek',
   label: 'DeepSeek',
+  // Accounts topped up in CNY have no USD entry
+  balanceApi: { path: 'user/balance', read: (j) => numberOf((Array.isArray(j?.balance_infos) ? j.balance_infos : []).find((b: any) => b?.currency === 'USD')?.total_balance) },
   get tagline() {
     return tp('deepseek.tagline');
   },

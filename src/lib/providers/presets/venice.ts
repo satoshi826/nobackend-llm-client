@@ -1,5 +1,5 @@
 import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
-import { checkKey, joinUrl } from '../openai-compatible';
+import { checkKey, joinUrl, numberOf } from '../openai-compatible';
 import { builtinBaseUrl } from '../endpoints';
 import { t as tp } from '../messages';
 
@@ -13,6 +13,8 @@ export const venicePreset: ProviderPreset = {
   get tagline() {
     return tp('venice.tagline');
   },
+  // Also sent in response headers; this reads it before the first message
+  balanceApi: { path: 'api_keys/rate_limits', read: (j) => numberOf(j?.data?.balances?.USD) },
   // Venice's own web search (venice_parameters.enable_web_search, set in requestOptions)
   nativeWebSearch: {
     supports: (_id, m) => m?.capabilities.webSearch !== false,

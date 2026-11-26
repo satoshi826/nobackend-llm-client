@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PRESETS } from './registry';
 import { parseSSE } from './sse';
 import { ThinkSplitter } from './think-splitter';
 import { openAICompatibleAdapter, toOpenAIMessages } from './openai-compatible';
@@ -223,5 +224,17 @@ describe('prompt cache', () => {
     const evs = await collect(openAICompatibleAdapter.chat(cfg, venicePreset, cred, { model: 'm', messages: [], cacheKey: 'conv-1', signal: new AbortController().signal }, t));
     expect(JSON.parse(String(capture.init!.body)).prompt_cache_key).toBe('conv-1');
     expect((evs.find((e) => e.type === 'usage') as any).usage.cachedInputTokens).toBe(80);
+  });
+});
+
+describe('balance APIs', () => {
+  // Response shapes from each provider's docs (2026-11-26)
+  it('read the USD balance, or this key’s limit left on OpenRouter', () => {
+    expect(PRESETS.venice.balanceApi!.read({ data: { balances: { USD: 12.5, DIEM: 3 } } })).toBe(12.5);
+    expect(PRESETS.openrouter.balanceApi!.read({ data: { limit: 10, limit_remaining: 7.25 } })).toBe(7.25);
+    expect(PRESETS.openrouter.balanceApi!.read({ data: { limit: null, limit_remaining: null } })).toBeUndefined();
+    expect(PRESETS.deepseek.balanceApi!.read({ balance_infos: [{ currency: 'CNY', total_balance: '50' }, { currency: 'USD', total_balance: '4.20' }] })).toBe(4.2);
+    expect(PRESETS.deepseek.balanceApi!.read({ balance_infos: [{ currency: 'CNY', total_balance: '50' }] })).toBeUndefined();
+    expect(PRESETS.nanogpt.balanceApi!.read({ usd_balance: '1.75', nano_balance: '9' })).toBe(1.75);
   });
 });

@@ -264,11 +264,23 @@ export interface ProviderPreset {
   parseExtra?(chunk: any, seen: Set<string>): ProviderEvent[];
   /** Read the balance etc. from response headers (headers to return are listed in responseHeaders) */
   readHeaders?(headers: Headers): ProviderEvent[];
+  /** Balance API that takes the normal key (called through the key vault, on the provider's own host) */
+  balanceApi?: BalanceApi;
   /** Verify a key (called inside the key vault with a fetch that attaches the candidate key) */
   validateKey?(cfg: ProviderConfig, fetchWithKey: KeyedFetch): Promise<{ ok: boolean; error?: ProviderError }>;
   /** Guide on creating a key and configuring it safely */
   keyGuide?: string;
   corsHint?: string;
+}
+
+export interface BalanceApi {
+  /** Relative to the base URL */
+  path: string;
+  method?: 'GET' | 'POST';
+  /** 'key': what is left of this key's spending limit, not the account balance */
+  scope?: 'account' | 'key';
+  /** The balance in USD; undefined when the answer has none (no limit, another currency) */
+  read(json: any): number | undefined;
 }
 
 export interface ProviderAdapter {

@@ -1,5 +1,5 @@
 import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
-import { checkKey, joinUrl } from '../openai-compatible';
+import { checkKey, joinUrl, numberOf } from '../openai-compatible';
 import { builtinBaseUrl } from '../endpoints';
 import { t as tp } from '../messages';
 
@@ -51,6 +51,8 @@ function perMTok(v: unknown): number | undefined {
 export const openrouterPreset: ProviderPreset = {
   id: 'openrouter',
   label: 'OpenRouter',
+  // The account's credits need a management key; a normal key sees only its own limit (none when unlimited)
+  balanceApi: { path: 'key', scope: 'key', read: (j) => numberOf(j?.data?.limit_remaining) },
   // Texts are getters so they follow the current language
   get tagline() {
     return tp('openrouter.tagline');

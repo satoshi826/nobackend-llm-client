@@ -1,4 +1,4 @@
-import type { ComponentChildren, ButtonHTMLAttributes } from 'preact';
+import type { ComponentChildren, ButtonHTMLAttributes, RefObject } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { useDialog } from './dialog';
 import { t } from './messages';
@@ -183,15 +183,26 @@ export function Slider({
   );
 }
 
+type Box = { x: number; y: number; w: number; h: number };
+
+/**
+ * Where the item matching `selector` sits inside `ref` (a positioned element), measured after every render:
+ * for a highlight that slides to the selected item. null while nothing matches
+ */
+export function useSelectedBox(ref: RefObject<HTMLElement | null>, selector: string): Box | null {
+  const [box, setBox] = useState<Box | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current?.querySelector<HTMLElement>(selector);
+    const next = el ? { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight } : null;
+    setBox((prev) => (prev === next || (prev && next && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h) ? prev : next));
+  });
+  return box;
+}
+
 /** Tabs in a column (settings on wide screens): the selected tab's background slides to it */
 export function SideTabs<T extends string>({ tabs, value, onChange, label, class: className }: { tabs: { id: T; label: string }[]; value: T; onChange(id: T): void; label?: string; class?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [bar, setBar] = useState<{ y: number; h: number } | null>(null);
-  const key = tabs.map((x) => x.label).join('|');
-  useLayoutEffect(() => {
-    const el = ref.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (el) setBar({ y: el.offsetTop, h: el.offsetHeight });
-  }, [value, key]);
+  const bar = useSelectedBox(ref, '[aria-selected="true"]');
   return (
     <div ref={ref} role="tablist" aria-orientation="vertical" aria-label={label} class={cx('relative flex flex-col gap-0.5', className)}>
       {bar && (
@@ -228,14 +239,10 @@ export function SideTabs<T extends string>({ tabs, value, onChange, label, class
 /** A row of tabs with an underline that slides to the selected tab */
 export function TabStrip<T extends string>({ tabs, value, onChange, label, class: className }: { tabs: { id: T; label: string }[]; value: T; onChange(id: T): void; label?: string; class?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [bar, setBar] = useState<{ x: number; w: number } | null>(null);
-  const key = tabs.map((x) => x.label).join('|');
+  const bar = useSelectedBox(ref, '[aria-selected="true"]');
   useLayoutEffect(() => {
-    const el = ref.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (!el) return;
-    setBar({ x: el.offsetLeft, w: el.offsetWidth });
-    el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-  }, [value, key]);
+    ref.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }, [value]);
   return (
     <div ref={ref} role="tablist" aria-label={label} class={cx('relative flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]', className)}>
       {tabs.map((x) => (

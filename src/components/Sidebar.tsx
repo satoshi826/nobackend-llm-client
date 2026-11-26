@@ -10,7 +10,7 @@ import { clearLeftoverLocalKeys, leftoverLocalKeys } from '../state/keys';
 import { dataLock, lockNow } from '../state/lock';
 import { providerById } from '../state/models';
 import { openSettings, showToast, sidebarOpen, sidebarTab } from '../state/ui';
-import { Button, Icon, Segmented, cx } from './ui';
+import { Button, Icon, Segmented, cx, useSelectedBox } from './ui';
 import { askConfirm } from './ConfirmDialog';
 import { sidebarTabs, textOf } from './extensions';
 import { t } from './messages';
@@ -27,10 +27,9 @@ function groupLabel(ts: number): string {
   return formatDate(d, { year: 'numeric', month: 'long' });
 }
 
-function Row({ c, snippet }: { c: Conversation; snippet?: string }) {
+function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet?: string }) {
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(c.title);
-  const active = currentId.value === c.id;
   const live = streamingConv.value.has(c.id);
   if (renaming) {
     return (
@@ -55,7 +54,7 @@ function Row({ c, snippet }: { c: Conversation; snippet?: string }) {
     );
   }
   return (
-    <div class={cx('group flex items-center rounded-lg', active ? 'bg-glass-strong' : 'hover:bg-glass-strong')}>
+    <div class={cx('group flex items-center rounded-lg', !active && 'hover:bg-glass-strong')}>
       <button type="button" class="flex min-w-0 flex-1 items-center gap-1.5 px-2.5 py-2 text-left text-sm" onClick={() => openConversation(c.id)} aria-current={active}>
         {c.temporary && <Icon name="ghost" class="size-3.5 shrink-0 text-accent-text" />}
         {c.pinned ? <Icon name="pin" class="size-3.5 shrink-0 text-faint" /> : null}
@@ -144,6 +143,9 @@ const MOBILE = '(max-width: 767px)';
 
 export function Sidebar() {
   const asideRef = useRef<HTMLElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  // The open conversation's background slides to it (like the settings tabs)
+  const current = useSelectedBox(navRef, '[aria-current="true"]');
   const [mobile, setMobile] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(MOBILE).matches);
   useEffect(() => {
     const mq = matchMedia(MOBILE);
@@ -178,6 +180,7 @@ export function Sidebar() {
   const allTabs = [{ id: 'chats', label: t('side.chats'), icon: 'chat' as const }, ...sidebarTabs];
   const ActivePanel = sidebarTabs.find((x) => x.id === tab)?.Panel;
   const ql = q.trim().toLowerCase();
+  const openId = currentId.value;
   const list = conversations.value.filter((c) => !ql || c.title.toLowerCase().includes(ql) || hits.has(c.id));
   const pinned = list.filter((c) => c.pinned);
   const groups: [string, Conversation[]][] = [];
@@ -239,12 +242,19 @@ export function Sidebar() {
             <input class="w-full bg-transparent outline-none" placeholder={t('side.searchPlaceholder')} value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} aria-label={t('side.searchLabel')} />
           </label>
         </div>
-        <nav class="scroll-thin flex-1 space-y-3 overflow-y-auto px-2 pb-2">
+        <nav ref={navRef} class="scroll-thin relative isolate flex-1 space-y-3 overflow-y-auto px-2 pb-2">
+          {current && (
+            <span
+              aria-hidden="true"
+              class="absolute inset-x-2 top-0 -z-10 rounded-lg bg-glass-strong transition-[translate,height] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]"
+              style={{ height: `${current.h}px`, translate: `0 ${current.y}px` }}
+            />
+          )}
           {pinned.length > 0 && (
             <section>
               <h3 class="px-2.5 py-1 text-xs font-medium text-muted">{t('side.pinned')}</h3>
               {pinned.map((c) => (
-                <Row key={c.id} c={c} snippet={ql ? hits.get(c.id)?.snippet : undefined} />
+                <Row key={c.id} c={c} active={c.id === openId} snippet={ql ? hits.get(c.id)?.snippet : undefined} />
               ))}
             </section>
           )}
@@ -252,7 +262,7 @@ export function Sidebar() {
             <section key={label}>
               <h3 class="px-2.5 py-1 text-xs font-medium text-muted">{label}</h3>
               {cs.map((c) => (
-                <Row key={c.id} c={c} snippet={ql ? hits.get(c.id)?.snippet : undefined} />
+                <Row key={c.id} c={c} active={c.id === openId} snippet={ql ? hits.get(c.id)?.snippet : undefined} />
               ))}
             </section>
           ))}

@@ -104,6 +104,16 @@ code,
   justify-content: space-between;
   gap: 8px;
 }
+.fill {
+  flex: 1;
+  min-width: 0;
+}
+/* A saved key shown in full: wraps anywhere, one click selects all of it */
+.secret {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
 .btns {
   display: flex;
   flex-wrap: wrap;

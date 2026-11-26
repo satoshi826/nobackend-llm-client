@@ -1,6 +1,6 @@
 // Key vault entry point. Embedded by the app in an iframe.
 //   ?view=transport          … no UI. Relays send requests from the app
-//   ?view=keys&provider=ID   … add, replace or delete the key of one provider (unlock if locked)
+//   ?view=keys&provider=ID   … add, show, replace or delete the key of one provider (unlock if locked)
 //   ?view=security           … passphrase (set, unlock, lock, change, remove) and deleting all keys
 //   ?view=security&setup=1   … only the passphrase setup form (used in the first-run guide)
 //   ?view=unlock             … only the unlock form (used on the app's lock screen)
@@ -10,7 +10,7 @@ import { VAULT_PROTOCOL, type ToVault } from '../src/lib/vault/protocol';
 import { detectLang, formatList, getLang, setLang } from '../src/lib/i18n';
 import { MIN_PASSPHRASE_LENGTH } from '../src/lib/crypto/passphrase';
 import { handle } from './core';
-import { allowedHosts, allStatus, clearAll, label as providerLabel, lock, onChange, remove, removePassphrase, saveKey, setPassphrase, status, unlock, vaultState } from './store';
+import { allowedHosts, allStatus, clearAll, label as providerLabel, lock, onChange, remove, removePassphrase, revealKey, saveKey, setPassphrase, status, unlock, vaultState } from './store';
 import { ACCOUNT_IDS as PROVIDER_IDS, accountById } from '../src/lib/keys/accounts';
 import './style.css';
 import { t } from './messages';
@@ -56,6 +56,7 @@ onChange(() => {
   void allStatus().then((s) => {
     for (const p of ports) p.postMessage({ type: 'status', providers: s.keys, vault: s.vault });
   });
+  reveal = null; // hide the shown key whenever the vault changes (lock, replace, delete)
   if (view === 'keys' || view === 'security' || view === 'unlock') void render();
 });
 
@@ -78,6 +79,8 @@ let message: { ok: boolean; text: string } | null = null;
 let confirming: 'clear-all' | null = null;
 /** Whether the passphrase change/remove form is open */
 let passMode: 'idle' | 'change' | 'remove' = 'idle';
+/** Showing the saved key: asking for the passphrase, or the key shown in full */
+let reveal: 'asking' | { key: string } | null = null;
 
 function postHeight() {
   // The document height never drops below the iframe height, so measure the content (root) instead (follows shrinking too)
@@ -150,6 +153,43 @@ function registeredLabel(last4: string, encrypted: boolean): string {
   return t(encrypted ? 'key.registeredEncrypted' : 'key.registered');
 }
 
+async function showKey(id: string, pass?: string): Promise<string | null> {
+  const r = await revealKey(id, pass);
+  if (!r.ok) return r.message;
+  reveal = { key: r.key };
+  void render();
+  return null;
+}
+
+/** Passphrase asked again before showing a saved key */
+function revealForm(id: string): HTMLElement {
+  const pass = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': t('pass.label'), 'data-autofocus': true });
+  const btn = h('button', { type: 'submit', class: 'btn primary' }, t('key.show'));
+  const error = h('p', { class: 'err', role: 'alert' });
+  const cancel = h('button', { type: 'button', class: 'btn outline', onclick: () => {
+    reveal = null;
+    void render();
+  } }, t('common.cancel'));
+  return h(
+    'form',
+    { class: 'stack', onsubmit: async (e: Event) => {
+      e.preventDefault();
+      error.textContent = '';
+      btn.disabled = true;
+      const failed = await showKey(id, pass.value);
+      if (!failed) return;
+      btn.disabled = false;
+      error.textContent = failed;
+      pass.focus();
+      pass.select();
+      postHeight();
+    } },
+    h('label', {}, t('key.revealNote'), pass),
+    h('div', { class: 'btns' }, btn, cancel),
+    error
+  );
+}
+
 /** Dangerous action with a confirm button */
 function dangerAction(kind: 'clear-all', label: string, warning: string, action: () => Promise<{ ok: boolean; message: string }>): HTMLElement {
   if (confirming !== kind)
@@ -173,7 +213,7 @@ function dangerAction(kind: 'clear-all', label: string, warning: string, action:
   );
 }
 
-/** Key of one provider (add, replace, delete). Unlock if the vault is locked */
+/** Key of one provider (add, show, replace, delete). Unlock if the vault is locked */
 async function renderKey(id: string): Promise<Node[]> {
   if (!PROVIDER_IDS.includes(id)) return [h('p', { class: 'muted' }, t('common.unsupportedProvider'))];
   const [st, vs] = await Promise.all([status(id), vaultState()]);
@@ -191,17 +231,38 @@ async function renderKey(id: string): Promise<Node[]> {
   }
   if (accountById(id)?.keyOptional && !st.present) nodes.push(h('p', { class: 'muted' }, t('key.optional')));
   if (st.present) {
+    const shown = reveal !== null && reveal !== 'asking' ? reveal.key : null;
+    const toggle = shown
+      ? h('button', { type: 'button', class: 'btn outline', onclick: () => {
+          reveal = null;
+          void render();
+        } }, t('key.hide'))
+      : h('button', { type: 'button', class: 'btn outline', onclick: async () => {
+          if (vs.hasPassphrase) {
+            reveal = 'asking';
+            return void render();
+          }
+          const failed = await showKey(id);
+          if (failed) show({ ok: false, text: failed });
+        } }, t('key.show'));
     nodes.push(
       h(
         'div',
         { class: 'card row' },
-        h('div', {}, h('div', { class: 'strong' }, registeredLabel(st.last4, st.encrypted)), h('div', { class: 'muted' }, t('key.hosts', { hosts: formatList(st.hosts) }))),
-        h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onclick: async () => {
+        h(
+          'div',
+          { class: 'fill' },
+          h('div', { class: 'strong' }, registeredLabel(st.last4, st.encrypted)),
+          shown && h('div', { class: 'mono secret' }, shown),
+          h('div', { class: 'muted' }, t('key.hosts', { hosts: formatList(st.hosts) }))
+        ),
+        h('div', { class: 'btns' }, toggle, h('button', { type: 'button', class: 'btn outline', onclick: async () => {
           await remove(id);
           show({ ok: true, text: t('key.deleted') });
         } }, t('common.delete')))
       )
     );
+    if (reveal === 'asking') nodes.push(revealForm(id));
   }
   const key = h('input', { type: 'password', autocomplete: 'off', spellcheck: 'false', placeholder: t('key.placeholder', { name }), class: 'mono', 'aria-label': t('key.label', { name }) });
   const submit = h('button', { type: 'submit', class: 'btn primary' }, t('key.save'));

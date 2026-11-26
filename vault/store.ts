@@ -291,6 +291,18 @@ async function keyFor(id: string): Promise<string | undefined> {
   return mem.get(id) ?? (await getRec(id))?.key;
 }
 
+/**
+ * The saved key itself, for showing it on the key page (it never leaves the vault page).
+ * With a passphrase, it must be entered again even while unlocked, so an unlocked device left alone does not give the key away.
+ */
+export async function revealKey(id: string, pass = ''): Promise<{ ok: true; key: string } | { ok: false; message: string }> {
+  const vs = await vaultState();
+  if (vs.locked) return { ok: false, message: t('store.unlockFirst') };
+  if (vs.hasPassphrase && !(await verify(pass))) return { ok: false, message: new WrongPassphraseError().message };
+  const key = await keyFor(id);
+  return key ? { ok: true, key } : { ok: false, message: t('store.noKey', { name: label(id) }) };
+}
+
 // ---- Sending with keys attached ----
 export function isAllowedUrl(id: string, url: string): boolean {
   let u: URL;

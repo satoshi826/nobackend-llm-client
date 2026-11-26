@@ -113,7 +113,7 @@ There is no storage-mode choice:
 **Vault views**:
 
 - `transport` — no UI.
-- `keys&provider=ID` — save, replace or delete one key; shows the unlock form when locked.
+- `keys&provider=ID` — save, show, replace or delete one key; shows the unlock form when locked. Showing the saved key asks for the passphrase again when one is set (being unlocked is not enough), and the key is hidden again on any vault change.
 - `security` — set, unlock, lock, change or remove the passphrase; delete all keys (two-step, inline confirmation).
 - `security&setup=1` — the set form only (used by the first-run prompt).
 - `unlock` — the unlock form only (used by the app's lock screen).

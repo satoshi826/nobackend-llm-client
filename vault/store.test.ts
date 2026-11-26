@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { encryptSecret } from '../src/lib/crypto/passphrase';
-import { clearAll, lock, removePassphrase, saveKey, setPassphrase, status, unlock, unwrapDataKey, vaultState, wrapDataKey } from './store';
+import { clearAll, lock, removePassphrase, revealKey, saveKey, setPassphrase, status, unlock, unwrapDataKey, vaultState, wrapDataKey } from './store';
 
 // tavily / jina do no key check (network) on save, so only the store's behaviour is exercised
 const PASS = 'correct horse battery';
@@ -61,6 +61,23 @@ describe('key vault store', () => {
 
     await clearAll();
     expect((await status('tavily')).present).toBe(false);
+  });
+
+  it('shows a saved key, asking for the passphrase again when there is one', { timeout: 30_000 }, async () => {
+    await clearAll();
+    expect((await revealKey('tavily')).ok).toBe(false);
+    await saveKey('tavily', 'tvly-1');
+    expect(await revealKey('tavily')).toEqual({ ok: true, key: 'tvly-1' });
+
+    await setPassphrase(PASS);
+    // Being unlocked is not enough: the passphrase has to be entered again
+    expect((await revealKey('tavily')).ok).toBe(false);
+    expect((await revealKey('tavily', 'wrong passphrase')).ok).toBe(false);
+    expect(await revealKey('tavily', PASS)).toEqual({ ok: true, key: 'tvly-1' });
+
+    lock();
+    expect((await revealKey('tavily', PASS)).ok).toBe(false);
+    await clearAll();
   });
 
   it('adopts the passphrase of keys encrypted by the old per-key scheme', { timeout: 30_000 }, async () => {

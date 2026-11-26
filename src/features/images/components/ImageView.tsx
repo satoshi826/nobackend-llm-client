@@ -12,9 +12,9 @@ import { askConfirm } from '../../../components/ConfirmDialog';
 import {
   deleteImages,
   estimateCost,
+  editorFor,
   imageAction,
   imageModelOf,
-  imageReady,
   lightbox,
   regenerateImage,
   retryWithSuggestion,
@@ -271,7 +271,11 @@ export function ToolImages({ blobIds, conversationId, messageId }: { blobIds: st
   );
 }
 
-const OP_BASE: ImageParams = { op: 'generate', providerId: 'venice', model: '', prompt: '', variants: 1, safeMode: false, format: 'png' };
+/** The estimated cost of an edit, for the button titles */
+function costText(p: Pick<ImageParams, 'op' | 'providerId' | 'scale'>): string {
+  const cost = estimateCost({ model: '', prompt: '', variants: 1, safeMode: false, format: 'png', ...p });
+  return cost === undefined ? t('lb.costUnknown') : t('lb.cost', { cost: usd(cost, 2) });
+}
 
 function step(d: number) {
   const cur = lightbox.value;
@@ -305,6 +309,11 @@ export function Lightbox() {
   const msg = messages.value.find((m) => m.id === item.messageId);
   const source = msg ? messages.value.find((m) => m.id === msg.parentId) : undefined;
   const promptText = msg?.image?.params.prompt || source?.imageRequest?.prompt || '';
+  // Edits run on the provider that made the image when it offers them, else on another one with a key
+  const from = msg?.meta?.providerId;
+  const upscaler = editorFor('upscale', from);
+  const bgRemover = editorFor('remove-bg', from);
+  const editor = editorFor('edit', from);
   const chat = item.conversationId;
   const inThisChat = !!chat && currentId.value === chat;
   // Saved images outlive their conversation, and brought-in images have none: those are edited in a new chat
@@ -346,25 +355,24 @@ export function Lightbox() {
               <Icon name="copy" />
             </IconButton>
           )}
-          {imageReady.value && (
-            <>
-              <Button class="text-xs text-white hover:bg-glass" disabled={isStreaming.value} title={t('lb.upscaleTitle', { scale: 2, cost: usd(estimateCost({ ...OP_BASE, op: 'upscale', scale: 2 }) ?? 0, 2) })} onClick={() => void act(() => imageAction('upscale', item.blobId, { scale: 2 }))}>
+          {upscaler &&
+            ([2, 4] as const).map((scale) => (
+              <Button key={scale} class="text-xs text-white hover:bg-glass" disabled={isStreaming.value} title={t('lb.upscaleTitle', { scale, cost: costText({ op: 'upscale', providerId: upscaler.id, scale }) })} onClick={() => void act(() => imageAction('upscale', item.blobId, { scale, from }))}>
                 <Icon name="expand" class="size-4" />
-                2×
+                {scale}×
               </Button>
-              <Button class="text-xs text-white hover:bg-glass" disabled={isStreaming.value} title={t('lb.upscaleTitle', { scale: 4, cost: usd(estimateCost({ ...OP_BASE, op: 'upscale', scale: 4 }) ?? 0, 2) })} onClick={() => void act(() => imageAction('upscale', item.blobId, { scale: 4 }))}>
-                <Icon name="expand" class="size-4" />
-                4×
-              </Button>
-              <Button class="text-xs text-white hover:bg-glass" disabled={isStreaming.value} title={t('lb.removeBgTitle')} onClick={() => void act(() => imageAction('remove-bg', item.blobId))}>
-                <Icon name="scissors" class="size-4" />
-                {t('lb.removeBg')}
-              </Button>
-              <Button class={cx('text-xs text-white hover:bg-glass', editing && 'bg-glass-strong')} disabled={isStreaming.value} aria-pressed={editing} title={t('lb.editTitle', { cost: usd(estimateCost({ ...OP_BASE, op: 'edit' }) ?? 0, 2) })} onClick={() => setEditing(!editing)}>
-                <Icon name="wand" class="size-4" />
-                {t('lb.edit')}
-              </Button>
-            </>
+            ))}
+          {bgRemover && (
+            <Button class="text-xs text-white hover:bg-glass" disabled={isStreaming.value} title={t('lb.removeBgTitle', { cost: costText({ op: 'remove-bg', providerId: bgRemover.id }) })} onClick={() => void act(() => imageAction('remove-bg', item.blobId, { from }))}>
+              <Icon name="scissors" class="size-4" />
+              {t('lb.removeBg')}
+            </Button>
+          )}
+          {editor && (
+            <Button class={cx('text-xs text-white hover:bg-glass', editing && 'bg-glass-strong')} disabled={isStreaming.value} aria-pressed={editing} title={t('lb.editTitle', { cost: costText({ op: 'edit', providerId: editor.id }) })} onClick={() => setEditing(!editing)}>
+              <Icon name="wand" class="size-4" />
+              {t('lb.edit')}
+            </Button>
           )}
           <IconButton
             class="text-white hover:bg-glass"
@@ -401,7 +409,7 @@ export function Lightbox() {
           class="mx-auto flex w-full max-w-2xl gap-2 px-3 pb-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (prompt.trim()) void act(() => imageAction('edit', item.blobId, { prompt }));
+            if (prompt.trim()) void act(() => imageAction('edit', item.blobId, { prompt, from }));
           }}
         >
           <input

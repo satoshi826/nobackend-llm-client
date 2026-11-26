@@ -24,10 +24,14 @@ import { imageCount, t, usd } from '../messages';
 
 export function ImageBar() {
   const [details, setDetails] = useState(false);
+  const providerId = currentImageModel.value?.providerId;
   useEffect(() => {
     void loadImageModels();
-    void loadImageStyles();
   }, [imageReady.value]);
+  // Styles come from the current model's provider
+  useEffect(() => {
+    void loadImageStyles();
+  }, [imageReady.value, providerId]);
   if (!imageReady.value)
     return (
       <div class="flex flex-wrap items-center gap-2 px-3 pt-2.5 text-xs text-warn">

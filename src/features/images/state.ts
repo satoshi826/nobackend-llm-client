@@ -65,8 +65,9 @@ export const imageSettings = defineFeatureSettings('images', DEFAULT_IMAGE_SETTI
   return p.imageDefaults ? { ...p, imageDefaults: { ...DEFAULT_IMAGE_SETTINGS.imageDefaults, ...p.imageDefaults } } : p;
 });
 
-/** Upscale, background removal and edits run on Venice (the other providers do not offer them) */
-export const EDIT_PROVIDER = 'venice';
+/** Changes to an existing image, and the provider method that runs each */
+export type EditOp = 'upscale' | 'edit' | 'remove-bg';
+const EDIT_METHOD = { upscale: 'upscale', edit: 'edit', 'remove-bg': 'removeBackground' } as const;
 
 function providerFor(id: string): ImageProvider {
   const p = imageProviderOf(id);
@@ -93,7 +94,9 @@ export const lightbox = signal<{ items: LightboxItem[]; index: number; fromGalle
 
 export const imageModels = signal<ImageModelInfo[]>([]);
 export const imageModelsError = signal<string | null>(null);
-export const imageStyles = signal<string[]>([]);
+/** Style presets per provider (loaded for the current model's provider) */
+const styleLists = signal<Record<string, string[]>>({});
+export const imageStyles = computed(() => styleLists.value[currentImageModel.value?.providerId ?? ''] ?? []);
 /** Bumped whenever images are added or deleted (lists of images reload on it) */
 export const imagesVersion = signal(0);
 // Images stored by chat replies (native image output) refresh the same lists
@@ -105,6 +108,12 @@ effect(() => {
 export const readyImageProviders = computed(() => imageProviderList().filter((p) => keyReady(p.account)));
 /** Image generation needs the key of at least one image provider */
 export const imageReady = computed(() => readyImageProviders.value.length > 0);
+
+/** The provider that runs an edit: the image's own provider when it offers the edit, else the first ready one that does */
+export function editorFor(op: EditOp, preferred?: string): ImageProvider | undefined {
+  const able = readyImageProviders.value.filter((p) => !!p[EDIT_METHOD[op]]);
+  return able.find((p) => p.id === preferred) ?? able[0];
+}
 
 /** v2: models describe their sizes as one list */
 const cacheKey = (id: string) => `cache:imageModels:v2:${id}`;
@@ -135,10 +144,13 @@ export function loadImageModels(force = false): Promise<void> {
   return loading;
 }
 
+/** Style presets of the current model's provider (once per provider) */
 export async function loadImageStyles() {
-  if (imageStyles.value.length || !keyReady(EDIT_PROVIDER)) return;
+  const p = imageProviderOf(currentImageModel.value?.providerId ?? '');
+  if (!p?.listStyles || p.id in styleLists.value || !keyReady(p.account)) return;
   try {
-    imageStyles.value = (await providerFor(EDIT_PROVIDER).listStyles?.(callContext(EDIT_PROVIDER))) ?? [];
+    const list = await p.listStyles(callContext(p.id));
+    styleLists.value = { ...styleLists.value, [p.id]: list };
   } catch {
     /* styles are optional */
   }
@@ -229,7 +241,7 @@ export function paramsFor(conv: Conversation | undefined, prompt: string): Image
   const size = sizeOf(m, d);
   return {
     op: 'generate',
-    providerId: m?.providerId ?? EDIT_PROVIDER,
+    providerId: m?.providerId ?? '',
     model: m?.id ?? '',
     prompt,
     negativePrompt: hasOption(m, 'negativePrompt') ? d.negativePrompt || undefined : undefined,
@@ -281,16 +293,17 @@ async function addUserRequest(conv: Conversation, p: ImageParams, text: string) 
   await runImageJob(conv.id, user.id);
 }
 
-/** Upscale / remove the background of / edit an image already in the current conversation */
-export async function imageAction(op: 'upscale' | 'remove-bg' | 'edit', sourceBlobId: string, opts: { scale?: 2 | 4; prompt?: string } = {}) {
-  if (!ensureImageKey(EDIT_PROVIDER)) return;
+/** Upscale / remove the background of / edit an image. from: the provider that made it (preferred for the edit) */
+export async function imageAction(op: EditOp, sourceBlobId: string, opts: { scale?: 2 | 4; prompt?: string; from?: string } = {}) {
+  const editor = editorFor(op, opts.from);
+  if (!editor) return;
   const text = op === 'upscale' ? t('request.upscaleText', { scale: opts.scale ?? 2 }) : op === 'remove-bg' ? t('request.removeBgText') : (opts.prompt ?? '').trim();
   if (!text) return;
   // In a new chat (an image whose conversation was deleted) the request starts a saved conversation
   const conv = await persistDraft(text);
   const p: ImageParams = {
     op,
-    providerId: EDIT_PROVIDER,
+    providerId: editor.id,
     model: '',
     prompt: op === 'edit' ? text : '',
     variants: 1,
@@ -352,8 +365,7 @@ async function call(p: ImageParams, signal: AbortSignal): Promise<{ blobs: Blob[
   }
   const source = p.sourceBlobId ? await getImage(p.sourceBlobId) : null;
   if (!source) throw new ImageApiError({ kind: 'bad-request', message: t('err.noSource') });
-  const op = p.op === 'upscale' ? provider.upscale : p.op === 'edit' ? provider.edit : provider.removeBackground;
-  if (!op) throw new ImageApiError({ kind: 'bad-request', message: t('err.opUnsupported', { provider: provider.label }) });
+  if (!provider[EDIT_METHOD[p.op]]) throw new ImageApiError({ kind: 'bad-request', message: t('err.opUnsupported', { provider: provider.label }) });
   const blob = p.op === 'upscale' ? await provider.upscale!(source, p.scale ?? 2, ctx) : p.op === 'edit' ? await provider.edit!(source, p, ctx) : await provider.removeBackground!(source, ctx);
   return { blobs: [blob], result: {} };
 }

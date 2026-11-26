@@ -9,6 +9,7 @@ import { Markdown } from '../../../components/Markdown';
 import { PageHeader } from '../../../components/PageHeader';
 import { Badge, Button, Icon, IconButton, Segmented, Select, Spinner, TextField } from '../../../components/ui';
 import { SandboxFrame, svgPage } from '../../../components/SandboxFrame';
+import { settings } from '../../../state/settings';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
 import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, filesVersion, getFile, renameFile, restoreVersion, saveUserVersion } from '../state';
@@ -304,7 +305,7 @@ function FileBody({ text, ext }: { text: string; ext: string }) {
 
 /** An HTML or SVG file: shown as a page in the sandbox (its scripts run there, without network), or as its code */
 function PageBody({ text, svg }: { text: string; svg: boolean }) {
-  const [view, setView] = useState<'preview' | 'code'>('preview');
+  const [view, setView] = useState<'preview' | 'code'>(settings.value.htmlFilePreview ? 'preview' : 'code');
   return (
     <div class="space-y-2">
       <div class="flex flex-wrap items-center gap-2">

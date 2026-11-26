@@ -44,6 +44,8 @@ export interface Settings {
   developerMode: boolean;
   /** "Run" on html / svg / js code blocks (they run in the sandbox) */
   codeRunButtons: boolean;
+  /** HTML / SVG files open as a page (else as code, and the page runs only when asked) */
+  htmlFilePreview: boolean;
   /** Include images in JSON backups (large) */
   backupIncludeImages: boolean;
   /** Bookmarked models ('providerId|modelId'), shown together at the top of the model picker */
@@ -80,6 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
   replySuggestions: true,
   developerMode: false,
   codeRunButtons: true,
+  htmlFilePreview: true,
   backupIncludeImages: false,
   suggestionCount: 3,
   suggestionTurns: 2,

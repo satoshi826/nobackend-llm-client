@@ -4,7 +4,7 @@
 // and message transforms (skills are put before attached files).
 import './images';
 import './files';
+import './sandbox';
 import './web';
 import './skills';
-import './sandbox';
 import './usage';

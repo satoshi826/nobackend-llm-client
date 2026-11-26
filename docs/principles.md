@@ -44,6 +44,7 @@ Threats the design holds against, and the rule that holds each one.
 
 - **Dependencies point one way:** `lib` → `state` → `components` → `features`. `lib` never imports state, UI or features; the core never imports a feature; a feature uses another only through its `index.ts`; the vault imports nothing from the app. *Check:* `npm run lint:deps` (part of `npm run build`).
 - **Features join through extension points.** A feature registers itself; adding one never means editing the core. A new extension point is added only when a second feature needs the same hook, or a feature would otherwise have to edit a core file.
+- **Built for thousands to tens of thousands of items.** Everything keeps working without trouble when conversations, files or images number in the thousands to tens of thousands; designs pay attention to performance with that in mind.
 - **The first screen loads only what it shows.** Other screens and large libraries load when first opened.
 - **The vault page has no framework** and builds its DOM with `createElement` / `textContent` only.
 - **Boundaries narrow upstream shapes.** Provider responses and stored records are turned into the app's own types where they enter; the rest of the code never sees a provider's raw shape.

@@ -28,6 +28,8 @@ const parentOrigin: string | undefined = (location as any).ancestorOrigins?.[0];
 const isolated = parentOrigin ? parentOrigin !== location.origin : undefined;
 
 const params = new URLSearchParams(location.search);
+/** Touch-first device (same test as the app's components/device.ts, which the vault cannot import) */
+const touchDevice = matchMedia('(pointer: coarse)').matches;
 const view = params.get('view') ?? 'transport';
 // The app passes its language; a vault opened on its own follows the browser
 {
@@ -403,7 +405,9 @@ async function render() {
   if (message) nodes.push(h('p', { class: message.ok ? 'ok' : 'err', role: 'status' }, message.text));
   root.replaceChildren(...nodes);
   postHeight();
-  // Put the cursor in the unlock field (unless the user is already working inside this page)
+  // Put the cursor in the unlock field (unless the user is already working inside this page). On touch devices only
+  // on the app's lock screen, where typing is the only way on: elsewhere it would bring up the on-screen keyboard
+  if (touchDevice && view !== 'unlock') return;
   if (!root.contains(document.activeElement)) root.querySelector<HTMLElement>('[data-autofocus]')?.focus();
 }
 

@@ -7,6 +7,7 @@ import type { Tool } from '../../lib/tools/types';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
 import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
+import { fileBlock } from './transform';
 
 export const CREATE_FILE = 'create_file';
 export const APPEND_FILE = 'append_file';
@@ -191,7 +192,9 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
       const text = currentText(f);
       const end = Math.min(text.length, i.offset + READ_CHUNK);
       const more = end < text.length ? `\n[characters ${i.offset}-${end} of ${text.length}; continue with offset=${end}]` : `\n[end of file; ${text.length} chars]`;
-      return { content: `<file name="${f.name}" id="${f.id}" version="${currentVersion(f).v}">\n${text.slice(i.offset, end)}\n</file>${more}`, details: details(f) };
+      // Text the user brought in or fetched from the web is marked as data; documents written here are not
+      const block = fileBlock({ name: f.name, id: f.id, version: currentVersion(f).v, text: text.slice(i.offset, end), outside: f.kind === 'upload' || !!f.url });
+      return { content: block + more, details: details(f) };
     }
   };
 
@@ -217,7 +220,7 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
       const r = await deps.fetch(i.url);
       if (!r) return { content: 'The user declined the fetch, or it did not complete. Nothing was saved.' };
       if (r.kind === 'image') return { content: `Saved the image "${r.name}" from ${i.url} in the user's Files tab. You cannot see it.`, details: { name: r.name } };
-      return { content: `Saved "${r.file.name}" from ${i.url} as a file (id: ${r.file.id}, ${r.file.size} chars). Read it with read_file.`, details: details(r.file) };
+      return { content: `Saved ${JSON.stringify(r.file.name)} from ${i.url} as a file (id: ${r.file.id}, ${r.file.size} chars). Read it with read_file.`, details: details(r.file) };
     }
   };
 
@@ -227,6 +230,6 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
 /** System prompt note listing the files the model can use in this conversation */
 export function filesNote(files: Pick<FileRecord, 'id' | 'name' | 'size'>[]): string | undefined {
   if (!files.length) return undefined;
-  const lines = files.map((f) => `- ${f.name} (id: ${f.id}, ${f.size} chars)`);
+  const lines = files.map((f) => `- ${f.name.replace(/[\r\n]+/g, ' ')} (id: ${f.id}, ${f.size} chars)`);
   return `## Files in this conversation\nYou can read and edit these with read_file / edit_file / append_file:\n${lines.join('\n')}`;
 }

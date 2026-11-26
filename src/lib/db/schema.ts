@@ -204,6 +204,8 @@ export class AppDB extends Dexie {
     this.version(3).stores({ skills: 'id, name, updatedAt' });
     // v6: files (documents written by the model, files the user uploaded)
     this.version(6).stores({ files: 'id, updatedAt, conversationId, kind' });
+    // v7: usage records indexed by conversation (the header shows each conversation's cost)
+    this.version(7).stores({ usage: 'id, at, providerId, conversationId' });
     // v4: usage records (survive deleting conversations). Rebuilt from the usage of existing answers
     this.version(4)
       .stores({ usage: 'id, at, providerId' })

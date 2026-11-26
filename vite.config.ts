@@ -84,7 +84,9 @@ function serviceWorkerPlugin(): Plugin {
   return {
     name: 'service-worker',
     apply: 'build',
-    generateBundle(_options, bundle) {
+    // After Vite's own plugins: it drops the empty JS chunks of CSS-only imports late in generateBundle, and a listed
+    // file that is never written makes the worker's install (cache.addAll) fail
+    generateBundle: { order: 'post', handler(_options, bundle) {
       const assets = Object.keys(bundle)
         .filter((f) => f.startsWith('assets/'))
         .map((f) => `/${f}`)
@@ -93,7 +95,7 @@ function serviceWorkerPlugin(): Plugin {
       const source =
         `self.__PRECACHE__ = ${JSON.stringify(precache)};\n` + `self.__ASSETS__ = ${JSON.stringify(assets)};\n` + readFileSync(resolve(__dirname, 'sw/sw.js'), 'utf8');
       this.emitFile({ type: 'asset', fileName: 'sw.js', source });
-    }
+    } }
   };
 }
 

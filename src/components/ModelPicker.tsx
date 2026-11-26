@@ -213,8 +213,8 @@ export function ModelPicker() {
   return (
     <Modal fullOnPhone fixed title={target.kind === 'regenerate' ? t('picker.titleRegenerate') : t('picker.title')} onClose={() => (modal.value = null)}>
       <div class="space-y-3">
-        <div class="flex gap-2">
-          <SearchField class="min-w-0 flex-1" placeholder={t('picker.searchPlaceholder')} label={t('picker.searchPlaceholder')} value={q} onInput={setQ} />
+        <div class="flex flex-wrap gap-2">
+          <SearchField class="min-w-40 flex-1" placeholder={t('picker.searchPlaceholder')} label={t('picker.searchPlaceholder')} value={q} onInput={setQ} />
           <Select
             aria-label={t('picker.sortLabel')}
             value={sort}

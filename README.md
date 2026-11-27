@@ -193,3 +193,7 @@ Always use **spend-limited keys**. If a key ever leaks, the damage stops at the 
 - **Chutes**: a per-key spending limit could not be confirmed; top up small amounts.
 - **Together**: prepaid with no per-key limit; top up small amounts.
 - **Tavily** (tool-based web search): set a usage limit.
+
+## License
+
+MIT ([LICENSE](LICENSE)). A build also writes `licenses.md` with the licenses of the packages it bundles (Dexie, pdf.js, DOMPurify, highlight.js, marked, Preact and others) and serves it next to the app, with the font's license (Inter, SIL OFL) as `licenses-fonts.txt`.

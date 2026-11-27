@@ -118,6 +118,20 @@ function serviceWorkerPlugin(base: string): Plugin {
 }
 
 /**
+ * The font's license (SIL OFL), served as licenses-fonts.txt: the font is loaded from CSS, so the bundled licenses
+ * (licenses.md) do not list it, and the OFL asks for its text to go with every copy of the font
+ */
+function fontLicensePlugin(): Plugin {
+  return {
+    name: 'font-license',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'licenses-fonts.txt', source: readFileSync(resolve(__dirname, 'node_modules/@fontsource-variable/inter/LICENSE'), 'utf8') });
+    }
+  };
+}
+
+/**
  * Which build this is: package version, commit (Cloudflare Workers Builds sets WORKERS_CI_COMMIT_SHA; otherwise
  * git), build time. Shown in Settings → 情報 and written to /version.json, which running pages poll to learn
  * that a newer build is out (state/version.ts).
@@ -152,12 +166,14 @@ export default defineConfig(({ mode, command }) => {
   return {
     base,
     define: { __APP_BUILD__: JSON.stringify(info) },
-    plugins: [preact(), tailwindcss(), headersPlugin(env, base), cspMetaPlugin(appPagePolicies(env)), sandboxPagePlugin(base), pdfCmapsPlugin(base), serviceWorkerPlugin(base), versionFilePlugin(info)],
+    plugins: [preact(), tailwindcss(), headersPlugin(env, base), cspMetaPlugin(appPagePolicies(env)), sandboxPagePlugin(base), pdfCmapsPlugin(base), serviceWorkerPlugin(base), versionFilePlugin(info), fontLicensePlugin()],
     build: {
       target: 'es2022',
       emptyOutDir: true,
       sourcemap: false,
       modulePreload: { polyfill: false }, // emit no inline script (for CSP script-src 'self')
+      // The licenses of the bundled packages, served next to the app (their terms ask for them to go with copies)
+      license: { fileName: 'licenses.md' },
       rollupOptions: {
         // The app, and the key vault and the fetch page on the same origin (/vault/, /fetch/) unless they have their own
         input: {

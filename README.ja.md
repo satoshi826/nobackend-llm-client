@@ -193,3 +193,7 @@ VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localh
 - **Chutes**: キーごとの利用額の上限は確認できていません。少額のチャージで使ってください。
 - **Together**: プリペイドで、キーごとの上限はありません。少額のチャージで使ってください。
 - **Tavily**（ツール方式の Web 検索）: 利用上限を設定します。
+
+## ライセンス
+
+MIT です（[LICENSE](LICENSE)）。ビルドすると、同梱しているパッケージ（Dexie、pdf.js、DOMPurify、highlight.js、marked、Preact など）のライセンスを `licenses.md` に書き出し、アプリと一緒に配信します。フォント（Inter、SIL OFL）のライセンスは `licenses-fonts.txt` として配信します。

@@ -193,3 +193,7 @@ VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localh
 - **Chutes**: 尚未确认是否可以按密钥设置用量上限，请小额充值使用。
 - **Together**: 预付费，没有按密钥的上限，请小额充值使用。
 - **Tavily**（工具方式的网页搜索）: 设置用量上限。
+
+## 许可证
+
+MIT（[LICENSE](LICENSE)）。构建时会把所打包的软件包（Dexie、pdf.js、DOMPurify、highlight.js、marked、Preact 等）的许可证写入 `licenses.md`，并与应用一同提供。字体（Inter，SIL OFL）的许可证以 `licenses-fonts.txt` 提供。

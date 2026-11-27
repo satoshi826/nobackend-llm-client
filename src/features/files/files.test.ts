@@ -106,6 +106,10 @@ describe('file tools', () => {
     expect(r.content).toContain('Introduction');
     expect(r.content).toContain('end of file');
   });
+  it('refuses a file without a name, so the model writes the call again', () => {
+    const { deps } = memDeps();
+    expect(() => tool(deps, 'create_file').prepare({ content: 'x' })).toThrow(/name/);
+  });
   it('rejects ambiguous or missing find text, and both modes at once', async () => {
     const { deps } = memDeps();
     const id = ((await run(deps, 'create_file', { name: 'a.txt', content: 'x x' })).details as { fileId: string }).fileId;

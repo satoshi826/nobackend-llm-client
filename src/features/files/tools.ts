@@ -89,6 +89,8 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     summarize: (i) => i.name,
     prepare(raw) {
       const r = obj(raw);
+      // A missing name is the model's slip: told, so it writes the call again, rather than saved as untitled.md
+      if (!str(r, 'name').trim()) throw new Error(t('tool.missingName'));
       const name = cleanFileName(str(r, 'name'));
       const content = str(r, 'content');
       checkSize(content);

@@ -1,10 +1,14 @@
-// The app's side of the sandbox (sandbox/sandbox.html): an <iframe sandbox="allow-scripts"> with no origin of its own
-// and a CSP that blocks every request. The page announces itself once on the window; from then on the app talks to
+// The app's side of the sandbox (sandbox/sandbox.html): an <iframe sandbox="allow-scripts allow-forms"> with no origin of
+// its own and a CSP that blocks every request. The page announces itself once on the window; from then on the app talks to
 // it over a private MessagePort, so whatever the shown HTML posts on the window is never listened to.
 
 export const SANDBOX_URL = `${(import.meta as any).env?.BASE_URL ?? '/'}sandbox/`;
-/** Only scripts may run: no same-origin access, no popups, forms, top navigation or downloads */
-export const SANDBOX_FLAGS = 'allow-scripts';
+/**
+ * Scripts may run, and forms may be submitted so that their submit handlers run (without allow-forms the browser drops a
+ * submission before its submit event; the CSP's form-action 'none' still stops it from going anywhere). No same-origin
+ * access, popups, top navigation or downloads
+ */
+export const SANDBOX_FLAGS = 'allow-scripts allow-forms';
 /** A shown page that does not answer for this long is stuck (an endless loop) and is removed */
 const STUCK_MS = 5_000;
 

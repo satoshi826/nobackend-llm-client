@@ -53,9 +53,10 @@ export function appCsp(env: Env, vaultOrigin?: string, fetchOrigin?: string): st
 }
 
 /**
- * CSP for the sandbox (/sandbox/), opened in <iframe sandbox="allow-scripts"> with no origin of its own. The HTML and
- * scripts it is given may run (inline, eval, workers from blob:), but nothing may leave: no request of any kind,
- * images and fonts only from data: / blob:, no frames, no forms. frameAncestors: only for the header version
+ * CSP for the sandbox (/sandbox/), opened in <iframe sandbox="allow-scripts allow-forms"> with no origin of its own. The
+ * HTML and scripts it is given may run (inline, eval, workers from blob:), but nothing may leave: no request of any
+ * kind, images and fonts only from data: / blob:, no frames, and a form's submit handlers run but the form goes nowhere.
+ * frameAncestors: only for the header version
  */
 export function sandboxCsp(frameAncestors = true): string {
   return [

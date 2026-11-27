@@ -1,9 +1,9 @@
 <!doctype html>
 <!--
   The sandbox: shows HTML and runs JavaScript that a model or a file supplies. The app opens it in
-  <iframe sandbox="allow-scripts">, so it has no origin of its own: it cannot reach the app's storage, the key vault or
-  the page around it. Its CSP (put in by the build, and sent as a header too) blocks every request, and the app's own
-  frame-src keeps it from navigating to another site.
+  <iframe sandbox="allow-scripts allow-forms">, so it has no origin of its own: it cannot reach the app's storage, the
+  key vault or the page around it. Its CSP (put in by the build, and sent as a header too) blocks every request, forms
+  included, and the app's own frame-src keeps it from navigating to another site.
   Talking to the app: this page says { type: 'sandbox-ready' } to its parent once; the parent answers with
   { type: 'connect' } and a MessagePort, and everything after goes over that port, which the HTML shown here cannot
   reach (so a page that replaced this one cannot talk to the app):

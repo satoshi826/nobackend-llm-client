@@ -76,9 +76,16 @@ export function SkillButton() {
   const attached = attachedSkills.value;
   return (
     <div class="relative" ref={wrap}>
-      <Chip aria-haspopup="menu" aria-expanded={menu} on={attached.length > 0} title={t('composer.buttonTitle')} onClick={() => setMenu(!menu)}>
+      <Chip
+        aria-haspopup="menu"
+        aria-expanded={menu}
+        on={attached.length > 0}
+        aria-label={attached.length ? t('composer.buttonCount', { n: attached.length }) : t('composer.button')}
+        title={t('composer.buttonTitle')}
+        onClick={() => setMenu(!menu)}
+      >
         <Icon name="book" class="size-3.5" />
-        {attached.length ? t('composer.buttonCount', { n: attached.length }) : t('composer.button')}
+        <span class="@max-[22rem]:hidden">{attached.length ? t('composer.buttonCount', { n: attached.length }) : t('composer.button')}</span>
       </Chip>
       {menu && <SkillMenu anchor={wrap.current} onClose={() => setMenu(false)} />}
     </div>

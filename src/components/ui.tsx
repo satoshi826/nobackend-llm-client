@@ -479,7 +479,7 @@ export function Chip({ on, class: className, children, ...rest }: ButtonHTMLAttr
     <button
       type="button"
       class={cx(
-        'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition duration-200 active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100',
+        'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium transition duration-200 active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100',
         on ? 'border-transparent bg-accent-soft text-ink-strong' : 'border-line bg-glass text-muted hover:border-line-strong hover:text-ink',
         className as string
       )}

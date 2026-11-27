@@ -264,7 +264,7 @@ export function Sidebar() {
         </>
         )}
         <Notices />
-        <div class="flex items-center gap-2 border-t border-line p-2">
+        <div class="flex items-center gap-2 border-t border-line p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           <Button class="justify-start" onClick={() => openSettings()}>
             <Icon name="settings" />
             {t('side.settings')}

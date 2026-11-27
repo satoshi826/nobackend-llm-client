@@ -70,7 +70,7 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 
 ### 3.3 Type
 
-Inter, then the system's Japanese font (Hiragino Sans, Noto Sans JP, Yu Gothic UI). Sizes: 12 (captions, badges), 13 (chips, secondary), 14 (UI default), 15 (message body, input), 18 (section titles), 24 (screen titles). Weights 400 / 500 / 600. Line height 1.7–1.8 for message text, 1.4 for UI.
+Inter, then the system's Japanese font (Hiragino Sans, Noto Sans JP, Yu Gothic UI). Sizes: 11 (chips, badges), 12 (captions), 13 (secondary), 14 (UI default), 15 (message body, input), 18 (section titles), 24 (screen titles). Weights 400 / 500 / 600. Line height 1.7–1.8 for message text, 1.4 for UI.
 
 ### 3.4 Space, radius, size
 

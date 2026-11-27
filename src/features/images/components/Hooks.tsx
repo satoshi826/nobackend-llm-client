@@ -34,9 +34,9 @@ export function ImageModeButton({ conv }: { conv: Conversation }) {
   const on = !!conv.imageMode;
   if (!imageReady.value && !on) return null;
   return (
-    <Chip aria-pressed={on} on={on} title={on ? t('mode.titleOn') : t('mode.titleOff')} onClick={() => void setImageMode(!on)}>
+    <Chip aria-pressed={on} on={on} aria-label={t('mode.button')} title={on ? t('mode.titleOn') : t('mode.titleOff')} onClick={() => void setImageMode(!on)}>
       <Icon name="image" class="size-3.5" />
-      {on ? t('mode.buttonOn') : t('mode.button')}
+      <span class="@max-[22rem]:hidden">{on ? t('mode.buttonOn') : t('mode.button')}</span>
     </Chip>
   );
 }
@@ -54,7 +54,6 @@ export function ImageModelButton() {
     <>
       <Icon name="image" class="size-3.5 shrink-0" />
       <span class="max-w-[11rem] truncate">{m?.name ?? t('imageModel')}</span>
-      {m && badge.tone === 'green' && <Icon name="eye-off" class="size-3 shrink-0 text-ok" />}
     </>
   );
   const title = badge.title ? `${t('header.title')}\n${badge.title}` : t('header.title');

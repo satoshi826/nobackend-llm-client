@@ -39,8 +39,7 @@ function ModelButton() {
 ${note}` : t('header.chooseModel')}
       aria-label={`${t('header.chooseModel')}: ${model?.name ?? conv.modelId}`}
     >
-      {model?.privacy === 'private' && <Icon name="eye-off" class="size-3 shrink-0 text-ok" />}
-      <span class="max-w-[9rem] truncate sm:max-w-[14rem]">{model?.name ?? (conv.modelId || t('header.noModel'))}</span>
+      <span class="max-w-[14rem] truncate">{model?.name ?? (conv.modelId || t('header.noModel'))}</span>
       <Icon name="chevron-down" class="size-3 shrink-0 text-faint transition-transform duration-200 group-hover:translate-y-px" />
     </button>
   );
@@ -94,7 +93,7 @@ export function Composer() {
 
   // 16px wider than the message column on each side (max-w-3xl + 2rem), so text scrolling under it never shows past its rounded corners
   return (
-    <div class="mx-auto w-full max-w-[calc(48rem+2rem)] px-2 pb-3 sm:px-0 md:pb-1">
+    <div class="mx-auto w-full max-w-[calc(48rem+2rem)] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-0 md:pb-0">
       <div
         ref={boxRef}
         data-composer-box
@@ -155,10 +154,11 @@ export function Composer() {
           )}
         </div>
       </div>
-      {/* Below the box: the features' chips, and the model on the right */}
-      <div class="mt-2 flex flex-wrap items-center gap-1.5 px-1">
+      {/* Below the box: the features' chips, and the model on the right, on one line. When it is narrow the chips keep
+          only their icons (their labels: @max-[22rem]:hidden), and the model's name gives way last (ellipsis) */}
+      <div class="@container mt-2 flex items-center gap-1.5 px-1">
         {below.map((a) => a.Button && <a.Button key={a.id} conv={conv} />)}
-        <div class="ml-auto flex min-w-0 items-center">{Slot ? <Slot conv={conv} /> : <ModelButton />}</div>
+        <div class="flex min-w-0 flex-1 items-center justify-end">{Slot ? <Slot conv={conv} /> : <ModelButton />}</div>
       </div>
     </div>
   );

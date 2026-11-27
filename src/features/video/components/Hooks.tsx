@@ -17,9 +17,9 @@ export function VideoModeButton({ conv }: { conv: Conversation }) {
   const on = !!conv.videoMode;
   if (!videoReady.value && !on) return null;
   return (
-    <Chip aria-pressed={on} on={on} title={on ? t('mode.titleOn') : t('mode.titleOff')} onClick={() => void setVideoMode(!on)}>
+    <Chip aria-pressed={on} on={on} aria-label={t('mode.button')} title={on ? t('mode.titleOn') : t('mode.titleOff')} onClick={() => void setVideoMode(!on)}>
       <Icon name="video" class="size-3.5" />
-      {on ? t('mode.buttonOn') : t('mode.button')}
+      <span class="@max-[22rem]:hidden">{on ? t('mode.buttonOn') : t('mode.button')}</span>
     </Chip>
   );
 }
@@ -37,7 +37,6 @@ export function VideoModelButton() {
     <>
       <Icon name="video" class="size-3.5 shrink-0" />
       <span class="max-w-[11rem] truncate">{m?.name ?? t('videoModel')}</span>
-      {m && badge.tone === 'green' && <Icon name="eye-off" class="size-3 shrink-0 text-ok" />}
     </>
   );
   const title = badge.title ? `${t('header.title')}\n${badge.title}` : t('header.title');

@@ -25,7 +25,8 @@ export function toItems(files: FileRecord[], images: ImageMeta[], convTitle: (id
       const d = new Date(im.createdAt);
       const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
       const video = im.mime.startsWith('video/');
-      const name = im.info?.name ?? `${(im.conversationId && convTitle(im.conversationId)) || t(video ? 'videoName' : 'imageName')} ${stamp}.${ext}`;
+      // A made image has no path: its shown name is not one either, so a '/' in the chat's title makes no folder
+      const name = im.info?.name ?? `${((im.conversationId && convTitle(im.conversationId)) || t(video ? 'videoName' : 'imageName')).replace(/\//g, '／')} ${stamp}.${ext}`;
       return { type: 'image', key: `i:${im.id}`, id: im.id, name, kind: im.info ? 'upload' : 'document', ext, size: im.size, updatedAt: im.createdAt, conversationId: im.conversationId, messageId: im.messageId, source: im.info?.source, video };
     })
   ];
@@ -53,13 +54,14 @@ function searchText(f: FileRecord): string {
   return s;
 }
 
-export function filterItems(items: FilerItem[], o: { view: FilerView; conversationId: string | null; folder?: string | null; query: string }): FilerItem[] {
+/** direct: only the items right inside the folder (browsing it), not those in its folders */
+export function filterItems(items: FilerItem[], o: { view: FilerView; conversationId: string | null; folder?: string | null; direct?: boolean; query: string }): FilerItem[] {
   const q = o.query.trim().toLowerCase();
   return items.filter(
     (it) =>
       inView(it, o.view) &&
       (!o.conversationId || it.conversationId === o.conversationId) &&
-      (!o.folder || isInside(it.name, o.folder)) &&
+      (o.direct ? directlyIn(it, o.folder ?? '') : !o.folder || isInside(it.name, o.folder)) &&
       (!q || it.name.toLowerCase().includes(q) || (it.type === 'file' && searchText(it.file).includes(q)))
   );
 }
@@ -79,6 +81,44 @@ export function sortItems(items: FilerItem[], sort: FilerSort, order: FilerOrder
   };
   return [...items].sort(cmp[sort]);
 }
+
+/** A folder as the file manager shows it: its path ('a/b/'), its name ('b'), what is inside it and when it last changed */
+export interface FolderItem {
+  path: string;
+  name: string;
+  count: number;
+  updatedAt: number;
+}
+
+/** The folders right inside `folder` ('' is the top) that hold items, by their paths (case folded into one) */
+export function foldersIn(items: FilerItem[], folder: string): FolderItem[] {
+  const m = new Map<string, FolderItem>();
+  for (const it of items) {
+    if (!isInside(it.name, folder)) continue;
+    const rest = it.name.slice(folder.length);
+    const slash = rest.indexOf('/');
+    if (slash < 0) continue;
+    const path = folder + rest.slice(0, slash + 1);
+    const g = m.get(path.toLowerCase()) ?? { path, name: rest.slice(0, slash), count: 0, updatedAt: 0 };
+    g.count++;
+    g.updatedAt = Math.max(g.updatedAt, it.updatedAt);
+    m.set(path.toLowerCase(), g);
+  }
+  return [...m.values()];
+}
+
+/** Every folder that holds items, at any depth, in path order */
+export function allFolders(items: FilerItem[]): string[] {
+  const m = new Map<string, string>();
+  for (const it of items) for (let i = it.name.indexOf('/'); i >= 0; i = it.name.indexOf('/', i + 1)) {
+    const path = it.name.slice(0, i + 1);
+    if (!m.has(path.toLowerCase())) m.set(path.toLowerCase(), path);
+  }
+  return [...m.values()].sort((a, b) => a.localeCompare(b));
+}
+
+/** Items right inside `folder` ('' is the top), not in a folder below it */
+export const directlyIn = (it: FilerItem, folder: string) => isInside(it.name, folder) && !it.name.slice(folder.length).includes('/');
 
 /** Top folders that have items ('todo-app/'), most recent first */
 export function foldersWithItems(items: FilerItem[]): { folder: string; count: number; latest: number }[] {

@@ -2,9 +2,9 @@
 // Depends on core state; core state never imports this module (it registers itself through extension points).
 import { effect, signal } from '@preact/signals';
 import * as fdb from '../../lib/db/files';
-import { folderNameFor, freeFolder, freePath, isInside, moveIntoWorkDirs, pathFree, pathKey, renumberTakenPaths, withTakenPaths } from '../../lib/db/paths';
+import { folderNameFor, freeFolder, freePath, isInside, moveFolder, moveIntoWorkDirs, pathFree, pathKey, renumberTakenPaths, withTakenPaths } from '../../lib/db/paths';
 import { getSetting, newId, setSetting } from '../../lib/db/repo';
-import { getImage, listImages, putImage } from '../../lib/db/images';
+import { getImage, listImages, putImage, renameImages } from '../../lib/db/images';
 import type { Attachment, Conversation, FileRecord, ImageSource, MessageRecord } from '../../lib/db/schema';
 import type { ImageMeta } from './filer';
 import { filesVersion, imagesVersion } from '../../state/stored';
@@ -204,6 +204,45 @@ export function openFiler(view?: FilerView, conversationId?: string | null, fold
 /** The Files tab showing what is inside a folder */
 export function openFolder(folder: string) {
   openFiler('all', null, folder);
+}
+
+/**
+ * Rename or move a folder: everything inside it, and the working folder of the chats that use it, follow. False
+ * (after a toast) when the new place is not free
+ */
+export async function renameFolder(from: string, raw: string): Promise<boolean> {
+  const to = fdb.cleanFolderName(raw);
+  if (!to || pathKey(to) === pathKey(from)) return false;
+  // Into itself, it would never end
+  if (isInside(to, from)) {
+    showToast(t('folder.intoItself'), 'error');
+    return false;
+  }
+  const ok = await withTakenPaths(() => moveFolder(from, to));
+  if (!ok) {
+    showToast(t('folder.taken', { name: to }), 'error');
+    return false;
+  }
+  for (const c of conversations.value) if (c.workDir && isInside(c.workDir, from)) await updateConversation({ workDir: to + c.workDir.slice(from.length) }, c.id);
+  if (filerFolder.value && isInside(filerFolder.value, from)) filerFolder.value = to + filerFolder.value.slice(from.length);
+  return true;
+}
+
+/** Move files and images into `folder` ('' is the top); a name already there gets a number */
+export async function moveItems(fileIds: string[], imageIds: string[], folder: string) {
+  await withTakenPaths(async (taken) => {
+    const images: { id: string; name: string }[] = [];
+    for (const id of [...fileIds, ...imageIds]) {
+      const own = taken.find((o) => o.id === id);
+      if (!own) continue;
+      const path = freePath(folder + fdb.baseName(own.path), taken, id);
+      own.path = path;
+      const f = fileIds.includes(id) ? await fdb.getFile(id) : undefined;
+      if (f) await fdb.putFile({ ...f, name: path, updatedAt: Date.now() });
+      else images.push({ id, name: path });
+    }
+    await renameImages(images);
+  });
 }
 
 /** Start a new chat whose working folder is `folder`, so its model works on the files already there */

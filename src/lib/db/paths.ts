@@ -2,11 +2,11 @@
 // A path is a file name with folders ('todo-app/js/app.js', cleaned by cleanFileName); a folder is the shared start of
 // names, with a closing '/'. Two paths are the same when they match in NFC with case folded, so a folder never splits
 // into 'Todo/' and 'todo/' (one folder on a Mac disk, in a zip). A file's path is never another one's folder.
-import { db, type Conversation, type FileRecord } from './schema';
+import { db, type BlobRecord, type Conversation, type FileRecord } from './schema';
 import { seal } from './sealed';
 import { storeChanged } from './changes';
 import { baseName, cleanFolderName, getFile, isTemporaryFile, listFiles, putFile } from './files';
-import { listImages, renameImages } from './images';
+import { listImages, renameImages, renamedImageRecord } from './images';
 
 /** Something that has a path: a file or a named image */
 export interface PathOwner {
@@ -137,4 +137,39 @@ export async function renumberTakenPaths(): Promise<number> {
   for (const f of files) await putFile(f, isTemporaryFile(f.id));
   await renameImages(images);
   return files.length + images.length;
+}
+
+/**
+ * Give everything inside folder `from` ('a/b/') the folder `to` instead ('c/'): its files and named images, keeping
+ * their paths below it. Refused (false) when a path it would take belongs to something that stays. Stored records
+ * change in one transaction. The conversations whose working folder it was are the caller's to change
+ */
+export async function moveFolder(from: string, to: string): Promise<boolean> {
+  const taken = await takenPaths();
+  const moving = taken.filter((o) => isInside(o.path, from));
+  const staying = taken.filter((o) => !isInside(o.path, from));
+  const renamed = moving.map((o) => ({ id: o.id, path: to + o.path.slice(from.length) }));
+  if (!renamed.length || renamed.some((r) => !pathFree(r.path, staying))) return false;
+  const now = Date.now();
+  const fileRecs: FileRecord[] = [];
+  const imageRecs: BlobRecord[] = [];
+  const memImages: { id: string; name: string }[] = [];
+  for (const r of renamed) {
+    const f = await getFile(r.id);
+    if (f && isTemporaryFile(f.id)) await putFile({ ...f, name: r.path, updatedAt: now }, true);
+    else if (f) fileRecs.push(await seal('files', { ...f, name: r.path, updatedAt: now }));
+    else {
+      const im = await renamedImageRecord(r.id, () => r.path);
+      if (im) imageRecs.push(im);
+      else memImages.push({ id: r.id, name: r.path });
+    }
+  }
+  await db().transaction('rw', db().files, db().blobs, async () => {
+    if (fileRecs.length) await db().files.bulkPut(fileRecs);
+    if (imageRecs.length) await db().blobs.bulkPut(imageRecs);
+  });
+  await renameImages(memImages);
+  storeChanged('files');
+  storeChanged('images');
+  return true;
 }

@@ -1,17 +1,19 @@
-// The file manager in the main area: every file and image as cards or a list. The header holds the search and
-// upload (selected items get their actions over it); the row under it the count, the filters in effect (the
-// sidebar's Files panel is a set of shortcuts to them), the sort menu and the layout. Files can also be dropped
-// anywhere on it.
+// The file manager in the main area: files and images as cards or a list, browsed by folder (the folders inside the
+// one open come first) unless a search, a type or a chat filters them. The header holds the search and upload
+// (selected items get their actions over it); the row under it the count, the open folder's path and its actions,
+// the filters in effect (the sidebar's Files panel is a set of shortcuts to them), the sort menu and the layout.
+// Files can also be dropped anywhere on it.
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { baseName, currentText } from '../../../lib/db/files';
+import { baseName, cleanFolderName, currentText, folderOf } from '../../../lib/db/files';
+import { isInside } from '../../../lib/db/paths';
 import { getImage } from '../../../lib/db/images';
 import { confirmAndDelete, deleteImages, ImageThumb, lightbox } from '../../images';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { PageHeader } from '../../../components/PageHeader';
-import { Button, Checkbox, Chip, EmptyState, Icon, IconButton, SearchField, Segmented, Spinner, cx, useDebounced, type IconName } from '../../../components/ui';
-import { filterItems, NATURAL_ORDER, previewText, sortItems, type FilerItem } from '../filer';
+import { Button, Checkbox, Chip, EmptyState, Icon, IconButton, Modal, SearchField, Segmented, Spinner, TextField, cx, useDebounced, type IconName } from '../../../components/ui';
+import { allFolders, filterItems, foldersIn, NATURAL_ORDER, previewText, sortItems, type FilerItem, type FolderItem } from '../filer';
 import {
   deleteFiles,
   downloadFile,
@@ -24,7 +26,9 @@ import {
   importFromDevice,
   importing,
   loadFilerPrefs,
+  moveItems,
   openFile,
+  renameFolder,
   setFilerPrefs,
   useInChat,
   type FilerPrefs,
@@ -118,10 +122,14 @@ export function Filer() {
   const folder = filerFolder.value;
   // Searching reads file contents: wait until typing pauses
   const query = useDebounced(filerQuery.value, 150);
+  // Browsing folders: what is right inside the open one; a search, a type or a chat lists everything below it instead
+  const browsing = view === 'all' && !conv && !query.trim();
   const items = useMemo(
-    () => (all ? sortItems(filterItems(all, { view, conversationId: conv, folder, query }), prefs.sort, prefs.order) : null),
-    [all, view, conv, folder, query, prefs.sort, prefs.order]
+    () => (all ? sortItems(filterItems(all, { view, conversationId: conv, folder, direct: browsing, query }), prefs.sort, prefs.order) : null),
+    [all, view, conv, folder, browsing, query, prefs.sort, prefs.order]
   );
+  const folders = useMemo(() => (all && browsing ? sortFolders(foldersIn(all, folder ?? ''), prefs) : []), [all, browsing, folder, prefs.sort, prefs.order]);
+  const [moving, setMoving] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const lastIndex = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -181,6 +189,22 @@ export function Filer() {
     setPicked(new Set());
   };
   const selecting = picked.size > 0;
+  /** Delete a folder with everything in it, after the user confirms with the counts */
+  const removeFolder = async (f: string) => {
+    const inside = (all ?? []).filter((i) => isInside(i.name, f));
+    const fileIds = inside.filter((i) => i.type === 'file').map((i) => i.id);
+    const imageIds = inside.filter((i) => i.type === 'image').map((i) => i.id);
+    const ok = await askConfirm({
+      title: t('folder.deleteTitle'),
+      message: t('folder.deleteMessage', { name: f, files: formatNumber(fileIds.length), images: formatNumber(imageIds.length) }),
+      confirmLabel: t('delete'),
+      danger: true
+    });
+    if (!ok) return;
+    if (fileIds.length) await deleteFiles(fileIds);
+    if (imageIds.length) await deleteImages(imageIds);
+    filerFolder.value = folderOf(f.slice(0, -1)) || null;
+  };
 
   return (
     <main
@@ -234,6 +258,10 @@ export function Filer() {
             {selectedFiles.length < selected.length && <span class="hidden text-xs text-muted lg:inline">{t('filer.imagesNotAttachable')}</span>}
             <div class="ml-auto flex items-center gap-1">
               {/* On phones the actions are icons only, so all of them fit */}
+              <Button class="text-xs" title={t('filer.moveTitle')} aria-label={t('filer.move')} onClick={() => setMoving(true)}>
+                <Icon name="folder" class="size-3.5" />
+                <span class="hidden sm:inline">{t('filer.move')}</span>
+              </Button>
               <Button class="text-xs" disabled={!selectedFiles.length} title={t('useInChatTitle')} aria-label={t('useInChat')} onClick={() => void useInChat(selectedFiles.map((f) => f.id))}>
                 <Icon name="paperclip" class="size-3.5" />
                 <span class="hidden sm:inline">{t('useInChat')}</span>
@@ -250,7 +278,7 @@ export function Filer() {
           </div>
         )}
       </PageHeader>
-      <FilterChips count={items?.length ?? null}>
+      <FilterChips count={items ? items.length + folders.length : null} onDeleteFolder={(f) => void removeFolder(f)}>
         {/* How the list is shown: under the header, so the search keeps its room on phones */}
         <SortMenu prefs={prefs} />
         <Segmented
@@ -270,7 +298,7 @@ export function Filer() {
             <Spinner class="size-4" />
             {t('loading')}
           </p>
-        ) : items.length === 0 && !importing.value.length ? (
+        ) : items.length === 0 && folders.length === 0 && !importing.value.length ? (
           <FilerEmpty view={view} filtered={!!conv || !!folder || !!filerQuery.value.trim()} onUpload={() => input.current?.click()} />
         ) : prefs.layout === 'grid' ? (
           <div class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
@@ -280,15 +308,34 @@ export function Filer() {
                 <span class="max-w-full truncate px-2">{u.name}</span>
               </div>
             ))}
+            {folders.map((f) => (
+              <FolderCard key={f.path} f={f} />
+            ))}
             {items.map((it, i) => (
               <Card key={it.key} it={it} picked={picked.has(it.key)} selecting={selecting} onToggle={(range) => toggle(i, range)} onOpen={() => open(it)} />
             ))}
           </div>
         ) : (
-          <ListView items={items} prefs={prefs} picked={picked} onToggle={toggle} onOpen={open} onAll={toggleAll} />
+          <ListView folders={folders} items={items} prefs={prefs} picked={picked} onToggle={toggle} onOpen={open} onAll={toggleAll} />
         )}
       </div>
 
+      {moving && (
+        <MoveDialog
+          folders={all ? allFolders(all) : []}
+          count={selected.length}
+          onClose={() => setMoving(false)}
+          onMove={async (to) => {
+            await moveItems(
+              selected.filter((i) => i.type === 'file').map((i) => i.id),
+              selected.filter((i) => i.type === 'image').map((i) => i.id),
+              to
+            );
+            setMoving(false);
+            setPicked(new Set());
+          }}
+        />
+      )}
       {dragging && (
         <div class="pointer-events-none absolute inset-2 grid place-items-center rounded-[22px] border-2 border-dashed border-accent bg-accent-soft text-sm font-medium text-ink-strong backdrop-blur-sm">
           {t('filer.drop')}
@@ -348,13 +395,14 @@ function SortMenu({ prefs }: { prefs: FilerPrefs }) {
  * How many items are shown and the filters in effect (the header has no title, so they are shown here), with the
  * controls for how the list is shown (children) at the right end
  */
-function FilterChips({ count, children }: { count: number | null; children: ComponentChildren }) {
+function FilterChips({ count, onDeleteFolder, children }: { count: number | null; onDeleteFolder(folder: string): void; children: ComponentChildren }) {
   const view = filerView.value;
   const conv = filerConversation.value;
   const folder = filerFolder.value;
   return (
     <div class="mx-3 flex min-h-11 flex-wrap items-center gap-1.5 pt-3 pb-3 sm:mx-4 md:mr-7 md:ml-1">
       <span class="px-1 text-xs text-muted tabular-nums">{count === null ? '' : count === 1 ? t('filer.countOne') : t('filer.count', { n: formatNumber(count) })}</span>
+      {folder && <FolderPath folder={folder} onDelete={() => onDeleteFolder(folder)} />}
       {view !== 'all' && (
         <Chip on class="h-7! pr-2!" aria-label={t('filter.remove', { name: viewLabel(view) })} onClick={() => (filerView.value = 'all')}>
           <Icon name={VIEW_ICONS[view]} class="size-3.5" />
@@ -369,21 +417,133 @@ function FilterChips({ count, children }: { count: number | null; children: Comp
           <Icon name="x" class="size-3.5 shrink-0 text-muted" />
         </Chip>
       )}
-      {folder && (
-        <>
-          <Chip on class="h-7! max-w-[16rem] pr-2!" aria-label={t('filter.remove', { name: folder })} onClick={() => (filerFolder.value = null)}>
-            <Icon name="folder" class="size-3.5 shrink-0" />
-            <span class="truncate">{folder}</span>
-            <Icon name="x" class="size-3.5 shrink-0 text-muted" />
-          </Chip>
-          <Chip class="h-7!" title={t('folder.chatTitle')} onClick={() => void chatInFolder(folder)}>
-            <Icon name="chat" class="size-3.5 shrink-0" />
-            {t('folder.chat')}
-          </Chip>
-        </>
-      )}
       <div class="ml-auto flex shrink-0 items-center gap-2">{children}</div>
     </div>
+  );
+}
+
+/** The open folder's path, each part a way back up, and what can be done with it */
+function FolderPath({ folder, onDelete }: { folder: string; onDelete(): void }) {
+  const parts = folder.slice(0, -1).split('/');
+  const [menu, setMenu] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const crumb = 'max-w-[12rem] truncate rounded-md px-1.5 py-0.5 hover:bg-glass-strong hover:text-ink';
+  return (
+    <nav class="flex min-w-0 items-center gap-0.5 text-sm text-muted" aria-label={t('folder.path')}>
+      <button type="button" class={crumb} onClick={() => (filerFolder.value = null)}>
+        {t('folder.top')}
+      </button>
+      {parts.map((p, i) => (
+        <span key={i} class="flex min-w-0 items-center gap-0.5">
+          <Icon name="chevron-right" class="size-3.5 shrink-0 text-faint" />
+          {i === parts.length - 1 ? (
+            <span class="max-w-[12rem] truncate px-1.5 font-medium text-ink-strong" aria-current="page">
+              {p}
+            </span>
+          ) : (
+            <button type="button" class={crumb} onClick={() => (filerFolder.value = `${parts.slice(0, i + 1).join('/')}/`)}>
+              {p}
+            </button>
+          )}
+        </span>
+      ))}
+      <div class="relative" ref={wrap}>
+        <IconButton label={t('folder.actions')} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>
+          <Icon name="more" class="size-4" />
+        </IconButton>
+        {menu && (
+          <Popover anchor={wrap.current} onClose={() => setMenu(false)} label={t('folder.actions')} class="w-56">
+            <MenuItem icon={<Icon name="chat" class="mt-0.5 size-4 shrink-0" />} onSelect={() => (setMenu(false), void chatInFolder(folder))}>
+              {t('folder.chat')}
+            </MenuItem>
+            <MenuItem icon={<Icon name="edit" class="mt-0.5 size-4 shrink-0" />} onSelect={() => (setMenu(false), setRenaming(true))}>
+              {t('folder.rename')}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem icon={<Icon name="trash" class="mt-0.5 size-4 shrink-0" />} class="text-danger! hover:bg-danger-soft! focus-visible:bg-danger-soft!" onSelect={() => (setMenu(false), onDelete())}>
+              {t('folder.delete')}
+            </MenuItem>
+          </Popover>
+        )}
+      </div>
+      {renaming && <RenameFolderDialog folder={folder} onClose={() => setRenaming(false)} />}
+    </nav>
+  );
+}
+
+/** A new path for a folder (it may move it into another one): what is inside and the chats on it follow */
+function RenameFolderDialog({ folder, onClose }: { folder: string; onClose(): void }) {
+  const [name, setName] = useState(folder.slice(0, -1));
+  const save = async () => {
+    if (await renameFolder(folder, name)) onClose();
+  };
+  return (
+    <Modal title={t('folder.rename')} onClose={onClose}>
+      <form
+        class="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <label class="block space-y-1 text-xs text-muted">
+          <span>{t('folder.renameLabel')}</span>
+          <TextField class="w-full" value={name} onInput={(e) => setName(e.currentTarget.value)} autoFocus />
+        </label>
+        <p class="text-xs text-muted">{t('folder.renameNote')}</p>
+        <div class="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>
+            {t('cancel')}
+          </Button>
+          <Button variant="primary" type="submit" disabled={!name.trim() || `${name.trim()}/` === folder}>
+            {t('save')}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Where to move the chosen items: a folder that exists, the top, or a new one */
+function MoveDialog({ folders, count, onClose, onMove }: { folders: string[]; count: number; onClose(): void; onMove(folder: string): Promise<void> }) {
+  const [fresh, setFresh] = useState('');
+  const row = 'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-glass';
+  return (
+    <Modal fixed title={t('filer.moveTo', { n: formatNumber(count) })} onClose={onClose}>
+      <ul class="max-h-[50vh] space-y-0.5 overflow-y-auto">
+        <li>
+          <button type="button" class={row} onClick={() => void onMove('')}>
+            <Icon name="files" class="size-4 shrink-0 text-muted" />
+            {t('folder.top')}
+          </button>
+        </li>
+        {folders.map((f) => (
+          <li key={f}>
+            <button type="button" class={row} onClick={() => void onMove(f)}>
+              <Icon name="folder" class="size-4 shrink-0 text-muted" />
+              <span class="truncate">{f.slice(0, -1)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form
+        class="mt-3 flex items-end gap-2 border-t border-line pt-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const f = cleanFolderName(fresh);
+          if (f) void onMove(f);
+        }}
+      >
+        <label class="min-w-0 flex-1 space-y-1 text-xs text-muted">
+          <span>{t('filer.moveNew')}</span>
+          <TextField class="w-full" value={fresh} onInput={(e) => setFresh(e.currentTarget.value)} placeholder="my-folder" />
+        </label>
+        <Button variant="primary" type="submit" disabled={!cleanFolderName(fresh)}>
+          {t('filer.move')}
+        </Button>
+      </form>
+    </Modal>
   );
 }
 
@@ -405,6 +565,54 @@ function FilerEmpty({ view, filtered, onUpload }: { view: FilerView; filtered: b
         </>
       )}
     </EmptyState>
+  );
+}
+
+/** Folders in the order the items are sorted in: by name, or by when something in them last changed */
+function sortFolders(folders: FolderItem[], prefs: FilerPrefs): FolderItem[] {
+  const dir = prefs.order === 'asc' ? 1 : -1;
+  return [...folders].sort((a, b) => (prefs.sort === 'updated' ? (a.updatedAt - b.updatedAt) * dir : a.name.localeCompare(b.name) * (prefs.sort === 'name' ? dir : 1)));
+}
+
+function FolderCard({ f }: { f: FolderItem }) {
+  return (
+    <button
+      type="button"
+      class="lift group flex flex-col overflow-hidden rounded-[18px] border border-line bg-glass text-left hover:border-line-strong"
+      onClick={() => (filerFolder.value = f.path)}
+      aria-label={t('folder.open', { name: f.name })}
+    >
+      <span class="grid aspect-[4/3] w-full place-items-center bg-sunken">
+        <Icon name="folder" class="size-10 text-faint transition group-hover:text-muted" />
+      </span>
+      <span class="flex min-w-0 flex-1 items-start gap-2 px-2.5 py-2">
+        <Icon name="folder" class="mt-0.5 size-4 shrink-0 text-muted" />
+        <span class="min-w-0">
+          <span class="line-clamp-2 text-sm leading-snug text-ink-strong [overflow-wrap:anywhere]">{f.name}</span>
+          <span class="mt-0.5 block truncate text-xs text-muted tabular-nums">
+            {t('folder.count', { n: formatNumber(f.count) })} · {formatDate(f.updatedAt)}
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function FolderRow({ f }: { f: FolderItem }) {
+  return (
+    <tr class="border-b border-line hover:bg-glass">
+      <td class="py-1.5 pl-1" />
+      <td class="py-1.5">
+        <button type="button" class="flex w-full min-w-0 items-center gap-2 rounded-md text-left hover:text-ink-strong" onClick={() => (filerFolder.value = f.path)}>
+          <Icon name="folder" class="size-4 shrink-0 text-muted" />
+          <span class="truncate">{f.name}</span>
+        </button>
+      </td>
+      <td class="hidden py-1.5 text-xs text-muted sm:table-cell">{t('folder.type')}</td>
+      <td class="hidden py-1.5 text-xs text-muted tabular-nums sm:table-cell">{t('folder.count', { n: formatNumber(f.count) })}</td>
+      <td class="py-1.5 text-xs text-muted tabular-nums">{formatDate(f.updatedAt)}</td>
+      <td class="hidden lg:table-cell" />
+    </tr>
   );
 }
 
@@ -515,7 +723,7 @@ function ListRow({ it, picked, selecting, onToggle, onOpen }: { it: FilerItem; p
   );
 }
 
-function ListView({ items, prefs, picked, onToggle, onOpen, onAll }: { items: FilerItem[]; prefs: FilerPrefs; picked: Set<string>; onToggle(i: number, range: boolean): void; onOpen(it: FilerItem): void; onAll(): void }) {
+function ListView({ folders, items, prefs, picked, onToggle, onOpen, onAll }: { folders: FolderItem[]; items: FilerItem[]; prefs: FilerPrefs; picked: Set<string>; onToggle(i: number, range: boolean): void; onOpen(it: FilerItem): void; onAll(): void }) {
   const all = items.length > 0 && items.every((i) => picked.has(i.key));
   return (
     <table class="w-full table-fixed text-sm">
@@ -532,6 +740,9 @@ function ListView({ items, prefs, picked, onToggle, onOpen, onAll }: { items: Fi
         </tr>
       </thead>
       <tbody>
+        {folders.map((f) => (
+          <FolderRow key={f.path} f={f} />
+        ))}
         {items.map((it, i) => (
           <ListRow key={it.key} it={it} picked={picked.has(it.key)} selecting={picked.size > 0} onToggle={(range) => onToggle(i, range)} onOpen={() => onOpen(it)} />
         ))}

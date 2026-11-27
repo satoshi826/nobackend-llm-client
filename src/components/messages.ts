@@ -5,6 +5,9 @@ export const t = defineMessages(
   {
     // App
     'app.loading': '読み込み中…',
+    'app.replacedTitle': '新しい版に更新されました',
+    'app.replacedText': '別のタブでアプリが新しい版に更新されたため、このタブではデータを使えなくなりました。再読み込みしてください。',
+    'app.reload': '再読み込み',
 
     // shared building blocks (ui.tsx, settings-ui.tsx, ConfirmDialog)
     'ui.close': '閉じる',
@@ -246,6 +249,9 @@ export const t = defineMessages(
   {
     en: {
       'app.loading': 'Loading…',
+      'app.replacedTitle': 'The app was updated',
+      'app.replacedText': 'The app was updated to a newer version in another tab, so this tab can no longer use its data. Reload it to go on.',
+      'app.reload': 'Reload',
 
       'ui.close': 'Close',
       'perm.ask': 'Ask every time',
@@ -475,6 +481,9 @@ export const t = defineMessages(
     },
     zh: {
       'app.loading': '加载中…',
+      'app.replacedTitle': '应用已更新',
+      'app.replacedText': '应用已在另一个标签页中更新为新版本，此标签页无法再使用其数据。请重新加载。',
+      'app.reload': '重新加载',
 
       'ui.close': '关闭',
       'perm.ask': '每次确认',

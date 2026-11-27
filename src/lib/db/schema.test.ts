@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import Dexie from 'dexie';
-import { AppDB } from './schema';
+import { AppDB, db, onDatabaseReplaced, setDatabaseName } from './schema';
 
 describe('database upgrades', () => {
   it('turns encrypted image bytes stored as ArrayBuffers into Blobs, and leaves the rest as it was', async () => {
@@ -76,5 +76,21 @@ describe('database upgrades', () => {
     expect(image!.enc!.iv).toEqual(new Uint8Array([0, 1, 2]));
     expect((image!.thumb as { iv: Uint8Array }).iv).toEqual(new Uint8Array([3, 4]));
     db.close();
+  });
+});
+
+describe('another tab upgrading the database', () => {
+  it('makes this tab close it for good and say so, instead of opening it again with the old code', async () => {
+    setDatabaseName('replaced-test');
+    await db().open();
+    let told = 0;
+    onDatabaseReplaced(() => told++);
+    // A newer version of the app in another tab
+    const newer = new Dexie('replaced-test');
+    newer.version(db().verno + 1).stores({ conversations: 'id' });
+    await newer.open();
+    expect(told).toBe(1);
+    await expect(db().conversations.toArray()).rejects.toThrow();
+    newer.close();
   });
 });

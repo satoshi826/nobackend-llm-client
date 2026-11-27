@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks';
-import { ready } from './state/app';
+import { ready, replacedByAnotherTab } from './state/app';
 import { backgroundImage, backgroundOf, GLOW_PRESETS, loadBackgroundImage } from './state/background';
 import { uiLang } from './state/settings';
 import { dataLock, dataWork } from './state/lock';
@@ -10,7 +10,7 @@ import { ChatView } from './components/ChatView';
 import { lazyComponent } from './components/lazy';
 import { SystemPromptModal } from './components/SystemPromptModal';
 import { FetchDialog } from './components/FetchDialog';
-import { cx, Spinner } from './components/ui';
+import { Button, cx, Icon, Spinner } from './components/ui';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { mainViews, overlays } from './components/extensions';
 import { mainView } from './state/ui';
@@ -101,9 +101,27 @@ function Toast() {
   );
 }
 
+/** Another tab upgraded the app's data: this tab stopped using it, so nothing is lost by reloading */
+function Replaced() {
+  return (
+    <div class="relative isolate grid h-full place-items-center px-6">
+      <SkyGlow />
+      <div class="max-w-sm text-center">
+        <h1 class="text-lg font-semibold text-ink-strong">{t('app.replacedTitle')}</h1>
+        <p class="mt-2 text-sm text-muted">{t('app.replacedText')}</p>
+        <Button variant="primary" class="mt-4" onClick={() => location.reload()}>
+          <Icon name="refresh" />
+          {t('app.reload')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   // Reading the language here re-renders the whole tree when it changes (messages are read during render)
   void uiLang.value;
+  if (replacedByAnotherTab.value) return <Replaced />;
   if (!ready.value) {
     return <div class="grid h-full place-items-center text-sm text-muted">{t('app.loading')}</div>;
   }

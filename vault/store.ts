@@ -50,7 +50,15 @@ function openDB(): Promise<IDBDatabase> {
     dbp = new Promise((resolve, reject) => {
       const req = indexedDB.open('key-vault', 1);
       req.onupgradeneeded = () => req.result.createObjectStore('secrets', { keyPath: 'id' });
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        // Another tab's newer vault upgrades the store: let it go at once (an open connection would hold the upgrade
+        // back), and open again on the next use (an older vault then fails to open instead of writing old records)
+        req.result.onversionchange = () => {
+          req.result.close();
+          dbp = null;
+        };
+        resolve(req.result);
+      };
       req.onerror = () => reject(req.error);
     });
   }

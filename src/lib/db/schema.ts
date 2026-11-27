@@ -375,9 +375,31 @@ export class AppDB extends Dexie {
 
 let _db: AppDB | null = null;
 let dbName = 'nobackend-llm-client';
+const replacedListeners = new Set<() => void>();
+
+/**
+ * The database, opened on first use. When another tab upgrades it to a newer version (or deletes it), this tab closes
+ * it for good instead of letting Dexie open it again: code of the older version must not write records of the old
+ * shape into the upgraded database, nor bring back what the upgrade removed. onDatabaseReplaced tells the app
+ */
 export function db(): AppDB {
-  if (!_db) _db = new AppDB(dbName);
+  if (!_db) {
+    const d = new AppDB(dbName);
+    // Runs before Dexie's own handler (newest first); false stops that one, which would open the database again
+    d.on('versionchange', () => {
+      d.close({ disableAutoOpen: true });
+      for (const fn of replacedListeners) fn();
+      return false;
+    });
+    _db = d;
+  }
   return _db;
+}
+
+/** Called when another tab upgraded or deleted the database and this tab can no longer use it (reload to go on) */
+export function onDatabaseReplaced(fn: () => void): () => void {
+  replacedListeners.add(fn);
+  return () => replacedListeners.delete(fn);
 }
 
 /** Use another database (perf mode keeps its generated data apart from the real one); call before the first db() */

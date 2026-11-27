@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { encryptSecret } from '../src/lib/crypto/passphrase';
-import { clearAll, lock, removePassphrase, revealKey, saveKey, setPassphrase, status, unlock, unwrapDataKey, vaultState, wrapDataKey } from './store';
+import { lastFour, clearAll, lock, removePassphrase, revealKey, saveKey, setPassphrase, status, unlock, unwrapDataKey, vaultState, wrapDataKey } from './store';
 
 // tavily does no key check (network) on save, so only the store's behaviour is exercised
 const PASS = 'correct horse battery';
@@ -24,7 +24,8 @@ async function rawPut(rec: unknown) {
 describe('key vault store', () => {
   it('stores plainly without a passphrase, encrypts everything once one is set', { timeout: 30_000 }, async () => {
     expect((await saveKey('tavily', 'tvly-1')).ok).toBe(true);
-    expect(await status('tavily')).toMatchObject({ present: true, encrypted: false, locked: false, last4: 'vly-1'.slice(-4) });
+    expect(await status('tavily')).toEqual({ present: true, encrypted: false, locked: false });
+    expect(await lastFour('tavily')).toBe('vly-1'.slice(-4));
     expect(await vaultState()).toMatchObject({ hasPassphrase: false, locked: false });
 
     expect((await setPassphrase('short')).ok).toBe(false);
@@ -42,7 +43,8 @@ describe('key vault store', () => {
     expect((await saveKey('tavily', 'x')).ok).toBe(false);
     expect((await unlock('wrong passphrase')).ok).toBe(false);
     expect((await unlock(PASS)).ok).toBe(true);
-    expect(await status('tavily')).toMatchObject({ locked: false, last4: 'vly-2'.slice(-4) });
+    expect(await status('tavily')).toMatchObject({ locked: false });
+    expect(await lastFour('tavily')).toBe('vly-2'.slice(-4));
 
     expect((await setPassphrase('another passphrase', 'wrong one!')).ok).toBe(false);
     // Wrap / unwrap the data key (anything without the marker is refused)
@@ -91,7 +93,8 @@ describe('key vault store', () => {
     expect(await status('openrouter')).toMatchObject({ encrypted: true, locked: false });
     lock();
     expect((await unlock(PASS)).ok).toBe(true);
-    expect(await status('tavily')).toMatchObject({ locked: false, last4: '-old' });
+    expect(await status('tavily')).toMatchObject({ locked: false });
+    expect(await lastFour('tavily')).toBe('-old');
     await clearAll();
   });
 });

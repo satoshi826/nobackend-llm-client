@@ -16,6 +16,7 @@ import {
   allStatus,
   clearAll,
   label as providerLabel,
+  lastFour,
   listPasskeys,
   lock,
   onChange,
@@ -67,8 +68,13 @@ const ports = new Set<MessagePort>();
 
 window.addEventListener('message', (e) => {
   if (!APP_ORIGINS.includes(e.origin)) return; // ignore anything but the allowed app origins
-  if (e.data?.type !== 'connect' || e.data?.protocol !== VAULT_PROTOCOL || !e.ports[0]) return;
+  if (e.data?.type !== 'connect' || !e.ports[0]) return;
   const port = e.ports[0];
+  // An app of another version (the vault deployed apart from it): say so instead of keeping silent
+  if (e.data?.protocol !== VAULT_PROTOCOL) {
+    port.postMessage({ type: 'mismatch', protocol: VAULT_PROTOCOL });
+    return;
+  }
   ports.add(port);
   port.onmessage = (ev) => {
     void handle(ev.data as ToVault, (m, transfer) => port.postMessage(m, transfer ?? []));
@@ -326,7 +332,7 @@ function dangerAction(kind: 'clear-all', label: string, warning: string, action:
 /** Key of one provider (add, show, replace, delete). Unlock if the vault is locked */
 async function renderKey(id: string): Promise<Node[]> {
   if (!PROVIDER_IDS.includes(id)) return [h('p', { class: 'muted' }, t('common.unsupportedProvider'))];
-  const [st, vs] = await Promise.all([status(id), vaultState()]);
+  const [st, vs, last4] = await Promise.all([status(id), vaultState(), lastFour(id)]);
   const name = providerLabel(id);
   const nodes: Node[] = [];
   if (params.get('compact') !== '1')
@@ -362,9 +368,9 @@ async function renderKey(id: string): Promise<Node[]> {
         h(
           'div',
           { class: 'fill' },
-          h('div', { class: 'strong' }, registeredLabel(st.last4, st.encrypted)),
+          h('div', { class: 'strong' }, registeredLabel(last4, st.encrypted)),
           shown && h('div', { class: 'mono secret' }, shown),
-          h('div', { class: 'muted' }, t('key.hosts', { hosts: formatList(st.hosts) }))
+          h('div', { class: 'muted' }, t('key.hosts', { hosts: formatList(allowedHosts(id)) }))
         ),
         h('div', { class: 'btns' }, toggle, h('button', { type: 'button', class: 'btn danger', onclick: () => {
           confirming = 'delete-key';

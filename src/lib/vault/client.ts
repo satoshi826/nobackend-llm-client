@@ -57,14 +57,31 @@ class VaultConnection {
       iframe.tabIndex = -1;
       iframe.referrerPolicy = 'no-referrer';
       iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
-      const timer = setTimeout(() => reject(new Error(t('connectFailed'))), 15000);
+      // Connected once the vault answers with its first status: the frame's load event fires for an error page
+      // too. A failure (no answer, another protocol version) is forgotten, so the next use tries again
+      let connected = false;
+      const fail = (message: string) => {
+        clearTimeout(timer);
+        this.ready = null;
+        this.port = null;
+        iframe.remove();
+        reject(new Error(message));
+      };
+      const timer = setTimeout(() => fail(t('connectFailed')), 15000);
       iframe.addEventListener('load', () => {
         const ch = new MessageChannel();
         this.port = ch.port1;
-        ch.port1.onmessage = (e) => this.onMessage(e.data as FromVault);
+        ch.port1.onmessage = (e) => {
+          const m = e.data as FromVault;
+          if (m.type === 'mismatch') return fail(t('versionMismatch'));
+          if (m.type === 'status' && !connected) {
+            connected = true;
+            clearTimeout(timer);
+            resolve();
+          }
+          this.onMessage(m);
+        };
         iframe.contentWindow!.postMessage({ type: 'connect', protocol: VAULT_PROTOCOL }, VAULT_ORIGIN, [ch.port2]);
-        clearTimeout(timer);
-        resolve();
       });
       document.body.appendChild(iframe);
     });
@@ -124,6 +141,8 @@ class VaultConnection {
       this.results.delete(m.id);
       return;
     }
+    // Handled while connecting
+    if (m.type === 'mismatch') return;
     const p = this.pending.get(m.id);
     if (!p) return;
     switch (m.type) {

@@ -16,7 +16,6 @@ interface SecretRec {
   id: string;
   key?: string;
   enc?: EncryptedBlob;
-  hosts: string[];
   createdAt: number;
 }
 /** Passphrase check value (a known string, encrypted). Kept in the same store as the keys under a reserved ID */
@@ -156,14 +155,18 @@ export async function vaultState(): Promise<VaultState> {
   return { hasPassphrase: has, locked: has && passphrase === null, passphraseId: has ? (meta?.pid ?? 'legacy') : null };
 }
 
+/** A key's status, as the app is told it (nothing of the key itself) */
 export async function status(id: string): Promise<KeyStatus> {
   const r = await getRec(id);
-  if (r?.enc) {
-    const k = mem.get(id);
-    return { present: true, encrypted: true, locked: k === undefined, hosts: r.hosts, last4: k?.slice(-4) ?? '' };
-  }
-  if (r?.key) return { present: true, encrypted: false, locked: false, hosts: r.hosts, last4: r.key.slice(-4) };
-  return { present: false, encrypted: false, locked: false, hosts: [], last4: '' };
+  if (r?.enc) return { present: true, encrypted: true, locked: !mem.has(id) };
+  if (r?.key) return { present: true, encrypted: false, locked: false };
+  return { present: false, encrypted: false, locked: false };
+}
+
+/** The key's last four characters, for the vault's own page only ('' while it is locked or absent) */
+export async function lastFour(id: string): Promise<string> {
+  const r = await getRec(id);
+  return (r?.enc ? mem.get(id) : r?.key)?.slice(-4) ?? '';
 }
 
 export async function allStatus(): Promise<{ keys: Record<string, KeyStatus>; vault: VaultState }> {
@@ -193,7 +196,7 @@ export async function saveKey(id: string, key: string): Promise<Result> {
     const r = await account.preset.validateKey(cfg, (url, init) => keyedFetch(id, url, init ?? {}, k));
     if (!r.ok) return { ok: false, message: r.error?.message ?? t('store.keyCheckFailed') };
   }
-  const base = { id, hosts: allowedHosts(id), createdAt: Date.now() };
+  const base = { id, createdAt: Date.now() };
   if (passphrase !== null) {
     await putRec({ ...base, enc: await encryptSecret(k, passphrase) });
     mem.set(id, k);
@@ -238,7 +241,7 @@ async function rewriteAll(next: string | null) {
   for (const r of await allRecs()) {
     const key = r.key ?? mem.get(r.id);
     if (key === undefined) continue; // old keys that could not be unlocked stay as they are
-    await putRec(next === null ? { id: r.id, hosts: r.hosts, createdAt: r.createdAt, key } : { id: r.id, hosts: r.hosts, createdAt: r.createdAt, enc: await encryptSecret(key, next) });
+    await putRec(next === null ? { id: r.id, createdAt: r.createdAt, key } : { id: r.id, createdAt: r.createdAt, enc: await encryptSecret(key, next) });
     if (next === null) mem.delete(r.id);
     else mem.set(r.id, key);
   }

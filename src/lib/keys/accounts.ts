@@ -61,7 +61,8 @@ for (const [id, s] of Object.entries(SERVICES)) {
 export const ACCOUNT_IDS = Object.keys(ACCOUNTS);
 
 export function accountById(id: string): Account | undefined {
-  return ACCOUNTS[id];
+  // Own keys only: an id such as '__proto__' must not find anything
+  return Object.hasOwn(ACCOUNTS, id) ? ACCOUNTS[id] : undefined;
 }
 
 export function providerConfigOf(id: string): ProviderConfig | undefined {
@@ -75,11 +76,9 @@ export interface KeyStatus {
   /** Stored encrypted with the passphrase */
   encrypted: boolean;
   locked: boolean;
-  hosts: string[];
-  last4: string;
 }
 
-export const EMPTY_KEY_STATUS: KeyStatus = { present: false, encrypted: false, locked: false, hosts: [], last4: '' };
+export const EMPTY_KEY_STATUS: KeyStatus = { present: false, encrypted: false, locked: false };
 
 /** State of the whole vault (the vault has a single passphrase) */
 export interface VaultState {

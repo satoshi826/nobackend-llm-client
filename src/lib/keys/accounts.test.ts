@@ -42,3 +42,10 @@ describe('providerConfigOf', () => {
     expect(providerConfigOf('tavily')).toBeUndefined();
   });
 });
+
+describe('looking accounts up', () => {
+  it('finds only accounts the app defines, not names every object has', () => {
+    expect(accountById('openrouter')?.host).toBe('openrouter.ai');
+    for (const id of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) expect(accountById(id)).toBeUndefined();
+  });
+});

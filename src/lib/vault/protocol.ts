@@ -27,7 +27,9 @@ export type FromVault =
   | { type: 'head'; id: string; status: number; statusText: string; headers: [string, string][] }
   | { type: 'chunk'; id: string; chunk: Uint8Array }
   | { type: 'end'; id: string }
-  | { type: 'error'; id: string; kind: string; message: string };
+  | { type: 'error'; id: string; kind: string; message: string }
+  /** The vault speaks another version of this protocol (it was deployed apart from the app): nothing else follows */
+  | { type: 'mismatch'; protocol: string };
 
 /** Response headers the vault may relay (nothing related to keys or cookies) */
 export const PASSTHROUGH_HEADERS = [

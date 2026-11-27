@@ -28,18 +28,18 @@ export function isTextLike(f: { name: string; type: string }) {
 
 export interface Extracted {
   text: string;
-  /** How the text was obtained ('PDF': extracted from a PDF; shown in the Files tab) */
-  source?: string;
+  /** The text was extracted from a PDF (shown in the Files tab) */
+  fromPdf: boolean;
   truncated: boolean;
 }
 
 export async function extractText(file: File): Promise<Extracted> {
   if (file.size > MAX_UPLOAD_BYTES) throw new UnsupportedFileError(t('extract.tooBig', { max: formatNumber(MAX_UPLOAD_BYTES / 1024 / 1024) }));
   let text: string;
-  let source: string | undefined;
+  let fromPdf = false;
   if (isPdf(file)) {
     text = await pdfToText(await file.arrayBuffer());
-    source = 'PDF';
+    fromPdf = true;
     if (!text.trim()) throw new UnsupportedFileError(t('extract.pdfEmpty'));
   } else if (isTextLike(file)) {
     text = await file.text();
@@ -47,7 +47,7 @@ export async function extractText(file: File): Promise<Extracted> {
     throw new UnsupportedFileError(t('extract.unsupported', { name: file.name }));
   }
   const truncated = text.length > MAX_UPLOAD_CHARS;
-  return { text: truncated ? text.slice(0, MAX_UPLOAD_CHARS) : text, source, truncated };
+  return { text: truncated ? text.slice(0, MAX_UPLOAD_CHARS) : text, fromPdf, truncated };
 }
 
 // ---- PDF ----

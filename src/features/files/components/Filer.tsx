@@ -5,9 +5,7 @@
 // entries can be dragged onto a folder, and files from the device dropped anywhere (into the open folder).
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { baseName, cleanFolderName, currentText, folderOf } from '../../../lib/db/files';
-import { isInside, pathKey } from '../../../lib/db/paths';
-import { getImage } from '../../../lib/db/images';
+import { baseName, cleanFolderName, folderOf, isInside, pathKey } from '../../../lib/paths';
 import { confirmAndDelete, deleteImages, ImageThumb, lightbox } from '../../images';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
@@ -19,6 +17,7 @@ import {
   createFolder,
   deleteFiles,
   downloadFile,
+  downloadImage,
   filerConversation,
   filerFolder,
   filerPrefs,
@@ -33,6 +32,7 @@ import {
   openFolder,
   renameFolder,
   renameItem,
+  searchContents,
   setFilerPrefs,
   useInChat,
   type FilerPrefs,
@@ -58,17 +58,7 @@ const sizeLabel = (it: FilerItem) => (it.type === 'image' ? formatBytes(it.size)
 const kindIcon = (it: FilerItem): IconName => (it.type === 'image' && it.video ? 'video' : VIEW_ICONS[it.type === 'image' ? 'image' : it.kind]);
 const folderKey = (f: FolderItem) => `d:${f.path}`;
 
-async function downloadItem(it: FilerItem) {
-  if (it.type === 'file') return downloadFile(it.file);
-  const blob = await getImage(it.id);
-  if (!blob) return;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = baseName(it.name);
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+const downloadItem = (it: FilerItem) => (it.type === 'file' ? downloadFile(it.file) : downloadImage(it.id, it.name));
 
 /** Choosing a sort key starts it in its natural direction (newest, largest, A first); the same key turns it around */
 function sortBy(k: FilerSort) {
@@ -160,9 +150,20 @@ export function Filer() {
   const query = useDebounced(filerQuery.value, 150);
   // By folder, without a search: what is right in the open folder (null when listing by type, by chat, or searching)
   const here = view === 'all' && !conv && !query.trim() ? (folder ?? '') : null;
+  // A search reads the files' whole texts apart (lists carry only their start)
+  const [contentHits, setContentHits] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    setContentHits(null);
+    if (!query.trim()) return;
+    let alive = true;
+    void searchContents(query).then((hits) => alive && setContentHits(hits));
+    return () => {
+      alive = false;
+    };
+  }, [query, all]);
   const items = useMemo(
-    () => (all ? sortItems(filterItems(all, { view, conversationId: conv, folder, direct: here !== null, query }), prefs.sort, prefs.order) : null),
-    [all, view, conv, folder, here, query, prefs.sort, prefs.order]
+    () => (all ? sortItems(filterItems(all, { view, conversationId: conv, folder, direct: here !== null, query, contentHits }), prefs.sort, prefs.order) : null),
+    [all, view, conv, folder, here, query, contentHits, prefs.sort, prefs.order]
   );
   const pending = newFolders.value;
   const folders = useMemo(() => {
@@ -606,7 +607,7 @@ function Card({ it, picked, selecting, onToggle, onOpen, api }: { it: FilerItem;
                 it.ext === 'md' || it.ext === 'txt' ? 'font-sans' : 'font-mono'
               )}
             >
-              {previewText(currentText(it.file), it.ext)}
+              {previewText(it.file.preview, it.ext)}
             </pre>
           </button>
         )}

@@ -39,8 +39,8 @@ export interface SandboxPage {
   path: string;
   /** Text, or a Blob (images, media) */
   files: Record<string, string | Blob>;
-  /** Its localStorage: the items it starts with, and where its changes go (checked: STORAGE_LIMIT) */
-  storage?: { items: Record<string, string>; save(items: Record<string, string>): void };
+  /** Its localStorage: the items it starts with (asked at each showing), and where its changes go (checked: STORAGE_LIMIT) */
+  storage?: { items(): Record<string, string>; save(items: Record<string, string>): void };
 }
 
 /** A line of a shown page's console, or something that went wrong on it (sandbox/sandbox.html, watchPage) */
@@ -98,7 +98,7 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
       }
     };
     // With page: path and files (Blobs go across without copying their bytes), and the localStorage it starts with
-    port.postMessage({ type: 'render', html, ...(page ? { path: page.path, files: page.files, storage: page.storage?.items } : {}) });
+    port.postMessage({ type: 'render', html, ...(page ? { path: page.path, files: page.files, storage: page.storage?.items() } : {}) });
     timer = setInterval(() => {
       if (Date.now() - last <= STUCK_MS) return port.postMessage({ type: 'ping', n: ++n });
       clearInterval(timer);
@@ -128,7 +128,7 @@ export const INSPECT_TEXT = 4000;
  * Show a page in a hidden sandbox frame (its localStorage only in memory, nothing saved), wait `waitMs`, run `script`
  * on it if given, and read back its log and the text it shows. The frame is removed afterwards
  */
-export async function inspectPage(html: string, page: SandboxPage | undefined, { waitMs, script }: { waitMs: number; script?: string }): Promise<PageInspection> {
+export async function inspectPage(html: string, page: SandboxPage | undefined, { waitMs, script, signal }: { waitMs: number; script?: string; signal?: AbortSignal }): Promise<PageInspection> {
   const f = document.createElement('iframe');
   f.setAttribute('sandbox', SANDBOX_FLAGS);
   f.setAttribute('aria-hidden', 'true');
@@ -159,8 +159,8 @@ export async function inspectPage(html: string, page: SandboxPage | undefined, {
         }),
         sleep(ms).then(() => null)
       ]);
-    port.postMessage({ type: 'render', html, ...(page ? { path: page.path, files: page.files, storage: page.storage?.items } : {}) });
-    await sleep(waitMs);
+    port.postMessage({ type: 'render', html, ...(page ? { path: page.path, files: page.files, storage: page.storage?.items() } : {}) });
+    await sleep(waitMs, signal);
     const ran = script ? await evalIn(script, 5000) : undefined;
     if (ran === null) return { logs, text: '', stuck: true };
     // Changes the script made, and logs it caused, have a moment to show
@@ -175,7 +175,12 @@ export async function inspectPage(html: string, page: SandboxPage | undefined, {
   }
 }
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+/** Wait ms (a stop given ends the wait at once) */
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((r) => {
+    const timer = setTimeout(r, ms);
+    signal?.addEventListener('abort', () => (clearTimeout(timer), r()), { once: true });
+  });
 
 // ---- running code: hidden sandbox frames, jobs answered by id over their ports ----
 // Worker runs share one frame (each worker is stopped after its run). A run on the page itself (dom) gets a frame of

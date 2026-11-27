@@ -57,7 +57,7 @@ export function VideoBar() {
     if (!file?.type.startsWith('image/')) return;
     // Kept in the Files tab like any image brought in
     const id = repo.newId();
-    await putImage({ id, mime: file.type, info: { name: file.name, source: { kind: 'upload' } } }, file, false);
+    await putImage({ id, mime: file.type, info: { origin: { kind: 'upload' } } }, file, false);
     firstFrame.value = { blobId: id, name: file.name };
   };
   return (

@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { newFile } from '../../lib/db/files';
-import { conversationsWithItems, filterItems, previewText, sortItems, toItems, type ImageMeta } from './filer';
+import { conversationsWithItems, filterItems, previewText, sortItems, toItems } from './filer';
+import type { ImageEntry } from '../../lib/db/catalog';
 
 const now = Date.UTC(2026, 10, 25, 12);
 const day = 86400_000;
 const file = (id: string, name: string, kind: 'document' | 'upload', text: string, updatedAt: number, conversationId?: string) => ({
-  ...newFile({ id, name, kind, text, by: kind === 'upload' ? 'upload' : 'model', conversationId }),
+  ...newFile({ id, name, origin: kind === 'upload' ? { kind: 'upload' } : { kind: 'made' }, text, by: kind === 'upload' ? 'upload' : 'model', conversationId }),
   updatedAt
 });
-const img = (id: string, createdAt: number, conversationId: string, size = 2048): ImageMeta => ({ id, conversationId, messageId: 'm', createdAt, mime: 'image/png', size });
+const img = (id: string, createdAt: number, conversationId: string, size = 2048): ImageEntry => ({ id, conversationId, messageId: 'm', createdAt, mime: 'image/png', size, origin: { kind: 'made' } });
 
 const items = toItems(
   [file('a', 'report.md', 'document', '# Market\nApples are up', now - day, 'c1'), file('b', 'scores.csv', 'upload', 'name,score\nsato,80', now - 10 * day), file('c', 'notes.txt', 'document', 'zzz', now - 2 * day, 'c2')],

@@ -1,6 +1,8 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { baseName, cleanFileName, folderOf, cleanFiles, currentText, deleteFiles, getFile, listFiles, newFile, previousText, putFile, setText, swapPrevious, withText } from '../../lib/db/files';
+import { cleanFiles, createFile, deleteFiles, getFile, listFiles, newFile, readText, setText, swapPrevious } from '../../lib/db/files';
+import { baseName, cleanFileName, folderOf } from '../../lib/paths';
+import { resetCatalog } from '../../lib/db/catalog';
 import { seal, setDataKey } from '../../lib/db/sealed';
 import { generateDataKey } from '../../lib/crypto/data';
 import { exportAll, importAll } from '../../lib/db/export';
@@ -18,21 +20,25 @@ const ctx = { signal: new AbortController().signal, transport: {} as never, auth
 
 function memDeps(scope = new Set<string>()) {
   const files = new Map<string, FileRecord>();
+  const texts = new Map<string, string>();
   let n = 0;
   const deps: FileToolDeps = {
     // As the files feature does: one file per path, found by id or by path
     async create(name, text) {
       const same = [...files.values()].find((f) => scope.has(f.id) && f.name === name);
       if (same) return { file: await deps.update(same.id, text), replaced: true };
-      const f = newFile({ id: `f${++n}`, name, kind: 'document', text, by: 'model' });
+      const f = newFile({ id: `f${++n}`, name, origin: { kind: 'made' }, text, by: 'model' });
       files.set(f.id, f);
+      texts.set(f.id, text);
       scope.add(f.id);
       return { file: f, replaced: false };
     },
     get: async (ref) => (scope.has(ref) ? files.get(ref) : [...files.values()].find((f) => scope.has(f.id) && f.name === ref)),
-    async update(id, text, append) {
-      const { next } = withText(files.get(id)!, text, 'model', append);
+    text: async (f) => texts.get(f.id) ?? '',
+    async update(id, text) {
+      const next = { ...files.get(id)!, size: text.length, updatedAt: Date.now() };
       files.set(id, next);
+      texts.set(id, text);
       return next;
     },
     pathOf: (f) => f.name,
@@ -49,7 +55,7 @@ function memDeps(scope = new Set<string>()) {
       const pick = only ? new RegExp(only, 'i') : null;
       return [...files.values()]
         .filter((f) => scope.has(f.id) && (!pick || pick.test(f.name)))
-        .flatMap((f) => currentText(f).split('\n').flatMap((text, i) => (re.test(text) ? [{ path: f.name, line: i + 1, text }] : [])));
+        .flatMap((f) => (texts.get(f.id) ?? '').split('\n').flatMap((text: string, i: number) => (re.test(text) ? [{ path: f.name, line: i + 1, text }] : [])));
     },
     async move(id, to) {
       if ([...files.values()].some((f) => f.name === to)) throw new Error('taken');
@@ -68,7 +74,7 @@ function memDeps(scope = new Set<string>()) {
       return { kind: 'file', file: (await deps.create('page.txt', 'fetched text')).file };
     }
   };
-  return { deps, files, scope };
+  return { deps, files, texts, scope };
 }
 
 const tool = (deps: FileToolDeps, name: string) => makeFileTools(deps, { hasFolder: true }).find((t) => t.name === name)!;
@@ -91,23 +97,12 @@ describe('file names and versions', () => {
     expect(folderOf('site/css/style.css')).toBe('site/css/');
     expect(folderOf('style.css')).toBe('');
   });
-  it('keeps the text before the last change, and appending keeps the one it had', () => {
-    const f = newFile({ id: 'x', name: 'a.md', kind: 'document', text: 'one', by: 'model' });
-    expect(f.previous).toBeUndefined();
-    const two = withText(f, 'two', 'user');
-    expect(two.previousText).toBe('one');
-    expect(two.next.previous?.by).toBe('model');
-    expect(currentText(two.next)).toBe('two');
-    const more = withText(two.next, 'two!', 'model', true);
-    expect(more.previousText).toBeUndefined();
-    expect(more.next.previous).toEqual(two.next.previous);
-    expect(more.next.size).toBe(4);
-  });
+
 });
 
 describe('file tools', () => {
   it('names files by path, and writing to a path the conversation has replaces that file', async () => {
-    const { deps, files } = memDeps();
+    const { deps, files, texts } = memDeps();
     const c = await run(deps, 'write_file', { name: '/site//css/style.css', content: 'a{}' });
     expect((c.details as { name: string }).name).toBe('site/css/style.css');
     const again = await run(deps, 'write_file', { name: 'site/css/style.css', content: 'b{}' });
@@ -116,17 +111,16 @@ describe('file tools', () => {
     // Read and edit by path as well as by id
     expect((await run(deps, 'read_file', { file_id: 'site/css/style.css' })).content).toContain('b{}');
     await run(deps, 'edit_file', { file_id: 'site/css/style.css', old_string: 'b{}', new_string: 'c{}' });
-    expect(currentText([...files.values()][0])).toBe('c{}');
+    expect(texts.get([...files.values()][0].id)).toBe('c{}');
   });
   it('creates, appends, edits by find/replace and reads in chunks', async () => {
-    const { deps, files } = memDeps();
+    const { deps, texts } = memDeps();
     const c = await run(deps, 'write_file', { name: 'report', content: '# Title\nintro' });
     expect((c.details as { name: string }).name).toBe('report.md');
     const id = (c.details as { fileId: string }).fileId;
     await run(deps, 'append_file', { file_id: id, content: '\n## More' });
     await run(deps, 'edit_file', { file_id: id, old_string: 'intro', new_string: 'Introduction' });
-    const f = files.get(id)!;
-    expect(currentText(f)).toBe('# Title\nIntroduction\n## More');
+    expect(texts.get(id)).toBe('# Title\nIntroduction\n## More');
     const r = await run(deps, 'read_file', { file_id: id });
     expect(r.content).toContain('Introduction');
     expect(r.content).toContain('end of file');
@@ -148,7 +142,7 @@ describe('file tools', () => {
   it('cannot touch files outside the conversation', async () => {
     const scope = new Set<string>();
     const { deps, files } = memDeps(scope);
-    files.set('other', newFile({ id: 'other', name: 'secret.md', kind: 'upload', text: 'secret', by: 'upload' }));
+    files.set('other', newFile({ id: 'other', name: 'secret.md', origin: { kind: 'upload' }, text: 'secret', by: 'upload' }));
     await expect(run(deps, 'read_file', { file_id: 'other' })).rejects.toThrow(/使えません/);
     await expect(run(deps, 'append_file', { file_id: 'other', content: 'x' })).rejects.toThrow(/使えません/);
   });
@@ -284,55 +278,71 @@ describe('csv preview', () => {
 });
 
 describe('file storage and backups', () => {
-  it('stores files and round-trips them through export / import', { timeout: 30_000 }, async () => {
-    const f = newFile({ id: 'file-1', name: 'notes.md', kind: 'document', text: 'one', by: 'model', conversationId: 'c1' });
-    await putFile(f);
-    await setText(f, 'two', 'user');
-    expect(currentText((await getFile('file-1'))!)).toBe('two');
+  it('keeps texts apart from records, one previous text, and round-trips through export / import', { timeout: 30_000 }, async () => {
+    const f = newFile({ id: 'file-1', name: 'notes.md', origin: { kind: 'made' }, text: 'one', by: 'model', conversationId: 'c1' });
+    await createFile(f, 'one');
+    await setText('file-1', 'two', 'user');
+    // Appending keeps the text before the change as it was
+    await setText('file-1', 'two!', 'model', true);
+    const now = (await getFile('file-1'))!;
+    expect(now.preview).toBe('two!');
+    expect(now.previous?.by).toBe('model');
+    expect(await readText('file-1')).toBe('two!');
+    expect(await readText('file-1', 'previous')).toBe('one');
+    // Records carry no texts
+    expect(JSON.stringify(await db().files.get('file-1'))).not.toContain('"text"');
     const dump = await exportAll();
     expect((dump.files as { id: string }[] | undefined)?.map((x) => x.id)).toContain('file-1');
     await db().files.clear();
+    await db().fileTexts.clear();
+    resetCatalog();
     const r = await importAll(JSON.parse(JSON.stringify(dump)));
     expect(r.tables.files).toBe(1);
     const back = (await listFiles()).find((x) => x.id === 'file-1')!;
-    expect(currentText(back)).toBe('two');
-    expect(await previousText(back)).toBe('one');
+    expect(back.size).toBe(4);
+    expect(await readText('file-1')).toBe('two!');
+    expect(await readText('file-1', 'previous')).toBe('one');
     // Undo swaps the two texts, so pressing it again goes forward
-    const undone = await swapPrevious(back);
-    expect(currentText(undone)).toBe('one');
-    expect(await previousText(undone)).toBe('two');
+    await swapPrevious('file-1');
+    expect(await readText('file-1')).toBe('one');
+    expect(await readText('file-1', 'previous')).toBe('two!');
+    await deleteFiles(['file-1']);
+    expect(await db().fileTexts.where('fileId').equals('file-1').count()).toBe(0);
   });
-  it('keeps the previous text apart, and converts records in older shapes when read (encrypted too)', { timeout: 30_000 }, async () => {
+  it('converts records in older shapes as the catalog loads (encrypted too)', { timeout: 30_000 }, async () => {
     const key = await generateDataKey();
     setDataKey(key);
     try {
-      // A record as stored before v9: every version inside, sealed; only the newest two stay
-      const legacy = { id: 'old-1', name: 'old.md', mime: 'text/markdown', kind: 'document', createdAt: 1, updatedAt: 2, size: 3, versions: [{ v: 1, at: 1, text: 'zero', by: 'model' }, { v: 2, at: 2, text: 'first', by: 'model' }, { v: 3, at: 3, text: 'new', by: 'user' }] };
-      await db().files.put(await seal('files', legacy as never));
-      const f = (await getFile('old-1'))!;
-      expect(currentText(f)).toBe('new');
-      expect(await previousText(f)).toBe('first');
+      // Before v9: every version inside; only the newest two stay
+      const legacy = { id: 'old-1', name: 'old.md', mime: 'text/markdown', kind: 'upload', source: 'PDF から抽出', createdAt: 1, updatedAt: 2, size: 3, versions: [{ v: 1, at: 1, text: 'zero', by: 'model' }, { v: 2, at: 2, text: 'first', by: 'model' }, { v: 3, at: 3, text: 'new', by: 'user' }] };
+      // v9: the current version inside, a list of earlier ones, their texts as rows '<id>:<v>'
+      const v9 = { id: 'v9', name: 'v9.md', mime: 'text/markdown', kind: 'document', url: 'https://example.com/a', createdAt: 1, updatedAt: 2, size: 1, current: { v: 3, at: 3, text: 'c', by: 'user', note: 'x' }, history: [{ v: 1, at: 1, by: 'model' }, { v: 2, at: 2, by: 'model' }] };
+      // Then: the current text inside, the previous one in a row '<id>'
+      const v10 = { id: 'v10', name: 'v10.md', mime: 'text/markdown', kind: 'document', createdAt: 1, updatedAt: 2, size: 1, current: { at: 3, text: 'now', by: 'model' }, previous: { at: 2, by: 'user' } };
+      await db().files.bulkPut([await seal('files', legacy as never), await seal('files', v9 as never), await seal('files', v10 as never)]);
+      await db().fileVersions.bulkPut([
+        await seal('fileVersions', { id: 'v9:1', fileId: 'v9', v: 1, text: 'a' } as never),
+        await seal('fileVersions', { id: 'v9:2', fileId: 'v9', v: 2, text: 'b' } as never),
+        await seal('fileVersions', { id: 'v10', fileId: 'v10', text: 'before' } as never)
+      ]);
+      resetCatalog();
+      const old = (await getFile('old-1'))!;
+      expect(old.origin).toEqual({ kind: 'upload' });
+      expect(old.fromPdf).toBe(true);
+      expect(await readText('old-1')).toBe('new');
+      expect(await readText('old-1', 'previous')).toBe('first');
+      const g = (await getFile('v9'))!;
+      expect(g.current).toEqual({ at: 3, by: 'user' });
+      expect(g.origin).toEqual({ kind: 'web', url: 'https://example.com/a' });
+      expect(await readText('v9', 'previous')).toBe('b');
+      expect(await readText('v10')).toBe('now');
+      expect(await readText('v10', 'previous')).toBe('before');
+      // Written back in today's shape, encrypted; the old rows are gone
       const raw = await db().files.get('old-1');
       expect((raw as unknown as Record<string, unknown>).versions).toBeUndefined();
       expect(JSON.stringify(raw)).not.toContain('first');
-      const text = await db().fileVersions.get('old-1');
-      expect(text?.text).toBeUndefined();
-      expect((text as unknown as { enc?: unknown })?.enc).toBeDefined();
-      // A change keeps one previous text, never more
-      await setText(f, 'third', 'user');
-      expect(await db().fileVersions.where('fileId').equals('old-1').count()).toBe(1);
-      expect(await previousText((await getFile('old-1'))!)).toBe('new');
-      await deleteFiles(['old-1']);
-      expect(await db().fileVersions.where('fileId').equals('old-1').count()).toBe(0);
-
-      // A record from v9: the current version, a list of earlier ones, and their texts as rows '<id>:<v>'
-      const v9 = { id: 'v9', name: 'v9.md', mime: 'text/markdown', kind: 'document', createdAt: 1, updatedAt: 2, size: 1, current: { v: 3, at: 3, text: 'c', by: 'user', note: 'x' }, history: [{ v: 1, at: 1, by: 'model' }, { v: 2, at: 2, by: 'model' }] };
-      await db().files.put(await seal('files', v9 as never));
-      await db().fileVersions.bulkPut([await seal('fileVersions', { id: 'v9:1', fileId: 'v9', v: 1, text: 'a' } as never), await seal('fileVersions', { id: 'v9:2', fileId: 'v9', v: 2, text: 'b' } as never)]);
-      const g = (await getFile('v9'))!;
-      expect(g.current).toEqual({ at: 3, text: 'c', by: 'user' });
-      expect(await previousText(g)).toBe('b');
-      expect((await db().fileVersions.where('fileId').equals('v9').primaryKeys()) as string[]).toEqual(['v9']);
+      expect(await db().fileVersions.count()).toBe(0);
+      expect((await db().fileTexts.get('old-1:current'))?.text).toBeUndefined();
     } finally {
       setDataKey(null);
     }

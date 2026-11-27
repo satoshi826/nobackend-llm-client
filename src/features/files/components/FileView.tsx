@@ -1,7 +1,7 @@
 // A file in the main area: read, edit, undo the last change, download, print (to PDF), use in a chat
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { extOf } from '../../../lib/db/files';
+import { extOf } from '../../../lib/paths';
 import type { FileRecord } from '../../../lib/db/schema';
 import { conversations, openConversation, showChat } from '../../../state/conversations';
 import { showToast } from '../../../state/ui';
@@ -17,7 +17,7 @@ import { isProblem, type PageLog, type SandboxPage } from '../../../lib/sandbox/
 import { settings } from '../../../state/settings';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
-import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, fileList, getFile, imageList, pageOf, refreshFiles, refreshImages, renameFile, saveUserText, siteSignature, undoLastChange } from '../state';
+import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, fileList, getFile, imageList, pageOf, readText, refreshFiles, refreshImages, renameFile, saveUserText, siteSignature, undoLastChange } from '../state';
 import { FileIcon, formatChars, PathName, typeLabel } from './common';
 import { formatDateTime, formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
@@ -27,20 +27,31 @@ const byLabel = (by: string) => (BY_KEYS[by] ? t(BY_KEYS[by]) : by);
 
 export function FileView({ id = '' }: { id?: string }) {
   const [f, setF] = useState<FileRecord | null | undefined>(undefined);
+  // Its text, read with it (records carry no texts); the record's date tells whether it is the text read
+  const [text, setText] = useState<{ at: number; text: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
   const body = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    void getFile(id).then((x) => setF(x ?? null));
+    let alive = true;
+    void getFile(id).then(async (x) => {
+      const body = x ? await readText(x.id) : '';
+      if (!alive) return;
+      setF(x ?? null);
+      if (x) setText({ at: x.updatedAt, text: body });
+    });
+    return () => {
+      alive = false;
+    };
   }, [id, filesVersion.value]);
   useEffect(() => {
     setEditing(false);
     setRenaming(false);
   }, [id]);
 
-  if (f === undefined)
+  if (f === undefined || (f && text?.at !== f.updatedAt))
     return (
       <main class="grid flex-1 place-items-center text-sm text-muted">
         <Spinner class="size-5" />
@@ -59,7 +70,7 @@ export function FileView({ id = '' }: { id?: string }) {
       </main>
     );
 
-  const shown = f.current;
+  const shown = text!;
   const conv = f.conversationId ? conversations.value.find((c) => c.id === f.conversationId) : undefined;
   const ext = extOf(f.name);
 
@@ -173,7 +184,7 @@ export function FileView({ id = '' }: { id?: string }) {
           )}
           <MoreMenu
             onCopy={() => void copyText(shown.text, t('file.copied'))}
-            onDownload={() => downloadFile(f, shown)}
+            onDownload={() => void downloadFile(f, shown.text)}
             onPrint={print}
             source={conv ? { title: conv.title, open: () => void openConversation(conv.id) } : null}
             onDelete={async () => {
@@ -182,16 +193,16 @@ export function FileView({ id = '' }: { id?: string }) {
           />
         </div>
       </PageHeader>
-      {f.url && (
+      {f.origin.kind === 'web' && (
         <p class="mx-3 mt-2 flex min-w-0 items-center gap-1.5 text-xs text-muted md:ml-1">
           <Icon name="link" class="size-3.5 shrink-0" />
           {t('fetch.source')}:
-          <a href={f.url} target="_blank" rel="noopener noreferrer nofollow" class="truncate underline hover:text-ink">
-            {f.url}
+          <a href={f.origin.url} target="_blank" rel="noopener noreferrer nofollow" class="truncate underline hover:text-ink">
+            {f.origin.url}
           </a>
         </p>
       )}
-      {f.source?.startsWith('PDF') && <p class="border-b border-line px-4 py-1.5 text-xs text-muted">{t('file.pdfNote')}</p>}
+      {f.fromPdf && <p class="border-b border-line px-4 py-1.5 text-xs text-muted">{t('file.pdfNote')}</p>}
       {editing ? (
         <div class="flex min-h-0 flex-1 flex-col gap-2 p-3">
           <textarea

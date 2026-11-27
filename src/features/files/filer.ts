@@ -1,33 +1,33 @@
 // The file manager's items: files and images in one list, with filtering and sorting (pure)
-import { currentText, extOf } from '../../lib/db/files';
-import { isInside } from '../../lib/db/paths';
-import type { FileRecord, ImageSource } from '../../lib/db/schema';
-import type { ImageListing } from '../../lib/db/images';
+import { extOf, isInside } from '../../lib/paths';
+import type { FileRecord, Origin } from '../../lib/db/schema';
+import type { ImageEntry } from '../../lib/db/catalog';
 import type { FilerOrder, FilerSort, FilerView } from './state';
 import { locale } from '../../lib/i18n';
 import { t } from './messages';
 
-export type ImageMeta = ImageListing;
+/** Made in a chat ('document'), or brought in by the user ('upload': from the device or the web) */
+export type ItemKind = 'document' | 'upload';
+const kindOf = (o: Origin): ItemKind => (o.kind === 'made' ? 'document' : 'upload');
 
-/** kind: where it came from — made by the model ('document'), or brought in by the user ('upload': device or web) */
 export type FilerItem =
-  | { type: 'file'; key: string; id: string; name: string; kind: FileRecord['kind']; ext: string; size: number; updatedAt: number; conversationId?: string; file: FileRecord }
-  | { type: 'image'; key: string; id: string; name: string; kind: FileRecord['kind']; ext: string; size: number; updatedAt: number; conversationId?: string; messageId?: string; source?: ImageSource; video: boolean };
+  | { type: 'file'; key: string; id: string; name: string; kind: ItemKind; ext: string; size: number; updatedAt: number; conversationId?: string; file: FileRecord }
+  | { type: 'image'; key: string; id: string; name: string; kind: ItemKind; ext: string; size: number; updatedAt: number; conversationId?: string; messageId?: string; origin: Origin; video: boolean };
 
 /** Stored images and videos (videos are kept with the images) */
 const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/avif': 'avif', 'video/mp4': 'mp4', 'video/webm': 'webm' };
 
-export function toItems(files: FileRecord[], images: ImageMeta[], convTitle: (id: string) => string | undefined): FilerItem[] {
+export function toItems(files: FileRecord[], images: ImageEntry[], convTitle: (id: string) => string | undefined): FilerItem[] {
   return [
-    ...files.map((f): FilerItem => ({ type: 'file', key: `f:${f.id}`, id: f.id, name: f.name, kind: f.kind, ext: f.source?.startsWith('PDF') ? 'pdf' : extOf(f.name) || 'txt', size: f.size, updatedAt: f.updatedAt, conversationId: f.conversationId, file: f })),
+    ...files.map((f): FilerItem => ({ type: 'file', key: `f:${f.id}`, id: f.id, name: f.name, kind: kindOf(f.origin), ext: f.fromPdf ? 'pdf' : extOf(f.name) || 'txt', size: f.size, updatedAt: f.updatedAt, conversationId: f.conversationId, file: f })),
     ...images.map((im): FilerItem => {
       const ext = IMAGE_EXT[im.mime] ?? 'png';
       const d = new Date(im.createdAt);
       const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
       const video = im.mime.startsWith('video/');
       // A made image has no path: its shown name is not one either, so a '/' in the chat's title makes no folder
-      const name = im.info?.name ?? `${((im.conversationId && convTitle(im.conversationId)) || t(video ? 'videoName' : 'imageName')).replace(/\//g, '／')} ${stamp}.${ext}`;
-      return { type: 'image', key: `i:${im.id}`, id: im.id, name, kind: im.info && im.info.source.kind !== 'made' ? 'upload' : 'document', ext, size: im.size, updatedAt: im.createdAt, conversationId: im.conversationId, messageId: im.messageId, source: im.info?.source, video };
+      const name = im.path ?? `${((im.conversationId && convTitle(im.conversationId)) || t(video ? 'videoName' : 'imageName')).replace(/\//g, '／')} ${stamp}.${ext}`;
+      return { type: 'image', key: `i:${im.id}`, id: im.id, name, kind: kindOf(im.origin), ext, size: im.size, updatedAt: im.createdAt, conversationId: im.conversationId, messageId: im.messageId, origin: im.origin, video };
     })
   ];
 }
@@ -45,24 +45,21 @@ export function inView(it: FilerItem, view: FilerView): boolean {
   }
 }
 
-// Lowercased text of each file record for search (records are replaced when they change, so the object is the key):
-// typing in the search box does not lowercase every file again on each keystroke
-const lowerText = new WeakMap<FileRecord, string>();
-function searchText(f: FileRecord): string {
-  let s = lowerText.get(f);
-  if (s === undefined) lowerText.set(f, (s = currentText(f).toLowerCase()));
-  return s;
-}
-
-/** direct: only the items right inside the folder (browsing it), not those in its folders */
-export function filterItems(items: FilerItem[], o: { view: FilerView; conversationId: string | null; folder?: string | null; direct?: boolean; query: string }): FilerItem[] {
+/**
+ * direct: only the items right inside the folder (browsing it), not those in its folders. A query matches names and
+ * the start of texts at once, and the whole texts of the files in `contentHits` (searched apart: texts are not in lists)
+ */
+export function filterItems(
+  items: FilerItem[],
+  o: { view: FilerView; conversationId: string | null; folder?: string | null; direct?: boolean; query: string; contentHits?: Set<string> | null }
+): FilerItem[] {
   const q = o.query.trim().toLowerCase();
   return items.filter(
     (it) =>
       inView(it, o.view) &&
       (!o.conversationId || it.conversationId === o.conversationId) &&
       (o.direct ? directlyIn(it, o.folder ?? '') : !o.folder || isInside(it.name, o.folder)) &&
-      (!q || it.name.toLowerCase().includes(q) || (it.type === 'file' && searchText(it.file).includes(q)))
+      (!q || it.name.toLowerCase().includes(q) || (it.type === 'file' && (it.file.preview.toLowerCase().includes(q) || !!o.contentHits?.has(it.id))))
   );
 }
 

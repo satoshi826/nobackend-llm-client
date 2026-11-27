@@ -6,7 +6,7 @@ import { setDataKey } from '../../lib/db/sealed';
 import { generateDataKey } from '../../lib/crypto/data';
 import { db, type ImageParams, type MessageRecord } from '../../lib/db/schema';
 import * as repo from '../../lib/db/repo';
-import { getFile, newFile, putFile } from '../../lib/db/files';
+import { getFile, newFile, createFile } from '../../lib/db/files';
 import { onStoreChange } from '../../lib/db/changes';
 import { buildRequestMessages, registerMessageTransform } from '../../lib/chat/request';
 import { imageNote } from './transform';
@@ -111,17 +111,18 @@ describe('image storage', () => {
   it('keeps a brought-in image\'s name and origin, encrypted with a passphrase', async () => {
     const key = await generateDataKey();
     setDataKey(key);
-    const info = { name: 'cat.png', source: { kind: 'web' as const, url: 'https://upload.example/cat.png' } };
+    const info = { path: 'cat.png', origin: { kind: 'web' as const, url: 'https://upload.example/cat.png' } };
     await putImage({ id: 'w1', mime: 'image/png', info }, new Blob(['png'], { type: 'image/png' }), false);
     const raw = await db().blobs.get('w1');
     expect(raw?.info).toBeUndefined();
     expect(raw?.infoEnc).toBeDefined();
     expect(raw?.conversationId).toBeUndefined();
-    expect((await listImages()).find((i) => i.id === 'w1')?.info).toEqual(info);
+    const listed = () => listImages().then((l) => l.find((i) => i.id === 'w1'));
+    expect([(await listed())?.path, (await listed())?.origin]).toEqual([info.path, info.origin]);
     const ex = await exportImages();
     await db().blobs.clear();
     expect(await importImages(ex)).toBe(1);
-    expect((await listImages()).find((i) => i.id === 'w1')?.info).toEqual(info);
+    expect([(await listed())?.path, (await listed())?.origin]).toEqual([info.path, info.origin]);
   });
   it('keeps saved images when their conversation is deleted', async () => {
     await putImage(meta('k1'), new Blob(['kept']), false);
@@ -131,8 +132,8 @@ describe('image storage', () => {
   it('deletes a conversation’s images and files with it when asked, and counts them first', async () => {
     await repo.putConversation({ id: 'c2', title: 'c2', createdAt: 1, updatedAt: 1, currentLeafId: null, providerId: 'p', modelId: 'm', systemPrompt: '', webSearch: 'off', pinned: 0, tags: [] });
     await putImage({ ...meta('d1'), conversationId: 'c2' }, new Blob(['x']), false);
-    await putFile(newFile({ id: 'f1', name: 'a.md', kind: 'document', text: 'hi', by: 'model', conversationId: 'c2' }), false);
-    await putFile(newFile({ id: 'f2', name: 'b.md', kind: 'document', text: 'other', by: 'user' }), false);
+    await createFile(newFile({ id: 'f1', name: 'a.md', origin: { kind: 'made' }, text: 'hi', by: 'model', conversationId: 'c2' }), 'hi');
+    await createFile(newFile({ id: 'f2', name: 'b.md', origin: { kind: 'made' }, text: 'other', by: 'user' }), 'other');
     expect(await repo.countMadeIn('c2')).toBe(2);
     // Lists of images and files hear about it, whichever code deleted them
     const heard: string[] = [];

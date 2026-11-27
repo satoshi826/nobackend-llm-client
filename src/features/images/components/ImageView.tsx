@@ -4,7 +4,7 @@ import { useDialog } from '../../../components/dialog';
 import type { ImageParams, MessageRecord } from '../../../lib/db/schema';
 import type { Part } from '../../../lib/providers/types';
 import { getImage, getImageThumb } from '../../../lib/db/images';
-import { baseName } from '../../../lib/db/files';
+import { baseName } from '../../../lib/paths';
 import { conversations, currentId, messages, openConversation, startNewChat } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
 import { modal, showToast } from '../../../state/ui';

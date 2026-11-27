@@ -1,10 +1,9 @@
 // Files inside the chat: the card under a file tool call, and the files attached to a user message
 import { useEffect, useState } from 'preact/hooks';
 import type { MessageRecord } from '../../../lib/db/schema';
-import { getFile } from '../../../lib/db/files';
 import type { Part } from '../../../lib/providers/types';
 import { Icon } from '../../../components/ui';
-import { openFile } from '../state';
+import { getFile, openFile } from '../state';
 import { filesVersion } from '../../../state/stored';
 import type { FileToolDetails } from '../tools';
 import { formatChars } from './common';

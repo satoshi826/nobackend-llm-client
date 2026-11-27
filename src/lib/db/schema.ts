@@ -142,48 +142,58 @@ export interface Attachment {
   totalChars: number;
 }
 
-/** A file's text as saved at one time */
-export interface FileVersion {
+/** Where a file or an image came from: made in a chat (by a model, or a page saving its data), the user's device, or the web */
+export type Origin = { kind: 'made' } | { kind: 'upload' } | { kind: 'web'; url: string };
+
+/** Who saved a file's text: a model, the user (editing, or a page of theirs saving its data), or an upload */
+export type SavedBy = 'model' | 'user' | 'upload';
+
+/** When and by whom a text was saved */
+export interface TextStamp {
   at: number;
-  text: string;
-  /** Who saved it */
-  by: 'model' | 'user' | 'upload';
-}
-
-/** When and by whom a text was saved, without the text */
-export type FileVersionInfo = Omit<FileVersion, 'text'>;
-
-/** A file's text before its last change (one per file), kept apart so lists and edits never load it */
-export interface FileVersionText {
-  /** The file's id */
-  id: string;
-  fileId: string;
-  text: string;
+  by: SavedBy;
 }
 
 /**
- * A text file: documents the model wrote (kind 'document') and files the user brought in (kind 'upload').
- * Images stay in the blobs table. name and texts are encrypted with a passphrase.
+ * A text file, without its text (lists never load texts): documents a model wrote, files the user brought in, data a
+ * page saved. Its name is its path (lib/paths.ts). With a passphrase name, origin and preview are encrypted.
  */
 export interface FileRecord {
   id: string;
   name: string;
   mime: string;
-  kind: 'document' | 'upload';
+  origin: Origin;
+  /** The text was extracted from a PDF (an upload or a fetch) */
+  fromPdf?: boolean;
   /** Conversation it was made or attached in (the file outlives the conversation) */
   conversationId?: string;
   createdAt: number;
   updatedAt: number;
   /** Characters in the current text */
   size: number;
-  /** For uploads: where the text came from (e.g. "PDF から抽出") */
-  source?: string;
-  /** The web address it was fetched from (on the user's request) */
-  url?: string;
-  /** The current text */
-  current: FileVersion;
-  /** The text before the last change, for undo (its text: FileVersionText) */
-  previous?: FileVersionInfo;
+  /** The current text's first characters, for cards and lists */
+  preview: string;
+  current: TextStamp;
+  /** The text before the last change, kept for undo */
+  previous?: TextStamp;
+}
+
+/** Characters of a file's text kept in its record, for cards and lists */
+export const PREVIEW_CHARS = 300;
+
+/** A file's text: its current one, and the one before its last change. Encrypted with a passphrase */
+export interface FileText {
+  /** `<fileId>:current` or `<fileId>:previous` */
+  id: string;
+  fileId: string;
+  text: string;
+}
+
+/** A row of the table before fileTexts (read only while stored data is converted; goes before release) */
+export interface FileVersionText {
+  id: string;
+  fileId: string;
+  text: string;
 }
 
 /** Skill (SKILL.md-compatible work instructions) */
@@ -226,14 +236,13 @@ export interface SealedBytes {
   data: Blob;
 }
 
-/** Where an image came from when it was not made in a chat: the user's device, or a web address fetched on request */
-/** Where an image came from: the user's device, the web, or a chat that made it (named when it was moved into a folder) */
-export type ImageSource = { kind: 'upload' } | { kind: 'web'; url: string } | { kind: 'made' };
-
-/** Name (its path) and origin of an image: one brought in by the user, or one made in a chat once it was moved (others have none) */
+/**
+ * An image's path and origin. Brought-in images have both; one made in a chat has none until it is moved into a
+ * folder (then it has a path, and origin 'made')
+ */
 export interface ImageInfo {
-  name: string;
-  source: ImageSource;
+  path?: string;
+  origin: Origin;
 }
 
 /**
@@ -270,6 +279,7 @@ export class AppDB extends Dexie {
   usage!: Table<UsageRecord, string>;
   files!: Table<FileRecord, string>;
   fileVersions!: Table<FileVersionText, string>;
+  fileTexts!: Table<FileText, string>;
 
   constructor(name = 'nobackend-llm-client') {
     super(name);
@@ -299,6 +309,9 @@ export class AppDB extends Dexie {
     this.version(9).stores({ fileVersions: 'id, fileId' });
     // v10: conversations lose the folderId index (a field never used; folders now hold files, see workDir)
     this.version(10).stores({ conversations: 'id, updatedAt, pinned, *tags' });
+    // v11: file texts in their own table (a file record is what lists show); the kind index goes (origin replaced it).
+    // Stored records are converted once after unlock (lib/db/convert.ts), as they are encrypted
+    this.version(11).stores({ files: 'id, updatedAt, conversationId', fileTexts: 'id, fileId' });
     this.version(8)
       .stores({ blobs: 'id, conversationId, createdAt' })
       .upgrade((tx) =>

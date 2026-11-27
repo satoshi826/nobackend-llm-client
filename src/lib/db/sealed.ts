@@ -27,7 +27,8 @@ export const SECRET_FIELDS = {
   messages: ['parts', 'vendorState', 'skills', 'compaction', 'error', 'suggestions', 'imageRequest', 'image', 'attachments'],
   prompts: ['name', 'content'],
   skills: ['description', 'body'],
-  files: ['name', 'current', 'previous', 'source', 'url'],
+  files: ['name', 'origin', 'preview'],
+  fileTexts: ['text'],
   fileVersions: ['text']
 } as const;
 

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { cleanFileName, cleanFolderName } from './files';
-import { freeFolder, freePath, isInside, pathFree, pathKey } from './paths';
+import { cleanFileName, cleanFolderName, freeFolder, freePath, isInside, pathFree, pathKey, spaceOf } from './paths';
 
-const taken = [
+const owners = [
   { id: '1', path: 'Todo/index.html' },
   { id: '2', path: 'notes.md' },
   { id: '3', path: 'pics/cat.png' }
 ];
+const taken = spaceOf(owners);
 
 describe('paths', () => {
   it('cleans names into NFC, so a name from a Mac disk matches the one a model writes', () => {
@@ -32,10 +32,17 @@ describe('paths', () => {
 
   it('numbers a taken path or folder', () => {
     expect(freePath('notes.md', taken)).toBe('notes (2).md');
-    expect(freePath('Todo/index.html', [...taken, { id: '4', path: 'todo/index (2).html' }])).toBe('Todo/index (3).html');
-    expect(freePath('README', [{ id: '1', path: 'readme' }])).toBe('README (2)');
+    expect(freePath('Todo/index.html', spaceOf([...owners, { id: '4', path: 'todo/index (2).html' }]))).toBe('Todo/index (3).html');
+    expect(freePath('README', spaceOf([{ id: '1', path: 'readme' }]))).toBe('README (2)');
     expect(freeFolder('todo/', taken)).toBe('todo (2)/');
     expect(freeFolder('notes.md/', taken)).toBe('notes.md (2)/');
     expect(freeFolder('fresh/', taken)).toBe('fresh/');
+    // A folder another chat works in is not free even while empty
+    expect(freeFolder('fresh/', taken, (k) => k === 'fresh/')).toBe('fresh (2)/');
+  });
+
+  it('numbers the folder when one of a path\'s folders is a file, instead of trying names forever', () => {
+    expect(freePath('notes.md/y.md', taken)).toBe('notes.md (2)/y.md');
+    expect(freePath('notes.md/sub/y.md', taken)).toBe('notes.md (2)/sub/y.md');
   });
 });

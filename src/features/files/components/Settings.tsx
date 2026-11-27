@@ -1,9 +1,8 @@
 // Settings → ファイル
 import { useEffect, useState } from 'preact/hooks';
-import { fileUsage } from '../../../lib/db/files';
 import { PermissionSelect, Section, Toggle } from '../../../components/settings-ui';
 import { FILE_TOOLS } from '../tools';
-import { fileSettings } from '../state';
+import { fileSettings, fileUsage } from '../state';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 

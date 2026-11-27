@@ -16,7 +16,6 @@ export { conversationFile, openFile, openFiler } from './state';
 /** Text of a PDF (or other attachable file), for reading pages fetched from the web */
 export { extractText } from './extract';
 
-// The fetch page, while the user is asked about an address the model wants to fetch (fetch_file)
 registerSidebarTab({ id: 'files', label: () => t('files'), icon: 'files', Panel: FilesPanel, onSelect: () => openFiler() });
 // The file manager and the file screen load their code when first opened
 registerMainView({ kind: 'files', Component: lazyComponent(() => import('./components/Filer').then((m) => m.Filer)) });

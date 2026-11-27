@@ -8,7 +8,7 @@ import { vaultIsolated, VAULT_ORIGIN } from '../../lib/vault/client';
 import { getPreset } from '../../lib/providers/registry';
 import { KeyPanel, VaultSecurityPanel } from '../KeyPanel';
 import { Icon, Select, cx, Checkbox } from '../ui';
-import { Section, Toggle, } from '../settings-ui';
+import { Section, Toggle } from '../settings-ui';
 import { AccountRow } from './AccountRow';
 import { t } from './messages';
 import { sentences } from '../messages';

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { parseSkillMd, serializeSkillMd, skillCatalog, unlockedTools, validateSkill, withAttachedSkills, withSkillCatalog } from './skill';
+import { parseSkillMd, serializeSkillMd, skillCatalog, unlockedTools, validateSkill, withAttachedSkills } from './skill';
 import { makeSaveSkillTool, makeSkillTool } from '../../features/skills/tools';
 import { lineDiff } from './diff';
 import { buildRequestMessages, registerMessageTransform } from '../chat/request';
@@ -48,8 +48,6 @@ describe('skills sent to the model', () => {
     const cat = skillCatalog([{ name: 'a', description: 'does A\nwell' }]);
     expect(cat).toContain('- a: does A well');
     expect(cat).toContain('load_skill');
-    expect(withSkillCatalog('', [])).toBe('');
-    expect(withSkillCatalog('be nice', [{ name: 'a', description: 'A' }])).toMatch(/^be nice\n\n## Skills\n/);
   });
   it('attached skills are prepended to the user message', () => {
     const t = withAttachedSkills('please review', [{ name: 'review', body: 'Check bugs' }]);

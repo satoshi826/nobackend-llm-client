@@ -1,7 +1,6 @@
 // Developer view of one reply's requests: the body sent to the provider at each step, with the system prompt and the
 // tools picked out of it (each provider puts them in its own place)
-import { useState } from 'preact/hooks';
-import { sentRequestsOf, sentRequestsVersion, type SentRequest } from '../state/sent-requests';
+import { sentRequestsOf, type SentRequest } from '../state/sent-requests';
 import { showToast } from '../state/ui';
 import { Button, Disclosure, Icon } from './ui';
 import { formatNumber } from '../lib/i18n';
@@ -57,21 +56,13 @@ function Step({ r, n }: { r: SentRequest; n: number }) {
 
 /** Under a reply in developer mode: the requests sent for it */
 export function RequestView({ replyId }: { replyId: string }) {
-  void sentRequestsVersion.value;
   const list = sentRequestsOf(replyId);
   return (
     <div class="mt-2 space-y-2 rounded-xl border border-line bg-glass p-3 text-xs text-muted">
       <p>{t('req.note')}</p>
       {list.map((r, i) => (
-        <Step key={r.at + i} r={r} n={i + 1} />
+        <Step key={i} r={r} n={i + 1} />
       ))}
     </div>
   );
-}
-
-/** The developer button on a reply: shows its requests (only when some were recorded in this session) */
-export function useRequestToggle(replyId: string): { available: boolean; open: boolean; toggle(): void } {
-  const [open, setOpen] = useState(false);
-  void sentRequestsVersion.value;
-  return { available: sentRequestsOf(replyId).length > 0, open, toggle: () => setOpen(!open) };
 }

@@ -373,10 +373,6 @@ const server = http.createServer(async (req, res) => {
     console.log(`jina ${target} (${req.headers.authorization ? 'with a key' : 'no key'})`);
     return json(res, 200, { code: 200, data: { title: 'モック記事', url: target, content: `# モック記事\n\n${target} の本文です。`.padEnd(400, '。') } });
   }
-  if (path === '/api_keys/rate_limits') {
-    if (!authed(req)) return json(res, 401, { error: 'Authentication failed' });
-    return json(res, 200, { data: { apiTier: { id: 'paid' }, balances: { USD: 12.34 } } });
-  }
   if (path === '/chat/completions' && req.method === 'POST') {
     if (!authed(req)) return json(res, 401, { error: 'Authentication failed' });
     const body = await readBody(req);
@@ -396,15 +392,19 @@ const server = http.createServer(async (req, res) => {
       chunk(res, { id, object: 'chat.completion.chunk', model: body.model, choices: [{ index: 0, delta, finish_reason: null }], ...extra });
       await sleep(25);
     };
+    /** Stream ans as the answer, then the usage (and cost in USD, when given) */
+    const finishText = async (ans, usage, cost) => {
+      for (const p of chunked(ans)) await send({ content: p });
+      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+      if (usage) chunk(res, { id, choices: [], usage, ...(cost !== undefined ? { cost: { usd: cost, diem: cost } } : {}) });
+      res.write('data: [DONE]\n\n');
+      res.end();
+    };
 
     // ---- Reply-suggestion requests (detected by a phrase of the system prompt in ja / en / zh) get a JSON array ----
     if (['次に送りそうな', 'likely to send next', '接下来可能发送'].some((k) => String(sys ?? '').includes(k))) {
       const ans = JSON.stringify(['もっと詳しく教えて', '具体例を見せて', '要点を3行でまとめて', 'ほかの方法はある？', '注意点は？'].slice(0, 3));
-      for (const p of chunked(ans)) await send({ content: p });
-      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
-      chunk(res, { id, choices: [], usage: { prompt_tokens: 120, completion_tokens: 30 }, cost: { usd: COST / 4, diem: COST / 4 } });
-      res.write('data: [DONE]\n\n');
-      return res.end();
+      return finishText(ans, { prompt_tokens: 120, completion_tokens: 30 }, COST / 4);
     }
 
     // ---- Tool-call mock ----
@@ -439,11 +439,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (lastMsg?.role === 'tool' && lastCallName === 'generate_image') {
       const ans = '窓辺の猫の絵を描きました。';
-      for (const p of chunked(ans)) await send({ content: p });
-      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
-      chunk(res, { id, choices: [], usage: { prompt_tokens: 200, completion_tokens: ans.length } });
-      res.write('data: [DONE]\n\n');
-      return res.end();
+      return finishText(ans, { prompt_tokens: 200, completion_tokens: ans.length });
     }
     // File tools: "レポートにまとめて" creates a Markdown file, "追記して" appends to the file listed in the
     // system prompt, "結論を直して" edits it, "読んで" (with a file listed) reads it
@@ -481,29 +477,17 @@ const server = http.createServer(async (req, res) => {
     }
     if (lastMsg?.role === 'tool' && ['create_file', 'append_file', 'edit_file', 'read_file'].includes(lastCallName)) {
       const ans = lastCallName === 'read_file' ? `読みました（${String(lastMsg.content ?? '').length} 文字）。` : `ファイルに保存しました。${String(lastMsg.content ?? '').slice(0, 60)}`;
-      for (const p of chunked(ans)) await send({ content: p });
-      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
-      chunk(res, { id, choices: [], usage: { prompt_tokens: 300, completion_tokens: ans.length }, cost: { usd: COST, diem: COST } });
-      res.write('data: [DONE]\n\n');
-      return res.end();
+      return finishText(ans, { prompt_tokens: 300, completion_tokens: ans.length }, COST);
     }
     // Attached files: acknowledge what arrived
     const att = [...String(last).matchAll(/<file name="([^"]+)" id="[^"]+" version="\d+">\n([\s\S]*?)\n<\/file>/g)];
     if (att.length && lastMsg?.role === 'user') {
       const ans = att.map((m) => `添付「${m[1]}」を受け取りました（${m[2].length} 文字）。冒頭: ${m[2].slice(0, 40).replace(/\n/g, ' ')}`).join('\n\n');
-      for (const p of chunked(ans)) await send({ content: p });
-      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
-      chunk(res, { id, choices: [], usage: { prompt_tokens: 400, completion_tokens: ans.length }, cost: { usd: COST, diem: COST } });
-      res.write('data: [DONE]\n\n');
-      return res.end();
+      return finishText(ans, { prompt_tokens: 400, completion_tokens: ans.length }, COST);
     }
     if (lastMsg?.role === 'tool' && lastCallName === 'save_skill') {
       const ans = `結果: ${String(lastMsg.content ?? '').slice(0, 80)}`;
-      for (const p of chunked(ans)) await send({ content: p });
-      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
-      chunk(res, { id, choices: [], usage: { prompt_tokens: 300, completion_tokens: ans.length }, cost: { usd: COST, diem: COST } });
-      res.write('data: [DONE]\n\n');
-      return res.end();
+      return finishText(ans, { prompt_tokens: 300, completion_tokens: ans.length }, COST);
     }
     // If load_skill is passed and the user wrote "スキル", load the first skill in the list
     if (toolNames.includes('load_skill') && lastMsg?.role === 'user' && last.includes('スキル')) {
@@ -516,20 +500,13 @@ const server = http.createServer(async (req, res) => {
     if (lastMsg?.role === 'tool' && lastCall === 'load_skill') {
       const out = String(lastMsg.content ?? '');
       const ans = `スキルの指示（${out.length} 文字）を読み込みました。\n\n> ${out.split('\n')[1] ?? ''}\n\nこの手順に従って回答します。`;
-      for (const p of chunked(ans)) await send({ content: p });
-      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
-      chunk(res, { id, choices: [], usage: { prompt_tokens: 300, completion_tokens: ans.length }, cost: { usd: COST, diem: COST } });
-      res.write('data: [DONE]\n\n');
-      return res.end();
+      return finishText(ans, { prompt_tokens: 300, completion_tokens: ans.length }, COST);
     }
     // The page reader (fetch_url's separate call): answers from the page it was given
     if (String(sys ?? '').startsWith('You read one web page')) {
       const page = /<page>\n([\s\S]*?)\n<\/page>/.exec(userText)?.[1] ?? '';
       const ans = `抜き出し（モック）: ページは ${page.length} 文字。冒頭: ${page.slice(0, 40).replace(/\s+/g, ' ')}`;
-      for (const p of chunked(ans)) await send({ content: p });
-      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
-      res.write('data: [DONE]\n\n');
-      return res.end();
+      return finishText(ans);
     }
     // "ページを読んで": read a page straight away (fetch_url, no search first)
     if (toolNames.includes('fetch_url') && lastMsg?.role === 'user' && userText.includes('ページを読んで')) {
@@ -547,11 +524,7 @@ const server = http.createServer(async (req, res) => {
       }
       const toolOut = msgs.filter((m) => m.role === 'tool').map((m) => m.content).join('\n');
       const ans = `検索結果をもとに回答します。\n\n- 1 件目の記事によると、例示用のドメインが存在します [1]。\n- 2 件目も参考になります [2]。\n\n（ツール結果 ${toolOut.length} 文字を受け取りました。${toolOut.includes('信頼できない') ? '注意書き付き。' : ''}）`;
-      for (const p of chunked(ans)) await send({ content: p });
-      chunk(res, { id, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
-      chunk(res, { id, choices: [], usage: { prompt_tokens: 400, completion_tokens: ans.length, prompt_tokens_details: { cached_tokens: 180 } }, cost: { usd: COST, diem: COST } });
-      res.write('data: [DONE]\n\n');
-      return res.end();
+      return finishText(ans, { prompt_tokens: 400, completion_tokens: ans.length, prompt_tokens_details: { cached_tokens: 180 } }, COST);
     }
 
     if (vp.enable_web_search && vp.enable_web_search !== 'off' && vp.include_search_results_in_stream) {

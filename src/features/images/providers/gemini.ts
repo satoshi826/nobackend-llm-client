@@ -1,17 +1,16 @@
 // Gemini image models (generateContent with responseModalities IMAGE).
 // The model list needs the key (the Gemini models list, filtered to image models). One image per request.
-// Prices are a dated table (the API lists none); unknown models show "費用不明".
+// Prices are a table (the API lists none); unknown models show "費用不明".
 // Editing sends the image (inline, base64) with the instruction to the same generateContent.
-import type { ProviderConfig, Transport } from '../../../lib/providers/types';
+import type { ProviderConfig } from '../../../lib/providers/types';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { ImageApiError, blobToBase64, jsonPost, perImage, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { ImageApiError, aspectAndTier, blobToBase64, fetchModelList, jsonPost, perImage, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const ASPECTS = ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '16:9', '9:16', '21:9'];
-const AS_OF = '2026-11';
 /** USD per image (Google's price list; 1K and 2K cost the same on Gemini 3 Pro Image) */
 const PRICES: { match: RegExp; generation?: number; resolutions?: Record<string, number> }[] = [
   { match: /^gemini-2\.5-flash-image/, generation: 0.039 },
@@ -38,7 +37,7 @@ export function mapGeminiImageModel(raw: any, providerId = 'gemini'): ImageModel
       defaultSize: sized(id) ? '1:1 1K' : '1:1',
       tierLabel: 'resolution'
     },
-    pricing: price ? { generation: price.generation, source: 'table', asOf: AS_OF } : {},
+    pricing: price ? { generation: price.generation } : {},
     // An image and an instruction in one request edits it
     edits: 'also',
     options: { seed: true, negativePrompt: false, styles: false, enhance: false }
@@ -47,9 +46,7 @@ export function mapGeminiImageModel(raw: any, providerId = 'gemini'): ImageModel
 
 export function buildGeminiImageBody(p: ImageParams, seed?: number, m?: ImageModelInfo): Record<string, unknown> {
   const imageConfig: Record<string, unknown> = {};
-  const s = sizeOf(m, p);
-  const aspect = s?.aspect ?? p.aspectRatio;
-  const tier = s?.tier ?? p.resolution;
+  const { aspect, tier } = aspectAndTier(m, p);
   if (aspect) imageConfig.aspectRatio = aspect;
   if (tier && sized(p.model)) imageConfig.imageSize = tier;
   return {
@@ -72,24 +69,18 @@ async function imagesOf(res: Response): Promise<Blob[]> {
 
 const contentUrl = (cfg: ProviderConfig, model: string) => joinUrl(cfg.baseUrl, `models/${encodeURIComponent(model)}:generateContent`);
 
-async function generate(p: ImageParams, m: ImageModelInfo | undefined, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
-  const results = await perImage(p.variants, async (i) => imagesOf(await sendImageRequest(transport, contentUrl(cfg, p.model), jsonPost(buildGeminiImageBody(p, p.seed !== undefined ? p.seed + i : undefined, m), signal), auth)));
-  const images = results.flat();
-  if (!images.length) throw new ImageApiError({ kind: 'bad-request', message: t('err.noImage') });
-  return { images };
-}
-
 export const geminiImageProvider: ImageProvider = {
   id: 'gemini',
   label: 'Gemini',
   account: 'gemini',
   keyedList: true,
-  async listModels(cfg, transport, auth) {
-    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'models?pageSize=200'), { method: 'GET', headers: { Accept: 'application/json' } }, auth);
-    const data = await res.json();
-    return (Array.isArray(data?.models) ? data.models : []).map((r: unknown) => mapGeminiImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
+  listModels: (cfg, transport, auth) => fetchModelList(transport, joinUrl(cfg.baseUrl, 'models?pageSize=200'), auth, (r) => mapGeminiImageModel(r, cfg.id), (data) => data?.models),
+  async generate(p, m, c) {
+    const results = await perImage(p.variants, async (i) => imagesOf(await sendImageRequest(c.transport, contentUrl(c.config, p.model), jsonPost(buildGeminiImageBody(p, p.seed !== undefined ? p.seed + i : undefined, m), c.signal), c.auth)));
+    const images = results.flat();
+    if (!images.length) throw new ImageApiError({ kind: 'bad-request', message: t('err.noImage') });
+    return { images };
   },
-  generate: (p, m, c) => generate(p, m, c.config, c.transport, c.auth, c.signal),
   async edit(source, p, c) {
     const [image] = await imagesOf(await sendImageRequest(c.transport, contentUrl(c.config, p.model), jsonPost(buildGeminiEditBody(p.prompt, source.type || 'image/png', await blobToBase64(source)), c.signal), c.auth));
     if (!image) throw new ImageApiError({ kind: 'bad-request', message: t('err.noImage') });

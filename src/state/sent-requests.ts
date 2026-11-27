@@ -5,7 +5,6 @@ import { signal } from '@preact/signals';
 import type { Transport } from '../lib/providers/types';
 
 export interface SentRequest {
-  at: number;
   url: string;
   /** The JSON body as sent (parsed), or the raw text when it is not JSON */
   body: unknown;
@@ -13,8 +12,8 @@ export interface SentRequest {
 
 const MAX_REPLIES = 20;
 const byReply = new Map<string, SentRequest[]>();
-/** Bumped on every recorded request (views re-read on it) */
-export const sentRequestsVersion = signal(0);
+/** Bumped on every recorded request, so readers of sentRequestsOf re-read */
+const version = signal(0);
 
 /** The transport for one reply's chat requests, recording each body under the reply's message id */
 export function recordingTransport(inner: Transport, replyId: string): Transport {
@@ -30,13 +29,17 @@ export function recordingTransport(inner: Transport, replyId: string): Transport
       }
       const list = byReply.get(replyId) ?? [];
       byReply.delete(replyId);
-      byReply.set(replyId, [...list, { at: Date.now(), url, body }]);
+      byReply.set(replyId, [...list, { url, body }]);
       // Only the latest replies are kept
       for (const id of byReply.keys()) if (byReply.size > MAX_REPLIES) byReply.delete(id);
-      sentRequestsVersion.value++;
+      version.value++;
       return inner.fetch(url, init, auth);
     }
   };
 }
 
-export const sentRequestsOf = (replyId: string): SentRequest[] => byReply.get(replyId) ?? [];
+/** A reply's recorded requests; reading it in a component or computed subscribes to new ones */
+export function sentRequestsOf(replyId: string): SentRequest[] {
+  void version.value;
+  return byReply.get(replyId) ?? [];
+}

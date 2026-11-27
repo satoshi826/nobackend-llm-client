@@ -37,10 +37,6 @@ export function deepestLatestLeaf<T extends TreeNode>(all: T[], startId: string)
   return cur;
 }
 
-export function siblingsOf<T extends TreeNode>(all: T[], node: T): T[] {
-  return childrenOf(all, node.parentId);
-}
-
 /**
  * The leaf to show for a conversation. If the saved leaf no longer exists (e.g. the tab was closed
  * after the leaf was switched to a new reply but before that reply was written), fall back to the

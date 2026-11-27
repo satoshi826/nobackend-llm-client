@@ -120,12 +120,6 @@ export function skillCatalog(list: Pick<Skill, 'name' | 'description'>[]): strin
   ].join('\n');
 }
 
-export function withSkillCatalog(systemPrompt: string, list: Pick<Skill, 'name' | 'description'>[]): string {
-  const cat = skillCatalog(list);
-  const sys = systemPrompt.trim();
-  return cat ? (sys ? `${sys}\n\n${cat}` : cat) : sys;
-}
-
 export function skillBlock(s: { name: string; body: string }): string {
   return `<skill name="${s.name}">\n${s.body.trim()}\n</skill>`;
 }

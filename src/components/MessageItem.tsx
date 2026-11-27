@@ -9,7 +9,8 @@ import { isStreaming } from '../state/runs';
 import { suggestingFor } from '../state/suggestions';
 import { modelOf } from '../state/models';
 import { settings } from '../state/settings';
-import { RequestView, useRequestToggle } from './RequestView';
+import { sentRequestsOf } from '../state/sent-requests';
+import { RequestView } from './RequestView';
 import { composerFocus, composerText, openModelPicker, showToast } from '../state/ui';
 import { Markdown } from './Markdown';
 import { ToolCallCard } from './ToolCallCard';
@@ -242,8 +243,9 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
   const estimated = m.meta?.costUsd == null && usage ? estimateCost(usage, model?.pricing) : undefined;
   // A feature answers this message itself (e.g. images): no waiting text, no "another model"
   const owned = assistantExtras.some((x) => x.owns?.(m));
-  const req = useRequestToggle(m.id);
-  const showReq = settings.value.developerMode && req.available;
+  // The developer button: shows the requests recorded for this reply in this session
+  const [reqOpen, setReqOpen] = useState(false);
+  const showReq = settings.value.developerMode && sentRequestsOf(m.id).length > 0;
   return (
     <div class="group">
       {m.parts.map((p, i) => {
@@ -299,7 +301,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
             )}
           </span>
           {showReq && (
-            <IconButton label={t('msg.request')} aria-pressed={req.open} class={cx(req.open && 'bg-glass-strong')} onClick={req.toggle}>
+            <IconButton label={t('msg.request')} aria-pressed={reqOpen} class={cx(reqOpen && 'bg-glass-strong')} onClick={() => setReqOpen(!reqOpen)}>
               <Icon name="code" class="size-3.5" />
             </IconButton>
           )}
@@ -335,7 +337,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
           )}
         </div>
       )}
-      {showReq && req.open && <RequestView replyId={m.id} />}
+      {showReq && reqOpen && <RequestView replyId={m.id} />}
     </div>
   );
 }

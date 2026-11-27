@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { applyEvent, buildRequestMessages, runAssistant } from './runner';
-import { deepestLatestLeaf, pathToLeaf, resolveLeaf, siblingsOf } from './tree';
+import { deepestLatestLeaf, pathToLeaf, resolveLeaf } from './tree';
 import type { MessageRecord } from '../db/schema';
 import { venicePreset } from '../providers/presets/venice';
 import type { ProviderConfig, Transport } from '../providers/types';
@@ -15,9 +15,8 @@ function rec(id: string, parentId: string | null, role: 'user' | 'assistant', te
 describe('tree', () => {
   const all = [rec('u1', null, 'user', 'a', 1), rec('a1', 'u1', 'assistant', 'b', 2), rec('a2', 'u1', 'assistant', 'b2', 3), rec('u2', 'a2', 'user', 'c', 4)];
   const byId = new Map(all.map((m) => [m.id, m]));
-  it('path and siblings', () => {
+  it('path and leaves', () => {
     expect(pathToLeaf(byId, 'u2').map((m) => m.id)).toEqual(['u1', 'a2', 'u2']);
-    expect(siblingsOf(all, byId.get('a1')!).map((m) => m.id)).toEqual(['a1', 'a2']);
     expect(deepestLatestLeaf(all, 'u1')).toBe('u2');
     expect(deepestLatestLeaf(all, 'a1')).toBe('a1');
   });

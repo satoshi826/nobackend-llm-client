@@ -36,9 +36,3 @@ export async function loadConversationCost(conversationId: string) {
   // Requests recorded while loading were already added to the signal; the log has them too, so the log wins
   if (total) conversationCosts.value = { ...conversationCosts.value, [conversationId]: total };
 }
-
-/** Forget totals (after deleting data) */
-export function resetConversationCosts() {
-  loaded.clear();
-  conversationCosts.value = {};
-}

@@ -1,5 +1,6 @@
+import { computed } from '@preact/signals';
 import { describe, expect, it } from 'vitest';
-import { recordingTransport, sentRequestsOf, sentRequestsVersion } from './sent-requests';
+import { recordingTransport, sentRequestsOf } from './sent-requests';
 import type { AuthRef, Transport } from '../lib/providers/types';
 
 function inner(seen: { url: string; auth?: AuthRef }[] = []): Transport {
@@ -15,7 +16,8 @@ describe('developer view: sent requests', () => {
   it('records each body under its reply, parsed when it is JSON, and passes the request on unchanged', async () => {
     const seen: { url: string; auth?: AuthRef }[] = [];
     const t = recordingTransport(inner(seen), 'reply-1');
-    const v = sentRequestsVersion.value;
+    const count = computed(() => sentRequestsOf('reply-1').length);
+    expect(count.value).toBe(0);
     await t.fetch('https://x.example/chat', { method: 'POST', body: '{"model":"m"}' }, { keyId: 'venice' });
     await t.fetch('https://x.example/raw', { method: 'POST', body: 'not json' });
     await t.fetch('https://x.example/get', { method: 'GET' });
@@ -25,7 +27,8 @@ describe('developer view: sent requests', () => {
       ['https://x.example/get', undefined]
     ]);
     expect(seen[0]).toEqual({ url: 'https://x.example/chat', auth: { keyId: 'venice' } });
-    expect(sentRequestsVersion.value).toBe(v + 3);
+    // Readers are told of new requests
+    expect(count.value).toBe(3);
     expect(sentRequestsOf('never')).toEqual([]);
   });
 

@@ -7,7 +7,6 @@ import { getPreset } from '../lib/providers/registry';
 import { runAssistant } from '../lib/chat/runner';
 import { childrenOf, deepestLatestLeaf, pathToLeaf } from '../lib/chat/tree';
 import { estimateTokens } from '../lib/chat/context';
-import { observeBalance, recordSpend } from '../lib/chat/balance';
 import { vaultTransport as transport } from '../lib/vault/client';
 import { settings, saveSettings } from './settings';
 import { authFor, keyReady } from './keys';
@@ -17,7 +16,7 @@ import { openSettings, showToast } from './ui';
 import { accountById } from '../lib/keys/accounts';
 import { contributedBuiltinWebSearch, contributedDynamicTools, contributedTools, requestHandlerFor, systemPromptFor, type ToolProviderContext } from './tool-registry';
 import { controllers, setStreaming, streamingConv } from './runs';
-import { balances, fetchBalance, updateBalance } from './balance';
+import { fetchBalance, observeProviderBalance, recordProviderSpend } from './balance';
 import { recordingTransport } from './sent-requests';
 import { providerOptionsFor, recordUsage } from './request-helpers';
 import { waitForApproval } from './approvals';
@@ -152,7 +151,7 @@ async function generateReply(convId: string, parentUserId: string) {
       onEvent: (ev) => {
         if (ev.type === 'account' && ev.balanceUsd !== undefined) {
           headerBalance = true;
-          updateBalance(cfg.id, (b) => observeBalance(b, ev.balanceUsd!));
+          observeProviderBalance(cfg.id, ev.balanceUsd);
         }
       },
       onUpdate: (m) => {
@@ -166,7 +165,7 @@ async function generateReply(convId: string, parentUserId: string) {
       flushUpdates();
     }
     recordUsage({ id: final.id, conversationId: conv.id, providerId: cfg.id, model: conv.modelId, kind: 'chat', usage: final.meta?.usage, costUsd: final.meta?.costUsd, temporary: conv.temporary });
-    if (final.meta?.costUsd && balances.value[cfg.id]) updateBalance(cfg.id, (b) => recordSpend(b, final.meta!.costUsd!));
+    if (final.meta?.costUsd) recordProviderSpend(cfg.id, final.meta.costUsd);
     // Providers that do not send the balance with the answer are asked for it afterwards
     if (!headerBalance) void fetchBalance(cfg.id);
     if (final.status === 'error' && final.error) showToast(final.error.message, 'error');

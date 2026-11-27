@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { defineMessages, detectLang, getLang, interpolate, onLangChange, setLang } from './index';
+import { defineMessages, detectLang, getLang, interpolate, setLang } from './index';
 
 afterEach(() => setLang('ja'));
 
@@ -13,15 +13,6 @@ describe('i18n', () => {
     expect(t('n', { count: 3 })).toBe('3 items');
     setLang('zh');
     expect(t('hi', { name: 'B' })).toBe('你好 B');
-  });
-  it('notifies listeners only on a change', () => {
-    const seen: string[] = [];
-    const off = onLangChange((l) => seen.push(l));
-    setLang('ja');
-    setLang('en');
-    off();
-    setLang('zh');
-    expect(seen).toEqual(['en']);
   });
   it('picks the language from browser preferences', () => {
     expect(detectLang(['ja-JP', 'en'])).toBe('ja');

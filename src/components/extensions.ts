@@ -112,13 +112,6 @@ export interface AssistantExtra {
 export type MessageExtra = ComponentType<{ m: MessageRecord }>;
 
 // ---- settings ----
-/** A section a feature adds to a settings tab */
-export interface SettingsSection {
-  id: string;
-  tab: string;
-  Component: ComponentType;
-}
-
 /** A whole settings tab (placed between the core tabs and "プライバシーとデータ", in registration order) */
 export interface SettingsTabDef {
   id: string;
@@ -135,7 +128,6 @@ export const modelSlots: ModelSlot[] = [];
 export const toolViews: ToolView[] = [];
 export const assistantExtras: AssistantExtra[] = [];
 export const userMessageExtras: MessageExtra[] = [];
-export const settingsSections: SettingsSection[] = [];
 export const settingsTabs: SettingsTabDef[] = [];
 /** Components rendered once at the app root (e.g. the image viewer) */
 export const overlays: ComponentType[] = [];
@@ -156,7 +148,6 @@ export const registerModelSlot = (s: ModelSlot) => upsert(modelSlots, s, 'id');
 export const registerToolView = (v: ToolView) => once(toolViews, v);
 export const registerAssistantExtra = (x: AssistantExtra) => upsert(assistantExtras, x, 'id');
 export const registerUserMessageExtra = (c: MessageExtra) => once(userMessageExtras, c);
-export const registerSettingsSection = (s: SettingsSection) => upsert(settingsSections, s, 'id');
 export const registerSettingsTab = (t: SettingsTabDef) => upsert(settingsTabs, t, 'id');
 export const registerOverlay = (c: ComponentType) => once(overlays, c);
 

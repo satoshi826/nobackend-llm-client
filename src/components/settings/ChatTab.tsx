@@ -1,22 +1,13 @@
-// Settings → チャット: generation, reply suggestions, sections registered by features, compaction
-import { keyStatus } from '../../state/keys';
-import { providerById, visibleModels } from '../../state/models';
+// Settings → チャット: generation, reply suggestions, compaction
 import { saveSettings, settings } from '../../state/settings';
 import { formatNumber } from '../../lib/i18n';
-import { settingsSections } from '../extensions';
 import { Icon, Select, TextField, cx } from '../ui';
-import { Section, Toggle, } from '../settings-ui';
+import { ModelSelect, Section, Toggle } from '../settings-ui';
 import { t } from './messages';
 import { around } from '../messages';
 
 export function ChatTab() {
   const s = settings.value;
-  const choices = visibleModels.value.filter((m) => keyStatus(m.providerId).present);
-  const modelOption = (m: (typeof choices)[number]) => {
-    const provider = providerById(m.providerId)?.name ?? m.providerId;
-    const price = m.pricing?.inputPerMTok;
-    return price != null ? t('chat.modelOptionPriced', { provider, model: m.name, price: price.toFixed(2) }) : `${provider} / ${m.name}`;
-  };
   const [lengthBefore, lengthAfter] = around(t('chat.lengthText'), 'icon');
   return (
     <div class="space-y-6">
@@ -70,23 +61,8 @@ export function ChatTab() {
             </Select>
           </label>
         </div>
-        <label class={cx('block text-sm', !s.replySuggestions && 'opacity-50')}>
-          {t('chat.suggestionModel')}
-          <Select disabled={!s.replySuggestions} class="mt-1 block w-full" value={s.suggestionModel} onChange={(e) => saveSettings({ suggestionModel: (e.target as HTMLSelectElement).value })}>
-            <option value="">{t('chat.sameModel')}</option>
-            {choices.map((m) => (
-              <option key={m.providerId + m.id} value={`${m.providerId}|${m.id}`}>
-                {modelOption(m)}
-              </option>
-            ))}
-          </Select>
-        </label>
+        <ModelSelect label={t('chat.suggestionModel')} disabled={!s.replySuggestions} value={s.suggestionModel} onChange={(v) => saveSettings({ suggestionModel: v })} />
       </Section>
-      {settingsSections
-        .filter((x) => x.tab === 'chat')
-        .map((x) => (
-          <x.Component key={x.id} />
-        ))}
       <Section title={t('chat.length')}>
         <p class="text-xs text-muted">
           {lengthBefore}
@@ -104,17 +80,7 @@ export function ChatTab() {
             ))}
           </Select>
         </label>
-        <label class="block text-sm">
-          {t('chat.compactModel')}
-          <Select class="mt-1 block w-full" value={s.compactModel} onChange={(e) => saveSettings({ compactModel: (e.target as HTMLSelectElement).value })}>
-            <option value="">{t('chat.sameModel')}</option>
-            {choices.map((m) => (
-              <option key={m.providerId + m.id} value={`${m.providerId}|${m.id}`}>
-                {modelOption(m)}
-              </option>
-            ))}
-          </Select>
-        </label>
+        <ModelSelect label={t('chat.compactModel')} value={s.compactModel} onChange={(v) => saveSettings({ compactModel: v })} />
         <Toggle
           checked={s.resendReasoning}
           onChange={(v) => saveSettings({ resendReasoning: v })}

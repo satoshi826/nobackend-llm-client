@@ -1,24 +1,14 @@
-// Building blocks of the settings screen, shared with settings sections that features register
+// Building blocks of the settings screen, shared with the settings tabs that features register
 import type { ComponentChildren } from 'preact';
 import type { Permission } from '../lib/tools/types';
+import { keyStatus } from '../state/keys';
+import { modelKey, providerById, visibleModels } from '../state/models';
+import { saveSettings, settings } from '../state/settings';
 import { Select, cx } from './ui';
 import { t } from './messages';
 
 /** Label of a permission choice (call it at render time: the language can change) */
-export const permLabel = (p: Permission): string => t(`perm.${p}`);
-
-/** The same labels as an object; the getters translate on every read, never at module load */
-export const PERM_LABEL: Record<Permission, string> = {
-  get ask() {
-    return permLabel('ask');
-  },
-  get allow() {
-    return permLabel('allow');
-  },
-  get deny() {
-    return permLabel('deny');
-  }
-};
+const permLabel = (p: Permission): string => t(`perm.${p}`);
 
 export function Section({ title, children }: { title?: string; children: ComponentChildren }) {
   return (
@@ -41,17 +31,42 @@ export function Toggle({ checked, onChange, title, desc, disabled }: { checked: 
   );
 }
 
-/** A "confirm before running" select for one tool */
-export function PermissionSelect({ label, value, onChange }: { label: string; value: Permission; onChange(v: Permission): void }) {
+/** A "confirm before running" select; saved for every tool in tools, read from the first */
+export function PermissionSelect({ label, tools, fallback = 'ask' }: { label: string; tools: string[]; fallback?: Permission }) {
+  const perms = settings.value.toolPermissions;
+  const save = (v: Permission) => void saveSettings({ toolPermissions: { ...perms, ...Object.fromEntries(tools.map((n) => [n, v])) } });
   return (
     <label class="flex items-center justify-between gap-3 text-sm">
       {label}
-      <Select value={value} onChange={(e) => onChange((e.target as HTMLSelectElement).value as Permission)}>
+      <Select value={perms[tools[0]] ?? fallback} onChange={(e) => save((e.target as HTMLSelectElement).value as Permission)}>
         {(['ask', 'allow', 'deny'] as Permission[]).map((v) => (
           <option key={v} value={v}>
             {permLabel(v)}
           </option>
         ))}
+      </Select>
+    </label>
+  );
+}
+
+/** A model for a side job (value "providerId|modelId"; '' is the conversation's model), from the models with a key */
+export function ModelSelect({ label, value, onChange, disabled }: { label: string; value: string; onChange(v: string): void; disabled?: boolean }) {
+  return (
+    <label class={cx('block text-sm', disabled && 'opacity-50')}>
+      {label}
+      <Select disabled={disabled} class="mt-1 block w-full" value={value} onChange={(e) => onChange((e.target as HTMLSelectElement).value)}>
+        <option value="">{t('model.same')}</option>
+        {visibleModels.value
+          .filter((m) => keyStatus(m.providerId).present)
+          .map((m) => {
+            const provider = providerById(m.providerId)?.name ?? m.providerId;
+            const price = m.pricing?.inputPerMTok;
+            return (
+              <option key={modelKey(m.providerId, m.id)} value={modelKey(m.providerId, m.id)}>
+                {price != null ? t('model.optionPriced', { provider, model: m.name, price: price.toFixed(2) }) : `${provider} / ${m.name}`}
+              </option>
+            );
+          })}
       </Select>
     </label>
   );

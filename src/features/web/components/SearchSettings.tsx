@@ -2,8 +2,7 @@
 // key) and fetching pages (fetch_url on/off, the model that reads pages, the ways the fetch page tries)
 import { useState } from 'preact/hooks';
 import { saveSettings, settings } from '../../../state/settings';
-import { enabledProviders, providerById, visibleModels } from '../../../state/models';
-import { keyStatus } from '../../../state/keys';
+import { enabledProviders } from '../../../state/models';
 import { accountById } from '../../../lib/keys/accounts';
 import { SERVICE_ORDER } from '../../../lib/tools/services';
 import { getPreset } from '../../../lib/providers/registry';
@@ -12,7 +11,7 @@ import { fetchSettingsOpen } from '../../../state/fetch-page';
 import { KeyPanel } from '../../../components/KeyPanel';
 import { AccountRow } from '../../../components/settings/AccountRow';
 import { Button, Icon, Select, cx } from '../../../components/ui';
-import { PermissionSelect, Section, Toggle } from '../../../components/settings-ui';
+import { ModelSelect, PermissionSelect, Section, Toggle } from '../../../components/settings-ui';
 import { providerSearchRoute, webSettings } from '../state';
 import { t } from '../messages';
 
@@ -25,7 +24,6 @@ export function SearchSettings() {
   const provs = enabledProviders.value;
   const anyNative = provs.some((p) => getPreset(p.preset).nativeWebSearch);
   const reads = s.toolPermissions.fetch_url !== 'deny';
-  const choices = visibleModels.value.filter((m) => keyStatus(m.providerId).present);
   const relay = FETCH_ROUTES.relay && new URL(FETCH_ROUTES.relay).host;
   const ways = [
     [t('settings.viaDirect'), t('settings.viaDirectDesc')],
@@ -66,11 +64,7 @@ export function SearchSettings() {
             </ul>
           )}
           <p class="text-xs text-muted">{t('settings.routesNote')}</p>
-          <PermissionSelect
-            label={t('settings.tavilyPermission')}
-            value={s.toolPermissions.web_search ?? 'ask'}
-            onChange={(v) => saveSettings({ toolPermissions: { ...s.toolPermissions, web_search: v } })}
-          />
+          <PermissionSelect label={t('settings.tavilyPermission')} tools={['web_search']} />
           {SERVICE_ORDER.map((id) => {
             const a = accountById(id)!;
             return (
@@ -88,17 +82,7 @@ export function SearchSettings() {
           title={t('settings.readToggle')}
           desc={t('settings.readDesc')}
         />
-        <label class={cx('block text-sm', !reads && 'opacity-50')}>
-          {t('settings.readerModel')}
-          <Select disabled={!reads} class="mt-1 block w-full" value={w.readerModel} onChange={(e) => void webSettings.save({ readerModel: (e.target as HTMLSelectElement).value })}>
-            <option value="">{t('settings.sameModel')}</option>
-            {choices.map((m) => (
-              <option key={m.providerId + m.id} value={`${m.providerId}|${m.id}`}>
-                {`${providerById(m.providerId)?.name ?? m.providerId} / ${m.name}`}
-              </option>
-            ))}
-          </Select>
-        </label>
+        <ModelSelect label={t('settings.readerModel')} disabled={!reads} value={w.readerModel} onChange={(v) => void webSettings.save({ readerModel: v })} />
         <div class="space-y-2">
           <p class="text-sm">{t('settings.ways')}</p>
           <p class="text-xs text-muted">{t('settings.waysDesc')}</p>

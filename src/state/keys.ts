@@ -48,10 +48,6 @@ export async function clearAllKeys() {
   await vault.command('clear-all');
 }
 
-export async function lockKeys() {
-  await vault.command('lock');
-}
-
 // ---- Old keys left on the main app's origin after moving to a cross-origin vault ----
 const LOCAL_KEY_DB = 'key-vault';
 export const leftoverLocalKeys = signal(false);

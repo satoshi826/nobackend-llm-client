@@ -12,11 +12,11 @@ export const BALANCE_ALERT_USD = 0.5;
 /** Providers whose balance dropped by an unexplained amount */
 export const balanceAlerts = computed(() => Object.entries(balances.value).filter(([, b]) => b.unexplainedUsd >= BALANCE_ALERT_USD));
 
-export function updateBalance(providerId: string, fn: (b: BalanceState) => BalanceState) {
+function updateBalance(providerId: string, fn: (b: BalanceState) => BalanceState) {
   balances.value = { ...balances.value, [providerId]: fn(balances.value[providerId] ?? initialBalanceState()) };
 }
 
-/** Record spend / observed balance from work outside the chat loop (image jobs), so balance alerts stay accurate */
+/** Count this app's own spend (only for providers whose balance is watched), so it is not taken for an unexplained drop */
 export function recordProviderSpend(providerId: string, usd: number) {
   if (balances.value[providerId]) updateBalance(providerId, (b) => recordSpend(b, usd));
 }

@@ -12,7 +12,7 @@ import { FETCH_ROUTES } from '../../lib/fetcher/config';
 import { askConfirm } from '../ConfirmDialog';
 
 import { Button, Icon, Spinner, TextField, Checkbox } from '../ui';
-import { Section,  } from '../settings-ui';
+import { Section } from '../settings-ui';
 import { t } from './messages';
 import { sentences } from '../messages';
 import { formatDateTime, formatNumber } from '../../lib/i18n';

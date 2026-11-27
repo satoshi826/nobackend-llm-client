@@ -29,18 +29,6 @@ export type FromVault =
   | { type: 'end'; id: string }
   | { type: 'error'; id: string; kind: string; message: string };
 
-/** Connection handshake (window.postMessage, MessagePort passed in ports[0]) */
-export interface ConnectMessage {
-  type: 'connect';
-  protocol: typeof VAULT_PROTOCOL;
-}
-
-/** Vault views (key entry, unlock) → parent window. Used to fit the iframe height */
-export interface ResizeMessage {
-  type: 'vault-resize';
-  height: number;
-}
-
 /** Response headers the vault may relay (nothing related to keys or cookies) */
 export const PASSTHROUGH_HEADERS = [
   ...new Set(['content-type', 'retry-after', 'x-ratelimit-remaining-requests', 'x-ratelimit-remaining-tokens', ...Object.values(PRESETS).flatMap((p) => p.responseHeaders ?? [])].map((h) => h.toLowerCase()))

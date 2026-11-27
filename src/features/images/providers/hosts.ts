@@ -9,7 +9,7 @@
 import type { AuthRef, ProviderConfig, Transport } from '../../../lib/providers/types';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import type { ImageProvider } from './types';
-import { DEFAULT_ASPECTS, ImageApiError, blobToDataUrl, imageCount, jsonPost, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, blobToDataUrl, fetchModelList, imageCount, jsonPost, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const num = (x: unknown): number | undefined => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
@@ -58,8 +58,8 @@ export function mapNanoImageModel(raw: any, providerId = 'nanogpt'): ImageModelI
     privacy: 'unknown',
     traits: [],
     // The provider's own size names (e.g. square_hd, landscape_16_9, 2048x2048), each with its price
-    constraints: { sizes: names.map((n) => ({ id: n, price: num(prices[n]) })), defaultSize: names[0], promptCharacterLimit: num(raw?.supported_parameters?.max_prompt_characters) },
-    pricing: { source: 'api' },
+    constraints: { sizes: names.map((n) => ({ id: n, price: num(prices[n]) })), defaultSize: names[0] },
+    pricing: {},
     maxImages: num(raw?.supported_parameters?.max_images),
     // image_to_image: takes an image to edit; models named "…edit" only edit
     ...(raw?.capabilities?.image_to_image ? { edits: /(^|[/-])edit/i.test(id) ? ('only' as const) : ('also' as const) } : {}),
@@ -71,11 +71,7 @@ export const nanogptImageProvider: ImageProvider = {
   id: 'nanogpt',
   label: 'NanoGPT',
   account: 'nanogpt',
-  async listModels(cfg, transport) {
-    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'image-models'), { method: 'GET', headers: { Accept: 'application/json' } }, undefined);
-    const data = await res.json();
-    return (Array.isArray(data?.data) ? data.data : []).map((r: unknown) => mapNanoImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
-  },
+  listModels: (cfg, transport) => fetchModelList(transport, joinUrl(cfg.baseUrl, 'image-models'), undefined, (r) => mapNanoImageModel(r, cfg.id)),
   generate(p, m, c) {
     const size = sizeOf(m, p)?.id;
     return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: imageCount(p, m), ...(size ? { size } : {}), response_format: 'b64_json' }, c.signal);
@@ -104,7 +100,7 @@ export function mapDeepInfraImageModel(raw: any, providerId = 'deepinfra'): Imag
     privacy: 'unknown',
     traits: [],
     constraints: { sizes: sizeGrid(DEFAULT_ASPECTS), defaultSize: '1:1' },
-    pricing: each !== undefined ? { generation: each, source: 'api' } : {},
+    pricing: each !== undefined ? { generation: each } : {},
     options: { seed: false, negativePrompt: false, styles: false, enhance: false }
   };
 }
@@ -113,13 +109,9 @@ export const deepinfraImageProvider: ImageProvider = {
   id: 'deepinfra',
   label: 'DeepInfra',
   account: 'deepinfra',
-  async listModels(cfg, transport) {
-    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'models'), { method: 'GET', headers: { Accept: 'application/json' } }, undefined);
-    const data = await res.json();
-    return (Array.isArray(data?.data) ? data.data : []).map((r: unknown) => mapDeepInfraImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
-  },
+  listModels: (cfg, transport) => fetchModelList(transport, joinUrl(cfg.baseUrl, 'models'), undefined, (r) => mapDeepInfraImageModel(r, cfg.id)),
   generate(p, m, c) {
-    const [w, h] = sizeFor(sizeOf(m, p)?.aspect ?? p.aspectRatio);
+    const [w, h] = sizeFor(aspectAndTier(m, p).aspect);
     return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: imageCount(p, m), size: `${w}x${h}`, response_format: 'b64_json' }, c.signal);
   },
   privacyLabel: () => ({ tone: 'zinc', label: 'DeepInfra', title: t('privacy.deepinfraTitle') })
@@ -146,14 +138,9 @@ export const togetherImageProvider: ImageProvider = {
   label: 'Together',
   account: 'together',
   keyedList: true,
-  async listModels(cfg, transport, auth) {
-    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'models'), { method: 'GET', headers: { Accept: 'application/json' } }, auth);
-    const data = await res.json();
-    const list: unknown[] = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : [];
-    return list.map((r) => mapTogetherImageModel(r, cfg.id)).filter((m): m is ImageModelInfo => !!m);
-  },
+  listModels: (cfg, transport, auth) => fetchModelList(transport, joinUrl(cfg.baseUrl, 'models'), auth, (r) => mapTogetherImageModel(r, cfg.id), (data) => (Array.isArray(data) ? data : data?.data)),
   generate(p, m, c) {
-    const [width, height] = sizeFor(sizeOf(m, p)?.aspect ?? p.aspectRatio);
+    const [width, height] = sizeFor(aspectAndTier(m, p).aspect);
     return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: imageCount(p, m), width, height, response_format: 'base64' }, c.signal);
   },
   privacyLabel: () => ({ tone: 'zinc', label: 'Together', title: t('privacy.togetherTitle') })

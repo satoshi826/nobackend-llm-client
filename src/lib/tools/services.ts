@@ -28,12 +28,3 @@ export const SERVICES: Record<string, ToolService> = {
 };
 
 export const SERVICE_ORDER = ['tavily'] as const;
-
-export function serviceById(id: string): ToolService | undefined {
-  return SERVICES[id];
-}
-
-export function serviceHost(id: string): string {
-  const s = SERVICES[id];
-  return s ? new URL(s.baseUrl).host : '';
-}

@@ -1,4 +1,5 @@
-// Web search (Tavily) and page text fetching (Jina Reader). Both can be called directly from the browser (CORS support verified).
+// The web tools: web_search (Tavily, called directly from the browser) and fetch_url (a page read through the reader the
+// web feature passes in).
 // Fetched external content is passed to the model explicitly marked as "untrusted data" (prompt injection defence).
 import { errorFromFetchFailure, errorFromResponse, ProviderFailure } from '../../lib/providers/errors';
 import { joinUrl } from '../../lib/providers/openai-compatible';
@@ -6,8 +7,6 @@ import { SERVICES } from '../../lib/tools/services';
 import type { Tool, ToolContext, ToolResult, ToolSource } from '../../lib/tools/types';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
 import { t } from './messages';
-
-/** Max characters of page text passed to the model */
 
 // What the model reads is English whatever the UI language (tool descriptions, notes, result headers): models follow
 // English descriptions most reliably, and the request stays the same when the language changes (prompt cache).
@@ -125,11 +124,4 @@ export function makeFetchUrlTool(read: PageReader): Tool<FetchInput> {
     },
     execute: (input, ctx) => read(input.url, input.prompt, ctx.signal)
   };
-}
-
-export const WEB_TOOLS: Tool[] = [webSearchTool];
-
-
-export function toolByName(name: string, tools: Tool[] = WEB_TOOLS): Tool | undefined {
-  return tools.find((x) => x.name === name);
 }

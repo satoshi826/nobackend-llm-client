@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildGenerateBody, generateImages, ImageApiError, mapImageModel, sizeFor } from './providers/venice';
+import { buildGenerateBody, mapImageModel, sizeFor, veniceEditCost, veniceImageProvider } from './providers/venice';
 import { getImage, imageUsage, listImages, putImage, resealImages, exportImages, importImages } from '../../lib/db/images';
 import { setDataKey } from '../../lib/db/sealed';
 import { generateDataKey } from '../../lib/crypto/data';
@@ -11,8 +11,7 @@ import { imageNote } from './transform';
 
 registerMessageTransform(imageNote);
 import { validate } from '../../lib/db/export';
-import { generationCost } from './providers/common';
-import { veniceEditCost } from './providers/venice';
+import { generationCost, ImageApiError } from './providers/common';
 import { makeImageTool } from './tool';
 import type { Transport } from '../../lib/providers/types';
 
@@ -69,12 +68,12 @@ describe('Venice image API', () => {
       }
     };
     const cfg = { id: 'venice', name: 'Venice', kind: 'openai-compatible' as const, preset: 'venice', baseUrl: 'https://api.venice.ai/api/v1', modelListMode: 'fetch' as const, enabled: true };
-    const r = await generateImages(cfg, { keyId: 'venice' }, ok, params(), widthModel);
+    const r = await veniceImageProvider.generate(params(), widthModel, { config: cfg, auth: { keyId: 'venice' }, transport: ok });
     expect(r.images).toHaveLength(1);
     expect(r.images[0].type).toBe('image/webp');
     expect(r).toMatchObject({ blurred: true, violations: 1 });
     const bad: Transport = { fetch: async () => new Response(JSON.stringify({ error: 'policy', suggested_prompt: 'a dog', recommended_model: 'chroma' }), { status: 422 }) };
-    const err = await generateImages(cfg, { keyId: 'venice' }, bad, params(), widthModel).catch((e) => e);
+    const err = await veniceImageProvider.generate(params(), widthModel, { config: cfg, auth: { keyId: 'venice' }, transport: bad }).catch((e) => e);
     expect(err).toBeInstanceOf(ImageApiError);
     expect(err.suggestion).toEqual({ prompt: 'a dog', model: 'chroma' });
   });

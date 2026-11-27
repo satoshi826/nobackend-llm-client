@@ -1,17 +1,15 @@
 // OpenAI Images API (POST /v1/images/generations).
 // The model list needs the key (/v1/models, filtered to image models). GPT Image models always return
 // base64; aspect ratios map to the sizes the model accepts, and "quality" takes the resolution menu.
-// Prices are a dated table (the API lists none). GPT Image edits an image too (POST /v1/images/edits, as JSON
+// Prices are a table (the API lists none). GPT Image edits an image too (POST /v1/images/edits, as JSON
 // with the image as a data: URL).
-import type { ProviderConfig, Transport } from '../../../lib/providers/types';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { ImageApiError, blobToDataUrl, jsonPost, perImage, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { ImageApiError, aspectAndTier, blobToDataUrl, fetchModelList, jsonPost, perImage, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
-const AS_OF = '2026-11';
 const GPT_SIZES: Record<string, string> = { '1:1': '1024x1024', '3:2': '1536x1024', '2:3': '1024x1536' };
 const DALLE_SIZES: Record<string, string> = { '1:1': '1024x1024', '16:9': '1792x1024', '9:16': '1024x1792' };
 /** USD per image by quality, for square / non-square sizes (OpenAI's price list) */
@@ -42,7 +40,7 @@ export function mapOpenAIImageModel(raw: any, providerId = 'openai'): ImageModel
       defaultSize: dalle ? '1:1 standard' : '1:1 medium',
       tierLabel: 'quality'
     },
-    pricing: row ? { source: 'table', asOf: AS_OF } : {},
+    pricing: {},
     // GPT Image edits images (DALL·E 3 does not)
     ...(dalle ? {} : { edits: 'also' as const }),
     options: { seed: false, negativePrompt: false, styles: false, enhance: false }
@@ -51,9 +49,9 @@ export function mapOpenAIImageModel(raw: any, providerId = 'openai'): ImageModel
 
 /** The pixel size and quality OpenAI takes for a request */
 export function openAISize(p: ImageParams, m?: ImageModelInfo): { size: string; quality?: string } {
-  const s = sizeOf(m, p);
+  const { aspect, tier } = aspectAndTier(m, p);
   const table = isDalle(p.model) ? DALLE_SIZES : GPT_SIZES;
-  return { size: table[s?.aspect ?? p.aspectRatio ?? '1:1'] ?? '1024x1024', quality: s?.tier ?? p.resolution };
+  return { size: table[aspect ?? '1:1'] ?? '1024x1024', quality: tier };
 }
 
 export function buildOpenAIImageBody(p: ImageParams, n: number, m?: ImageModelInfo): Record<string, unknown> {
@@ -70,32 +68,26 @@ export function buildOpenAIEditBody(p: ImageParams, image: string): Record<strin
   return { model: p.model, prompt: p.prompt, images: [{ image_url: image }], n: 1, output_format: 'png' };
 }
 
-async function generate(p: ImageParams, m: ImageModelInfo | undefined, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
-  const url = joinUrl(cfg.baseUrl, 'images/generations');
-  const mime = isDalle(p.model) ? 'image/png' : `image/${p.format === 'jpeg' ? 'jpeg' : p.format}`;
-  const read = async (res: Response) => {
-    const data = await res.json();
-    return (Array.isArray(data?.data) ? data.data : []).filter((x: any) => typeof x?.b64_json === 'string').map((x: any) => base64ToBlob(x.b64_json, mime));
-  };
-  // DALL·E 3 makes one image per request; GPT Image takes n
-  const images = isDalle(p.model)
-    ? (await perImage(p.variants, async () => read(await sendImageRequest(transport, url, jsonPost(buildOpenAIImageBody(p, 1, m), signal), auth)))).flat()
-    : await read(await sendImageRequest(transport, url, jsonPost(buildOpenAIImageBody(p, Math.min(4, Math.max(1, p.variants)), m), signal), auth));
-  if (!images.length) throw new ImageApiError({ kind: 'bad-request', message: t('err.noImage') });
-  return { images };
-}
-
 export const openaiImageProvider: ImageProvider = {
   id: 'openai',
   label: 'OpenAI',
   account: 'openai',
   keyedList: true,
-  async listModels(cfg, transport, auth) {
-    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'models'), { method: 'GET', headers: { Accept: 'application/json' } }, auth);
-    const data = await res.json();
-    return (Array.isArray(data?.data) ? data.data : []).map((r: unknown) => mapOpenAIImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
+  listModels: (cfg, transport, auth) => fetchModelList(transport, joinUrl(cfg.baseUrl, 'models'), auth, (r) => mapOpenAIImageModel(r, cfg.id)),
+  async generate(p, m, c) {
+    const url = joinUrl(c.config.baseUrl, 'images/generations');
+    const mime = isDalle(p.model) ? 'image/png' : `image/${p.format === 'jpeg' ? 'jpeg' : p.format}`;
+    const read = async (res: Response) => {
+      const data = await res.json();
+      return (Array.isArray(data?.data) ? data.data : []).filter((x: any) => typeof x?.b64_json === 'string').map((x: any) => base64ToBlob(x.b64_json, mime));
+    };
+    // DALL·E 3 makes one image per request; GPT Image takes n
+    const images = isDalle(p.model)
+      ? (await perImage(p.variants, async () => read(await sendImageRequest(c.transport, url, jsonPost(buildOpenAIImageBody(p, 1, m), c.signal), c.auth)))).flat()
+      : await read(await sendImageRequest(c.transport, url, jsonPost(buildOpenAIImageBody(p, Math.min(4, Math.max(1, p.variants)), m), c.signal), c.auth));
+    if (!images.length) throw new ImageApiError({ kind: 'bad-request', message: t('err.noImage') });
+    return { images };
   },
-  generate: (p, m, c) => generate(p, m, c.config, c.transport, c.auth, c.signal),
   async edit(source, p, c) {
     const res = await sendImageRequest(c.transport, joinUrl(c.config.baseUrl, 'images/edits'), jsonPost(buildOpenAIEditBody(p, await blobToDataUrl(source)), c.signal), c.auth);
     const b64 = (await res.json())?.data?.[0]?.b64_json;

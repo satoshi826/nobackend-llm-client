@@ -1,10 +1,8 @@
 // The image feature's pieces for the core screens: input-box mode, image model button, user-message label,
-// tool card for generate_image, and the settings section
+// tool card for generate_image, and the settings tab
 import type { Conversation, MessageRecord } from '../../../lib/db/schema';
-import type { Permission } from '../../../lib/tools/types';
-import { saveSettings, settings } from '../../../state/settings';
 import { Chip, Disclosure, Icon, Select, cx } from '../../../components/ui';
-import { PermissionSelect, Section, Toggle, } from '../../../components/settings-ui';
+import { PermissionSelect, Section, Toggle } from '../../../components/settings-ui';
 import type { ToolPart } from '../../../components/extensions';
 import { useEffect } from 'preact/hooks';
 import { conversations, currentConv } from '../../../state/conversations';
@@ -203,9 +201,9 @@ function DefaultModelSelect() {
   );
 }
 
-/** Settings → チャット → 画像 */
+/** Settings → 画像 */
 export function ImageSettings() {
-  const s = { ...settings.value, ...imageSettings.value.value };
+  const s = imageSettings.value.value;
   const saveImage = imageSettings.save;
   return (
     <Section>
@@ -226,11 +224,7 @@ export function ImageSettings() {
         desc={t('settings.toolDesc')}
       />
       {s.imageTool && (
-        <PermissionSelect
-          label={t('settings.permission')}
-          value={(s.toolPermissions.generate_image ?? 'ask') as Permission}
-          onChange={(v) => saveSettings({ toolPermissions: { ...s.toolPermissions, generate_image: v } })}
-        />
+        <PermissionSelect label={t('settings.permission')} tools={['generate_image']} />
       )}
     </Section>
   );

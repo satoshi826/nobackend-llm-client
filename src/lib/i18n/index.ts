@@ -17,7 +17,6 @@ export const LANGS: readonly Lang[] = ['ja', 'en', 'zh'];
 export const LANG_NAMES: Record<Lang, string> = { ja: '日本語', en: 'English', zh: '简体中文' };
 
 let current: Lang = 'ja';
-const listeners = new Set<(l: Lang) => void>();
 
 /**
  * Called whenever text is produced (t() and the formatters). The app installs a tracker that reads its
@@ -34,14 +33,7 @@ export function getLang(): Lang {
 }
 
 export function setLang(l: Lang) {
-  if (l === current) return;
   current = l;
-  for (const fn of listeners) fn(l);
-}
-
-export function onLangChange(fn: (l: Lang) => void): () => void {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
 }
 
 /** The best language for the browser's preferences (falls back to English) */

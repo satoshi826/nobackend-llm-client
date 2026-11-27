@@ -299,8 +299,3 @@ export function db(): AppDB {
   if (!_db) _db = new AppDB();
   return _db;
 }
-
-/** For tests */
-export function setDB(d: AppDB) {
-  _db = d;
-}

@@ -16,7 +16,7 @@ import { parseModelRef, providerOptionsFor, recordUsage } from '../../state/requ
 import { defineFeatureSettings } from '../../state/feature-settings';
 import { registerToolProvider } from '../../state/tool-registry';
 import { extractText } from '../files';
-import { makeFetchUrlTool, WEB_TOOLS } from './tools';
+import { makeFetchUrlTool, webSearchTool } from './tools';
 
 /**
  * enabled: web search on (the default; off only in settings).
@@ -100,7 +100,7 @@ const readsPages = () => settings.value.toolPermissions.fetch_url !== 'deny';
 registerToolProvider({
   id: 'web',
   tools: ({ conv, model }) => [
-    ...(searchRouteFor(conv.providerId, conv.modelId) === 'tools' ? WEB_TOOLS : []),
+    ...(searchRouteFor(conv.providerId, conv.modelId) === 'tools' ? [webSearchTool] : []),
     ...(model?.capabilities.tools && readsPages() ? [makeFetchUrlTool(pageReader(conv))] : [])
   ],
   builtinWebSearch: ({ conv }) => (searchRouteFor(conv.providerId, conv.modelId) === 'native' ? 'auto' : undefined)

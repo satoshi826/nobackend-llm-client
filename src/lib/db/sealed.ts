@@ -3,7 +3,6 @@
 // the content (text, titles, instructions, etc.) is bundled into enc and encrypted.
 // Crypto cannot be awaited inside an IndexedDB transaction, so conversion happens before writes and after reads.
 import { openJSON, sealJSON, type DataKey, type Sealed } from '../crypto/data';
-import type { Conversation, FileRecord, FileVersionText, MessageRecord, SavedPrompt, Skill } from './schema';
 import { t } from './messages';
 
 let dataKey: DataKey | null = null;
@@ -58,8 +57,3 @@ export async function unseal<T extends object>(rec: WithEnc<T>, key: DataKey | n
   const secret = await openJSON<Record<string, unknown>>(key, enc);
   return { ...(rest as unknown as T), ...secret };
 }
-
-export const isSealed = (rec: unknown): boolean => !!(rec as { enc?: unknown })?.enc;
-
-// Type check (table-to-type mapping)
-export type SealedTypes = { conversations: Conversation; messages: MessageRecord; prompts: SavedPrompt; skills: Skill; files: FileRecord; fileVersions: FileVersionText };

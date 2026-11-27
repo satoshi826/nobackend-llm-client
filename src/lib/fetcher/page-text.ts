@@ -13,10 +13,11 @@ export const MAX_PAGE_CHARS = 60_000;
 const MAX_HTML_CHARS = 3_000_000;
 
 const DROP = new Set(['script', 'style', 'noscript', 'template', 'iframe', 'object', 'embed', 'svg', 'math', 'canvas', 'video', 'audio', 'form', 'button', 'select', 'textarea', 'input', 'nav', 'aside', 'footer']);
-const BLOCK = new Set(['p', 'div', 'section', 'article', 'main', 'header', 'figure', 'figcaption', 'dl', 'dt', 'dd', 'address', 'details', 'summary']);
+/** Blocks walked for the blocks inside them; one holding only inline content is one paragraph */
+const BLOCK = new Set(['p', 'div', 'section', 'article', 'main', 'header', 'figure', 'figcaption', 'dl', 'dt', 'dd', 'address', 'details', 'summary', 'li', 'body', 'html']);
 /** Elements that start a block of their own */
-const BLOCKISH = /^(p|div|section|article|main|header|figure|figcaption|dl|dt|dd|address|details|summary|h[1-6]|ul|ol|li|table|pre|blockquote|hr|body|html)$/i;
-const hasBlocks = (e: Element) => [...e.children].some((c) => BLOCKISH.test(c.tagName) && !DROP.has(c.tagName.toLowerCase()));
+const BLOCKISH = new Set([...BLOCK, 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'table', 'pre', 'blockquote', 'hr']);
+const hasBlocks = (e: Element) => [...e.children].some((c) => BLOCKISH.has(c.tagName.toLowerCase()));
 
 /** Text in the page's own encoding (a meta charset near the top), else UTF-8 */
 function decode(data: ArrayBuffer, html: boolean): string {
@@ -83,14 +84,7 @@ function blocks(el: Element, base: string, out: string[], depth = 0) {
       blocks(e, base, inner, depth);
       out.push(inner.map((l) => `> ${l}`).join('\n'));
     } else if (tag === 'hr') out.push('---');
-    else if (BLOCK.has(tag) || tag === 'body' || tag === 'html' || tag === 'li') {
-      // A block holding only inline content is one paragraph
-      if (hasBlocks(e)) blocks(e, base, out, depth);
-      else {
-        const t = inline(e, base).trim();
-        if (t) out.push(t);
-      }
-    }
+    else if (BLOCK.has(tag) && hasBlocks(e)) blocks(e, base, out, depth);
     else {
       const t = inline(e, base).trim();
       if (t) out.push(t);

@@ -11,8 +11,6 @@ export interface ImageModelInfo {
   privacy: 'private' | 'anonymized' | 'unknown';
   traits: string[];
   constraints: {
-    promptCharacterLimit?: number;
-    steps?: { default?: number; max?: number };
     /** Venice models sized by width x height: what they must be divisible by */
     widthHeightDivisor?: number;
     /** Every size the model makes (see ImageSize); empty when the provider decides */
@@ -22,7 +20,7 @@ export interface ImageModelInfo {
     tierLabel?: 'resolution' | 'quality';
   };
   /** USD per image when a size has no price of its own */
-  pricing: { generation?: number; source?: 'api' | 'table'; asOf?: string };
+  pricing: { generation?: number };
   /** Most images one request can make (default 4) */
   maxImages?: number;
   /** Edits an image from a prompt: 'also' (and makes images from text), 'only' (not offered for making images) */
@@ -30,7 +28,6 @@ export interface ImageModelInfo {
   /** Options the bar shows for this model (missing = all of them, as for Venice) */
   options?: { seed?: boolean; negativePrompt?: boolean; styles?: boolean; enhance?: boolean };
   offline?: boolean;
-  deprecated?: boolean;
 }
 
 /**
@@ -67,6 +64,12 @@ export function sizeOf(m: ImageModelInfo | undefined, p: Pick<ImageParams, 'size
   return sameAspect.find((s) => s.tier === p.resolution) ?? sameAspect.find((s) => s.tier === def?.tier) ?? sameAspect[0] ?? def;
 }
 
+/** The aspect ratio and tier to send: those of the request's size (see sizeOf), else the ones the request saved */
+export function aspectAndTier(m: ImageModelInfo | undefined, p: Pick<ImageParams, 'size' | 'aspectRatio' | 'resolution'>): { aspect?: string; tier?: string } {
+  const s = sizeOf(m, p);
+  return { aspect: s?.aspect ?? p.aspectRatio, tier: s?.tier ?? p.resolution };
+}
+
 /** Images one request makes for a model */
 export const imageCount = (p: Pick<ImageParams, 'variants'>, m: ImageModelInfo | undefined) => Math.min(m?.maxImages ?? 4, 4, Math.max(1, p.variants));
 
@@ -101,8 +104,17 @@ export class ImageApiError extends Error {
   }
 }
 
-/** Send a request; network failures and non-2xx responses become ImageApiError */
-export async function sendImageRequest(transport: Transport, url: string, init: RequestInit, auth: AuthRef | undefined): Promise<Response> {
+/**
+ * Send a request; network failures and non-2xx responses become ImageApiError. rejected: a provider's own reading
+ * of an error response, tried first (undefined falls through to the shared one)
+ */
+export async function sendImageRequest(
+  transport: Transport,
+  url: string,
+  init: RequestInit,
+  auth: AuthRef | undefined,
+  rejected?: (status: number, body: any) => ImageApiError | undefined
+): Promise<Response> {
   let res: Response;
   try {
     res = await transport.fetch(url, init, auth);
@@ -118,10 +130,25 @@ export async function sendImageRequest(transport: Transport, url: string, init: 
     } catch {
       /* not JSON */
     }
+    const own = rejected?.(res.status, body);
+    if (own) throw own;
     if (res.status === 503) throw new ImageApiError({ kind: 'server', status: 503, message: t('err.busy') });
     throw new ImageApiError(classifyError(res.status, body, res.headers.get('retry-after')));
   }
   return res;
+}
+
+/** GET a model list and map its entries (found in data.data unless list says otherwise), dropping the ones map rejects */
+export async function fetchModelList(
+  transport: Transport,
+  url: string,
+  auth: AuthRef | undefined,
+  map: (raw: unknown) => ImageModelInfo | null,
+  list: (data: any) => unknown = (data) => data?.data
+): Promise<ImageModelInfo[]> {
+  const res = await sendImageRequest(transport, url, { method: 'GET', headers: { Accept: 'application/json' } }, auth);
+  const items = list(await res.json());
+  return (Array.isArray(items) ? items : []).map(map).filter((m): m is ImageModelInfo => !!m);
 }
 
 export const jsonPost = (body: unknown, signal?: AbortSignal): RequestInit => ({

@@ -2,12 +2,11 @@
 // prices per model from /images/models/{id}/endpoints (fetched when the model is chosen),
 // POST /images with response_format b64_json. The request's reported cost is recorded as spend.
 // Models that take input_references edit an image (sent there as a data: URL); those that need one only edit.
-import type { ProviderConfig, Transport } from '../../../lib/providers/types';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { DEFAULT_ASPECTS, ImageApiError, blobToDataUrl, jsonPost, perImage, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, blobToDataUrl, fetchModelList, jsonPost, perImage, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const enumOf = (sp: any, k: string): string[] | undefined => (sp?.[k]?.type === 'enum' && Array.isArray(sp[k].values) ? sp[k].values.map(String).filter((v: string) => v !== 'auto') : undefined);
@@ -58,39 +57,31 @@ export function buildOpenRouterEditBody(p: ImageParams, image: string): Record<s
   return { model: p.model, prompt: p.prompt, input_references: [{ type: 'image_url', image_url: { url: image } }], response_format: 'b64_json', output_format: 'png' };
 }
 
-async function generate(p: ImageParams, m: ImageModelInfo | undefined, cfg: ProviderConfig, transport: Transport, auth: Parameters<typeof sendImageRequest>[3], signal?: AbortSignal) {
-  const body: Record<string, unknown> = { model: p.model, prompt: p.prompt, response_format: 'b64_json', output_format: p.format };
-  const s = sizeOf(m, p);
-  const aspect = s?.aspect ?? p.aspectRatio;
-  const tier = s?.tier ?? p.resolution;
-  if (aspect) body.aspect_ratio = aspect;
-  if (tier) body.resolution = tier;
-  if (p.seed !== undefined) body.seed = p.seed;
-  // One image per request (the API has no image count); variants run in parallel
-  const results = await perImage(p.variants, async (i) =>
-    readImages(await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'images'), jsonPost({ ...body, ...(p.seed !== undefined ? { seed: p.seed + i } : {}) }, signal), auth))
-  );
-  const images = results.flatMap((r) => r.images);
-  if (!images.length) throw new ImageApiError({ kind: 'server', message: t('err.noImage') });
-  const costs = results.map((r) => r.cost);
-  return { images, costUsd: costs.every((c) => c !== undefined) ? costs.reduce((a, b) => a! + b!, 0) : undefined };
-}
-
 export const openrouterImageProvider: ImageProvider = {
   id: 'openrouter',
   label: 'OpenRouter',
   account: 'openrouter',
-  async listModels(cfg, transport) {
-    const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, 'images/models'), { method: 'GET', headers: { Accept: 'application/json' } }, undefined);
-    const data = await res.json();
-    return (Array.isArray(data?.data) ? data.data : []).map((r: unknown) => mapOpenRouterImageModel(r, cfg.id)).filter((m: ImageModelInfo | null): m is ImageModelInfo => !!m);
-  },
+  listModels: (cfg, transport) => fetchModelList(transport, joinUrl(cfg.baseUrl, 'images/models'), undefined, (r) => mapOpenRouterImageModel(r, cfg.id)),
   async loadPricing(m, cfg, transport) {
     const res = await sendImageRequest(transport, joinUrl(cfg.baseUrl, `images/models/${m.id}/endpoints`), { method: 'GET', headers: { Accept: 'application/json' } }, undefined);
     const price = priceFromEndpoints(await res.json());
-    return price === undefined ? m : { ...m, pricing: { generation: price, source: 'api' } };
+    return price === undefined ? m : { ...m, pricing: { generation: price } };
   },
-  generate: (p, m, c) => generate(p, m, c.config, c.transport, c.auth, c.signal),
+  async generate(p, m, c) {
+    const body: Record<string, unknown> = { model: p.model, prompt: p.prompt, response_format: 'b64_json', output_format: p.format };
+    const { aspect, tier } = aspectAndTier(m, p);
+    if (aspect) body.aspect_ratio = aspect;
+    if (tier) body.resolution = tier;
+    if (p.seed !== undefined) body.seed = p.seed;
+    // One image per request (the API has no image count); variants run in parallel
+    const results = await perImage(p.variants, async (i) =>
+      readImages(await sendImageRequest(c.transport, joinUrl(c.config.baseUrl, 'images'), jsonPost({ ...body, ...(p.seed !== undefined ? { seed: p.seed + i } : {}) }, c.signal), c.auth))
+    );
+    const images = results.flatMap((r) => r.images);
+    if (!images.length) throw new ImageApiError({ kind: 'server', message: t('err.noImage') });
+    const costs = results.map((r) => r.cost);
+    return { images, costUsd: costs.every((x) => x !== undefined) ? costs.reduce((a, b) => a! + b!, 0) : undefined };
+  },
   async edit(source, p, c) {
     const { images } = await readImages(await sendImageRequest(c.transport, joinUrl(c.config.baseUrl, 'images'), jsonPost(buildOpenRouterEditBody(p, await blobToDataUrl(source)), c.signal), c.auth));
     if (!images[0]) throw new ImageApiError({ kind: 'server', message: t('err.noImage') });

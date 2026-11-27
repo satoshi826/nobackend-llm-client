@@ -1,6 +1,6 @@
 // OpenAI-compatible hosts of open models: NanoGPT, DeepInfra, Cerebras, Novita, Chutes, Together.
 // All take a Bearer key, stream SSE with usage at the end, and allow requests from a browser (checked 2026-11-26).
-// Their model lists carry prices, context and capabilities; each has its own shape, read here (docs/specs/provider-research.md).
+// Their model lists carry prices, context and capabilities; each has its own shape, read here.
 // Reasoning comes as `reasoning` / `reasoning_content` or inline <think> (all handled by the adapter); it is never sent back.
 import type { ModelInfo, ProviderPreset } from '../types';
 import { checkKey, flexTier, joinUrl, numberOf as num } from '../openai-compatible';

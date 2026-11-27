@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateDataKey, importDataKey, openBytes, openJSON, sealBytes, sealJSON } from './data';
+import { generateDataKey, importDataKey, openBytes, openJSON, sealBytes, sealJSON, sealedFromBase64 } from './data';
 
 describe('data key', () => {
   it('round-trips JSON and bytes, with a fresh IV every time', async () => {
@@ -7,9 +7,9 @@ describe('data key', () => {
     const value = { title: '秘密', n: 3, list: [1, 'two'] };
     const a = await sealJSON(k, value);
     const b = await sealJSON(k, value);
-    expect(a.iv).not.toBe(b.iv);
-    expect(a.ct).not.toBe(b.ct);
-    expect(a.ct).not.toContain('秘密');
+    expect(a.subarray(0, 12)).not.toEqual(b.subarray(0, 12));
+    expect(a).not.toEqual(b);
+    expect(new TextDecoder().decode(a)).not.toContain('秘密');
     expect(await openJSON(k, a)).toEqual(value);
 
     const bytes = new Uint8Array([0, 1, 2, 250, 255]).buffer;
@@ -31,8 +31,15 @@ describe('data key', () => {
     const other = await generateDataKey();
     const s = await sealJSON(k, { a: 1 });
     await expect(openJSON(other, s)).rejects.toThrow();
-    const flipped = atob(s.ct);
-    const tampered = { iv: s.iv, ct: btoa(String.fromCharCode(flipped.charCodeAt(0) ^ 1) + flipped.slice(1)) };
+    const tampered = s.slice();
+    tampered[12] ^= 1;
     await expect(openJSON(k, tampered)).rejects.toThrow();
+  });
+
+  it('opens data sealed before it was stored as bytes, once converted', async () => {
+    const k = await generateDataKey();
+    const s = await sealJSON(k, { a: 1 });
+    const b64 = (x: Uint8Array) => btoa(String.fromCharCode(...x));
+    expect(await openJSON(k, sealedFromBase64({ iv: b64(s.subarray(0, 12)), ct: b64(s.subarray(12)) }))).toEqual({ a: 1 });
   });
 });

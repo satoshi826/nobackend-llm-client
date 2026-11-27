@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { ChatMessage, ModelInfo } from '../providers/types';
 import type { UsageRecord } from '../usage';
-import type { Sealed } from '../crypto/data';
+import { bytesFromBase64, sealedFromBase64, type Sealed } from '../crypto/data';
 
 export const SCHEMA_VERSION = 6;
 
@@ -235,7 +235,7 @@ export interface SettingRecord {
  * on disk until it is read
  */
 export interface SealedBytes {
-  iv: string;
+  iv: Uint8Array<ArrayBuffer>;
   data: Blob;
 }
 
@@ -312,6 +312,29 @@ export class AppDB extends Dexie {
     // v11: file texts in their own table (a file record is what lists show); the kind index goes (origin replaced it).
     // Stored records are converted once after unlock (lib/db/convert.ts), as they are encrypted
     this.version(11).stores({ files: 'id, updatedAt, conversationId', fileTexts: 'id, fileId' });
+    // v12 (development only, goes before the first release): encrypted data as bytes (was base64 text). Only the
+    // encoding changes, so this needs no key and runs even while the data is locked
+    this.version(12).stores({}).upgrade(async (tx) => {
+      type Old = { iv: string; ct: string };
+      const isOld = (x: unknown): x is Old => typeof (x as Old | undefined)?.ct === 'string';
+      for (const name of ['conversations', 'messages', 'prompts', 'skills', 'files', 'fileTexts', 'fileVersions']) {
+        await tx
+          .table(name)
+          .toCollection()
+          .modify((r: { enc?: unknown }) => {
+            if (isOld(r.enc)) r.enc = sealedFromBase64(r.enc);
+          });
+      }
+      await tx
+        .table('blobs')
+        .toCollection()
+        .modify((r: { infoEnc?: unknown; enc?: { iv: unknown }; thumb?: unknown }) => {
+          if (isOld(r.infoEnc)) r.infoEnc = sealedFromBase64(r.infoEnc);
+          if (typeof r.enc?.iv === 'string') r.enc.iv = bytesFromBase64(r.enc.iv);
+          const thumb = r.thumb as { iv?: unknown } | undefined;
+          if (thumb && !(thumb instanceof Blob) && typeof thumb.iv === 'string') thumb.iv = bytesFromBase64(thumb.iv);
+        });
+    });
     this.version(8)
       .stores({ blobs: 'id, conversationId, createdAt' })
       .upgrade((tx) =>

@@ -16,8 +16,12 @@ export interface Conversation {
   systemPrompt: string;
   webSearch: 'off' | 'auto' | 'on';
   pinned: 0 | 1;
-  folderId?: string;
   tags: string[];
+  /**
+   * The working folder ('todo-app/'): made with the conversation's first file. The model reads and writes only inside
+   * it (lib/db/paths.ts); the files in it keep the conversation they were made in (FileRecord.conversationId)
+   */
+  workDir?: string;
   /** Temporary chat. Conversations with true are never written to the DB (memory only) */
   temporary?: boolean;
   /** Image mode: messages sent from the input box are image prompts */
@@ -297,6 +301,8 @@ export class AppDB extends Dexie {
     // v9: earlier versions of a file in their own table (the file record keeps the current one). Records in the
     // old shape (all versions inside, possibly encrypted) are converted when first read: lib/db/files.ts
     this.version(9).stores({ fileVersions: 'id, fileId' });
+    // v10: conversations lose the folderId index (a field never used; folders now hold files, see workDir)
+    this.version(10).stores({ conversations: 'id, updatedAt, pinned, *tags' });
     this.version(8)
       .stores({ blobs: 'id, conversationId, createdAt' })
       .upgrade((tx) =>

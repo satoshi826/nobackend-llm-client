@@ -23,7 +23,7 @@ export class DataLockedError extends Error {
 
 /** Fields to encrypt (per table) */
 export const SECRET_FIELDS = {
-  conversations: ['title', 'systemPrompt', 'tags'],
+  conversations: ['title', 'systemPrompt', 'tags', 'workDir'],
   messages: ['parts', 'vendorState', 'skills', 'compaction', 'error', 'suggestions', 'imageRequest', 'image', 'attachments'],
   prompts: ['name', 'content'],
   skills: ['description', 'body'],

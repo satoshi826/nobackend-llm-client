@@ -15,7 +15,9 @@ import { filterItems, NATURAL_ORDER, previewText, sortItems, type FilerItem } fr
 import {
   deleteFiles,
   downloadFile,
+  chatInFolder,
   filerConversation,
+  filerFolder,
   filerPrefs,
   filerQuery,
   filerView,
@@ -113,9 +115,13 @@ export function Filer() {
   const prefs = filerPrefs.value;
   const view = filerView.value;
   const conv = filerConversation.value;
+  const folder = filerFolder.value;
   // Searching reads file contents: wait until typing pauses
   const query = useDebounced(filerQuery.value, 150);
-  const items = useMemo(() => (all ? sortItems(filterItems(all, { view, conversationId: conv, query }), prefs.sort, prefs.order) : null), [all, view, conv, query, prefs.sort, prefs.order]);
+  const items = useMemo(
+    () => (all ? sortItems(filterItems(all, { view, conversationId: conv, folder, query }), prefs.sort, prefs.order) : null),
+    [all, view, conv, folder, query, prefs.sort, prefs.order]
+  );
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const lastIndex = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -125,7 +131,7 @@ export function Filer() {
   useEffect(() => {
     setPicked(new Set());
     lastIndex.current = null;
-  }, [view, conv, filerQuery.value]);
+  }, [view, conv, folder, filerQuery.value]);
   // Drop picks that disappeared (deleted)
   useEffect(() => {
     if (!items || !picked.size) return;
@@ -265,7 +271,7 @@ export function Filer() {
             {t('loading')}
           </p>
         ) : items.length === 0 && !importing.value.length ? (
-          <FilerEmpty view={view} filtered={!!conv || !!filerQuery.value.trim()} onUpload={() => input.current?.click()} />
+          <FilerEmpty view={view} filtered={!!conv || !!folder || !!filerQuery.value.trim()} onUpload={() => input.current?.click()} />
         ) : prefs.layout === 'grid' ? (
           <div class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
             {importing.value.map((u) => (
@@ -345,6 +351,7 @@ function SortMenu({ prefs }: { prefs: FilerPrefs }) {
 function FilterChips({ count, children }: { count: number | null; children: ComponentChildren }) {
   const view = filerView.value;
   const conv = filerConversation.value;
+  const folder = filerFolder.value;
   return (
     <div class="mx-3 flex min-h-11 flex-wrap items-center gap-1.5 pt-3 pb-3 sm:mx-4 md:mr-7 md:ml-1">
       <span class="px-1 text-xs text-muted tabular-nums">{count === null ? '' : count === 1 ? t('filer.countOne') : t('filer.count', { n: formatNumber(count) })}</span>
@@ -361,6 +368,19 @@ function FilterChips({ count, children }: { count: number | null; children: Comp
           <span class="truncate">{convTitle(conv) ?? t('deletedConversation')}</span>
           <Icon name="x" class="size-3.5 shrink-0 text-muted" />
         </Chip>
+      )}
+      {folder && (
+        <>
+          <Chip on class="h-7! max-w-[16rem] pr-2!" aria-label={t('filter.remove', { name: folder })} onClick={() => (filerFolder.value = null)}>
+            <Icon name="folder" class="size-3.5 shrink-0" />
+            <span class="truncate">{folder}</span>
+            <Icon name="x" class="size-3.5 shrink-0 text-muted" />
+          </Chip>
+          <Chip class="h-7!" title={t('folder.chatTitle')} onClick={() => void chatInFolder(folder)}>
+            <Icon name="chat" class="size-3.5 shrink-0" />
+            {t('folder.chat')}
+          </Chip>
+        </>
       )}
       <div class="ml-auto flex shrink-0 items-center gap-2">{children}</div>
     </div>
@@ -444,7 +464,7 @@ function Card({ it, picked, selecting, onToggle, onOpen }: { it: FilerItem; pick
         <Icon name={kindIcon(it)} class="mt-0.5 size-4 shrink-0 text-muted" />
         <span class="min-w-0">
           <span class="line-clamp-2 text-sm leading-snug text-ink-strong [overflow-wrap:anywhere]">
-            <PathName name={it.name} />
+            <PathName name={it.name} from={filerFolder.value} />
           </span>
           <span class="mt-0.5 block truncate text-xs text-muted tabular-nums">
             {sizeLabel(it)} · {formatDate(it.updatedAt)}
@@ -484,7 +504,7 @@ function ListRow({ it, picked, selecting, onToggle, onOpen }: { it: FilerItem; p
         >
           <Icon name={kindIcon(it)} class="size-4 shrink-0 text-muted" />
           <span class="truncate">
-            <PathName name={it.name} />
+            <PathName name={it.name} from={filerFolder.value} />
           </span>
         </button>
       </td>

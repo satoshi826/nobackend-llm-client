@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Conversation, FileRecord } from '../../../lib/db/schema';
 import { Button, EmptyState, Icon, Modal, SearchField, Spinner, cx } from '../../../components/ui';
 import { MenuItem, Popover } from '../../../components/menu';
-import { ATTACH_INLINE_CHARS, attachExisting, detach, fileList, pendingAttachments, refreshFiles, uploadFiles } from '../state';
+import { ATTACH_INLINE_CHARS, attachExisting, detach, fileList, openFolder, pendingAttachments, refreshFiles, uploadFiles } from '../state';
 import { formatChars, formatDate, FileIcon, typeLabel } from './common';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
@@ -118,12 +118,25 @@ function FilePicker({ onClose }: { onClose(): void }) {
   );
 }
 
-/** Attached files shown above the text area */
-export function AttachmentChips() {
+/** Above the text area: the conversation's working folder, and the attached files */
+export function AttachmentChips({ conv }: { conv: Conversation }) {
   const list = pendingAttachments.value;
-  if (!list.length) return null;
+  const dir = conv.workDir;
+  if (!list.length && !dir) return null;
   return (
     <div class="flex flex-wrap gap-1 px-3 pt-2.5">
+      {dir && (
+        <button
+          type="button"
+          class="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs text-muted hover:bg-glass-strong hover:text-ink"
+          title={t('workDir.title')}
+          aria-label={t('workDir.label', { name: dir })}
+          onClick={() => openFolder(dir)}
+        >
+          <Icon name="folder" class="size-3 shrink-0" />
+          <span class="truncate">{dir}</span>
+        </button>
+      )}
       {list.map((a) => (
         <span
           key={a.fileId}

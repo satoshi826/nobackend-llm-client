@@ -1,5 +1,6 @@
 // The file manager's items: files and images in one list, with filtering and sorting (pure)
 import { currentText, extOf } from '../../lib/db/files';
+import { isInside } from '../../lib/db/paths';
 import type { FileRecord, ImageSource } from '../../lib/db/schema';
 import type { ImageListing } from '../../lib/db/images';
 import type { FilerOrder, FilerSort, FilerView } from './state';
@@ -52,12 +53,13 @@ function searchText(f: FileRecord): string {
   return s;
 }
 
-export function filterItems(items: FilerItem[], o: { view: FilerView; conversationId: string | null; query: string }): FilerItem[] {
+export function filterItems(items: FilerItem[], o: { view: FilerView; conversationId: string | null; folder?: string | null; query: string }): FilerItem[] {
   const q = o.query.trim().toLowerCase();
   return items.filter(
     (it) =>
       inView(it, o.view) &&
       (!o.conversationId || it.conversationId === o.conversationId) &&
+      (!o.folder || isInside(it.name, o.folder)) &&
       (!q || it.name.toLowerCase().includes(q) || (it.type === 'file' && searchText(it.file).includes(q)))
   );
 }
@@ -76,6 +78,22 @@ export function sortItems(items: FilerItem[], sort: FilerSort, order: FilerOrder
     size: (a, b) => (a.type === b.type ? dir * (a.size - b.size) : a.type === 'file' ? -1 : 1)
   };
   return [...items].sort(cmp[sort]);
+}
+
+/** Top folders that have items ('todo-app/'), most recent first */
+export function foldersWithItems(items: FilerItem[]): { folder: string; count: number; latest: number }[] {
+  const m = new Map<string, { folder: string; count: number; latest: number }>();
+  for (const it of items) {
+    const slash = it.name.indexOf('/');
+    if (slash < 0) continue;
+    const folder = it.name.slice(0, slash + 1);
+    // One entry per folder whatever the case of its name (paths compare with case folded)
+    const g = m.get(folder.toLowerCase()) ?? { folder, count: 0, latest: 0 };
+    g.count++;
+    g.latest = Math.max(g.latest, it.updatedAt);
+    m.set(folder.toLowerCase(), g);
+  }
+  return [...m.values()].sort((a, b) => b.latest - a.latest);
 }
 
 /** Conversations that have items, most recent first */

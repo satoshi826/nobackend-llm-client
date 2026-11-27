@@ -9,7 +9,7 @@ export function cx(...xs: (string | false | null | undefined)[]): string {
 
 export type IconName =
   | 'menu' | 'plus' | 'settings' | 'send' | 'stop' | 'copy' | 'refresh' | 'edit' | 'trash' | 'pin' | 'chevron-left'
-  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star' | 'image' | 'expand' | 'wand' | 'scissors' | 'paperclip' | 'file' | 'files' | 'chat' | 'printer' | 'history' | 'grid' | 'list' | 'clock' | 'filter' | 'sort' | 'more' | 'link' | 'eye-off' | 'palette' | 'chart' | 'info' | 'code' | 'video' | 'play';
+  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star' | 'image' | 'expand' | 'wand' | 'scissors' | 'paperclip' | 'file' | 'files' | 'chat' | 'printer' | 'history' | 'grid' | 'list' | 'clock' | 'filter' | 'sort' | 'more' | 'link' | 'eye-off' | 'palette' | 'chart' | 'info' | 'code' | 'video' | 'play' | 'folder';
 
 const PATHS: Record<IconName, string> = {
   menu: 'M4 6h16M4 12h16M4 18h16',
@@ -57,6 +57,7 @@ const PATHS: Record<IconName, string> = {
   paperclip: 'M20 11.5 12.5 19a5 5 0 0 1-7-7L13 4.5a3.3 3.3 0 0 1 4.7 4.7l-7.5 7.5a1.7 1.7 0 0 1-2.4-2.4L15 7.2',
   file: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6',
   files: 'M8 3h7l4 4v11H8zM15 3v4h4M5 7v14h11',
+  folder: 'M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z',
   chat: 'M4 5h16v11H9l-5 4V5Z',
   printer: 'M7 9V3h10v6M7 17H4v-7h16v7h-3M7 14h10v7H7z',
   history: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 8v4l3 2',

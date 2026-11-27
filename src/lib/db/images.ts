@@ -118,6 +118,33 @@ export async function getImageThumb(id: string): Promise<Blob | null> {
   return thumb ?? full;
 }
 
+/**
+ * A stored image record with a new name (encrypted like the rest of its info), for the caller to put in a transaction
+ * of its own; undefined for a temporary or unnamed image
+ */
+export async function renamedImageRecord(id: string, rename: (name: string) => string): Promise<BlobRecord | undefined> {
+  const rec = await db().blobs.get(id);
+  const info = rec && (await infoOf(rec));
+  if (!rec || !info?.name) return undefined;
+  const { info: _i, infoEnc: _e, ...rest } = rec;
+  return { ...rest, ...(await storedInfo({ ...info, name: rename(info.name) }, currentDataKey())) };
+}
+
+/** Rename named images (stored or temporary) */
+export async function renameImages(changes: { id: string; name: string }[]): Promise<void> {
+  const recs: BlobRecord[] = [];
+  for (const c of changes) {
+    const m = mem.get(c.id);
+    if (m?.info) mem.set(c.id, { ...m, info: { ...m.info, name: c.name } });
+    else {
+      const r = await renamedImageRecord(c.id, () => c.name);
+      if (r) recs.push(r);
+    }
+  }
+  if (recs.length) await db().blobs.bulkPut(recs);
+  if (changes.length) storeChanged('images');
+}
+
 /** Image records without the bytes, newest first (for the gallery) */
 export async function listImages(): Promise<ImageListing[]> {
   const rows = await db().blobs.orderBy('createdAt').reverse().toArray();

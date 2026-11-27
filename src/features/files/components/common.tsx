@@ -21,8 +21,9 @@ export function typeLabel(f: Pick<FileRecord, 'name' | 'source'>): string {
   return (extOf(f.name) || 'txt').toUpperCase();
 }
 
-/** A file's name with its folders dimmed (a name is a path: site/css/style.css) */
-export function PathName({ name }: { name: string }) {
+/** A file's name with its folders dimmed (a name is a path: site/css/style.css); from: a folder shown, left out of the name */
+export function PathName({ name, from }: { name: string; from?: string | null }) {
+  if (from && name.toLowerCase().startsWith(from.toLowerCase())) name = name.slice(from.length);
   const folder = folderOf(name);
   return (
     <>

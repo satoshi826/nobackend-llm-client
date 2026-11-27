@@ -2,8 +2,11 @@
 // A path is a file name with folders ('todo-app/js/app.js', cleaned by cleanFileName); a folder is the shared start of
 // names, with a closing '/'. Two paths are the same when they match in NFC with case folded, so a folder never splits
 // into 'Todo/' and 'todo/' (one folder on a Mac disk, in a zip). A file's path is never another one's folder.
-import { listFiles } from './files';
-import { listImages } from './images';
+import { db, type Conversation, type FileRecord } from './schema';
+import { seal } from './sealed';
+import { storeChanged } from './changes';
+import { baseName, cleanFolderName, getFile, isTemporaryFile, listFiles, putFile } from './files';
+import { listImages, renameImages } from './images';
 
 /** Something that has a path: a file or a named image */
 export interface PathOwner {
@@ -64,4 +67,74 @@ export function withTakenPaths<T>(fn: (taken: PathOwner[]) => Promise<T>): Promi
   const run = queue.then(async () => fn(await takenPaths()));
   queue = run.catch(() => undefined);
   return run;
+}
+
+/** A folder named by a local date: '2026-11-27/' */
+export function dateFolder(at: number): string {
+  const d = new Date(at);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}/`;
+}
+
+/** A working folder's name when no one chose one: after a file ('report.md' → 'report/'), else by the date */
+export function folderNameFor(path: string, at: number): string {
+  const base = baseName(path);
+  const dot = base.lastIndexOf('.');
+  return cleanFolderName(dot > 0 ? base.slice(0, dot) : base) || dateFolder(at);
+}
+
+/** The top folder of a path ('todo/' for 'todo/js/a.js'; '' for a path at the top) */
+const topFolder = (path: string) => path.slice(0, path.indexOf('/') + 1);
+
+/**
+ * Data from before working folders: give each stored conversation that has files, and no working folder, one. When
+ * all of them sit in one top folder that holds nothing else, that folder is it, and nothing moves; else they move
+ * into a folder named after the first of them (relative paths between them keep their shape). Images stay where
+ * they are: a user put them there. One transaction per conversation, so a stop halfway leaves each conversation
+ * moved or untouched. Returns the conversations it changed
+ */
+export async function moveIntoWorkDirs(convs: Conversation[]): Promise<Conversation[]> {
+  const changed: Conversation[] = [];
+  for (const c of convs) {
+    if (c.workDir || c.temporary) continue;
+    const fileIds = (await db().files.where('conversationId').equals(c.id).primaryKeys()) as string[];
+    const files = (await Promise.all(fileIds.map((id) => getFile(id)))).filter((f) => !!f).sort((a, b) => a.createdAt - b.createdAt);
+    if (!files.length) continue;
+    const mine = new Set(files.map((f) => f.id));
+    const taken = await takenPaths();
+    const top = topFolder(files[0].name);
+    const ownTop = !!top && files.every((f) => pathKey(topFolder(f.name)) === pathKey(top)) && taken.every((o) => mine.has(o.id) || !isInside(o.path, top));
+    const folder = ownTop ? top : freeFolder(folderNameFor(files[0].name, c.createdAt), taken);
+    const fileRecs = ownTop ? [] : await Promise.all(files.map((f) => seal('files', { ...f, name: folder + f.name })));
+    const next = { ...c, workDir: folder };
+    const convRec = await seal('conversations', next);
+    await db().transaction('rw', db().files, db().conversations, async () => {
+      if (fileRecs.length) await db().files.bulkPut(fileRecs);
+      await db().conversations.put(convRec);
+    });
+    changed.push(next);
+  }
+  if (changed.length) storeChanged('files');
+  return changed;
+}
+
+/** Give a number to every path that another file or image already has (data from before paths were unique, imports) */
+export async function renumberTakenPaths(): Promise<number> {
+  const all = await takenPaths();
+  const kept: PathOwner[] = [];
+  const files: FileRecord[] = [];
+  const images: { id: string; name: string }[] = [];
+  for (let i = 0; i < all.length; i++) {
+    const o = all[i];
+    if (!pathFree(o.path, kept)) {
+      const path = freePath(o.path, [...kept, ...all.slice(i + 1)]);
+      const f = await getFile(o.id);
+      if (f) files.push({ ...f, name: path, updatedAt: Date.now() });
+      else images.push({ id: o.id, name: path });
+      o.path = path;
+    }
+    kept.push(o);
+  }
+  for (const f of files) await putFile(f, isTemporaryFile(f.id));
+  await renameImages(images);
+  return files.length + images.length;
 }

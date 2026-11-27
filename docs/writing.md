@@ -59,6 +59,7 @@ Natural mainland UI wording, full-width punctuation, no space between Chinese an
 | 取得用ページ | fetch page | 获取页面 |
 | 中継サーバー | relay server | 中转服务器 |
 | 版 | version | 版本 |
+| 作業フォルダ | working folder | 工作文件夹 |
 | 指示（システムプロンプト） | instructions (system prompt) | 指令（系统提示词） |
 | 思考 | reasoning | 思考 |
 | コンテキスト長 | context length | 上下文长度 |

@@ -2,19 +2,20 @@
 // Depends on core state; core state never imports this module (it registers itself through extension points).
 import { effect, signal } from '@preact/signals';
 import * as fdb from '../../lib/db/files';
-import { freePath, pathFree, withTakenPaths } from '../../lib/db/paths';
+import { folderNameFor, freeFolder, freePath, isInside, moveIntoWorkDirs, pathFree, pathKey, renumberTakenPaths, withTakenPaths } from '../../lib/db/paths';
 import { getSetting, newId, setSetting } from '../../lib/db/repo';
 import { getImage, listImages, putImage } from '../../lib/db/images';
 import type { Attachment, Conversation, FileRecord, ImageSource, MessageRecord } from '../../lib/db/schema';
 import type { ImageMeta } from './filer';
 import { filesVersion, imagesVersion } from '../../state/stored';
-import { currentConv, showChat, updateConversation } from '../../state/conversations';
+import { conversations, currentConv, showChat, startNewChat, updateConversation } from '../../state/conversations';
+import { registerDataLoader } from '../../state/lifecycle';
 import { defineFeatureSettings, pickLegacy } from '../../state/feature-settings';
 import { mainView, showToast, sidebarOpen, sidebarTab, type MainViewState } from '../../state/ui';
 import { registerRoute, setHash } from '../../state/router';
 import { registerToolProvider } from '../../state/tool-registry';
 import { extractText } from './extract';
-import { FILE_TOOL_NAMES, filesNote, makeFileTools, type FileToolDetails } from './tools';
+import { filesNote, makeFileTools } from './tools';
 import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
 import { fetchFromWeb } from '../../state/fetch-page';
@@ -106,6 +107,8 @@ export interface FilerPrefs {
 export const filerView = signal<FilerView>('all');
 /** Only items made in / attached to this conversation */
 export const filerConversation = signal<string | null>(null);
+/** Only items inside this folder ('todo-app/') */
+export const filerFolder = signal<string | null>(null);
 export const filerQuery = signal('');
 export const filerPrefs = signal<FilerPrefs>({ layout: 'grid', sort: 'updated', order: 'desc' });
 
@@ -121,13 +124,26 @@ export async function setFilerPrefs(patch: Partial<FilerPrefs>) {
   await setSetting(PREFS_KEY, filerPrefs.value);
 }
 
-export function openFiler(view?: FilerView, conversationId?: string | null) {
+export function openFiler(view?: FilerView, conversationId?: string | null, folder?: string | null) {
   if (view) filerView.value = view;
   if (conversationId !== undefined) filerConversation.value = conversationId;
+  if (folder !== undefined) filerFolder.value = folder;
   mainView.value = { kind: 'files' };
   sidebarTab.value = 'files';
   sidebarOpen.value = false;
   setHash('#/files');
+}
+
+/** The Files tab showing what is inside a folder */
+export function openFolder(folder: string) {
+  openFiler('all', null, folder);
+}
+
+/** Start a new chat whose working folder is `folder`, so its model works on the files already there */
+export async function chatInFolder(folder: string) {
+  startNewChat();
+  await updateConversation({ workDir: folder }, null);
+  showChat();
 }
 
 /** Where "back" goes from a file: the screen it was opened from */
@@ -266,12 +282,13 @@ async function importImage(file: File, id: string, source: ImageSource, conv?: C
 
 
 // ---- fetching from the web (through the fetch page: state/fetch-page.ts) ----
-/** Keep what was fetched in the Files tab, as part of the chat (so its tools can read it): a file, or an image */
+/** Keep what was fetched in the conversation's working folder (so its tools can read it): a file, or an image */
 async function saveFetched(r: Fetched, conv: Conversation): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null> {
   const file = new File([r.data], r.name, { type: r.mime });
   const id = newId();
-  if (r.mime.startsWith('image/')) return (await importImage(file, id, { kind: 'web', url: r.url }, conv)) ? { kind: 'image', name: file.name } : null;
-  const rec = await importOne(file, id, !!conv.temporary, r.url, conv.id);
+  const dir = await ensureWorkDir(conv.id, r.name);
+  if (r.mime.startsWith('image/')) return (await importImage(file, id, { kind: 'web', url: r.url }, conv, dir)) ? { kind: 'image', name: file.name } : null;
+  const rec = await importOne(file, id, !!conv.temporary, r.url, conv.id, dir);
   return rec ? { kind: 'file', file: rec } : null;
 }
 
@@ -338,81 +355,118 @@ export async function takeAttachments(): Promise<Attachment[]> {
   return out;
 }
 
-// ---- tools for the model ----
-/** A file this conversation may read (made, fetched or attached in it): its name and current text, for other features' tools */
-export async function conversationFile(conv: Conversation, history: MessageRecord[], ref: string): Promise<{ name: string; text: string } | undefined> {
-  const used = filesInHistory(history);
-  const allowed = (f: FileRecord | undefined) => (f && (f.conversationId === conv.id || used.has(f.id)) ? f : undefined);
-  let f = allowed(await fdb.getFile(ref));
-  if (!f) {
-    // Not an id: a path, among the conversation's own files and the ones its messages used
-    const path = fdb.cleanFileName(ref, fdb.extOf(ref) || 'md');
-    f = (await fdb.filesOfConversation(conv.id)).find((x) => x.name === path);
-    for (const id of used.keys()) {
-      if (f) break;
-      const x = await fdb.getFile(id);
-      if (x?.name === path) f = x;
-    }
-  }
-  return f && { name: f.name, text: fdb.currentText(f) };
+// ---- the working folder: the one folder a conversation's model reads and writes ----
+/** The conversation's working folder as it is now ('todo-app/'; '' before its first file) */
+export function workDirOf(convId: string): string {
+  const c = conversations.value.find((x) => x.id === convId);
+  return c?.workDir ? fdb.cleanFolderName(c.workDir) : '';
 }
 
-/** Files the model may use in a conversation: attached to it, or created / changed by file tools in it */
-export function filesInHistory(history: MessageRecord[]): Map<string, { name: string; size: number }> {
-  const out = new Map<string, { name: string; size: number }>();
-  for (const m of history) {
-    for (const a of m.attachments ?? []) out.set(a.fileId, { name: a.name, size: a.totalChars });
-    for (const p of m.parts) {
-      if (p.type !== 'tool' || !FILE_TOOL_NAMES.includes(p.name)) continue;
-      const d = p.uiDetails as FileToolDetails | undefined;
-      if (d?.fileId) out.set(d.fileId, { name: d.name, size: d.chars });
-    }
-  }
-  return out;
+/**
+ * The conversation's working folder, made now if it has none: named `name` (the model's choice), else after the
+ * file that makes it (`firstFile`)
+ */
+async function ensureWorkDir(convId: string, firstFile: string, name = ''): Promise<string> {
+  return workDirOf(convId) || withTakenPaths(async (taken) => {
+    // Another call may have made it while this one waited its turn
+    const made = workDirOf(convId);
+    if (made) return made;
+    const dir = freeFolder(fdb.cleanFolderName(name) || folderNameFor(firstFile, Date.now()), taken);
+    await updateConversation({ workDir: dir }, convId);
+    return dir;
+  });
+}
+
+/** Files attached to the conversation's messages: the model may read them, wherever they are */
+function attachedIds(history: MessageRecord[]): Set<string> {
+  return new Set(history.flatMap((m) => (m.attachments ?? []).map((a) => a.fileId)));
+}
+
+/** A file the model of a conversation may read: by id, or by path in its working folder (else undefined) */
+async function readableFile(convId: string, history: MessageRecord[], ref: string): Promise<FileRecord | undefined> {
+  const dir = workDirOf(convId);
+  const byId = await fdb.getFile(ref);
+  if (byId) return (dir && isInside(byId.name, dir)) || attachedIds(history).has(byId.id) ? byId : undefined;
+  if (!dir) return undefined;
+  const key = pathKey(dir + fdb.cleanFileName(ref, fdb.extOf(ref) || 'md'));
+  return (await fdb.listFiles()).find((f) => pathKey(f.name) === key);
+}
+
+/** A file this conversation's model may read (in its working folder, or attached): its path and text, for other features' tools */
+export async function conversationFile(conv: Conversation, history: MessageRecord[], ref: string): Promise<{ name: string; text: string } | undefined> {
+  const f = await readableFile(conv.id, history, ref);
+  return f && { name: relativeTo(workDirOf(conv.id), f.name), text: fdb.currentText(f) };
+}
+
+/** A path as the model sees it: relative to the working folder (whole when outside it) */
+const relativeTo = (dir: string, path: string) => (dir && isInside(path, dir) ? path.slice(dir.length) : path);
+
+function fileTools(conv: Conversation, history: MessageRecord[]) {
+  const dir = () => workDirOf(conv.id);
+  return makeFileTools(
+    {
+      async fetch(url, signal) {
+        const r = await fetchFromWeb(url, 'save', signal);
+        return r && (await saveFetched(r, conv));
+      },
+      async create(path, text, folder) {
+        const d = await ensureWorkDir(conv.id, path, folder);
+        return withTakenPaths(async (taken) => {
+          const full = d + path;
+          const key = pathKey(full);
+          const same = taken.find((o) => pathKey(o.path) === key);
+          // One file per path: writing to a path the folder has makes a new version of that file
+          const file = same && (await fdb.getFile(same.id));
+          if (file) return { file: await fdb.addVersion(file, text, 'model'), replaced: true };
+          if (!pathFree(full, taken)) throw new Error(t('tool.pathTaken', { name: path }));
+          const f = fdb.newFile({ id: newId(), name: full, kind: 'document', text, by: 'model', conversationId: conv.id });
+          await fdb.putFile(f, !!conv.temporary);
+          return { file: f, replaced: false };
+        });
+      },
+      get: (ref) => readableFile(conv.id, history, ref),
+      async update(id, text, note) {
+        const f = await fdb.getFile(id);
+        if (!f) throw new Error(t('tool.notFound'));
+        // A file attached from outside the folder is only read: a change goes into a new file in the folder
+        if (!dir() || !isInside(f.name, dir())) throw new Error(t('tool.readOnly', { name: f.name }));
+        return fdb.addVersion(f, text, 'model', note);
+      },
+      pathOf: (f) => relativeTo(dir(), f.name)
+    },
+    { hasFolder: !!dir() }
+  );
 }
 
 registerToolProvider({
   id: 'files',
-  tools({ conv, history }) {
-    if (!fileSettings.value.value.fileTools) return [];
-    const scope = new Set(filesInHistory(history).keys());
-    /** A file of the conversation by its path (names are read now: a file may have been renamed since) */
-    const atPath = async (path: string) => {
-      for (const id of scope) {
-        const f = await fdb.getFile(id);
-        if (f?.name === path) return f;
-      }
-      return undefined;
-    };
-    return makeFileTools({
-      async fetch(url, signal) {
-        const r = await fetchFromWeb(url, 'save', signal);
-        const saved = r && (await saveFetched(r, conv));
-        if (saved?.kind === 'file') {
-          scope.add(saved.file.id);
-        }
-        return saved;
-      },
-      async create(name, text) {
-        // One file per path in a conversation: writing to a path it has makes a new version of that file
-        const same = await atPath(name);
-        if (same) return { file: await fdb.addVersion(same, text, 'model'), replaced: true };
-        const f = fdb.newFile({ id: newId(), name, kind: 'document', text, by: 'model', conversationId: conv.id });
-        await fdb.putFile(f, !!conv.temporary);
-        scope.add(f.id);
-        return { file: f, replaced: false };
-      },
-      get: async (ref) => (scope.has(ref) ? fdb.getFile(ref) : atPath(fdb.cleanFileName(ref, fdb.extOf(ref) || 'md'))),
-      async update(id, text, note) {
-        const f = await fdb.getFile(id);
-        if (!f || !scope.has(id)) throw new Error(t('tool.notFound'));
-        const next = await fdb.addVersion(f, text, 'model', note);
-        return next;
-      }
-    });
-  },
-  systemNote({ history }) {
-    if (!fileSettings.value.value.fileTools) return undefined;
-    return filesNote([...filesInHistory(history)].map(([id, f]) => ({ id, ...f })));
+  // Until the working folder exists only create_file and fetch_file; once a file made it (in this answer too) all
+  tools: ({ conv, history }) => (fileSettings.value.value.fileTools ? fileTools(conv, history) : []),
+  dynamicTools: ({ conv, history }) => (fileSettings.value.value.fileTools && workDirOf(conv.id) ? fileTools(conv, history) : []),
+  systemNote({ conv }) {
+    const dir = workDirOf(conv.id);
+    if (!fileSettings.value.value.fileTools || !dir) return undefined;
+    // The list is loaded with the conversation (below); while it loads, only the folder is named
+    const files = fileList.value?.filter((f) => isInside(f.name, dir)).map((f) => ({ id: f.id, path: f.name.slice(dir.length), size: f.size })) ?? null;
+    return filesNote(dir, files);
   }
 });
+
+// The system note lists the working folder's files from the file list: loaded once a conversation with one is open
+effect(() => {
+  if (currentConv.value.workDir && !fileList.peek()) void refreshFiles();
+});
+
+// Stored data from before working folders: the files of each conversation move into a folder of their own. Paths
+// that two files share (from before paths were unique) get a number: once, and after every import of a backup
+let checkedPaths = false;
+registerDataLoader(async () => {
+  const moved = await moveIntoWorkDirs(conversations.value);
+  if (moved.length) conversations.value = conversations.value.map((c) => moved.find((m) => m.id === c.id) ?? c);
+  const firstLoad = !checkedPaths;
+  checkedPaths = true;
+  if (firstLoad && !moved.length && (await getSetting(PATHS_CHECKED, false))) return;
+  await renumberTakenPaths();
+  await setSetting(PATHS_CHECKED, true);
+});
+const PATHS_CHECKED = 'files:pathsChecked';

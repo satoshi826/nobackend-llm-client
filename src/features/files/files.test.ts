@@ -54,7 +54,7 @@ function memDeps(scope = new Set<string>()) {
       ...(script ? { scriptResult: '1' } : {})
     }),
     list: async () => [...files.values()].filter((f) => scope.has(f.id)).map((f) => ({ path: f.name, kind: 'file' as const, bytes: f.bytes })),
-    // As the sandbox worker does it (state.ts)
+    // As the sandbox worker does it (state/workdir.ts)
     async search(pattern, ignoreCase, only) {
       const re = new RegExp(pattern, ignoreCase ? 'i' : '');
       const pick = only ? new RegExp(only, 'i') : null;

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { currentConv, updateConversation } from '../state/conversations';
 import { saveSettings, settings } from '../state/settings';
 import { modal, showToast } from '../state/ui';
-import * as repo from '../lib/db/repo';
+import { deleteSavedPrompt, listSavedPrompts, savePrompt } from '../state/prompts';
 import type { SavedPrompt } from '../lib/db/schema';
 import { Button, EmptyState, Icon, IconButton, Modal, TextArea, TextField } from './ui';
 import { askConfirm } from './ConfirmDialog';
@@ -15,7 +15,7 @@ export function SystemPromptModal() {
   const [name, setName] = useState('');
 
   useEffect(() => {
-    repo.listPrompts().then(setSaved);
+    listSavedPrompts().then(setSaved);
   }, []);
 
   const apply = async () => {
@@ -67,8 +67,7 @@ export function SystemPromptModal() {
             onSubmit={async (e) => {
               e.preventDefault();
               if (!name.trim() || !text.trim()) return;
-              const p = { id: repo.newId(), name: name.trim(), content: text, updatedAt: Date.now() };
-              await repo.putPrompt(p);
+              const p = await savePrompt(name.trim(), text);
               setSaved([p, ...saved]);
               setName('');
             }}
@@ -97,7 +96,7 @@ export function SystemPromptModal() {
                   variant="remove"
                   onClick={async () => {
                     if (!(await askConfirm({ title: t('sys.deleteTitle'), message: t('sys.deleteMessage', { name: p.name }), confirmLabel: t('sys.delete'), danger: true }))) return;
-                    await repo.deletePrompt(p.id);
+                    await deleteSavedPrompt(p.id);
                     setSaved(saved.filter((x) => x.id !== p.id));
                   }}
                 >

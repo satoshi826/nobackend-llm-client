@@ -1,12 +1,10 @@
 // The option bar shown above the input box in video mode: model, length, resolution, aspect ratio, sound, the
 // first frame, and the price
 import { useEffect, useRef } from 'preact/hooks';
-import * as repo from '../../../lib/db/repo';
-import { putImage } from '../../../lib/db/images';
 import { openSettings } from '../../../state/ui';
 import { Button, Checkbox, Icon, IconButton, Select, Spinner } from '../../../components/ui';
 import { ImageThumb } from '../../images';
-import { barQuote, chooseVideoModel, currentVideoModel, firstFrame, loadVideoModels, modelRef, offeredModels, paramsFromBar, readyVideoProviders, setVideoDefaults, videoModels, videoModelsError, videoReady } from '../state';
+import { barQuote, chooseVideoModel, currentVideoModel, firstFrame, loadVideoModels, modelRef, offeredModels, paramsFromBar, pickFirstFrame, readyVideoProviders, setVideoDefaults, videoModels, videoModelsError, videoReady } from '../state';
 import { videoProviderOf } from '../providers/types';
 import { t, usd } from '../messages';
 import { formatNumber } from '../../../lib/i18n';
@@ -54,11 +52,7 @@ export function VideoBar() {
   const price = videoProviderOf(p.providerId)?.quoteIsPrice;
   const frame = firstFrame.value;
   const pickFrame = async (file: File | undefined) => {
-    if (!file?.type.startsWith('image/')) return;
-    // Kept in the Files tab like any image brought in
-    const id = repo.newId();
-    await putImage({ id, mime: file.type, origin: { kind: 'upload' }, name: file.name }, file, false);
-    firstFrame.value = { blobId: id, name: file.name };
+    if (file?.type.startsWith('image/')) await pickFirstFrame(file);
   };
   return (
     <div class="space-y-1.5 px-3 pt-2.5 text-xs" role="group" aria-label={t('bar.group')}>

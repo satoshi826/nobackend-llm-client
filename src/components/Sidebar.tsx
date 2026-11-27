@@ -1,9 +1,8 @@
 // Sidebar: tabs (conversations + tabs registered by features), notices, settings
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useDialog } from './dialog';
-import { countMadeIn, searchMessages, type SearchHit } from '../lib/db/repo';
 import type { Conversation } from '../lib/db/schema';
-import { conversations, currentId, openConversation, removeConversation, showChat, startNewChat, updateConversation } from '../state/conversations';
+import { conversations, countMadeIn, currentId, openConversation, removeConversation, searchMessages, showChat, startNewChat, updateConversation, type SearchHit } from '../state/conversations';
 import { abortConversation, streamingConv } from '../state/runs';
 import { balanceAlerts } from '../state/balance';
 import { clearLeftoverLocalKeys, leftoverLocalKeys } from '../state/keys';

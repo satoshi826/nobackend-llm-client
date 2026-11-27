@@ -3,10 +3,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useDialog } from '../../../components/dialog';
 import type { ImageParams, MessageRecord } from '../../../lib/db/schema';
 import type { Part } from '../../../lib/providers/types';
-import { getImage, getImageThumb } from '../../../lib/db/images';
-import { catalogImage } from '../../../lib/db/catalog';
 import { baseName } from '../../../lib/paths';
-import { conversations, currentId, messages, openConversation, startNewChat } from '../../../state/conversations';
+import { currentId, openConversation } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
 import { modal, showToast } from '../../../state/ui';
 import { Button, Disclosure, Icon, Shimmer, Spinner, cx, IconButton, type IconName } from '../../../components/ui';
@@ -15,12 +13,15 @@ import { copyText } from '../../../components/clipboard';
 import {
   deleteImages,
   estimateCost,
-  editTargetFor,
   imageActions,
   imageProviderReady,
   imageAction,
   imageModelOf,
+  goToImageChat,
+  imageWorkOf,
   lightbox,
+  loadImage,
+  savedPathOf,
   regenerateImage,
   retryWithSuggestion,
   type LightboxItem
@@ -94,7 +95,7 @@ export function useImageUrl(blobId: string | undefined, size: 'full' | 'thumb' =
     if (!blobId || !enabled) return;
     let alive = true;
     const key = `${size}:${blobId}`;
-    void acquireUrl(key, () => (size === 'thumb' ? getImageThumb(blobId) : getImage(blobId))).then((u) => alive && setUrl(u));
+    void acquireUrl(key, () => loadImage(blobId, size)).then((u) => alive && setUrl(u));
     return () => {
       alive = false;
       releaseUrl(key);
@@ -104,17 +105,17 @@ export function useImageUrl(blobId: string | undefined, size: 'full' | 'thumb' =
 }
 
 /**
- * The object URL of stored bytes, made when blobId is set and freed when it changes or the component goes: for videos,
- * too large to keep in the image cache
+ * The object URL of stored bytes (the whole, or the small copy), made when blobId is set and freed when it changes or
+ * the component goes: for videos, too large to keep in the image cache
  */
-export function useBlobUrl(blobId: string | undefined, load: (id: string) => Promise<Blob | null> = getImage): string | null | undefined {
+export function useBlobUrl(blobId: string | undefined, size: 'full' | 'thumb' = 'full'): string | null | undefined {
   const [url, setUrl] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     setUrl(undefined);
     if (!blobId) return;
     let made: string | null = null;
     let alive = true;
-    void load(blobId)
+    void loadImage(blobId, size)
       .then((b) => {
         made = b ? URL.createObjectURL(b) : null;
         if (alive) setUrl(made);
@@ -125,7 +126,7 @@ export function useBlobUrl(blobId: string | undefined, load: (id: string) => Pro
       alive = false;
       if (made) URL.revokeObjectURL(made);
     };
-  }, [blobId]);
+  }, [blobId, size]);
   return url;
 }
 
@@ -365,25 +366,12 @@ export function useImageViewer(item: LightboxItem | undefined, o: { leave(): voi
   const url = item?.video ? videoUrl : imageUrl;
   const video = !!item?.video;
   const missing = url === null;
-  const msg = item && messages.value.find((m) => m.id === item.messageId);
-  const source = msg ? messages.value.find((m) => m.id === msg.parentId) : undefined;
-  const promptText = msg?.image?.params.prompt || source?.imageRequest?.prompt || '';
-  if (!item) return { url, video, missing, promptText, tools: [], editing: false, submitEdit: () => {} };
-  // Edits run on the provider that made the image when it offers them, else on another one with a key
-  const from = { providerId: msg?.meta?.providerId, model: msg?.meta?.model };
-  const upscaler = video || missing ? undefined : editTargetFor('upscale', from)?.provider;
-  const bgRemover = video || missing ? undefined : editTargetFor('remove-bg', from)?.provider;
-  const editor = video || missing ? undefined : editTargetFor('edit', from);
-  const editorName = editor && (editor.model ? (imageModelOf(editor.provider.id, editor.model)?.name ?? editor.model) : editor.provider.label);
-  const chat = item.conversationId;
-  const inThisChat = !!chat && currentId.value === chat;
-  // Saved images outlive their conversation, and brought-in images have none: those are edited in a new chat
-  const chatExists = inThisChat || (!!chat && conversations.value.some((c) => c.id === chat));
+  const work = item && imageWorkOf(item, url !== null);
+  const promptText = work?.prompt ?? '';
+  if (!item || !work) return { url, video, missing, promptText, tools: [], editing: false, submitEdit: () => {} };
+  const { from } = work;
   const act = async (fn: () => Promise<void>) => {
-    if (!inThisChat) {
-      if (chat && chatExists) await openConversation(chat);
-      else startNewChat();
-    }
+    await goToImageChat(work);
     o.leave();
     modal.value = null;
     await fn();
@@ -393,36 +381,35 @@ export function useImageViewer(item: LightboxItem | undefined, o: { leave(): voi
     const a = document.createElement('a');
     a.href = url;
     // Named as it is saved in the Files tab
-    const path = item.name ?? catalogImage(item.blobId)?.path;
-    const file = msg?.parts.find((p): p is FilePart => p.type === 'file' && p.blobId === item.blobId);
-    a.download = path ? baseName(path) : file?.name ?? (video ? `video-${item.blobId.slice(0, 8)}.mp4` : `image-${item.blobId.slice(0, 8)}.png`);
+    const path = item.name ?? savedPathOf(item.blobId);
+    a.download = path ? baseName(path) : video ? `video-${item.blobId.slice(0, 8)}.mp4` : `image-${item.blobId.slice(0, 8)}.png`;
     a.click();
   };
   const busy = isStreaming.value;
   const tools: ViewerTool[] = [
     ...(url ? [{ id: 'download', icon: 'download' as const, label: t('lb.download'), run: download }] : []),
     ...(promptText ? [{ id: 'copy', icon: 'copy' as const, label: t('lb.copyPrompt'), run: () => void copyText(promptText, t('lb.copied')) }] : []),
-    ...(upscaler
+    ...(work.upscale
       ? ([2, 4] as const).map((scale) => ({
           id: `upscale-${scale}`,
           icon: 'expand' as const,
           label: `${scale}×`,
           text: `${scale}×`,
-          title: t('lb.upscaleTitle', { scale, cost: costText({ op: 'upscale', providerId: upscaler.id, scale }) }),
-          cost: costText({ op: 'upscale', providerId: upscaler.id, scale }),
+          title: t('lb.upscaleTitle', { scale, cost: costText({ op: 'upscale', providerId: work.upscale!, scale }) }),
+          cost: costText({ op: 'upscale', providerId: work.upscale!, scale }),
           makesNew: true,
           disabled: busy,
           run: () => void act(() => imageAction('upscale', item.blobId, { scale, from }))
         }))
       : []),
-    ...(bgRemover
-      ? [{ id: 'remove-bg', icon: 'scissors' as const, label: t('lb.removeBg'), text: t('lb.removeBg'), title: t('lb.removeBgTitle', { cost: costText({ op: 'remove-bg', providerId: bgRemover.id }) }), cost: costText({ op: 'remove-bg', providerId: bgRemover.id }), makesNew: true, disabled: busy, run: () => void act(() => imageAction('remove-bg', item.blobId, { from })) }]
+    ...(work.removeBg
+      ? [{ id: 'remove-bg', icon: 'scissors' as const, label: t('lb.removeBg'), text: t('lb.removeBg'), title: t('lb.removeBgTitle', { cost: costText({ op: 'remove-bg', providerId: work.removeBg }) }), cost: costText({ op: 'remove-bg', providerId: work.removeBg }), makesNew: true, disabled: busy, run: () => void act(() => imageAction('remove-bg', item.blobId, { from })) }]
       : []),
     ...(!video && !missing
       ? imageActions.filter((a) => a.shown()).map((a) => ({ id: a.id, icon: a.icon, label: a.label(), text: a.label(), title: a.title(), makesNew: true, run: () => void act(async () => a.run(item.blobId, item.name)) }))
       : []),
-    ...(editor
-      ? [{ id: 'edit', icon: 'wand' as const, label: t('lb.edit'), text: t('lb.edit'), title: t('lb.editTitle', { model: editorName!, cost: costText({ op: 'edit', providerId: editor.provider.id, model: editor.model }) }), cost: costText({ op: 'edit', providerId: editor.provider.id, model: editor.model }), makesNew: true, disabled: busy, pressed: editing, run: () => setEditing(!editing) }]
+    ...(work.edit
+      ? [{ id: 'edit', icon: 'wand' as const, label: t('lb.edit'), text: t('lb.edit'), title: t('lb.editTitle', { model: work.edit.name, cost: costText({ op: 'edit', providerId: work.edit.providerId, model: work.edit.model }) }), cost: costText({ op: 'edit', providerId: work.edit.providerId, model: work.edit.model }), makesNew: true, disabled: busy, pressed: editing, run: () => setEditing(!editing) }]
       : []),
     {
       id: 'delete',
@@ -432,7 +419,7 @@ export function useImageViewer(item: LightboxItem | undefined, o: { leave(): voi
         if (await confirmAndDelete([item.blobId])) o.deleted();
       }
     },
-    ...(o.fromGallery && chat && !inThisChat && chatExists
+    ...(o.fromGallery && work.chat && currentId.value !== work.chat
       ? [
           {
             id: 'open-chat',
@@ -442,7 +429,7 @@ export function useImageViewer(item: LightboxItem | undefined, o: { leave(): voi
             run: () => {
               o.leave();
               modal.value = null;
-              void openConversation(chat);
+              void openConversation(work.chat!);
             }
           }
         ]

@@ -2,7 +2,6 @@
 // request, and the answer (progress while it is made, then the player)
 import { useEffect, useState } from 'preact/hooks';
 import type { Conversation, MessageRecord } from '../../../lib/db/schema';
-import { getImageThumb } from '../../../lib/db/images';
 import { formatNumber } from '../../../lib/i18n';
 import { isStreaming } from '../../../state/runs';
 import { Button, Chip, Icon, Shimmer, Spinner } from '../../../components/ui';
@@ -89,7 +88,7 @@ function VideoAnswerBody({ m }: { m: MessageRecord }) {
   const file = m.parts.find((x): x is Extract<typeof x, { type: 'file' }> => x.type === 'file');
   // The poster first; the video itself (megabytes) only once it is played
   const [playing, setPlaying] = useState(false);
-  const poster = useBlobUrl(file?.blobId, getImageThumb);
+  const poster = useBlobUrl(file?.blobId, 'thumb');
   const src = useBlobUrl(playing ? file?.blobId : undefined);
   const box = file?.width ? { aspectRatio: `${file.width} / ${file.height}` } : { aspectRatio: '16 / 9' };
   const model = videoModelOf(p.providerId, p.model);

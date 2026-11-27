@@ -9,6 +9,12 @@ import { clearAllKeys } from './keys';
 import { decryptSecret, encryptSecret, type EncryptedBlob } from '../lib/crypto/passphrase';
 import { t } from './messages';
 
+export type { StorageBreakdown } from '../lib/db/storage-usage';
+/** What each kind of data takes in this browser's storage */
+export { storageBreakdown } from '../lib/db/storage-usage';
+/** How many images and videos are kept, and their bytes (they make backups large) */
+export { imageUsage } from '../lib/db/images';
+
 /** Backup file encrypted with a password (PBKDF2 + AES-GCM, same scheme as the key vault) */
 export const ENCRYPTED_BACKUP_FORMAT = 'nobackend-llm-client/export-encrypted';
 

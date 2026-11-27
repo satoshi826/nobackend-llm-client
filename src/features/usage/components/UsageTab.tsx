@@ -1,7 +1,7 @@
 // Settings > Usage: tokens and cost recorded on this device, aggregated by day, provider, and model
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { BALANCE_ALERT_USD, balances, fetchBalances } from '../../../state/balance';
-import * as repo from '../../../lib/db/repo';
+import { clearUsage, listUsage } from '../state';
 import { summarizeUsage, type UsageRecord, type UsageTotals } from '../../../lib/usage';
 import { modelOf, providerById } from '../../../state/models';
 import { PRESETS } from '../../../lib/providers/registry';
@@ -173,7 +173,7 @@ export function UsageTab() {
   const [metric, setMetric] = useState<'cost' | 'tokens'>('cost');
   const [showDays, setShowDays] = useState(false);
 
-  const load = () => void repo.listUsage(sinceOf(range)).then(setRecords);
+  const load = () => void listUsage(sinceOf(range)).then(setRecords);
   useEffect(load, [range]);
   const s = useMemo(() => (records ? summarizeUsage(records, sinceOf(range)) : null), [records, range]);
   const name = (pid: string) => providerById(pid)?.name ?? (pid || t('unknownProvider'));
@@ -249,7 +249,7 @@ export function UsageTab() {
           onClick={() =>
             void askConfirm({ title: t('clear.title'), message: t('clear.message'), confirmLabel: t('clear.confirm'), danger: true }).then(async (ok) => {
               if (!ok) return;
-              await repo.clearUsage();
+              await clearUsage();
               load();
               showToast(t('clear.done'));
             })

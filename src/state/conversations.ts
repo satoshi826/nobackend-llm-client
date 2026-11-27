@@ -79,6 +79,13 @@ function sortConversations(list: Conversation[]): Conversation[] {
   return [...list].sort((a, b) => b.pinned - a.pinned || b.updatedAt - a.updatedAt);
 }
 
+export type { SearchHit } from '../lib/db/repo';
+/** Messages whose text matches a search (the sidebar's search) */
+export const searchMessages = (query: string, signal?: AbortSignal): Promise<repo.SearchHit[]> => repo.searchMessages(query, signal);
+
+/** How many saved things (files, images) a chat made: they can go with it when it is deleted */
+export const countMadeIn = (id: string): Promise<number> => repo.countMadeIn(id);
+
 export async function loadConversations() {
   conversations.value = sortConversations(await repo.listConversations());
 }

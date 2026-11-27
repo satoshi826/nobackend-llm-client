@@ -4,7 +4,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { folderOf } from '../../../lib/paths';
 import { Button, Icon, IconButton, Spinner, TextField } from '../../../components/ui';
 import { useImageViewer, ViewerStage, type LightboxItem, type ViewerTool } from '../../images';
-import { closeFileView, fileReturnsToChat, imageSiblings, openFolder, openImage } from '../state';
+import { closeFileView, fileReturnsToChat, imagesToStep, openFolder, openImage } from '../state';
 import { useFilerItems } from './filer-items';
 import { ActionMenu, FolderCrumbs, SourceChat, SubBar, type MenuAction } from './common';
 import { FilesHeader } from './FilesHeader';
@@ -13,10 +13,7 @@ import { t } from '../messages';
 export function ImagePage({ id = '' }: { id?: string }) {
   const all = useFilerItems();
   const it = all?.find((x): x is Extract<typeof x, { type: 'image' }> => x.type === 'image' && x.id === id);
-  // The images to step through: those it was opened with, else the ones in its folder (newest first, as listed)
-  const images = all?.filter((x) => x.type === 'image') ?? [];
-  const listed = imageSiblings.value.filter((s) => images.some((x) => x.id === s));
-  const siblings = listed.length ? listed : images.filter((x) => it && folderOf(x.name) === folderOf(it.name)).map((x) => x.id);
+  const siblings = imagesToStep(id);
   const at = siblings.indexOf(id);
   const go = (d: number) => siblings.length > 1 && openImage(siblings[(at + d + siblings.length) % siblings.length], siblings);
   const item: LightboxItem | undefined = it && { blobId: it.id, conversationId: it.conversationId, messageId: it.messageId, name: it.name, video: it.video };

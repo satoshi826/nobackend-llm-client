@@ -10,7 +10,7 @@ import { putConversation } from '../../lib/db/repo';
 import { conversations } from '../../state/conversations';
 import { contributedTools } from '../../state/tool-registry';
 import type { ModelInfo } from '../../lib/providers/types';
-import { moveItems, siteOf, workDirOf } from './state';
+import { moveItems, planRemoval, refreshFiles, refreshImages, siteOf, workDirOf } from './state';
 
 const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
 const model = { capabilities: { tools: true } } as ModelInfo;
@@ -146,16 +146,26 @@ describe('sites', () => {
 });
 
 describe('moving into folders', () => {
-  it('gives an image made in a chat its shown name as its first path, still as made, and numbers a taken one', async () => {
-    await putImage({ id: 'made', mime: 'image/png', conversationId: 'c' }, new Blob(['x'], { type: 'image/png' }), false);
-    await make({ id: 'f', name: 'pics/Chat 1.png.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
-    await moveItems([{ id: 'made', type: 'image', name: 'Chat 1.png' }, { id: 'f', type: 'file', name: 'pics/Chat 1.png.md' }], 'pics/');
+  it('moves files and images with their names, still as made, and numbers a taken one', async () => {
+    const at = await putImage({ id: 'made', mime: 'image/png', conversationId: 'c' }, new Blob(['x'], { type: 'image/png' }), false);
+    await make({ id: 'f', name: 'pics/notes.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
+    await moveItems([{ id: 'made', type: 'image' }, { id: 'f', type: 'file' }], 'pics/');
     const im = (await listImages()).find((i) => i.id === 'made')!;
-    expect([im.path, im.origin]).toEqual(['pics/Chat 1.png', { kind: 'made' }]);
+    expect([im.path, im.origin]).toEqual([`pics/${at}`, { kind: 'made' }]);
     // Already there: stays as it is
-    expect((await getFile('f'))!.name).toBe('pics/Chat 1.png.md');
-    await make({ id: 'g', name: 'other/Chat 1.png.md', origin: { kind: 'made' }, text: 'y', by: 'model' });
-    await moveItems([{ id: 'g', type: 'file', name: 'other/Chat 1.png.md' }], 'pics/');
-    expect((await getFile('g'))!.name).toBe('pics/Chat 1.png (2).md');
+    expect((await getFile('f'))!.name).toBe('pics/notes.md');
+    await make({ id: 'g', name: 'other/notes.md', origin: { kind: 'made' }, text: 'y', by: 'model' });
+    await moveItems([{ id: 'g', type: 'file' }], 'pics/');
+    expect((await getFile('g'))!.name).toBe('pics/notes (2).md');
+  });
+  it('plans a delete: a folder goes with everything inside it, chosen items once', async () => {
+    await make({ id: 'a', name: 'pics/a.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
+    await make({ id: 'b', name: 'pics/deep/b.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
+    await make({ id: 'c', name: 'other/c.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
+    await putImage({ id: 'i', mime: 'image/png', folder: 'pics/' }, new Blob(['x'], { type: 'image/png' }), false);
+    await refreshFiles();
+    await refreshImages();
+    const r = planRemoval(['pics/'], [{ id: 'a', type: 'file' }, { id: 'c', type: 'file' }]);
+    expect([r.fileIds.sort(), r.imageIds]).toEqual([['a', 'b', 'c'], ['i']]);
   });
 });

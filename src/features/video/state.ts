@@ -98,6 +98,13 @@ export function videoModelOf(providerId: string | undefined, id: string | undefi
 // ---- the bar ----
 /** The first frame chosen in the bar (an image of the Files tab); models are then those that start from an image */
 export const firstFrame = signal<{ blobId: string; name?: string } | null>(null);
+
+/** Use an image from the user's device as the first frame: kept in the Files tab like any image brought in */
+export async function pickFirstFrame(file: File) {
+  const id = repo.newId();
+  await putImage({ id, mime: file.type, origin: { kind: 'upload' }, name: file.name }, file, false);
+  firstFrame.value = { blobId: id, name: file.name };
+}
 // It belongs to the conversation it was chosen in
 effect(() => {
   void currentId.value;

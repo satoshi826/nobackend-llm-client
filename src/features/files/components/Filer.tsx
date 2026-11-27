@@ -6,7 +6,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { baseName, cleanFolderName, folderOf, isInside, pathKey } from '../../../lib/paths';
-import { confirmAndDelete, deleteImages, ImageThumb } from '../../images';
+import { confirmAndDelete, ImageThumb } from '../../images';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { FilesHeader } from './FilesHeader';
@@ -16,7 +16,6 @@ import { allFolders, filterItems, foldersIn, NATURAL_ORDER, previewText, sortIte
 import {
   chatInFolder,
   createFolder,
-  deleteFiles,
   downloadFile,
   downloadImage,
   filerConversation,
@@ -27,13 +26,14 @@ import {
   importFromDevice,
   importing,
   loadFilerPrefs,
-  moveItems,
+  moveEntries,
   newFolders,
-  dropNewFolders,
   openFile,
   openImage,
   openFolder,
   renameFolder,
+  planRemoval,
+  removeEntries,
   renameItem,
   searchContents,
   setFilerPrefs,
@@ -212,43 +212,34 @@ export function Filer() {
     openImage(it.id, list.filter((x) => x.type === 'image').map((x) => x.id));
   };
 
-  /** Move entries into a folder: a folder takes everything in it along; one cannot go into itself */
+  /** Move entries into a folder (a folder takes everything in it along) */
   const moveInto = async (target: string, entryKeys: string[]) => {
-    for (const k of entryKeys) {
-      const f = folderOfKey(k);
-      if (f && !isInside(target, f.path) && pathKey(folderOf(f.path.slice(0, -1))) !== pathKey(target)) await renameFolder(f.path, target + f.name);
-    }
-    const its = entryKeys.map(itemOfKey).filter((i) => !!i);
-    if (its.length) await moveItems(its.map((i) => ({ id: i.id, type: i.type, name: i.name })), target);
+    await moveEntries(entryKeys.map(folderOfKey).filter((f) => !!f), entryKeys.map(itemOfKey).filter((i) => !!i), target);
     setPicked(new Set());
   };
 
   /** Delete entries, a folder with all it holds, after the user confirms what goes */
   const remove = async (entryKeys: string[]) => {
     const fs = entryKeys.map(folderOfKey).filter((f) => !!f);
-    const inside = [...entryKeys.map(itemOfKey).filter((i) => !!i), ...(all ?? []).filter((i) => fs.some((f) => isInside(i.name, f.path)))];
-    const fileIds = [...new Set(inside.filter((i) => i.type === 'file').map((i) => i.id))];
-    const imageIds = [...new Set(inside.filter((i) => i.type === 'image').map((i) => i.id))];
-    if (!fileIds.length && !fs.length) {
-      if (imageIds.length) await confirmAndDelete(imageIds);
+    const r = planRemoval(fs.map((f) => f.path), entryKeys.map(itemOfKey).filter((i) => !!i));
+    // Images alone: asked and deleted as everywhere else images are
+    if (!fs.length && !r.fileIds.length) {
+      if (r.imageIds.length) await confirmAndDelete(r.imageIds);
     } else {
       const ok = await askConfirm({
         title: entryKeys.length === 1 ? t('filer.deleteTitleOne') : t('filer.deleteTitle', { n: formatNumber(entryKeys.length) }),
         message: fs.length
-          ? t('filer.confirmFolders', { folders: fs.map((f) => `「${f.name}」`).join(''), files: formatNumber(fileIds.length), images: formatNumber(imageIds.length) })
-          : imageIds.length
-            ? t('filer.confirmFilesImages', { files: formatNumber(fileIds.length), images: formatNumber(imageIds.length) })
-            : t('filer.confirmFiles', { files: formatNumber(fileIds.length) }),
+          ? t('filer.confirmFolders', { folders: fs.map((f) => `「${f.name}」`).join(''), files: formatNumber(r.fileIds.length), images: formatNumber(r.imageIds.length) })
+          : r.imageIds.length
+            ? t('filer.confirmFilesImages', { files: formatNumber(r.fileIds.length), images: formatNumber(r.imageIds.length) })
+            : t('filer.confirmFiles', { files: formatNumber(r.fileIds.length) }),
         confirmLabel: t('delete'),
         danger: true
       });
       if (!ok) return;
-      if (fileIds.length) await deleteFiles(fileIds);
-      if (imageIds.length) await deleteImages(imageIds);
+      await removeEntries(r);
     }
-    dropNewFolders(fs.map((f) => f.path));
     setPicked(new Set());
-    if (folder && fs.some((f) => isInside(folder, f.path))) openFolder(folderOf(folder.slice(0, -1)) || null);
   };
 
   const api: EntryApi = {

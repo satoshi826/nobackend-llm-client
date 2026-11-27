@@ -5,7 +5,8 @@ import { computed, effect, signal } from '@preact/signals';
 import * as repo from '../../lib/db/repo';
 import type { Conversation, ImageParams, ImageResult, MessageRecord } from '../../lib/db/schema';
 import type { Part } from '../../lib/providers/types';
-import { deleteImageRecords, getImage, getImageMeta, putImage } from '../../lib/db/images';
+import { deleteImageRecords, getImage, getImageMeta, getImageThumb, putImage } from '../../lib/db/images';
+import { catalogImage } from '../../lib/db/catalog';
 import { baseName } from '../../lib/paths';
 import { providerConfigOf } from '../../lib/keys/accounts';
 import { plainTransport } from '../../lib/providers/transport';
@@ -14,7 +15,7 @@ import { authFor, keyReady } from '../../state/keys';
 import { defineFeatureSettings, pickLegacy } from '../../state/feature-settings';
 import { openSettings, showToast } from '../../state/ui';
 import { recordUsage } from '../../state/request-helpers';
-import { conversations, currentConv, currentId, messages, persistDraft, putMessage, updateConversation } from '../../state/conversations';
+import { conversations, currentConv, currentId, messages, openConversation, persistDraft, putMessage, startNewChat, updateConversation } from '../../state/conversations';
 import { beginRun, endRun } from '../../state/runs';
 import { cancelSuggestions } from '../../state/suggestions';
 import { resetProviderBalanceBaseline } from '../../state/balance';
@@ -110,6 +111,50 @@ export function registerImageAction(a: ImageAction) {
 }
 
 /** fromGallery: opened from the file manager (offers to open the image's conversation) */
+/** An image's or a video's bytes: the whole, or the small copy grids show (null when not stored in this browser) */
+export const loadImage = (id: string, size: 'full' | 'thumb' = 'full'): Promise<Blob | null> => (size === 'thumb' ? getImageThumb(id) : getImage(id));
+
+/** What can be made from an image, from where it came from */
+export interface ImageWork {
+  /** The prompt it was made from ('' when unknown) */
+  prompt: string;
+  /** The provider and model that made it: edits run there when it offers them, else on another one with a key */
+  from: { providerId?: string; model?: string };
+  /** The providers that upscale it and remove its background, and the model that edits it by instructions */
+  upscale?: string;
+  removeBg?: string;
+  edit?: { providerId: string; model?: string; name: string };
+  /** The chat it was made in, while that chat exists */
+  chat?: string;
+}
+
+/** What can be made from an image (nothing from a video, or from one whose bytes are not stored here) */
+export function imageWorkOf(item: LightboxItem, stored: boolean): ImageWork {
+  const msg = messages.value.find((m) => m.id === item.messageId);
+  const source = msg ? messages.value.find((m) => m.id === msg.parentId) : undefined;
+  const from = { providerId: msg?.meta?.providerId, model: msg?.meta?.model };
+  const able = !item.video && stored;
+  const editor = able ? editTargetFor('edit', from) : undefined;
+  const chat = item.conversationId && (currentId.value === item.conversationId || conversations.value.some((c) => c.id === item.conversationId)) ? item.conversationId : undefined;
+  return {
+    prompt: msg?.image?.params.prompt || source?.imageRequest?.prompt || '',
+    from,
+    ...(able ? { upscale: editTargetFor('upscale', from)?.provider.id, removeBg: editTargetFor('remove-bg', from)?.provider.id } : {}),
+    ...(editor ? { edit: { providerId: editor.provider.id, model: editor.model, name: editor.model ? (imageModelOf(editor.provider.id, editor.model)?.name ?? editor.model) : editor.provider.label } } : {}),
+    ...(chat ? { chat } : {})
+  };
+}
+
+/** Go where work on an image runs: its chat (saved images outlive theirs, and brought-in ones have none: a new chat then) */
+export async function goToImageChat(work: ImageWork) {
+  if (work.chat && currentId.value === work.chat) return;
+  if (work.chat) await openConversation(work.chat);
+  else startNewChat();
+}
+
+/** Where an image is saved in the Files tab */
+export const savedPathOf = (id: string): string | undefined => catalogImage(id)?.path;
+
 export const lightbox = signal<{ items: LightboxItem[]; index: number; fromGallery?: boolean } | null>(null);
 
 export const imageModels = signal<ImageModelInfo[]>([]);

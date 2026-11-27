@@ -1,12 +1,10 @@
 // Settings → プライバシーとデータ: destinations, storage, backups, deleting keys and everything
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { BackupPasswordNeeded, downloadExport, importFromFile, wipeEverything } from '../../state/data';
+import { BackupPasswordNeeded, downloadExport, imageUsage, importFromFile, storageBreakdown, wipeEverything, type StorageBreakdown } from '../../state/data';
 import { clearAllKeys, vaultState } from '../../state/keys';
 import { enabledProviders, hostOfProvider } from '../../state/models';
 import { saveSettings, settings } from '../../state/settings';
 import { showToast } from '../../state/ui';
-import { imageUsage } from '../../lib/db/images';
-import { storageBreakdown, type StorageBreakdown } from '../../lib/db/storage-usage';
 import { getPreset } from '../../lib/providers/registry';
 import { accountById } from '../../lib/keys/accounts';
 import { FETCH_ROUTES } from '../../lib/fetcher/config';

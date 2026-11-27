@@ -17,7 +17,7 @@ import type { SandboxPage } from '../../../lib/sandbox/client';
 import { settings } from '../../../state/settings';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
-import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, getFile, pageFiles, renameFile, restoreVersion, saveUserVersion } from '../state';
+import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, getFile, pageOf, renameFile, restoreVersion, saveUserVersion } from '../state';
 import { FileIcon, formatChars, PathName, typeLabel } from './common';
 import { formatDateTime, formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
@@ -319,14 +319,14 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
   const [run, setRun] = useState(0);
   const [full, setFull] = useState(false);
   const page = svg ? svgPage(text) : text;
-  // The other files of its group, for references by relative path; loaded again when stored files or images change
+  // The other files of its site, for references by relative path; loaded again when stored files or images change
   const [files, setFiles] = useState<SandboxPage | undefined>(undefined);
   const fv = filesVersion.value;
   const iv = imagesVersion.value;
   useEffect(() => {
     if (svg) return;
     let alive = true;
-    void pageFiles(file).then((x) => alive && setFiles({ path: file.name, files: x }));
+    void pageOf(file).then((x) => alive && setFiles(x));
     return () => {
       alive = false;
     };

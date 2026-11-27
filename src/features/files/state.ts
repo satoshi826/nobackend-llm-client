@@ -20,6 +20,7 @@ import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
 import { fetchFromWeb } from '../../state/fetch-page';
 import type { Fetched } from '../../lib/fetcher/protocol';
+import type { SandboxPage } from '../../lib/sandbox/client';
 
 /** Let chat models write and read files (create_file / append_file / edit_file / read_file) */
 export const fileSettings = defineFeatureSettings('files', { fileTools: true }, (old) => pickLegacy(old, { fileTools: true }));
@@ -55,31 +56,45 @@ export function refreshImages(): Promise<void> {
   return p;
 }
 
-/** Text a page's preview receives from its group at most (characters) */
+/** Text a page's preview receives from its site at most (characters) */
 const PAGE_TEXT_LIMIT = 5_000_000;
 
 /**
- * The files a page's preview may load by relative path: the texts and named images of its group, the same
- * conversation (or, for a file of none, the files of none), keyed by path. Texts stop at PAGE_TEXT_LIMIT
+ * A page's site: the nearest folder at or above it that has an index.html, else its own folder; '' for a page at
+ * the top, which has none ('a/b/index.html' makes 'a/b/' a site for every page under it)
  */
-export async function pageFiles(page: FileRecord): Promise<Record<string, string | Blob>> {
+export function siteOf(pagePath: string, paths: string[]): string {
+  const have = new Set(paths.map(pathKey));
+  for (let dir = fdb.folderOf(pagePath); dir; dir = fdb.folderOf(dir.slice(0, -1))) if (have.has(pathKey(`${dir}index.html`))) return dir;
+  return fdb.folderOf(pagePath);
+}
+
+/**
+ * What a page's preview may load by relative path: the texts and named images of its site, keyed by their path in
+ * it ('/' in the page is the site's top). Nothing outside the site, so a page cannot read unrelated files. Texts stop
+ * at PAGE_TEXT_LIMIT
+ */
+export async function pageOf(page: FileRecord): Promise<SandboxPage> {
   await Promise.all([fileList.value ? null : refreshFiles(), imageList.value ? null : refreshImages()]);
+  const files = fileList.value ?? [];
+  const images = (imageList.value ?? []).filter((im) => im.info?.name);
+  const site = siteOf(page.name, [...files.map((f) => f.name), ...images.map((im) => im.info!.name)]);
   const out: Record<string, string | Blob> = {};
+  if (!site) return { path: page.name, files: out };
   let chars = 0;
-  for (const f of [...(fileList.value ?? [])].sort((a, b) => a.name.localeCompare(b.name))) {
-    if (f.conversationId !== page.conversationId || f.id === page.id || f.name in out) continue;
+  for (const f of [...files].sort((a, b) => a.name.localeCompare(b.name))) {
+    if (f.id === page.id || !isInside(f.name, site)) continue;
     const text = fdb.currentText(f);
     if (chars + text.length > PAGE_TEXT_LIMIT) continue;
     chars += text.length;
-    out[f.name] = text;
+    out[f.name.slice(site.length)] = text;
   }
-  // Images are named only when brought in (generated ones get a name only in the Files tab)
-  for (const im of imageList.value ?? []) {
-    if (im.conversationId !== page.conversationId || !im.info?.name || im.info.name in out) continue;
+  for (const im of images) {
+    if (!isInside(im.info!.name, site)) continue;
     const blob = await getImage(im.id).catch(() => null);
-    if (blob) out[im.info.name] = blob;
+    if (blob) out[im.info!.name.slice(site.length)] = blob;
   }
-  return out;
+  return { path: page.name.slice(site.length), files: out };
 }
 
 // Lists already loaded follow every change to the stored files and images (whoever made it)

@@ -8,7 +8,7 @@ import { putConversation } from '../../lib/db/repo';
 import { conversations } from '../../state/conversations';
 import { contributedTools } from '../../state/tool-registry';
 import type { ModelInfo } from '../../lib/providers/types';
-import { workDirOf } from './state';
+import { siteOf, workDirOf } from './state';
 
 const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
 const model = { capabilities: { tools: true } } as ModelInfo;
@@ -125,5 +125,17 @@ describe('moving older data', () => {
     expect(m.workDir).toBe('a/');
     expect((await getFile('a'))!.name).toBe('a/shared/a.md');
     expect((await getFile('b'))!.name).toBe('shared/b.md');
+  });
+});
+
+describe('sites', () => {
+  it('is the nearest folder above a page with an index.html, else the page’s own folder; none at the top', () => {
+    const paths = ['p/todo/index.html', 'p/todo/pages/about.html', 'p/notes/memo.html', 'index.html', 'counter.html', 'P/TODO/js/x.html'];
+    expect(siteOf('p/todo/index.html', paths)).toBe('p/todo/');
+    expect(siteOf('p/todo/pages/about.html', paths)).toBe('p/todo/');
+    expect(siteOf('P/TODO/js/x.html', paths)).toBe('P/TODO/');
+    expect(siteOf('p/notes/memo.html', paths)).toBe('p/notes/');
+    // The top is never a site, even with an index.html there
+    expect(siteOf('counter.html', paths)).toBe('');
   });
 });

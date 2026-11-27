@@ -21,3 +21,4 @@
 ## Commits
 
 - Commit messages are in English. Line 1 says what changed in a way that shows why; the body holds intent and background the diff cannot show.
+- A visible UI change is shown to the owner (the dev server or a screenshot) before it is committed; tweaks asked for along the way go into that one commit.

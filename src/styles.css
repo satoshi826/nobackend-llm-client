@@ -259,8 +259,8 @@ body {
 @supports (-moz-appearance: none) {
   * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
 }
-/* The chat list's bar stays between the floating header and the input box */
-.chat-scroll::-webkit-scrollbar-track { margin-top: var(--chat-top, 0px); margin-bottom: var(--chat-bottom, 0px); }
+/* The chat list's bar starts under the floating header and runs to the bottom of the screen */
+.chat-scroll::-webkit-scrollbar-track { margin-top: var(--chat-top, 0px); }
 
 /* Moving highlight over "in progress" text */
 @keyframes text-shimmer {
@@ -431,11 +431,18 @@ details > summary::before {
 details[open] > summary::before { rotate: 45deg; }
 
 /* The message list fades out under the input box: fully hidden behind the chip row, and the soft edge
-   sits behind the (blurred) bottom of the input box. --chat-fade is measured in ChatView. */
+   sits behind the (blurred) bottom of the input box. --chat-fade is measured in ChatView. The strip on the right
+   where the scrollbar is (8 px) is left out of the fade, so the bar shows down to the bottom of the screen. */
 .chat-scroll {
   scrollbar-gutter: stable both-edges;
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--chat-fade, 0px) - 28px), transparent calc(100% - var(--chat-fade, 0px)));
-  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--chat-fade, 0px) - 28px), transparent calc(100% - var(--chat-fade, 0px)));
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--chat-fade, 0px) - 28px), transparent calc(100% - var(--chat-fade, 0px))), linear-gradient(#000, #000);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--chat-fade, 0px) - 28px), transparent calc(100% - var(--chat-fade, 0px))), linear-gradient(#000, #000);
+  -webkit-mask-size: 100% 100%, 8px 100%;
+  mask-size: 100% 100%, 8px 100%;
+  -webkit-mask-position: 0 0, 100% 0;
+  mask-position: 0 0, 100% 0;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
 /* Tab panels cross-fade in */

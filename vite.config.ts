@@ -35,9 +35,18 @@ function cspMetaPlugin(policies: Record<string, string>): Plugin {
   };
 }
 
-/** The sandbox page (sandbox/sandbox.html → /sandbox/), with its CSP put in; served by the dev server too */
+/**
+ * The sandbox page (sandbox/sandbox.html → /sandbox/), with its CSP and sandbox/rewrite.js put in (into its inline
+ * script: the page has no origin to load scripts from); served by the dev server too
+ */
 function sandboxPagePlugin(base: string): Plugin {
-  const page = () => readFileSync(resolve(__dirname, 'sandbox/sandbox.html'), 'utf8').replace('<!--CSP-->', cspMetaTag(sandboxCsp(false)));
+  const page = () => {
+    const rewrite = readFileSync(resolve(__dirname, 'sandbox/rewrite.js'), 'utf8');
+    if (/<\/script/i.test(rewrite)) throw new Error('sandbox/rewrite.js must not contain a closing script tag');
+    return readFileSync(resolve(__dirname, 'sandbox/sandbox.html'), 'utf8')
+      .replace('<!--CSP-->', cspMetaTag(sandboxCsp(false)))
+      .replace('/*REWRITE*/', () => rewrite);
+  };
   return {
     name: 'sandbox-page',
     configureServer(server) {

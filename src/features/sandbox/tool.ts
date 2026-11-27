@@ -28,7 +28,7 @@ export function makeRunJavaScriptTool(readFile: FileReader): Tool<RunInput> {
       type: 'object',
       properties: {
         code: { type: 'string', description: 'The JavaScript to run, as the body of an async function (end with `return value` to get a result back).' },
-        file_ids: { type: 'array', items: { type: 'string' }, description: 'Optional. Ids of files of this conversation to read as `files` (from the files list in the system prompt, or create_file / fetch_file results).' },
+        file_ids: { type: 'array', items: { type: 'string' }, description: 'Optional. Ids or paths of files of this conversation to read as `files` (from the files list in the system prompt, or create_file / fetch_file results).' },
         dom: { type: 'boolean', description: 'Optional. true to have DOMParser and document (for parsing HTML); default false.' }
       },
       required: ['code']
@@ -46,7 +46,7 @@ export function makeRunJavaScriptTool(readFile: FileReader): Tool<RunInput> {
       const files: Record<string, string> = {};
       for (const id of i.file_ids) {
         const f = await readFile(id);
-        if (!f) return { content: `No file with id ${id} in this conversation.`, isError: true, details: { output: '', failed: true } };
+        if (!f) return { content: `No file ${JSON.stringify(id)} in this conversation.`, isError: true, details: { output: '', failed: true } };
         files[f.name] = f.text;
       }
       const r = await runJavaScript(i.code, { files, dom: i.dom });

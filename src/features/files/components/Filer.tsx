@@ -4,7 +4,7 @@
 // anywhere on it.
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { currentText } from '../../../lib/db/files';
+import { baseName, currentText } from '../../../lib/db/files';
 import { getImage } from '../../../lib/db/images';
 import { confirmAndDelete, deleteImages, ImageThumb, lightbox } from '../../images';
 import { askConfirm } from '../../../components/ConfirmDialog';
@@ -29,7 +29,7 @@ import {
   type FilerSort,
   type FilerView
 } from '../state';
-import { formatChars, formatDate } from './common';
+import { formatChars, formatDate, PathName } from './common';
 import { convTitle, useFilerItems, viewLabel, VIEW_ICONS } from './filer-items';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
@@ -52,7 +52,7 @@ async function downloadItem(it: FilerItem) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = it.name;
+  a.download = baseName(it.name);
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -443,7 +443,9 @@ function Card({ it, picked, selecting, onToggle, onOpen }: { it: FilerItem; pick
       <button type="button" class="flex min-w-0 flex-1 items-start gap-2 px-2.5 py-2 text-left" onClick={click}>
         <Icon name={kindIcon(it)} class="mt-0.5 size-4 shrink-0 text-muted" />
         <span class="min-w-0">
-          <span class="line-clamp-2 text-sm leading-snug text-ink-strong [overflow-wrap:anywhere]">{it.name}</span>
+          <span class="line-clamp-2 text-sm leading-snug text-ink-strong [overflow-wrap:anywhere]">
+            <PathName name={it.name} />
+          </span>
           <span class="mt-0.5 block truncate text-xs text-muted tabular-nums">
             {sizeLabel(it)} · {formatDate(it.updatedAt)}
             {it.type === 'file' && it.file.history.length ? ` · ${t('version', { v: it.file.current.v })}` : ''}
@@ -481,7 +483,9 @@ function ListRow({ it, picked, selecting, onToggle, onOpen }: { it: FilerItem; p
           onClick={(e) => (press.consume() ? undefined : selecting || e.ctrlKey || e.metaKey || e.shiftKey ? onToggle(e.shiftKey) : onOpen())}
         >
           <Icon name={kindIcon(it)} class="size-4 shrink-0 text-muted" />
-          <span class="truncate">{it.name}</span>
+          <span class="truncate">
+            <PathName name={it.name} />
+          </span>
         </button>
       </td>
       <td class="hidden py-1.5 text-xs text-muted uppercase sm:table-cell">{it.ext}</td>

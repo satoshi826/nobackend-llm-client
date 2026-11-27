@@ -7,14 +7,18 @@
   Talking to the app: this page says { type: 'sandbox-ready' } to its parent once; the parent answers with
   { type: 'connect' } and a MessagePort, and everything after goes over that port, which the HTML shown here cannot
   reach (so a page that replaced this one cannot talk to the app):
-    { type: 'render', html }               replace this page with the html (its scripts run under the same CSP)
+    { type: 'render', html, path?, files? }
+                                           replace this page with the html (its scripts run under the same CSP); with
+                                           files ({ path: text or Blob } of the project) and path (the page's own),
+                                           its references to those files use them (sandbox/rewrite.js)
     { type: 'run', id, code, files?, dom?, timeoutMs }
                                            run code and answer { type: 'result', id, logs, result?, error? }: in a worker
                                            (stopped after timeoutMs), or with dom on this page itself, where DOMParser
                                            exists (the app removes the frame if it does not answer in time); files is
                                            { name: text } for the code to read as \`files\`
     { type: 'ping', n }                    answered with { type: 'pong', n } while this page is not stuck
-  The script is inline: a page without an origin cannot load module scripts from the server.
+  The script is inline: a page without an origin cannot load module scripts from the server. The build puts
+  sandbox/rewrite.js into it at REWRITE (vite.config.ts), inside its function, so the shown page finds no names of ours.
 -->
 <html>
   <head>
@@ -34,6 +38,7 @@
           document.body.textContent = 'This page only works inside the app.';
           return;
         }
+        /*REWRITE*/
         // Runs code as the body of an async function and collects its console output: on this page (dom), and from
         // its source in each worker
         async function runCode(code, files) {
@@ -112,9 +117,10 @@
             else run({ id: d.id, code: d.code, files, timeoutMs: d.timeoutMs });
           } else if (d.type === 'render' && typeof d.html === 'string') {
             noPeers();
+            const html = d.files && typeof d.files === 'object' && typeof d.path === 'string' ? rewritePage(d.html, d.path, d.files) : d.html;
             document.open();
             // DNS prefetch hints could carry data in host names: asked off again for the new page
-            document.write('<meta http-equiv="x-dns-prefetch-control" content="off">' + d.html);
+            document.write('<meta http-equiv="x-dns-prefetch-control" content="off">' + html);
             document.close();
           }
         }

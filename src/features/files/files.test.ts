@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { addVersion, cleanFileName, cleanFiles, currentText, deleteFiles, getFile, listFiles, MAX_VERSIONS, newFile, putFile, versionsOf, versionText, withVersion } from '../../lib/db/files';
+import { addVersion, baseName, cleanFileName, folderOf, cleanFiles, currentText, deleteFiles, getFile, listFiles, MAX_VERSIONS, newFile, putFile, versionsOf, versionText, withVersion } from '../../lib/db/files';
 import { seal, setDataKey } from '../../lib/db/sealed';
 import { generateDataKey } from '../../lib/crypto/data';
 import { exportAll, importAll } from '../../lib/db/export';
@@ -20,13 +20,16 @@ function memDeps(scope = new Set<string>()) {
   const files = new Map<string, FileRecord>();
   let n = 0;
   const deps: FileToolDeps = {
+    // As the files feature does: one file per path, found by id or by path
     async create(name, text) {
+      const same = [...files.values()].find((f) => scope.has(f.id) && f.name === name);
+      if (same) return { file: await deps.update(same.id, text), replaced: true };
       const f = newFile({ id: `f${++n}`, name, kind: 'document', text, by: 'model' });
       files.set(f.id, f);
       scope.add(f.id);
-      return f;
+      return { file: f, replaced: false };
     },
-    get: async (id) => (scope.has(id) ? files.get(id) : undefined),
+    get: async (ref) => (scope.has(ref) ? files.get(ref) : [...files.values()].find((f) => scope.has(f.id) && f.name === ref)),
     async update(id, text, note) {
       const { next } = withVersion(files.get(id)!, text, 'model', note);
       files.set(id, next);
@@ -36,7 +39,7 @@ function memDeps(scope = new Set<string>()) {
     async fetch(url) {
       if (url.includes('decline')) return null;
       if (url.endsWith('.png')) return { kind: 'image', name: 'cat.png' };
-      return { kind: 'file', file: await deps.create('page.txt', 'fetched text') };
+      return { kind: 'file', file: (await deps.create('page.txt', 'fetched text')).file };
     }
   };
   return { deps, files, scope };
@@ -50,10 +53,17 @@ const run = async (deps: FileToolDeps, name: string, raw: unknown) => {
 
 describe('file names and versions', () => {
   it('cleans names from models and disks', () => {
-    expect(cleanFileName('../../etc/passwd')).toBe('passwd.md');
-    expect(cleanFileName('C:\\x\\report.csv')).toBe('report.csv');
+    // A name is a path: folders stay, `..` and empty parts go, a drive letter goes
+    expect(cleanFileName('../../etc/passwd')).toBe('etc/passwd.md');
+    expect(cleanFileName('C:\\x\\report.csv')).toBe('x/report.csv');
+    expect(cleanFileName('/site//css/./style.css')).toBe('site/css/style.css');
     expect(cleanFileName('  ', 'txt')).toBe('untitled.txt');
     expect(cleanFileName('a\u0000b.md')).toBe('ab.md');
+    expect(cleanFileName('a/b/c/d/e/f/g/h/i/j.js').split('/')).toHaveLength(8);
+    expect(cleanFileName(`${'x'.repeat(60)}/`.repeat(5) + 'f.md').length).toBeLessThanOrEqual(200);
+    expect(baseName('site/css/style.css')).toBe('style.css');
+    expect(folderOf('site/css/style.css')).toBe('site/css/');
+    expect(folderOf('style.css')).toBe('');
   });
   it('appends versions and keeps at most MAX_VERSIONS, saying which texts to keep and drop', () => {
     let f = newFile({ id: 'x', name: 'a.md', kind: 'document', text: 'v1', by: 'model' });
@@ -73,6 +83,18 @@ describe('file names and versions', () => {
 });
 
 describe('file tools', () => {
+  it('names files by path, and writing to a path the conversation has makes a new version', async () => {
+    const { deps, files } = memDeps();
+    const c = await run(deps, 'create_file', { name: '/site//css/style.css', content: 'a{}' });
+    expect((c.details as { name: string }).name).toBe('site/css/style.css');
+    const again = await run(deps, 'create_file', { name: 'site/css/style.css', content: 'b{}' });
+    expect(again.content).toContain('Replaced');
+    expect(files.size).toBe(1);
+    // Read and edit by path as well as by id
+    expect((await run(deps, 'read_file', { file_id: 'site/css/style.css' })).content).toContain('b{}');
+    await run(deps, 'edit_file', { file_id: 'site/css/style.css', find: 'b{}', replace: 'c{}' });
+    expect(currentText([...files.values()][0])).toBe('c{}');
+  });
   it('creates, appends, edits by find/replace and reads in chunks', async () => {
     const { deps, files } = memDeps();
     const c = await run(deps, 'create_file', { name: 'report', content: '# Title\nintro' });

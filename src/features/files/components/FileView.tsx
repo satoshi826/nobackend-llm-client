@@ -6,18 +6,19 @@ import type { FileRecord, FileVersion } from '../../../lib/db/schema';
 import { conversations, openConversation, showChat } from '../../../state/conversations';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { filesVersion } from '../../../state/stored';
+import { filesVersion, imagesVersion } from '../../../state/stored';
 import { copyText } from '../../../components/clipboard';
 import { Markdown } from '../../../components/Markdown';
 import { useDialog } from '../../../components/dialog';
 import { PageHeader } from '../../../components/PageHeader';
 import { Badge, Button, Icon, IconButton, Segmented, Select, Spinner, TextField } from '../../../components/ui';
 import { SandboxFrame, svgPage } from '../../../components/SandboxFrame';
+import type { SandboxPage } from '../../../lib/sandbox/client';
 import { settings } from '../../../state/settings';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
-import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, getFile, renameFile, restoreVersion, saveUserVersion } from '../state';
-import { FileIcon, formatChars, typeLabel } from './common';
+import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, getFile, pageFiles, renameFile, restoreVersion, saveUserVersion } from '../state';
+import { FileIcon, formatChars, PathName, typeLabel } from './common';
 import { formatDateTime, formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 
@@ -141,7 +142,9 @@ export function FileView({ id = '' }: { id?: string }) {
             }}
           >
             <FileIcon f={f} class="size-4 shrink-0 text-muted" />
-            <span class="truncate text-sm font-medium text-ink-strong">{f.name}</span>
+            <span class="truncate text-sm font-medium text-ink-strong">
+              <PathName name={f.name} />
+            </span>
           </button>
         )}
         <Badge>{typeLabel(f)}</Badge>
@@ -260,7 +263,7 @@ export function FileView({ id = '' }: { id?: string }) {
       ) : (
         <div class="scroll-thin min-h-0 flex-1 overflow-y-auto px-2 sm:px-3 md:pl-0 md:pr-3">
           <div ref={body} class="glass rise mx-auto my-3 w-full max-w-3xl rounded-[22px] px-5 py-6 sm:my-4 sm:px-8">
-            <FileBody text={shown.text} ext={ext} />
+            <FileBody file={f} text={shown.text} ext={ext} />
           </div>
         </div>
       )}
@@ -268,9 +271,9 @@ export function FileView({ id = '' }: { id?: string }) {
   );
 }
 
-function FileBody({ text, ext }: { text: string; ext: string }) {
+function FileBody({ file, text, ext }: { file: FileRecord; text: string; ext: string }) {
   if (ext === 'md' || ext === 'markdown') return <Markdown text={text} />;
-  if (ext === 'html' || ext === 'htm' || ext === 'svg') return <PageBody text={text} svg={ext === 'svg'} />;
+  if (ext === 'html' || ext === 'htm' || ext === 'svg') return <PageBody file={file} text={text} svg={ext === 'svg'} />;
   if (ext === 'csv' || ext === 'tsv') {
     const { rows, truncated } = parseDelimited(text, ext === 'tsv' ? '\t' : ',');
     if (rows.length > 0 && rows.length <= 1000) {
@@ -311,11 +314,23 @@ function FileBody({ text, ext }: { text: string; ext: string }) {
  * An HTML or SVG file: shown as a page in the sandbox (its scripts run there, without network), or as its code. The
  * page can start again (reload) and open over the whole window (its own run of the page)
  */
-function PageBody({ text, svg }: { text: string; svg: boolean }) {
+function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: boolean }) {
   const [view, setView] = useState<'preview' | 'code'>(settings.value.htmlFilePreview ? 'preview' : 'code');
   const [run, setRun] = useState(0);
   const [full, setFull] = useState(false);
   const page = svg ? svgPage(text) : text;
+  // The other files of its group, for references by relative path; loaded again when stored files or images change
+  const [files, setFiles] = useState<SandboxPage | undefined>(undefined);
+  const fv = filesVersion.value;
+  const iv = imagesVersion.value;
+  useEffect(() => {
+    if (svg) return;
+    let alive = true;
+    void pageFiles(file).then((x) => alive && setFiles({ path: file.name, files: x }));
+    return () => {
+      alive = false;
+    };
+  }, [file.id, file.name, file.conversationId, fv, iv, svg]);
   return (
     <div class="space-y-2">
       <div class="flex flex-wrap items-center gap-2">
@@ -341,11 +356,18 @@ function PageBody({ text, svg }: { text: string; svg: boolean }) {
         )}
       </div>
       {view === 'preview' ? (
-        <SandboxFrame key={run} html={page} title={t('file.preview')} class="h-[70vh]" />
+        svg || files ? (
+          <SandboxFrame key={run} html={page} page={files} title={t('file.preview')} class="h-[70vh]" />
+        ) : (
+          // Shown once its files are here, so it does not render twice
+          <div class="grid h-[70vh] place-items-center rounded-xl border border-line">
+            <Spinner class="size-5 text-faint" />
+          </div>
+        )
       ) : (
         <pre class="font-mono text-sm break-words whitespace-pre-wrap">{text}</pre>
       )}
-      {full && <FullPage html={page} onClose={() => setFull(false)} />}
+      {full && <FullPage html={page} page={files} onClose={() => setFull(false)} />}
     </div>
   );
 }
@@ -354,7 +376,7 @@ function PageBody({ text, svg }: { text: string; svg: boolean }) {
  * The page filling the whole window, its buttons floating over its top right corner. Rendered at the page root: the
  * file panel's glass (backdrop-filter) would otherwise hold a fixed layer inside it
  */
-function FullPage({ html, onClose }: { html: string; onClose(): void }) {
+function FullPage({ html, page, onClose }: { html: string; page?: SandboxPage; onClose(): void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [run, setRun] = useState(0);
   useDialog(ref, { onClose, active: true });
@@ -369,7 +391,7 @@ function FullPage({ html, onClose }: { html: string; onClose(): void }) {
           <Icon name="x" />
         </IconButton>
       </div>
-      <SandboxFrame key={run} html={html} title={t('file.preview')} class="h-full rounded-none! border-0!" />
+      <SandboxFrame key={run} html={html} page={page} title={t('file.preview')} class="h-full rounded-none! border-0!" />
     </div>,
     document.body
   );

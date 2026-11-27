@@ -4,6 +4,7 @@ import { useDialog } from '../../../components/dialog';
 import type { ImageParams, MessageRecord } from '../../../lib/db/schema';
 import type { Part } from '../../../lib/providers/types';
 import { getImage, getImageThumb } from '../../../lib/db/images';
+import { baseName } from '../../../lib/db/files';
 import { conversations, currentId, messages, openConversation, startNewChat } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
 import { modal, showToast } from '../../../state/ui';
@@ -379,7 +380,7 @@ export function Lightbox() {
     const a = document.createElement('a');
     a.href = url;
     const file = msg?.parts.find((p): p is FilePart => p.type === 'file' && p.blobId === item.blobId);
-    a.download = item.name ?? file?.name ?? (video ? `video-${item.blobId.slice(0, 8)}.mp4` : `image-${item.blobId.slice(0, 8)}.png`);
+    a.download = item.name ? baseName(item.name) : file?.name ?? (video ? `video-${item.blobId.slice(0, 8)}.mp4` : `image-${item.blobId.slice(0, 8)}.png`);
     a.click();
   };
   return (

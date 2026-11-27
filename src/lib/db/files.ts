@@ -39,18 +39,34 @@ export function mimeFromName(name: string): string {
   return MIME[extOf(name)] ?? 'text/plain';
 }
 
-/** Clean a file name coming from a model or a disk: no paths, no control characters, bounded length */
+/** Folders a file name may hold, and the length of the whole name */
+const MAX_FOLDERS = 7;
+const MAX_PATH = 200;
+
+/**
+ * Clean a file name coming from a model, a disk or a backup. A name is a path: folders separated by `/` (a `\` counts
+ * as one), with no empty, `.` or `..` parts and no control characters, at most 7 folders deep and 200 characters long;
+ * the last part gets an extension when it has none. There are no folder records: a folder is the shared start of names
+ */
 export function cleanFileName(raw: string, fallbackExt = 'md'): string {
-  let n = raw
+  const parts = raw
     .replace(/[\u0000-\u001f\u007f]/g, '')
     .split(/[\\/]/)
-    .pop()!
-    .trim()
-    .slice(0, 120);
-  if (!n || n === '.' || n === '..') n = 'untitled';
-  if (!extOf(n)) n = `${n}.${fallbackExt}`;
-  return n;
+    .map((p) => p.trim())
+    // Empty, `.` and `..` parts go, and so does a drive letter (`C:`)
+    .filter((p) => p && p !== '.' && p !== '..' && !/^[a-z]:$/i.test(p));
+  let name = (parts.pop() ?? '').slice(0, 120) || 'untitled';
+  if (!extOf(name)) name = `${name}.${fallbackExt}`;
+  const folders = parts.slice(0, MAX_FOLDERS).map((p) => p.slice(0, 60));
+  while (folders.length && [...folders, name].join('/').length > MAX_PATH) folders.pop();
+  return [...folders, name].join('/');
 }
+
+/** The last part of a path: the name to show alone or to download as */
+export const baseName = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
+
+/** The folders of a path, with the closing `/` ('' at the top) */
+export const folderOf = (path: string): string => path.slice(0, path.lastIndexOf('/') + 1);
 
 export const currentVersion = (f: FileRecord): FileVersion => f.current;
 export const currentText = (f: FileRecord): string => f.current.text;
@@ -158,6 +174,13 @@ async function open(raw: FileRecord, key: DataKey | null = currentDataKey()): Pr
     await db().files.put(rec);
   });
   return record;
+}
+
+/** The files made in or brought into a conversation, newest first */
+export async function filesOfConversation(conversationId: string): Promise<FileRecord[]> {
+  const temporary = [...mem.values()].filter((f) => f.conversationId === conversationId);
+  const stored = await Promise.all((await db().files.where('conversationId').equals(conversationId).toArray()).map((r) => open(r)));
+  return [...temporary, ...stored].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function getFile(id: string): Promise<FileRecord | undefined> {

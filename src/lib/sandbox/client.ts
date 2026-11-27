@@ -30,11 +30,19 @@ function connect(frame: HTMLIFrameElement, signal?: AbortSignal): Promise<Messag
   });
 }
 
+/** A page of a project: its own path ('site/index.html') and the project files it may use, by path ('site/css/a.css') */
+export interface SandboxPage {
+  path: string;
+  /** Text, or a Blob (images, media) */
+  files: Record<string, string | Blob>;
+}
+
 /**
  * Show html in a sandbox frame (call when the frame is created) and keep checking that the page answers; onStuck runs
- * when it stops answering, so the caller can remove the frame. Returns a cleanup function
+ * when it stops answering, so the caller can remove the frame. With page, the html's references to the project's files
+ * use those files (sandbox/rewrite.js). Returns a cleanup function
  */
-export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: () => void): () => void {
+export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: () => void, page?: SandboxPage): () => void {
   const ctrl = new AbortController();
   let timer: ReturnType<typeof setInterval> | undefined;
   void connect(frame, ctrl.signal).then((port) => {
@@ -44,7 +52,8 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
     port.onmessage = (e) => {
       if ((e.data as { type?: string })?.type === 'pong') last = Date.now();
     };
-    port.postMessage({ type: 'render', html });
+    // With page: path and files (Blobs go across without copying their bytes)
+    port.postMessage({ type: 'render', html, ...page });
     timer = setInterval(() => {
       if (Date.now() - last <= STUCK_MS) return port.postMessage({ type: 'ping', n: ++n });
       clearInterval(timer);

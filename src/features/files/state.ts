@@ -3,7 +3,7 @@
 import { effect, signal } from '@preact/signals';
 import * as fdb from '../../lib/db/files';
 import { getSetting, newId, setSetting } from '../../lib/db/repo';
-import { listImages, putImage } from '../../lib/db/images';
+import { getImage, listImages, putImage } from '../../lib/db/images';
 import type { Attachment, Conversation, FileRecord, ImageSource, MessageRecord } from '../../lib/db/schema';
 import type { ImageMeta } from './filer';
 import { filesVersion, imagesVersion } from '../../state/stored';
@@ -51,6 +51,33 @@ export function refreshImages(): Promise<void> {
   });
   imagesLoading = { v, p };
   return p;
+}
+
+/** Text a page's preview receives from its group at most (characters) */
+const PAGE_TEXT_LIMIT = 5_000_000;
+
+/**
+ * The files a page's preview may load by relative path: the texts and named images of its group, the same
+ * conversation (or, for a file of none, the files of none), keyed by path. Texts stop at PAGE_TEXT_LIMIT
+ */
+export async function pageFiles(page: FileRecord): Promise<Record<string, string | Blob>> {
+  await Promise.all([fileList.value ? null : refreshFiles(), imageList.value ? null : refreshImages()]);
+  const out: Record<string, string | Blob> = {};
+  let chars = 0;
+  for (const f of [...(fileList.value ?? [])].sort((a, b) => a.name.localeCompare(b.name))) {
+    if (f.conversationId !== page.conversationId || f.id === page.id || f.name in out) continue;
+    const text = fdb.currentText(f);
+    if (chars + text.length > PAGE_TEXT_LIMIT) continue;
+    chars += text.length;
+    out[f.name] = text;
+  }
+  // Images are named only when brought in (generated ones get a name only in the Files tab)
+  for (const im of imageList.value ?? []) {
+    if (im.conversationId !== page.conversationId || !im.info?.name || im.info.name in out) continue;
+    const blob = await getImage(im.id).catch(() => null);
+    if (blob) out[im.info.name] = blob;
+  }
+  return out;
 }
 
 // Lists already loaded follow every change to the stored files and images (whoever made it)
@@ -164,7 +191,7 @@ export function downloadFile(f: FileRecord, v: { text: string } = f.current) {
   const url = URL.createObjectURL(new Blob([v.text], { type: `${f.mime};charset=utf-8` }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = f.name;
+  a.download = fdb.baseName(f.name);
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -296,10 +323,21 @@ export async function takeAttachments(): Promise<Attachment[]> {
 
 // ---- tools for the model ----
 /** A file this conversation may read (made, fetched or attached in it): its name and current text, for other features' tools */
-export async function conversationFile(conv: Conversation, history: MessageRecord[], id: string): Promise<{ name: string; text: string } | undefined> {
-  const f = await fdb.getFile(id);
-  if (!f || (f.conversationId !== conv.id && !filesInHistory(history).has(id))) return undefined;
-  return { name: f.name, text: fdb.currentText(f) };
+export async function conversationFile(conv: Conversation, history: MessageRecord[], ref: string): Promise<{ name: string; text: string } | undefined> {
+  const used = filesInHistory(history);
+  const allowed = (f: FileRecord | undefined) => (f && (f.conversationId === conv.id || used.has(f.id)) ? f : undefined);
+  let f = allowed(await fdb.getFile(ref));
+  if (!f) {
+    // Not an id: a path, among the conversation's own files and the ones its messages used
+    const path = fdb.cleanFileName(ref, fdb.extOf(ref) || 'md');
+    f = (await fdb.filesOfConversation(conv.id)).find((x) => x.name === path);
+    for (const id of used.keys()) {
+      if (f) break;
+      const x = await fdb.getFile(id);
+      if (x?.name === path) f = x;
+    }
+  }
+  return f && { name: f.name, text: fdb.currentText(f) };
 }
 
 /** Files the model may use in a conversation: attached to it, or created / changed by file tools in it */
@@ -321,6 +359,14 @@ registerToolProvider({
   tools({ conv, history }) {
     if (!fileSettings.value.value.fileTools) return [];
     const scope = new Set(filesInHistory(history).keys());
+    /** A file of the conversation by its path (names are read now: a file may have been renamed since) */
+    const atPath = async (path: string) => {
+      for (const id of scope) {
+        const f = await fdb.getFile(id);
+        if (f?.name === path) return f;
+      }
+      return undefined;
+    };
     return makeFileTools({
       async fetch(url, signal) {
         const r = await fetchFromWeb(url, 'save', signal);
@@ -331,12 +377,15 @@ registerToolProvider({
         return saved;
       },
       async create(name, text) {
+        // One file per path in a conversation: writing to a path it has makes a new version of that file
+        const same = await atPath(name);
+        if (same) return { file: await fdb.addVersion(same, text, 'model'), replaced: true };
         const f = fdb.newFile({ id: newId(), name, kind: 'document', text, by: 'model', conversationId: conv.id });
         await fdb.putFile(f, !!conv.temporary);
         scope.add(f.id);
-        return f;
+        return { file: f, replaced: false };
       },
-      get: async (id) => (scope.has(id) ? fdb.getFile(id) : undefined),
+      get: async (ref) => (scope.has(ref) ? fdb.getFile(ref) : atPath(fdb.cleanFileName(ref, fdb.extOf(ref) || 'md'))),
       async update(id, text, note) {
         const f = await fdb.getFile(id);
         if (!f || !scope.has(id)) throw new Error(t('tool.notFound'));

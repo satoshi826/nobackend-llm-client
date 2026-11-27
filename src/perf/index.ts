@@ -3,8 +3,8 @@
 import * as repo from '../lib/db/repo';
 import { createFile, newFile } from '../lib/db/files';
 import { putImage } from '../lib/db/images';
-import type { Conversation, MessageRecord } from '../lib/db/schema';
-import { currentId, currentPath } from '../state/conversations';
+import { db, type Conversation, type MessageRecord } from '../lib/db/schema';
+import { currentId, currentPath, touchConversation } from '../state/conversations';
 import { scheduleMessageUpdate } from '../state/generation';
 import { beginRun, endRun } from '../state/runs';
 import { saveSettings } from '../state/settings';
@@ -19,6 +19,8 @@ export interface SeedSpec {
   /** Files, spread over `folders` folders */
   files?: number;
   folders?: number;
+  /** Give each file one of the short conversations, in turn, inside that conversation's working folder (the Files tab then lists them by conversation) */
+  filesInConversations?: boolean;
   /** Images in the top folder */
   images?: number;
 }
@@ -64,13 +66,20 @@ async function seed(spec: SeedSpec) {
   const now = Date.now();
   // The chat shows only with a provider set up (and the passphrase question answered)
   await saveSettings({ enabledProviders: [PERF_PROVIDER], passphrasePrompted: true });
+  // Short conversations in one go (thousands of them; perf mode's database is never encrypted, so rows are stored as they are)
+  const convs: Conversation[] = [];
+  const msgs: MessageRecord[] = [];
   for (let c = 0; c < (spec.conversations ?? 0); c++) {
     const id = `perf-c${c}`;
     const at = now - (c + 2) * 3_600_000;
-    await repo.putMessage(message(`${id}-q`, id, null, 'user', `Question ${c}`, at), false);
-    await repo.putMessage(message(`${id}-a`, id, `${id}-q`, 'assistant', answer(c), at + 1000), false);
-    await repo.putConversation(conversation(id, `Conversation ${c}`, at, `${id}-a`));
+    msgs.push(message(`${id}-q`, id, null, 'user', `Question ${c}`, at), message(`${id}-a`, id, `${id}-q`, 'assistant', answer(c), at + 1000));
+    const conv = conversation(id, `Conversation ${c}`, at, `${id}-a`);
+    convs.push(spec.filesInConversations && c < (spec.files ?? 0) ? { ...conv, workDir: `work-${c}/` } : conv);
   }
+  await db().transaction('rw', db().conversations, db().messages, async () => {
+    await db().messages.bulkPut(msgs);
+    await db().conversations.bulkPut(convs);
+  });
   const n = spec.longMessages ?? 0;
   if (n) {
     let parent: string | null = null;
@@ -85,9 +94,24 @@ async function seed(spec: SeedSpec) {
   const folders = Math.max(1, spec.folders ?? 1);
   for (let i = 0; i < (spec.files ?? 0); i++) {
     const text = fileText(i);
-    await createFile(newFile({ id: `perf-f${i}`, name: `folder-${i % folders}/notes-${i}.md`, origin: { kind: 'made' }, text, by: 'model' }), text);
+    const c = spec.filesInConversations && spec.conversations ? i % spec.conversations : null;
+    const name = c === null ? `folder-${i % folders}/notes-${i}.md` : `work-${c}/notes-${i}.md`;
+    await createFile(newFile({ id: `perf-f${i}`, name, origin: { kind: 'made' }, text, by: 'model', conversationId: c === null ? undefined : `perf-c${c}` }), text);
   }
   for (let i = 0; i < (spec.images ?? 0); i++) await putImage({ id: `perf-i${i}`, mime: 'image/png', origin: { kind: 'upload' }, name: `image-${i}.png` }, await tinyImage(i), false);
+}
+
+/** A message sent in conversation `id`: it moves to the top of the list, as after a real one */
+function touch(id: string) {
+  touchConversation(id);
+}
+
+/** Files saved one after another, as when a model or an upload saves many (each save announces a change) */
+async function addFiles(n: number) {
+  for (let i = 0; i < n; i++) {
+    const text = fileText(i);
+    await createFile(newFile({ id: `perf-added-${i}`, name: `added/notes-${i}.md`, origin: { kind: 'made' }, text, by: 'model' }), text);
+  }
 }
 
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
@@ -144,5 +168,5 @@ function stop() {
 }
 
 export function exposePerfTools() {
-  (window as unknown as { __perf: unknown }).__perf = { seed, stream, start, stop, LONG_CONVERSATION, PERF_PROVIDER };
+  (window as unknown as { __perf: unknown }).__perf = { seed, stream, touch, addFiles, start, stop, LONG_CONVERSATION, PERF_PROVIDER };
 }

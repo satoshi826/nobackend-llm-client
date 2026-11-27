@@ -4,6 +4,8 @@ import type { Probe, Metrics } from './measure.ts';
 
 /** The data every scenario starts from (src/perf/index.ts seed) */
 export const SEED = { conversations: 150, longMessages: 300, files: 2000, folders: 20, images: 40 };
+/** Many conversations, with the files spread over them */
+export const SEED_MANY = { ...SEED, conversations: 5000, filesInConversations: true };
 const LAST_MESSAGE = `perf-long-${SEED.longMessages - 1}`;
 
 export interface Scenario {
@@ -13,16 +15,18 @@ export interface Scenario {
 }
 
 /** Open the app with an empty database, fill it, and slow the CPU for what follows */
-async function prepare(probe: Probe, base: string, cpu: number) {
+async function prepare(probe: Probe, base: string, cpu: number, seed: object = SEED) {
   await probe.page.goto(`${base}/`);
   await probe.page.waitForFunction(() => !!(window as unknown as { __perf?: unknown }).__perf, undefined, { timeout: 60_000 });
-  await probe.page.evaluate((spec) => (window as unknown as { __perf: { seed(s: unknown): Promise<void> } }).__perf.seed(spec), SEED);
+  await probe.page.evaluate((spec) => (window as unknown as { __perf: { seed(s: unknown): Promise<void> } }).__perf.seed(spec), seed);
   // Leave the page, so the next step opens the app anew (a change of the hash alone would not reload it)
   await probe.page.goto('about:blank');
   await probe.throttle(cpu);
 }
 
 const shown = (id: string) => `!!document.querySelector('[data-message-id="${id}"]')`;
+type Tools = { __perf: { touch(id: string): void; addFiles(n: number): Promise<void> } };
+const touch = (probe: Probe, id: string) => probe.page.evaluate((x) => (window as unknown as Tools).__perf.touch(x), id);
 const entries = () => `document.querySelectorAll('[data-entry]').length`;
 
 export const SCENARIOS: Scenario[] = [
@@ -80,6 +84,28 @@ export const SCENARIOS: Scenario[] = [
       out.folder = await probe.action(
         () => probe.page.evaluate(() => (location.hash = '#/files/folder-3/')),
         `${entries()} >= ${SEED.files / SEED.folders}`
+      );
+      out.heap = { heap: await probe.heap() };
+      return out;
+    }
+  },
+  {
+    name: 'many',
+    label: `Many conversations (${SEED_MANY.conversations}) with ${SEED_MANY.files} files spread over them`,
+    async run(probe, base, cpu) {
+      await prepare(probe, base, cpu, SEED_MANY);
+      const out: Record<string, Metrics> = {};
+      out.open = await probe.load(`${base}/#/c/perf-long`, shown(LAST_MESSAGE));
+      out.switch = await probe.action(() => probe.page.getByRole('button', { name: 'Conversation 0', exact: true }).first().click(), shown('perf-c0-a'));
+      // A message sent in an old conversation moves it to the top
+      out.send = await probe.action(() => touch(probe, 'perf-c4000'), 'true');
+      out.files = await probe.action(() => probe.page.evaluate(() => (location.hash = '#/files?type=text')), `${entries()} >= 60`);
+      // The same while the Files tab is open: its rows show conversation names
+      out.sendInFiles = await probe.action(() => touch(probe, 'perf-c3000'), 'true');
+      // 50 files saved one after another (each save announces a change)
+      out.addFiles = await probe.action(
+        () => probe.page.evaluate(() => (window as unknown as Tools).__perf.addFiles(50)),
+        'true'
       );
       out.heap = { heap: await probe.heap() };
       return out;

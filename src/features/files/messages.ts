@@ -134,7 +134,7 @@ export const t = defineMessages(
 
     // sidebar panel
     'filer.search': 'ファイルを検索',
-    'filer.searchIn': '「{name}」内を検索',
+    'filer.searchIn': 'フォルダ内を検索',
     'filer.closeSearch': '検索を閉じる',
     'filer.openChat': '会話を開く',
     'file.viewAs': '表示のしかた',
@@ -351,7 +351,7 @@ export const t = defineMessages(
       'settings.permission': 'Confirm before writing files',
 
       'filer.search': 'Search files',
-      'filer.searchIn': 'Search in “{name}”',
+      'filer.searchIn': 'Search this folder',
       'filer.closeSearch': 'Close search',
       'filer.openChat': 'Open the chat',
       'file.viewAs': 'Show as',
@@ -564,7 +564,7 @@ export const t = defineMessages(
       'settings.permission': '写入文件前确认',
 
       'filer.search': '搜索文件',
-      'filer.searchIn': '在“{name}”中搜索',
+      'filer.searchIn': '在文件夹中搜索',
       'filer.closeSearch': '关闭搜索',
       'filer.openChat': '打开对话',
       'file.viewAs': '显示方式',

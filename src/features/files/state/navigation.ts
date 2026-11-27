@@ -59,6 +59,16 @@ function showFiler(view?: FilerView, conversationId?: string | null, folder?: st
   sidebarOpen.value = false;
 }
 
+/**
+ * The sidebar's Files tab chosen: the file manager as it was left. The sidebar stays open (on a phone it is a drawer),
+ * as it does when the chats tab is chosen: picking a tab is not picking a place yet
+ */
+export function selectFilesTab() {
+  mainView.value = { kind: 'files' };
+  sidebarTab.value = 'files';
+  pushHash(filerHash());
+}
+
 /** The hash of what the Files tab shows ('#/files/todo-app/js/', '#/files?type=text', '#/files?chat=<id>'), so a reload reopens it */
 const filerHash = () => {
   if (filerConversation.value) return `#/files?chat=${encodeURIComponent(filerConversation.value)}`;

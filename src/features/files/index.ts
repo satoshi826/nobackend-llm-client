@@ -6,7 +6,7 @@ import { lazyComponent } from '../../components/lazy';
 import { AttachButton, AttachmentChips } from './components/Composer';
 import { FilesPanel } from './components/FilesPanel';
 import { FileToolDetail, UserAttachments } from './components/Message';
-import { openFiler, pendingAttachments, takeAttachments, uploadFiles } from './state';
+import { pendingAttachments, selectFilesTab, takeAttachments, uploadFiles } from './state';
 import { FILE_TOOL_NAMES, fileToolLabel } from './tools';
 import { t } from './messages';
 import { registerMessageTransform } from '../../lib/chat/request';
@@ -16,7 +16,7 @@ export { conversationFile, openFile, openFiler } from './state';
 /** Text of a PDF (or other attachable file), for reading pages fetched from the web */
 export { extractText } from './extract';
 
-registerSidebarTab({ id: 'files', label: () => t('files'), icon: 'files', Panel: FilesPanel, onSelect: () => openFiler() });
+registerSidebarTab({ id: 'files', label: () => t('files'), icon: 'files', Panel: FilesPanel, onSelect: selectFilesTab });
 // The file manager and the file screen load their code when first opened
 registerMainView({ kind: 'files', Component: lazyComponent(() => import('./components/Filer').then((m) => m.Filer)) });
 registerMainView({ kind: 'file', Component: lazyComponent(() => import('./components/FileView').then((m) => m.FileView)) });

@@ -4,7 +4,6 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { PageHeader } from '../../../components/PageHeader';
 import { Icon, IconButton, SearchField } from '../../../components/ui';
-import { baseName } from '../../../lib/paths';
 import { filerQuery } from '../state';
 import { t } from '../messages';
 
@@ -31,7 +30,7 @@ export function FilesHeader({ title, searchIn, onSearch, children }: { title: Co
     carryFocus = true;
     onSearch();
   };
-  const hint = searchIn ? t('filer.searchIn', { name: baseName(searchIn.slice(0, -1)) }) : t('filer.search');
+  const hint = searchIn ? t('filer.searchIn') : t('filer.search');
   const input = (v: string) => {
     filerQuery.value = v;
     if (!onSearch) return;

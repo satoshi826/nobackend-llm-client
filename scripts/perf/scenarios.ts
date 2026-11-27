@@ -25,7 +25,7 @@ async function prepare(probe: Probe, base: string, cpu: number, seed: object = S
 }
 
 const shown = (id: string) => `!!document.querySelector('[data-message-id="${id}"]')`;
-type Tools = { __perf: { touch(id: string): void; addFiles(n: number): Promise<void> } };
+type Tools = { __perf: { touch(id: string): void; addFiles(n: number): Promise<void>; encrypt(): Promise<void>; seed(s: unknown): Promise<void>; search(q: string): Promise<number> } };
 const touch = (probe: Probe, id: string) => probe.page.evaluate((x) => (window as unknown as Tools).__perf.touch(x), id);
 const entries = () => `document.querySelectorAll('[data-entry]').length`;
 
@@ -107,6 +107,65 @@ export const SCENARIOS: Scenario[] = [
         () => probe.page.evaluate(() => (window as unknown as Tools).__perf.addFiles(50)),
         'true'
       );
+      out.heap = { heap: await probe.heap() };
+      return out;
+    }
+  },
+  {
+    name: 'search',
+    label: 'Full-text search with a passphrase (5000 conversations, 10,000 messages)',
+    async run(probe, base, cpu) {
+      // In one page: the data key lives only in the page, as after unlocking
+      await probe.page.goto(`${base}/`);
+      await probe.page.waitForFunction(() => !!(window as unknown as { __perf?: unknown }).__perf, undefined, { timeout: 60_000 });
+      await probe.page.evaluate(async () => {
+        const { __perf } = window as unknown as Tools;
+        await __perf.encrypt();
+        await __perf.seed({ conversations: 5000 });
+      });
+      await probe.throttle(cpu);
+      const search = (q: string) => () => probe.page.evaluate((x) => (window as unknown as Tools).__perf.search(x), q);
+      const out: Record<string, Metrics> = {};
+      // The first search decrypts every message; later ones read what it kept
+      out.first = await probe.action(search('step 4321'), 'true');
+      out.again = await probe.action(search('step 1234'), 'true');
+      // Found nowhere: every message is looked at
+      out.none = await probe.action(search('no such words'), 'true');
+      out.heap = { heap: await probe.heap() };
+      return out;
+    }
+  }
+,
+  {
+    name: 'images',
+    label: 'Scrolling through 1,500 images with a passphrase',
+    async run(probe, base, cpu) {
+      await probe.page.goto(`${base}/`);
+      await probe.page.waitForFunction(() => !!(window as unknown as { __perf?: unknown }).__perf, undefined, { timeout: 60_000 });
+      await probe.page.evaluate(async () => {
+        const { __perf } = window as unknown as Tools;
+        await __perf.encrypt();
+        await __perf.seed({ images: 1500 });
+      });
+      await probe.throttle(cpu);
+      const out: Record<string, Metrics> = {};
+      out.open = await probe.action(() => probe.page.evaluate(() => (location.hash = '#/files?type=image')), `${entries()} >= 30`);
+      // Down to the end, a screenful at a time, as a person scrolls
+      out.scroll = await probe.action(async () => {
+        for (let i = 0; i < 400; i++) {
+          const done = await probe.page.evaluate(() => {
+            const area = document.querySelector('[data-entry]')?.closest('.overflow-y-auto') as HTMLElement | null;
+            if (!area) return false;
+            area.scrollBy(0, area.clientHeight);
+            return area.scrollTop + area.clientHeight >= area.scrollHeight - 2 && document.querySelectorAll('[data-entry]').length >= 1500;
+          });
+          if (done) break;
+          await probe.page.waitForTimeout(50);
+        }
+      }, `${entries()} >= 1500`);
+      // What stays loaded at the end: images shown in the page, and the JS heap
+      await probe.page.waitForTimeout(1000);
+      out.kept = { images: await probe.page.evaluate(() => [...document.querySelectorAll('[data-entry] img')].filter((i) => (i as HTMLImageElement).src).length) };
       out.heap = { heap: await probe.heap() };
       return out;
     }

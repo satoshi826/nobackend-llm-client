@@ -8,7 +8,8 @@ export type Runs = Record<string, Record<string, Metrics[]>>;
 const P_LIMIT = 0.01;
 const MIN_CHANGE = 0.03;
 const TIMES = ['time', 'tbt', 'script', 'layout', 'style'];
-const COUNTS = ['renders', 'mounts', 'unmounts', 'commits'];
+// images: images still shown in the page at the end of a scenario (scenarios.ts, images)
+const COUNTS = ['renders', 'mounts', 'unmounts', 'commits', 'images'];
 
 const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b);
 function quantile(xs: number[], q: number) {

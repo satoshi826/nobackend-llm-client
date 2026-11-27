@@ -9,6 +9,8 @@ import { scheduleMessageUpdate } from '../state/generation';
 import { beginRun, endRun } from '../state/runs';
 import { saveSettings } from '../state/settings';
 import type { PerfCounts } from '../lib/perf/counter';
+import { generateDataKey } from '../lib/crypto/data';
+import { currentDataKey, seal, setDataKey } from '../lib/db/sealed';
 
 /** What to generate. The long conversation is the one scenarios open (its id is LONG_CONVERSATION) */
 export interface SeedSpec {
@@ -66,7 +68,7 @@ async function seed(spec: SeedSpec) {
   const now = Date.now();
   // The chat shows only with a provider set up (and the passphrase question answered)
   await saveSettings({ enabledProviders: [PERF_PROVIDER], passphrasePrompted: true });
-  // Short conversations in one go (thousands of them; perf mode's database is never encrypted, so rows are stored as they are)
+  // Short conversations in one go (thousands of them), encrypted after encrypt() as the app would store them
   const convs: Conversation[] = [];
   const msgs: MessageRecord[] = [];
   for (let c = 0; c < (spec.conversations ?? 0); c++) {
@@ -76,9 +78,12 @@ async function seed(spec: SeedSpec) {
     const conv = conversation(id, `Conversation ${c}`, at, `${id}-a`);
     convs.push(spec.filesInConversations && c < (spec.files ?? 0) ? { ...conv, workDir: `work-${c}/` } : conv);
   }
+  const key = currentDataKey();
+  const msgRows = key ? await Promise.all(msgs.map((m) => seal('messages', m))) : msgs;
+  const convRows = key ? await Promise.all(convs.map((c) => seal('conversations', c))) : convs;
   await db().transaction('rw', db().conversations, db().messages, async () => {
-    await db().messages.bulkPut(msgs);
-    await db().conversations.bulkPut(convs);
+    await db().messages.bulkPut(msgRows);
+    await db().conversations.bulkPut(convRows);
   });
   const n = spec.longMessages ?? 0;
   if (n) {
@@ -99,6 +104,20 @@ async function seed(spec: SeedSpec) {
     await createFile(newFile({ id: `perf-f${i}`, name, origin: { kind: 'made' }, text, by: 'model', conversationId: c === null ? undefined : `perf-c${c}` }), text);
   }
   for (let i = 0; i < (spec.images ?? 0); i++) await putImage({ id: `perf-i${i}`, mime: 'image/png', origin: { kind: 'upload' }, name: `image-${i}.png` }, await tinyImage(i), false);
+}
+
+/**
+ * Encrypt what is stored from now on, with a fresh data key held in this page only (as after unlocking with a
+ * passphrase). Gone on reload: measure in the same page
+ */
+async function encrypt() {
+  setDataKey(await generateDataKey());
+  repo.clearSearchCache();
+}
+
+/** The full-text search of the sidebar; resolves with the number of conversations found */
+async function search(query: string): Promise<number> {
+  return (await repo.searchMessages(query)).length;
 }
 
 /** A message sent in conversation `id`: it moves to the top of the list, as after a real one */
@@ -168,5 +187,5 @@ function stop() {
 }
 
 export function exposePerfTools() {
-  (window as unknown as { __perf: unknown }).__perf = { seed, stream, touch, addFiles, start, stop, LONG_CONVERSATION, PERF_PROVIDER };
+  (window as unknown as { __perf: unknown }).__perf = { seed, stream, touch, addFiles, encrypt, search, start, stop, LONG_CONVERSATION, PERF_PROVIDER };
 }

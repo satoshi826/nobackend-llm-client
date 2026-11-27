@@ -55,6 +55,8 @@ Natural mainland UI wording, full-width punctuation, no space between Chinese an
 | 使用量 | usage | 用量 |
 | バックアップ / 書き出す / 読み込む | backup / export / import | 备份 / 导出 / 导入 |
 | 外部中継 | relayed | 外部中转 |
+| 取得用ページ | fetch page | 获取页面 |
+| 中継サーバー | relay server | 中转服务器 |
 | 版 | version | 版本 |
 | 指示（システムプロンプト） | instructions (system prompt) | 指令（系统提示词） |
 | 思考 | reasoning | 思考 |

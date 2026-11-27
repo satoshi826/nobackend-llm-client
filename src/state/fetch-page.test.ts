@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { fetchFromWeb, fetchRequest, type Fetched } from './fetch-page';
+import type { Fetched } from '../lib/fetcher/protocol';
+import { fetchFromWeb, fetchRequest } from './fetch-page';
 
 describe('fetching through the fetch page', () => {
   it('shows one request at a time and resolves with what the page returns', async () => {

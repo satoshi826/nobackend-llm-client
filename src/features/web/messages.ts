@@ -31,7 +31,7 @@ export const t = defineMessages(
     'settings.fetchTitle': 'ページの取得',
     'settings.readDesc': 'ツール呼び出しに対応したモデルが、URL のページ（HTML・テキスト・PDF）を読めます。本文は別の呼び出しで知りたいことだけ抜き出してから会話のモデルに渡すので、ページに書かれた指示の影響を受けにくくなります。',
     'settings.ways': '取得の経路',
-    'settings.waysDesc': 'ページを読むときもファイルを取り込むときも、取得用ページが毎回確認してから、上から順に試します（サイトごとに「今後確認しない」も選べます）。',
+    'settings.waysDesc': 'ページを読むときもファイルを取り込むときも、取得用ページが毎回確認してから、上から順に試します（サイトごとに、読むときと取り込むときで別々に「今後確認せずに」も選べます）。',
     'settings.viaDirect': 'サイトから直接',
     'settings.viaDirectDesc': 'ブラウザからの取得を許しているサイト（ファイルの配信元に多い）',
     'settings.viaRelay': '中継サーバー',

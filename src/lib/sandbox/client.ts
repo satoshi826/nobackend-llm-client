@@ -96,23 +96,25 @@ function hiddenFrame(): Hidden {
   return { frame: f, port };
 }
 
+/** How long a run may take */
+export const RUN_TIMEOUT_MS = 10_000;
+
 export interface RunOptions {
-  timeoutMs?: number;
   /** Text files the code reads as `files` ({ name: text }) */
   files?: Record<string, string>;
   /** Run on the sandbox page instead of a worker, so the code has DOMParser (stopped by removing the frame) */
   dom?: boolean;
 }
 
-/** Run JavaScript in the sandbox: no network, no access to the app, stopped after timeoutMs */
-export async function runJavaScript(code: string, { timeoutMs = 10_000, files = {}, dom = false }: RunOptions = {}): Promise<RunResult> {
+/** Run JavaScript in the sandbox: no requests, no access to the app, stopped after RUN_TIMEOUT_MS */
+export async function runJavaScript(code: string, { files = {}, dom = false }: RunOptions = {}): Promise<RunResult> {
   const own = dom ? hiddenFrame() : null;
   const h = own ?? (shared ??= hiddenFrame());
   const port = await h.port;
   const id = crypto.randomUUID();
   return new Promise((resolve) => {
     // A worker is stopped by the sandbox itself; code on the page (dom) is stopped by dropping the frame
-    const limit = dom ? timeoutMs : timeoutMs + 2000;
+    const limit = dom ? RUN_TIMEOUT_MS : RUN_TIMEOUT_MS + 2000;
     const guard = setTimeout(() => {
       pending.delete(id);
       if (own) own.frame.remove();
@@ -124,7 +126,7 @@ export async function runJavaScript(code: string, { timeoutMs = 10_000, files = 
       own?.frame.remove();
       resolve(r);
     });
-    port.postMessage({ type: 'run', id, code, files, dom, timeoutMs });
+    port.postMessage({ type: 'run', id, code, files, dom, timeoutMs: RUN_TIMEOUT_MS });
   });
 }
 

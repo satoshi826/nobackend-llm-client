@@ -1,13 +1,13 @@
-// The fetch page. The app opens it in a frame: ?url=<address>&mode=read|save&app=<app origin>&lang=..&theme=..
+// The fetch page. The app opens it in a frame: #url=<address>&mode=read|save&app=<app origin>&lang=..&theme=..
 // It is the only page allowed to reach any https address (its own CSP), and it asks the user before every fetch,
-// unless they chose not to be asked again for that site (kept in this page's storage).
+// unless they chose not to be asked again for that site and mode (kept in this page's storage).
 // read: a page for a model to read. Straight from the site, then through the user's relay, and as text from Jina
 // Reader when neither works or the HTML holds almost no text (a page drawn by scripts). save: a file, kept as it is.
 // The question lives here, out of the app's reach: neither a prompt-injected model nor a script running in the
 // app can fetch without the user (fully so when this page is on its own origin, VITE_FETCH_URL).
 // No dependencies on the app. The DOM is built with createElement and textContent only (no innerHTML).
 import { detectLang, formatNumber, getLang, setLang } from '../src/lib/i18n';
-import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, type FetchVia, type FromFetcher } from '../src/lib/fetcher/protocol';
+import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, type FetchMode, type FetchVia, type FromFetcher } from '../src/lib/fetcher/protocol';
 import '../vault/style.css';
 import { t } from './messages';
 
@@ -36,7 +36,7 @@ document.documentElement.classList.toggle('dark', params.get('theme') !== 'light
 const appOrigin = params.get('app') ?? '';
 const target = window.parent !== window && APP_ORIGINS.includes(appOrigin) ? appOrigin : null;
 const url = fetchableUrl(params.get('url') ?? '');
-const mode: 'read' | 'save' = params.get('mode') === 'read' ? 'read' : 'save';
+const mode: FetchMode = params.get('mode') === 'read' ? 'read' : 'save';
 /** Opened from the app's settings to manage what this page keeps, instead of to fetch */
 const settingsView = params.get('view') === 'settings';
 
@@ -59,16 +59,24 @@ function store(key: string, value: string | null) {
     /* storage unavailable: nothing is kept (the user is asked each time, Jina is used without a key) */
   }
 }
-function allowedHosts(): string[] {
+/** Sites not asked about again, for reading pages and for saving files apart */
+type Sites = Record<FetchMode, string[]>;
+function allowedSites(): Sites {
+  let v: unknown;
   try {
-    const v = JSON.parse(load(ALLOWED_KEY) ?? '[]');
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    v = JSON.parse(load(ALLOWED_KEY) ?? '[]');
   } catch {
-    return [];
+    v = [];
   }
+  const hosts = (x: unknown) => (Array.isArray(x) ? x.filter((h): h is string => typeof h === 'string') : []);
+  // A plain list, kept before reading and saving were remembered apart: it stands for both
+  if (Array.isArray(v)) return { read: hosts(v), save: hosts(v) };
+  const o = (v ?? {}) as Partial<Sites>;
+  return { read: hosts(o.read), save: hosts(o.save) };
 }
-function setAllowedHosts(list: string[]) {
-  store(ALLOWED_KEY, list.length ? JSON.stringify([...new Set(list)].sort()) : null);
+function setAllowed(m: FetchMode, hosts: string[]) {
+  const s = { ...allowedSites(), [m]: [...new Set(hosts)].sort() };
+  store(ALLOWED_KEY, s.read.length || s.save.length ? JSON.stringify(s) : null);
 }
 const MAX_MB = formatNumber(MAX_FETCH_BYTES / 1024 / 1024);
 
@@ -133,7 +141,6 @@ async function download(u: URL, onProgress: (bytes: number) => void): Promise<{ 
   return { res, body: body.buffer, relayed };
 }
 
-/** Roughly how much text an HTML page shows (scripts, styles and tags left out) */
 /** Roughly how much text a page shows, from its first 2 MB, in one pass (a crafted page must not stall it) */
 function visibleTextLength(html: string): number {
   const s = html.slice(0, 2_000_000);
@@ -167,13 +174,13 @@ async function viaJina(u: URL): Promise<{ title: string; text: string }> {
   return { title: typeof json?.data?.title === 'string' ? json.data.title : '', text };
 }
 
-type Result = Extract<FromFetcher, { ok: true }>;
+type Result = Extract<FromFetcher, { type: 'fetch-result' }>;
 
 /** What to hand to the app: the file as fetched, or for reading, Jina's text when the site gave none */
 async function fetchFor(u: URL, onProgress: (bytes: number) => void): Promise<Result> {
   const asText = (r: { title: string; text: string }): Result => {
     const data = new TextEncoder().encode(r.title ? `# ${r.title}\n\n${r.text}` : r.text).buffer as ArrayBuffer;
-    return { type: 'fetch-result', ok: true, name: nameFor(u, null, 'text/markdown'), mime: 'text/markdown', data, url: u.href, via: 'jina' };
+    return { type: 'fetch-result', name: nameFor(u, null, 'text/markdown'), mime: 'text/markdown', data, url: u.href, via: 'jina' };
   };
   let got: Awaited<ReturnType<typeof download>>;
   try {
@@ -191,11 +198,12 @@ async function fetchFor(u: URL, onProgress: (bytes: number) => void): Promise<Re
     const r = await viaJina(finalUrl).catch(() => null);
     if (r) return asText(r);
   }
-  return { type: 'fetch-result', ok: true, name: nameFor(finalUrl, res.headers.get('content-disposition'), mime), mime, data: body, url: finalUrl.href, via };
+  return { type: 'fetch-result', name: nameFor(finalUrl, res.headers.get('content-disposition'), mime), mime, data: body, url: finalUrl.href, via };
 }
 
 const root = document.getElementById('root')!;
-const closeSettings = () => post({ type: 'fetch-close' });
+/** Cancelled, or the settings closed */
+const close = () => post({ type: 'fetch-close' });
 
 /** Deleting the key waits for a second press (no confirm()) */
 let confirmingKey = false;
@@ -227,17 +235,18 @@ function renderSettings() {
     const no = h('button', { type: 'button', class: 'btn outline', onClick: () => ((confirmingKey = false), renderSettings()) }, t('cancel'));
     jina = h('div', { class: 'card stack', role: 'alert' }, h('p', {}, t('jinaKeyDeleteWarning')), h('div', { class: 'btns' }, yes, no));
   }
-  const hosts = allowedHosts();
-  const sites = hosts.length
-    ? hosts.map((host) =>
-        h(
-          'div',
-          { class: 'card row' },
-          h('div', { class: 'fill mono' }, host),
-          h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: () => (setAllowedHosts(allowedHosts().filter((x) => x !== host)), renderSettings()) }, t('forget')))
-        )
+  const allowed = allowedSites();
+  const rows = (['read', 'save'] as const).flatMap((m) =>
+    allowed[m].map((host) =>
+      h(
+        'div',
+        { class: 'card row' },
+        h('div', { class: 'fill' }, h('div', { class: 'mono' }, host), h('div', { class: 'muted' }, t(m === 'read' ? 'siteRead' : 'siteSave'))),
+        h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: () => (setAllowed(m, allowedSites()[m].filter((x) => x !== host)), renderSettings()) }, t('forget')))
       )
-    : [h('p', { class: 'muted' }, t('noSites'))];
+    )
+  );
+  const sites = rows.length ? rows : [h('p', { class: 'muted' }, t('noSites'))];
   root.replaceChildren(
     h(
       'div',
@@ -249,7 +258,7 @@ function renderSettings() {
       h('div', { class: 'strong' }, t('sitesTitle')),
       h('p', { class: 'muted' }, t('sitesDesc')),
       ...sites,
-      h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: closeSettings }, t('close')))
+      h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: close }, t('close')))
     )
   );
 }
@@ -262,12 +271,12 @@ function render() {
   if (settingsView) return renderSettings();
   if (!url) {
     root.replaceChildren(
-      h('div', { class: 'card stack' }, h('p', { role: 'alert' }, t('badUrl')), h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: () => post({ type: 'fetch-result', ok: false, cancelled: true }) }, t('close'))))
+      h('div', { class: 'card stack' }, h('p', { role: 'alert' }, t('badUrl')), h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: close }, t('close'))))
     );
     return;
   }
   const status = h('p', { class: 'muted', role: 'status', 'aria-live': 'polite' });
-  const cancel = h('button', { type: 'button', class: 'btn outline', onClick: () => post({ type: 'fetch-result', ok: false, cancelled: true }) }, t('cancel'));
+  const cancel = h('button', { type: 'button', class: 'btn outline', onClick: close }, t('cancel'));
   const go = h('button', { type: 'button', class: 'btn primary' }, t(mode === 'read' ? 'read' : 'fetch'));
   const remember = h('input', { type: 'checkbox' });
   const run = async () => {
@@ -278,7 +287,7 @@ function render() {
     status.textContent = t('progress', { size: size(0) });
     try {
       const r = await fetchFor(url, (n) => (status.textContent = t('progress', { size: size(n) })));
-      if (remember.checked) setAllowedHosts([...allowedHosts(), url.host]);
+      if (remember.checked) setAllowed(mode, [...allowedSites()[mode], url.host]);
       post(r, [r.data]);
     } catch (e) {
       go.removeAttribute('aria-busy');
@@ -289,13 +298,13 @@ function render() {
     }
   };
   go.addEventListener('click', () => void run());
-  const allowed = allowedHosts();
+  const allowed = allowedSites()[mode];
   const forget = h(
     'p',
     { class: 'muted' },
     t('allowedList', { hosts: allowed.join(', ') }),
     ' ',
-    h('button', { type: 'button', class: 'link', onClick: () => (setAllowedHosts([]), forget.remove()) }, t('forgetAll'))
+    h('button', { type: 'button', class: 'link', onClick: () => (setAllowed(mode, []), forget.remove()) }, t('forgetAll'))
   );
   root.replaceChildren(
     h(
@@ -308,13 +317,14 @@ function render() {
       RELAY && h('p', { class: 'muted' }, t('noteRelay', { host: url.host, relay: new URL(RELAY).host })),
       mode === 'read' && h('p', { class: 'muted' }, t('noteJina', { jina: new URL(JINA).host })),
       mode === 'save' && h('p', { class: 'muted' }, t('limit', { max: MAX_MB })),
-      h('label', { class: 'check' }, remember, t('remember', { host: url.host })),
+      h('label', { class: 'check' }, remember, t(mode === 'read' ? 'rememberRead' : 'rememberSave', { host: url.host })),
+      h('p', { class: 'muted' }, t('rememberNote', { host: url.host })),
       allowed.length > 0 && forget,
       status,
       h('div', { class: 'btns' }, cancel, go)
     )
   );
-  // A site the user chose not to be asked about again: fetch right away (the request still shows while it runs)
+  // A site the user chose not to be asked about again (for this mode): fetch right away (the request still shows while it runs)
   if (allowed.includes(url.host)) {
     remember.checked = true;
     void run();
@@ -335,6 +345,6 @@ else
     render();
   });
 addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') post(settingsView ? { type: 'fetch-close' } : { type: 'fetch-result', ok: false, cancelled: true });
+  if (e.key === 'Escape') close();
 });
 new ResizeObserver(() => post({ type: 'fetch-resize', height: root.scrollHeight })).observe(root);

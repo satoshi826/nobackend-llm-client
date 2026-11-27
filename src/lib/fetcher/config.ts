@@ -10,19 +10,14 @@ export const FETCH_URL: string = (import.meta as any).env?.VITE_FETCH_URL || (ty
 export const FETCH_ROUTES = fetchRoutes((import.meta as any).env ?? {});
 export const FETCH_ORIGIN = typeof location !== 'undefined' ? new URL(FETCH_URL, location.origin).origin : '';
 
-/** The fetch page for one address, told which app opened it (it answers only to allowed app origins) */
-export function fetchPageUrl(url: string, mode: FetchMode, theme: 'dark' | 'light'): string {
-  return pageUrl({ url, mode }, theme);
-}
-
-/** The fetch page's own settings (the Jina Reader key, the remembered sites) */
-export function fetchSettingsUrl(theme: 'dark' | 'light'): string {
-  return pageUrl({ view: 'settings' }, theme);
-}
-
-function pageUrl(params: Record<string, string>, theme: 'dark' | 'light'): string {
+/**
+ * The fetch page for one address, or with view=settings its own settings (the Jina Reader key, the remembered sites).
+ * Told which app opened it (it answers only to allowed app origins), in the app's language and theme
+ */
+export function fetchPageUrl(params: { url: string; mode: FetchMode } | { view: 'settings' }): string {
   // In the fragment: the address the model asked for must not reach the host's request logs
   const u = new URL(FETCH_URL);
+  const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
   u.hash = new URLSearchParams({ ...params, app: location.origin, lang: getLang(), theme }).toString();
   return u.toString();
 }

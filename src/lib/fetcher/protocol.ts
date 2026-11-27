@@ -17,11 +17,20 @@ export function fetchRoutes(env: Record<string, string | undefined>): { relay: s
 /** The app's proof that it framed the page (sent once the page has loaded); the page shows nothing until then */
 export const FETCH_HELLO = { type: 'fetch-hello' } as const;
 
+/** What was fetched */
+export interface Fetched {
+  name: string;
+  mime: string;
+  data: ArrayBuffer;
+  /** The address it came from (after redirects) */
+  url: string;
+  via: FetchVia;
+}
+
 export type FromFetcher =
   | { type: 'fetch-resize'; height: number }
-  | { type: 'fetch-result'; ok: true; name: string; mime: string; data: ArrayBuffer; url: string; via: FetchVia }
-  | { type: 'fetch-result'; ok: false; cancelled: boolean; message?: string }
-  /** The settings view was closed */
+  | ({ type: 'fetch-result' } & Fetched)
+  /** Cancelled, or the settings view closed: nothing was fetched */
   | { type: 'fetch-close' };
 
 /** Only https addresses are fetched (no http, no data:, no file:, no credentials in the address) */

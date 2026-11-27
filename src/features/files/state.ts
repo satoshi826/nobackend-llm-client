@@ -16,7 +16,8 @@ import { extractText } from './extract';
 import { FILE_TOOL_NAMES, filesNote, makeFileTools, type FileToolDetails } from './tools';
 import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
-import { fetchFromWeb, type Fetched } from '../../state/fetch-page';
+import { fetchFromWeb } from '../../state/fetch-page';
+import type { Fetched } from '../../lib/fetcher/protocol';
 
 /** Let chat models write and read files (create_file / append_file / edit_file / read_file) */
 export const fileSettings = defineFeatureSettings('files', { fileTools: true }, (old) => pickLegacy(old, { fileTools: true }));
@@ -222,39 +223,29 @@ async function importImage(file: File, id: string, source: ImageSource, conv?: C
   return true;
 }
 
-/**
- * Bring files into the Files tab (not attached to anything): images are kept as images, everything else as
- * text (PDFs too). source: where they came from (the device, or a web address)
- */
-export async function bringIn(files: File[], source: ImageSource = { kind: 'upload' }): Promise<number> {
+
+// ---- fetching from the web (through the fetch page: state/fetch-page.ts) ----
+/** Keep what was fetched in the Files tab, as part of the chat (so its tools can read it): a file, or an image */
+async function saveFetched(r: Fetched, conv: Conversation): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null> {
+  const file = new File([r.data], r.name, { type: r.mime });
+  const id = newId();
+  if (r.mime.startsWith('image/')) return (await importImage(file, id, { kind: 'web', url: r.url }, conv)) ? { kind: 'image', name: file.name } : null;
+  const rec = await importOne(file, id, !!conv.temporary, r.url, conv.id);
+  return rec ? { kind: 'file', file: rec } : null;
+}
+
+/** Upload from the file manager into the Files tab (not attached to anything): images as images, the rest as text (PDFs too) */
+export async function importFromDevice(files: File[]) {
   const jobs = files.map((f) => ({ id: newId(), file: f }));
   importing.value = [...importing.value, ...jobs.map((j) => ({ id: j.id, name: j.file.name }))];
   const done = await Promise.all(
     jobs.map(async (j) => {
-      const r = j.file.type.startsWith('image/') ? await importImage(j.file, j.id, source) : !!(await importOne(j.file, j.id, false, source.kind === 'web' ? source.url : undefined));
+      const r = j.file.type.startsWith('image/') ? await importImage(j.file, j.id, { kind: 'upload' }) : !!(await importOne(j.file, j.id, false));
       importing.value = importing.value.filter((x) => x.id !== j.id);
       return r;
     })
   );
-  return done.filter(Boolean).length;
-}
-
-// ---- fetching from the web (through the fetch page: state/fetch-page.ts) ----
-/** What a fetch became: a file the model can read, or an image */
-export type SavedFetch = { kind: 'file'; file: FileRecord } | { kind: 'image'; id: string; name: string };
-
-/** Keep what was fetched in the Files tab (in a chat: as part of that chat, so its tools can read it) */
-export async function saveFetched(r: Fetched, conv?: Conversation): Promise<SavedFetch | null> {
-  const file = new File([r.data], r.name, { type: r.mime });
-  const id = newId();
-  if (r.mime.startsWith('image/')) return (await importImage(file, id, { kind: 'web', url: r.url }, conv)) ? { kind: 'image', id, name: file.name } : null;
-  const rec = await importOne(file, id, !!conv?.temporary, r.url, conv?.id);
-  return rec ? { kind: 'file', file: rec } : null;
-}
-
-/** Upload from the file manager */
-export async function importFromDevice(files: File[]) {
-  const n = await bringIn(files);
+  const n = done.filter(Boolean).length;
   if (n) showToast(n === 1 ? t('import.doneOne') : t('import.done', { n: formatNumber(n) }));
 }
 
@@ -304,7 +295,6 @@ export async function takeAttachments(): Promise<Attachment[]> {
 }
 
 // ---- tools for the model ----
-/** Files the model may use in a conversation: attached to it, or created / changed by file tools in it */
 /** A file this conversation may read (made, fetched or attached in it): its name and current text, for other features' tools */
 export async function conversationFile(conv: Conversation, history: MessageRecord[], id: string): Promise<{ name: string; text: string } | undefined> {
   const f = await fdb.getFile(id);
@@ -312,6 +302,7 @@ export async function conversationFile(conv: Conversation, history: MessageRecor
   return { name: f.name, text: fdb.currentText(f) };
 }
 
+/** Files the model may use in a conversation: attached to it, or created / changed by file tools in it */
 export function filesInHistory(history: MessageRecord[]): Map<string, { name: string; size: number }> {
   const out = new Map<string, { name: string; size: number }>();
   for (const m of history) {

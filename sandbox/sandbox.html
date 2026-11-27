@@ -34,26 +34,39 @@
           document.body.textContent = 'This page only works inside the app.';
           return;
         }
-        // Runs inside the worker: console output is collected, the code runs as the body of an async function
-        const PRELUDE = `
+        // Runs code as the body of an async function and collects its console output: on this page (dom), and from
+        // its source in each worker
+        async function runCode(code, files) {
           const logs = [];
-          const show = (v) => { try { return typeof v === 'string' ? v : JSON.stringify(v, null, 2) ?? String(v); } catch { return String(v); } };
-          for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
-            console[level] = (...args) => { logs.push((level === 'log' || level === 'info' ? '' : level + ': ') + args.map(show).join(' ')); if (logs.length > 1000) logs.shift(); };
-          }
-          onmessage = async (e) => {
+          const show = (v) => {
             try {
-              const value = await new Function('files', 'return (async () => {\\n' + e.data.code + '\\n})()')(e.data.files || {});
-              postMessage({ logs, result: value === undefined ? undefined : show(value) });
-            } catch (err) {
-              postMessage({ logs, error: String((err && err.stack) || err) });
+              return typeof v === 'string' ? v : (JSON.stringify(v, null, 2) ?? String(v));
+            } catch {
+              return String(v);
             }
           };
-        `;
+          const saved = {};
+          for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
+            saved[level] = console[level];
+            console[level] = (...args) => {
+              logs.push((level === 'log' || level === 'info' ? '' : level + ': ') + args.map(show).join(' '));
+              if (logs.length > 1000) logs.shift();
+            };
+          }
+          try {
+            const value = await new Function('files', 'return (async () => {\n' + code + '\n})()')(files);
+            return { logs, result: value === undefined ? undefined : show(value) };
+          } catch (err) {
+            return { logs, error: String((err && err.stack) || err) };
+          } finally {
+            Object.assign(console, saved);
+          }
+        }
+        const WORKER = `const runCode = ${runCode};\nonmessage = async (e) => postMessage(await runCode(e.data.code, e.data.files));`;
         let port = null;
 
         function run(d) {
-          const url = URL.createObjectURL(new Blob([PRELUDE], { type: 'text/javascript' }));
+          const url = URL.createObjectURL(new Blob([WORKER], { type: 'text/javascript' }));
           const worker = new Worker(url);
           URL.revokeObjectURL(url);
           let done = false;
@@ -75,34 +88,13 @@
 
         // With dom: on this page, so the code has DOMParser (e.g. to try a scraper on a saved HTML file)
         async function runHere(d) {
-          const logs = [];
-          const show = (v) => {
-            try {
-              return typeof v === 'string' ? v : (JSON.stringify(v, null, 2) ?? String(v));
-            } catch {
-              return String(v);
-            }
-          };
-          const saved = {};
-          for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
-            saved[level] = console[level];
-            console[level] = (...args) => {
-              logs.push((level === 'log' || level === 'info' ? '' : level + ': ') + args.map(show).join(' '));
-              if (logs.length > 1000) logs.shift();
-            };
-          }
           noPeers();
-          try {
-            const value = await new Function('files', 'return (async () => {\n' + d.code + '\n})()')(d.files || {});
-            port.postMessage({ type: 'result', id: d.id, logs, result: value === undefined ? undefined : show(value) });
-          } catch (err) {
-            port.postMessage({ type: 'result', id: d.id, logs, error: String((err && err.stack) || err) });
-          } finally {
-            Object.assign(console, saved);
-          }
+          port.postMessage({ ...(await runCode(d.code, d.files)), type: 'result', id: d.id });
         }
 
-        // A peer connection could carry data out past the CSP: not offered to code on this page (defence in depth)
+        // A peer connection could carry data out past the CSP in browsers that do not enforce its webrtc directive
+        // (Chrome among them): not offered to code on this page. A frame the code makes has its own, so this only
+        // raises the bar
         function noPeers() {
           for (const k of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'RTCDataChannel']) {
             try {
@@ -117,7 +109,7 @@
           else if (d.type === 'run' && typeof d.code === 'string') {
             const files = d.files && typeof d.files === 'object' ? d.files : {};
             if (d.dom) void runHere({ id: d.id, code: d.code, files });
-            else run({ id: d.id, code: d.code, files, timeoutMs: Math.min(60000, Math.max(100, Number(d.timeoutMs) || 10000)) });
+            else run({ id: d.id, code: d.code, files, timeoutMs: d.timeoutMs });
           } else if (d.type === 'render' && typeof d.html === 'string') {
             noPeers();
             document.open();

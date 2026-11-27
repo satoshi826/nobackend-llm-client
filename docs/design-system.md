@@ -74,7 +74,7 @@ Inter, then the system's Japanese font (Hiragino Sans, Noto Sans JP, Yu Gothic U
 ### 3.4 Space, radius, size
 
 - Spacing scale (px): 4, 6, 8, 12, 16, 20, 24, 32.
-- Radius: 10 (buttons, chips that are not pills), 12–14 (rows, fields, small cards), 18 (message bubbles, cards), 22 (panels, composer), 999 (pills, badges, round buttons).
+- Radius: 4–6 (tags, inline code, checkboxes, small text buttons), 8 (images, rows, small cards), 10 (buttons, selects, segmented items), 12 (fields, code blocks, lists), 16 (message bubbles, toasts, floating bars), 18 (file cards, the file editor), 22 (dialogs, panels, composer, sidebar), 999 (pills, badges, round buttons).
 - Control heights: 34 (compact chips / toolbar buttons), 40 (default buttons, fields), 44 (primary actions, send). Touch targets ≥ 44 px on touch devices.
 
 ### 3.5 Motion

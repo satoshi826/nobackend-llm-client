@@ -2,17 +2,7 @@
 // and asks the user (or remembers a site they allowed). Both reading a page (fetch_url) and saving a file
 // (fetch_file) ask here; the FetchDialog shows the page for the current request.
 import { signal } from '@preact/signals';
-import type { FetchMode, FetchVia } from '../lib/fetcher/protocol';
-
-export interface Fetched {
-  name: string;
-  mime: string;
-  data: ArrayBuffer;
-  /** The address it came from (after redirects) */
-  url: string;
-  /** Straight from the site, through the user's relay, or as text from Jina Reader */
-  via: FetchVia;
-}
+import type { Fetched, FetchMode } from '../lib/fetcher/protocol';
 
 /** The fetch page's own settings are open (over the app's settings; the FetchDialog shows them) */
 export const fetchSettingsOpen = signal(false);

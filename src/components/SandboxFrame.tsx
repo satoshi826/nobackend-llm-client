@@ -1,7 +1,7 @@
 // HTML shown in the sandbox (sandbox/sandbox.html): its scripts run there, with no origin of its own and no network.
 // A page that stops answering (an endless loop) is removed, so it cannot keep a CPU busy.
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { renderInFrame, SANDBOX_FLAGS, SANDBOX_URL, type SandboxPage } from '../lib/sandbox/client';
+import { renderInFrame, SANDBOX_FLAGS, SANDBOX_URL, type PageLog, type SandboxPage } from '../lib/sandbox/client';
 import { Button, Icon, cx } from './ui';
 import { t } from './messages';
 
@@ -17,16 +17,26 @@ function pageId(page: SandboxPage): number {
   return pageIds.get(page)!;
 }
 
-/** page: the project files the html may use; a new object renders again, so keep the same one while the files stay */
-export function SandboxFrame({ html, page, title, class: className }: { html: string; page?: SandboxPage; title: string; class?: string }) {
+/**
+ * page: the project files the html may use; a new object renders again, so keep the same one while the files stay.
+ * onLog: the page's console output and errors as they come, with the render they belong to (each render starts with
+ * an empty call, so what an earlier one logged can be dropped)
+ */
+export function SandboxFrame({ html, page, title, class: className, onLog }: { html: string; page?: SandboxPage; title: string; class?: string; onLog?(logs: PageLog[], render: string): void }) {
   const ref = useRef<HTMLIFrameElement>(null);
+  const log = useRef(onLog);
+  log.current = onLog;
   const [round, setRound] = useState(0);
   // Which render got stuck: new html, a new page or "show again" starts a fresh one
   const key = `${round}:${page ? pageId(page) : 0}:${html}`;
   const [stuckKey, setStuckKey] = useState<string | null>(null);
   const stuck = stuckKey === key;
   // The frame reloads for each render (the page replaces itself with what it is given)
-  useLayoutEffect(() => (ref.current && !stuck ? renderInFrame(ref.current, html, () => setStuckKey(key), page) : undefined), [key, stuck]);
+  useLayoutEffect(() => {
+    if (!ref.current || stuck) return;
+    log.current?.([], key);
+    return renderInFrame(ref.current, html, () => setStuckKey(key), page, (logs) => log.current?.(logs, key));
+  }, [key, stuck]);
   if (stuck)
     return (
       <div class={cx('flex flex-col items-center justify-center gap-2 rounded-xl border border-line bg-sunken p-4 text-center text-xs text-muted', className)}>

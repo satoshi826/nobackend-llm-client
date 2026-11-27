@@ -11,9 +11,9 @@ import { copyText } from '../../../components/clipboard';
 import { Markdown } from '../../../components/Markdown';
 import { useDialog } from '../../../components/dialog';
 import { PageHeader } from '../../../components/PageHeader';
-import { Badge, Button, Icon, IconButton, Segmented, Spinner, TextField } from '../../../components/ui';
+import { Badge, Button, Icon, IconButton, Modal, Segmented, Spinner, TextField, cx } from '../../../components/ui';
 import { SandboxFrame, svgPage } from '../../../components/SandboxFrame';
-import type { SandboxPage } from '../../../lib/sandbox/client';
+import { isProblem, type PageLog, type SandboxPage } from '../../../lib/sandbox/client';
 import { settings } from '../../../state/settings';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
@@ -272,6 +272,18 @@ function FileBody({ file, text, ext }: { file: FileRecord; text: string; ext: st
  * An HTML or SVG file: shown as a page in the sandbox (its scripts run there, without network), or as its code. The
  * page can start again (reload) and open over the whole window (its own run of the page)
  */
+/** How each kind of log line is labelled */
+const LOG_LABELS: Record<PageLog['level'], () => string> = {
+  log: () => 'log',
+  info: () => 'info',
+  debug: () => 'debug',
+  warn: () => 'warn',
+  error: () => 'error',
+  exception: () => t('file.logException'),
+  resource: () => t('file.logResource'),
+  csp: () => t('file.logBlocked')
+};
+
 function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: boolean }) {
   const [view, setView] = useState<'preview' | 'code'>(settings.value.htmlFilePreview ? 'preview' : 'code');
   const [run, setRun] = useState(0);
@@ -295,6 +307,12 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
       alive = false;
     };
   }, [file.id, file.name, signature, svg, ready]);
+  // What the shown page logged and what went wrong on it, for its current render
+  const [log, setLog] = useState<{ render: string; entries: PageLog[] }>({ render: '', entries: [] });
+  const onLog = (entries: PageLog[], render: string) =>
+    setLog((prev) => (prev.render === render ? { render, entries: [...prev.entries, ...entries].slice(-500) } : { render, entries }));
+  const [logOpen, setLogOpen] = useState(false);
+  const problems = log.entries.filter(isProblem).length;
   return (
     <div class="space-y-2">
       <div class="flex flex-wrap items-center gap-2">
@@ -310,6 +328,17 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
         {view === 'preview' && <span class="min-w-0 flex-1 text-xs text-muted">{t('file.sandboxNote')}</span>}
         {view === 'preview' && (
           <div class="ml-auto flex items-center gap-0.5">
+            {log.entries.length > 0 && (
+              <button
+                type="button"
+                class={cx('flex items-center gap-1 rounded-full px-2 py-1 text-xs tabular-nums hover:bg-glass-strong', problems ? 'text-danger' : 'text-muted hover:text-ink')}
+                title={t('file.logTitle')}
+                onClick={() => setLogOpen(true)}
+              >
+                <Icon name={problems ? 'info' : 'code'} class="size-3.5" />
+                {problems ? t('file.problems', { n: formatNumber(problems) }) : t('file.logs', { n: formatNumber(log.entries.length) })}
+              </button>
+            )}
             <IconButton label={t('file.reload')} onClick={() => setRun(run + 1)}>
               <Icon name="refresh" />
             </IconButton>
@@ -321,7 +350,7 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
       </div>
       {view === 'preview' ? (
         svg || files ? (
-          <SandboxFrame key={run} html={page} page={files} title={t('file.preview')} class="h-[70vh]" />
+          <SandboxFrame key={run} html={page} page={files} title={t('file.preview')} class="h-[70vh]" onLog={onLog} />
         ) : (
           // Shown once its files are here, so it does not render twice
           <div class="grid h-[70vh] place-items-center rounded-xl border border-line">
@@ -332,6 +361,18 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
         <pre class="font-mono text-sm break-words whitespace-pre-wrap">{text}</pre>
       )}
       {full && <FullPage html={page} page={files} onClose={() => setFull(false)} />}
+      {logOpen && (
+        <Modal title={t('file.logTitle')} onClose={() => setLogOpen(false)} wide>
+          <ul class="max-h-[60vh] space-y-1 overflow-y-auto font-mono text-xs">
+            {log.entries.map((l, i) => (
+              <li key={i} class={cx('flex gap-2 rounded-md px-2 py-1 break-all whitespace-pre-wrap', isProblem(l) ? 'bg-danger-soft text-danger' : l.level === 'warn' ? 'bg-warn-soft text-warn' : 'text-ink')}>
+                <span class="shrink-0 opacity-70">{LOG_LABELS[l.level]()}</span>
+                <span class="min-w-0">{l.text}</span>
+              </li>
+            ))}
+          </ul>
+        </Modal>
+      )}
     </div>
   );
 }

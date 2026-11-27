@@ -50,6 +50,16 @@ describe('sealed storage', () => {
     expect(await seal('conversations', conv('c'), null)).toEqual(conv('c'));
   });
 
+  it('encrypts every field but the few kept plain, including fields no list names (a video request)', async () => {
+    const k = await generateDataKey();
+    const m = { id: 'm1', conversationId: 'c1', parentId: null, createdAt: 3, role: 'user', status: 'done', parts: [{ type: 'text', text: '秘密' }], videoRequest: { prompt: '秘密の動画', model: 'v' }, video: { job: { downloadUrl: 'https://once.example/x' } } };
+    const stored = (await seal('messages', m, k)) as Record<string, unknown>;
+    expect(Object.keys(stored).sort()).toEqual(['conversationId', 'createdAt', 'enc', 'id', 'parentId']);
+    expect(JSON.stringify(stored)).not.toContain('秘密');
+    expect(JSON.stringify(stored)).not.toContain('once.example');
+    expect(await unseal(stored as typeof m, k)).toEqual(m);
+  });
+
   it('repo encrypts at rest, decrypts on read, and searches decrypted text', async () => {
     const k = await generateDataKey();
     setDataKey(k);

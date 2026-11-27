@@ -34,18 +34,27 @@ export async function putConversation(c: Conversation): Promise<void> {
   await db().conversations.put(await seal('conversations', c));
 }
 
-export async function deleteConversation(id: string): Promise<void> {
+/** Delete a conversation and its messages; withItems: also the images and files made in it (see countMadeIn) */
+export async function deleteConversation(id: string, withItems = false): Promise<void> {
   if (memConversations.delete(id)) {
     for (const [k, m] of memMessages) if (m.conversationId === id) memMessages.delete(k);
-    for (const t of dataTables()) await t.onConversationDeleted?.(id, true);
+    for (const t of dataTables()) await t.onConversationDeleted?.(id, { temporary: true, withItems });
     return;
   }
   await db().transaction('rw', db().conversations, db().messages, async () => {
     await db().messages.where('conversationId').equals(id).delete();
     await db().conversations.delete(id);
   });
-  for (const t of dataTables()) await t.onConversationDeleted?.(id, false);
+  for (const t of dataTables()) await t.onConversationDeleted?.(id, { temporary: false, withItems });
   for (const [k, m] of searchCache) if (m.conversationId === id) searchCache.delete(k);
+}
+
+/** Images and files made in or brought into a stored conversation, which deleting it can take along */
+export async function countMadeIn(id: string): Promise<number> {
+  if (memConversations.has(id)) return 0;
+  let n = 0;
+  for (const t of dataTables()) n += (await t.countMadeIn?.(id)) ?? 0;
+  return n;
 }
 
 // ---- messages ----

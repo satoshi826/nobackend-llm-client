@@ -300,8 +300,10 @@ registerDataTable<ExportedFile>({
   clean: (raw) => cleanFiles(raw),
   importRows: (rows) => importFiles(rows),
   reseal: resealFiles,
-  // Files outlive the conversation they were made in; only a temporary chat's files go with it
-  onConversationDeleted(id, temporary) {
+  countMadeIn: (id) => db().files.where('conversationId').equals(id).count(),
+  // Files outlive the conversation they were made in unless the user deletes them with it; a temporary chat's go with it
+  async onConversationDeleted(id, { temporary, withItems }) {
     if (temporary) forgetTemporaryFiles(id);
+    else if (withItems) await deleteFiles((await db().files.where('conversationId').equals(id).primaryKeys()) as string[]);
   }
 });

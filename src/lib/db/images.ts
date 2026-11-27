@@ -237,8 +237,11 @@ registerDataTable<ExportedImage>({
     ),
   importRows: (rows) => importImages(rows),
   reseal: resealImages,
-  // Saved images outlive their conversation (they stay in the Files tab); a temporary chat's go with it
-  onConversationDeleted(id, temporary) {
+  countMadeIn: (id) => db().blobs.where('conversationId').equals(id).count(),
+  // Saved images outlive their conversation (they stay in the Files tab) unless the user deletes them with it;
+  // a temporary chat's go with it
+  async onConversationDeleted(id, { temporary, withItems }) {
     if (temporary) forgetTemporaryImages(id);
+    else if (withItems) await db().blobs.where('conversationId').equals(id).delete();
   }
 });

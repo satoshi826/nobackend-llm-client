@@ -6,6 +6,7 @@ import { enabledProviders, hostOfProvider } from '../../state/models';
 import { saveSettings, settings } from '../../state/settings';
 import { showToast } from '../../state/ui';
 import { imageUsage } from '../../lib/db/images';
+import { storageBreakdown, type StorageBreakdown } from '../../lib/db/storage-usage';
 import { getPreset } from '../../lib/providers/registry';
 import { accountById } from '../../lib/keys/accounts';
 import { FETCH_ROUTES } from '../../lib/fetcher/config';
@@ -113,6 +114,7 @@ export function PrivacyTab() {
             )}
           </div>
         )}
+        <StorageParts />
         <div class="space-y-2 rounded-lg border border-line p-3">
           <Checkbox checked={encrypt} onChange={setEncrypt}>
             <span>
@@ -244,3 +246,56 @@ export function PrivacyTab() {
   );
 }
 
+
+const mb = (bytes: number) => formatNumber(bytes / 1024 / 1024, ONE_DECIMAL);
+
+/** What takes the space, measured when asked (it reads every record once) */
+function StorageParts() {
+  const [parts, setParts] = useState<{ b: StorageBreakdown; used: number; caches: number } | 'loading' | null>(null);
+  if (parts === null)
+    return (
+      <Button
+        variant="outline"
+        class="text-xs"
+        onClick={async () => {
+          setParts('loading');
+          const [b, est] = await Promise.all([storageBreakdown(), navigator.storage?.estimate?.()]);
+          const details = (est as { usageDetails?: Record<string, number> } | undefined)?.usageDetails;
+          setParts({ b, used: est?.usage ?? 0, caches: details?.caches ?? 0 });
+        }}
+      >
+        <Icon name="chart" class="size-3.5" />
+        {t('privacy.breakdown')}
+      </Button>
+    );
+  if (parts === 'loading')
+    return (
+      <p class="flex items-center gap-2 text-xs text-muted" role="status">
+        <Spinner class="size-3.5" />
+        {t('privacy.breakdownLoading')}
+      </p>
+    );
+  const { b, used, caches } = parts;
+  const known = b.conversations.bytes + b.images.bytes + b.files.bytes + b.other + caches;
+  const rows: [string, number][] = [
+    [t('privacy.partConversations', { n: formatNumber(b.conversations.count) }), b.conversations.bytes],
+    [t('privacy.partImages', { n: formatNumber(b.images.count) }), b.images.bytes],
+    [t('privacy.partFiles', { n: formatNumber(b.files.count) }), b.files.bytes],
+    [t('privacy.partOther'), b.other],
+    ...(caches ? [[t('privacy.partApp'), caches] as [string, number]] : []),
+    ...(used > known ? [[t('privacy.partBrowser'), used - known] as [string, number]] : [])
+  ];
+  return (
+    <div class="space-y-1.5">
+      <ul class="divide-y divide-line rounded-lg border border-line text-xs">
+        {rows.map(([name, bytes]) => (
+          <li key={name} class="flex items-baseline justify-between gap-3 px-3 py-1.5">
+            <span class="min-w-0">{name}</span>
+            <span class="shrink-0 tabular-nums text-muted">{t('privacy.partSize', { size: mb(bytes) })}</span>
+          </li>
+        ))}
+      </ul>
+      <p class="text-xs text-muted">{t('privacy.breakdownNote')}</p>
+    </div>
+  );
+}

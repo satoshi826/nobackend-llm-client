@@ -150,10 +150,13 @@ export async function persistDraft(firstText: string): Promise<Conversation> {
   return conv;
 }
 
-export async function removeConversation(id: string, beforeRemove?: (id: string) => void) {
+/** beforeRemove: e.g. stop its running answer; withItems: also delete the images and files made in it */
+export async function removeConversation(id: string, { beforeRemove, withItems = false }: { beforeRemove?(id: string): void; withItems?: boolean } = {}) {
   beforeRemove?.(id);
-  await repo.deleteConversation(id);
+  await repo.deleteConversation(id, withItems);
   if (currentId.value === id) startNewChat();
+  // A file or image of it may be open: back to the chat rather than show what is gone
+  else if (withItems && mainView.value.kind !== 'chat') showChat();
   conversations.value = conversations.value.filter((c) => c.id !== id);
 }
 

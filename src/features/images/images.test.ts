@@ -6,6 +6,7 @@ import { setDataKey } from '../../lib/db/sealed';
 import { generateDataKey } from '../../lib/crypto/data';
 import { db, type ImageParams, type MessageRecord } from '../../lib/db/schema';
 import * as repo from '../../lib/db/repo';
+import { getFile, newFile, putFile } from '../../lib/db/files';
 import { buildRequestMessages, registerMessageTransform } from '../../lib/chat/request';
 import { imageNote } from './transform';
 
@@ -125,6 +126,17 @@ describe('image storage', () => {
     await putImage(meta('k1'), new Blob(['kept']), false);
     await repo.deleteConversation('c1');
     expect(await (await getImage('k1'))!.text()).toBe('kept');
+  });
+  it('deletes a conversation’s images and files with it when asked, and counts them first', async () => {
+    await repo.putConversation({ id: 'c2', title: 'c2', createdAt: 1, updatedAt: 1, currentLeafId: null, providerId: 'p', modelId: 'm', systemPrompt: '', webSearch: 'off', pinned: 0, tags: [] });
+    await putImage({ ...meta('d1'), conversationId: 'c2' }, new Blob(['x']), false);
+    await putFile(newFile({ id: 'f1', name: 'a.md', kind: 'document', text: 'hi', by: 'model', conversationId: 'c2' }), false);
+    await putFile(newFile({ id: 'f2', name: 'b.md', kind: 'document', text: 'other', by: 'user' }), false);
+    expect(await repo.countMadeIn('c2')).toBe(2);
+    await repo.deleteConversation('c2', true);
+    expect(await getImage('d1')).toBeNull();
+    expect(await getFile('f1')).toBeUndefined();
+    expect(await getFile('f2')).toBeDefined();
   });
 });
 

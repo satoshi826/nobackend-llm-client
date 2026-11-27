@@ -14,8 +14,13 @@ export interface DataTable<Row = unknown> {
   importRows(rows: Row[]): Promise<number>;
   /** Encrypt (to: a key) or decrypt (to: null) every row; safe to re-run after an interruption */
   reseal?(from: DataKey | null, to: DataKey | null, onProgress?: (done: number, total: number) => void): Promise<void>;
-  /** A conversation was deleted (temporary: it only lived in memory) */
-  onConversationDeleted?(conversationId: string, temporary: boolean): void | Promise<void>;
+  /** How many rows were made in (or brought into) a conversation: the delete confirmation offers to delete them too */
+  countMadeIn?(conversationId: string): Promise<number>;
+  /**
+   * A conversation was deleted. temporary: it only lived in memory (its rows go with it); withItems: the user chose
+   * to delete what was made in it too
+   */
+  onConversationDeleted?(conversationId: string, o: { temporary: boolean; withItems: boolean }): void | Promise<void>;
 }
 
 const tables: DataTable<any>[] = [];

@@ -1,7 +1,7 @@
 // Sidebar: tabs (conversations + tabs registered by features), notices, settings
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useDialog } from './dialog';
-import { searchMessages, type SearchHit } from '../lib/db/repo';
+import { countMadeIn, searchMessages, type SearchHit } from '../lib/db/repo';
 import type { Conversation } from '../lib/db/schema';
 import { conversations, currentId, openConversation, removeConversation, showChat, startNewChat, updateConversation } from '../state/conversations';
 import { abortConversation, streamingConv } from '../state/runs';
@@ -12,10 +12,10 @@ import { providerById } from '../state/models';
 import { newerBuild } from '../state/version';
 import { openSettings, showToast, sidebarOpen, sidebarTab } from '../state/ui';
 import { Button, EmptyState, Icon, IconButton, RowHighlight, SearchField, Segmented, TextField, cx, useSelectedBox } from './ui';
-import { askConfirm } from './ConfirmDialog';
+import { askConfirm, askConfirmWithCheck } from './ConfirmDialog';
 import { sidebarTabs, textOf } from './extensions';
 import { t } from './messages';
-import { formatDate } from '../lib/i18n';
+import { formatDate, formatNumber } from '../lib/i18n';
 
 function groupLabel(ts: number): string {
   const d = new Date(ts);
@@ -84,16 +84,18 @@ function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet
           label={t('side.delete')}
           variant="remove"
           class="px-1!"
-          onClick={() =>
-            void askConfirm({
+          onClick={async () => {
+            // Its images and files outlive it unless the user ticks the box
+            const n = await countMadeIn(c.id);
+            const a = await askConfirmWithCheck({
               title: t('side.deleteTitle'),
               message: t('side.deleteMessage', { title: c.title }),
               confirmLabel: t('side.delete'),
-              danger: true
-            }).then((ok) => {
-              if (ok) void removeConversation(c.id, abortConversation);
-            })
-          }
+              danger: true,
+              check: n ? { label: t('side.deleteItems', { n: formatNumber(n) }), desc: t('side.deleteItemsDesc') } : undefined
+            });
+            if (a) void removeConversation(c.id, { beforeRemove: abortConversation, withItems: a.checked });
+          }}
         >
           <Icon name="trash" class="size-3.5" />
         </IconButton>

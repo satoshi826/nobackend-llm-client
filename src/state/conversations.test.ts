@@ -151,7 +151,7 @@ describe('conversation list', () => {
     await store(conv('c'), [msg('u1', null, 1)]);
     await openConversation('c');
     const seen: string[] = [];
-    await removeConversation('c', (id) => seen.push(id));
+    await removeConversation('c', { beforeRemove: (id) => seen.push(id) });
     expect(seen).toEqual(['c']);
     expect(isDraft.value).toBe(true);
     expect(conversations.value).toEqual([]);

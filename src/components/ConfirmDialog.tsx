@@ -1,7 +1,7 @@
 // In-app confirmation dialog used instead of the browser's native confirm()/alert().
 import { signal } from '@preact/signals';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { Button, Icon, TextField } from './ui';
+import { Button, Checkbox, Icon, TextField } from './ui';
 import { useDialog } from './dialog';
 import { t } from './messages';
 
@@ -12,39 +12,49 @@ interface ConfirmOptions {
   danger?: boolean;
   /** Can only be executed when the typed input matches (guards against mistakes on irreversible actions) */
   requireText?: string;
+  /** An unchecked box that widens the action (e.g. also delete what was made in it), with a line under it */
+  check?: { label: string; desc?: string };
 }
 
-const state = signal<(ConfirmOptions & { resolve(ok: boolean): void }) | null>(null);
+/** Confirmed (with the box's state), or null when cancelled */
+type Answer = { checked: boolean } | null;
+const state = signal<(ConfirmOptions & { resolve(a: Answer): void }) | null>(null);
 
-export function askConfirm(opts: ConfirmOptions): Promise<boolean> {
+/** Ask; resolves to null when cancelled, else whether the box (check) was ticked */
+export function askConfirmWithCheck(opts: ConfirmOptions): Promise<Answer> {
   // Treat any dialog that is already open as cancelled
-  state.value?.resolve(false);
+  state.value?.resolve(null);
   return new Promise((resolve) => {
     state.value = { ...opts, resolve };
   });
 }
 
-function close(ok: boolean) {
+export const askConfirm = (opts: ConfirmOptions): Promise<boolean> => askConfirmWithCheck(opts).then((a) => !!a);
+
+function close(a: Answer) {
   const cur = state.value;
   state.value = null;
-  cur?.resolve(ok);
+  cur?.resolve(a);
 }
 
 export function ConfirmDialog() {
   const s = state.value;
   const [typed, setTyped] = useState('');
+  const [checked, setChecked] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (s) setTyped('');
+    if (!s) return;
+    setTyped('');
+    setChecked(false);
   }, [s]);
   // Focus starts on "Cancel" (or the confirmation input); Esc cancels
-  useDialog(dialogRef, { onClose: () => close(false), active: !!s });
+  useDialog(dialogRef, { onClose: () => close(null), active: !!s });
 
   if (!s) return null;
   const canConfirm = !s.requireText || typed.trim() === s.requireText;
 
   return (
-    <div class="backdrop fixed inset-0 z-[60] flex items-center justify-center p-4" onMouseDown={(e) => e.target === e.currentTarget && close(false)}>
+    <div class="backdrop fixed inset-0 z-[60] flex items-center justify-center p-4" onMouseDown={(e) => e.target === e.currentTarget && close(null)}>
       <div ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg" class="frosted rise-glass w-full max-w-sm rounded-[22px] p-5">
         <div class="flex items-start gap-3">
           {s.danger && (
@@ -68,16 +78,24 @@ export function ConfirmDialog() {
               data-autofocus
               value={typed}
               onInput={(e) => setTyped((e.target as HTMLInputElement).value)}
-              onKeyDown={(e) => e.key === 'Enter' && canConfirm && close(true)}
+              onKeyDown={(e) => e.key === 'Enter' && canConfirm && close({ checked })}
               class="mt-1 block w-full"
             />
           </label>
         )}
+        {s.check && (
+          <Checkbox checked={checked} onChange={setChecked} class="mt-4 text-sm">
+            <span>
+              {s.check.label}
+              {s.check.desc && <span class="block text-xs text-muted">{s.check.desc}</span>}
+            </span>
+          </Checkbox>
+        )}
         <div class="mt-5 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => close(false)} {...(s.requireText ? {} : { 'data-autofocus': true })}>
+          <Button variant="outline" onClick={() => close(null)} {...(s.requireText ? {} : { 'data-autofocus': true })}>
             {t('confirm.cancel')}
           </Button>
-          <Button variant={s.danger ? 'danger' : 'primary'} disabled={!canConfirm} onClick={() => close(true)}>
+          <Button variant={s.danger ? 'danger' : 'primary'} disabled={!canConfirm} onClick={() => close({ checked })}>
             <Icon name={s.danger ? 'trash' : 'check'} />
             {s.confirmLabel ?? t('confirm.ok')}
           </Button>

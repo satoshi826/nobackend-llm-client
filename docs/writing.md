@@ -47,6 +47,7 @@ Natural mainland UI wording, full-width punctuation, no space between Chinese an
 | ファイル | file | 文件 |
 | 添付 | attach / attachment | 附件 |
 | 画像 / 画像モード | image / image mode | 图像 / 图像模式 |
+| 動画 / 動画モード / 最初の場面 | video / video mode / first frame | 视频 / 视频模式 / 首帧 |
 | Web 検索 | web search | 网页搜索 |
 | ツール | tool | 工具 |
 | 実行 / 常に許可 / 拒否 | Run / Always allow / Deny | 运行 / 始终允许 / 拒绝 |

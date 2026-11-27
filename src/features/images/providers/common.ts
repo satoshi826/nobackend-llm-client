@@ -79,15 +79,6 @@ export function generationCost(p: ImageParams, m: ImageModelInfo | undefined): n
   return each === undefined ? undefined : each * imageCount(p, m);
 }
 
-/** An image as base64, and as a data: URL (how the edit APIs take the image) */
-export async function blobToBase64(b: Blob): Promise<string> {
-  const bytes = new Uint8Array(await b.arrayBuffer());
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-export const blobToDataUrl = async (b: Blob) => `data:${b.type || 'image/png'};base64,${await blobToBase64(b)}`;
-
 /** Whether the bar should offer an option for this model */
 export const hasOption = (m: ImageModelInfo | undefined, k: keyof NonNullable<ImageModelInfo['options']>) => !m?.options || !!m.options[k];
 

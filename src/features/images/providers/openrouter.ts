@@ -3,10 +3,10 @@
 // POST /images with response_format b64_json. The request's reported cost is recorded as spend.
 // Models that take input_references edit an image (sent there as a data: URL); those that need one only edit.
 import { joinUrl } from '../../../lib/providers/openai-compatible';
-import { base64ToBlob } from '../../../lib/db/images';
+import { base64ToBlob, blobToDataUrl } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, blobToDataUrl, fetchModelList, jsonPost, perImage, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
+import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, fetchModelList, jsonPost, perImage, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const enumOf = (sp: any, k: string): string[] | undefined => (sp?.[k]?.type === 'enum' && Array.isArray(sp[k].values) ? sp[k].values.map(String).filter((v: string) => v !== 'auto') : undefined);

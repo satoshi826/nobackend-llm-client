@@ -18,6 +18,7 @@ export const t = defineMessages(
     useInChat: '会話で使う',
     useInChatTitle: '入力欄に添付して、チャットに戻る',
     imageName: '画像',
+    videoName: '動画',
 
     // tools (labels on tool cards; errors go to the model and are shown to the user)
     'tool.create': 'ファイルの作成',
@@ -97,7 +98,7 @@ export const t = defineMessages(
     'view.document': 'モデルが作成',
     'view.upload': 'アップロード',
     'view.text': 'テキスト',
-    'view.image': '画像',
+    'view.image': '画像・動画',
     'sort.updated': '更新日',
     'sort.name': '名前',
     'sort.type': '種類',
@@ -178,6 +179,7 @@ export const t = defineMessages(
       useInChat: 'Use in chat',
       useInChatTitle: 'Attach to the input box and go back to the chat',
       imageName: 'Image',
+      videoName: 'Video',
 
       'tool.create': 'Create file',
       'tool.append': 'Append to file',
@@ -249,7 +251,7 @@ export const t = defineMessages(
       'view.document': 'Made by the model',
       'view.upload': 'Uploaded',
       'view.text': 'Text',
-      'view.image': 'Images',
+      'view.image': 'Images & videos',
       'sort.updated': 'Date modified',
       'sort.name': 'Name',
       'sort.type': 'Type',
@@ -328,6 +330,7 @@ export const t = defineMessages(
       useInChat: '在对话中使用',
       useInChatTitle: '添加到输入框并返回对话',
       imageName: '图像',
+      videoName: '视频',
 
       'tool.create': '创建文件',
       'tool.append': '追加到文件',
@@ -399,7 +402,7 @@ export const t = defineMessages(
       'view.document': '模型创建',
       'view.upload': '已上传',
       'view.text': '文本',
-      'view.image': '图像',
+      'view.image': '图像和视频',
       'sort.updated': '修改日期',
       'sort.name': '名称',
       'sort.type': '类型',

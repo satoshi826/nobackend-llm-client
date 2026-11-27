@@ -6,10 +6,12 @@ export type Env = Record<string, string | undefined>;
 
 /**
  * Default URLs of the built-in providers (overridable with VITE_<ID>_BASE_URL, for mocks during development).
- * publicModels: the model list needs no key, so the app fetches it directly (its origin joins the app's CSP)
+ * publicModels: the model list needs no key, so the app fetches it directly (its origin joins the app's CSP).
+ * downloads: hosts where the provider hands out one-time keyless download addresses (Venice videos), fetched by the
+ * app directly (they join the app's CSP)
  */
-export const BUILTIN_BASE_URLS: Record<string, { env: string; url: string; publicModels?: boolean }> = {
-  venice: { env: 'VITE_VENICE_BASE_URL', url: 'https://api.venice.ai/api/v1', publicModels: true },
+export const BUILTIN_BASE_URLS: Record<string, { env: string; url: string; publicModels?: boolean; downloads?: string[] }> = {
+  venice: { env: 'VITE_VENICE_BASE_URL', url: 'https://api.venice.ai/api/v1', publicModels: true, downloads: ['https://private-share.venice.ai'] },
   openrouter: { env: 'VITE_OPENROUTER_BASE_URL', url: 'https://openrouter.ai/api/v1', publicModels: true },
   nanogpt: { env: 'VITE_NANOGPT_BASE_URL', url: 'https://api.nano-gpt.com/api/v1', publicModels: true },
   deepinfra: { env: 'VITE_DEEPINFRA_BASE_URL', url: 'https://api.deepinfra.com/v1/openai', publicModels: true },
@@ -83,11 +85,12 @@ export function parseCustomProviders(json: string | undefined): CustomProviderDe
   });
 }
 
-/** Providers the app may call directly without the vault (keyless model lists, keyless providers) */
+/** Providers the app may call directly without the vault (keyless model lists and downloads, keyless providers) */
 export function appDirectOrigins(env: Env): string[] {
   const out = Object.entries(BUILTIN_BASE_URLS)
     .filter(([, b]) => b.publicModels)
     .map(([id]) => new URL(builtinBaseUrl(id, env)).origin);
+  for (const b of Object.values(BUILTIN_BASE_URLS)) out.push(...(b.downloads ?? []));
   for (const c of parseCustomProviders(env.VITE_CUSTOM_PROVIDERS)) if (c.publicModels || c.keyOptional) out.push(new URL(c.baseUrl).origin);
   return [...new Set(out)];
 }

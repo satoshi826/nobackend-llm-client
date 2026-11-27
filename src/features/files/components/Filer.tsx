@@ -41,7 +41,7 @@ export function formatBytes(n: number): string {
 }
 
 const sizeLabel = (it: FilerItem) => (it.type === 'image' ? formatBytes(it.size) : formatChars(it.size));
-const kindIcon = (it: FilerItem): IconName => VIEW_ICONS[it.type === 'image' ? 'image' : it.kind];
+const kindIcon = (it: FilerItem): IconName => (it.type === 'image' && it.video ? 'video' : VIEW_ICONS[it.type === 'image' ? 'image' : it.kind]);
 
 async function downloadItem(it: FilerItem) {
   if (it.type === 'file') return downloadFile(it.file);
@@ -151,7 +151,7 @@ export function Filer() {
   const open = (it: FilerItem) => {
     if (it.type === 'file') return void openFile(it.id);
     const imgs = list.filter((x): x is Extract<FilerItem, { type: 'image' }> => x.type === 'image');
-    lightbox.value = { items: imgs.map((x) => ({ blobId: x.id, conversationId: x.conversationId, messageId: x.messageId, name: x.name })), index: imgs.findIndex((x) => x.id === it.id), fromGallery: true };
+    lightbox.value = { items: imgs.map((x) => ({ blobId: x.id, conversationId: x.conversationId, messageId: x.messageId, name: x.name, video: x.video })), index: imgs.findIndex((x) => x.id === it.id), fromGallery: true };
   };
   const removeSelected = async () => {
     const fileIds = selected.filter((i) => i.type === 'file').map((i) => i.id);
@@ -419,7 +419,16 @@ function Card({ it, picked, selecting, onToggle, onOpen }: { it: FilerItem; pick
       />
       <div class="relative">
         {it.type === 'image' ? (
-          <ImageThumb blobId={it.id} alt={it.name} class="aspect-[4/3] w-full rounded-none!" onOpen={() => (press.consume() ? undefined : selecting ? onToggle(false) : onOpen())} />
+          <>
+            <ImageThumb blobId={it.id} alt={it.name} class="aspect-[4/3] w-full rounded-none!" onOpen={() => (press.consume() ? undefined : selecting ? onToggle(false) : onOpen())} />
+            {it.video && (
+              <span class="pointer-events-none absolute inset-0 grid place-items-center">
+                <span class="grid size-10 place-items-center rounded-full bg-black/50 text-white backdrop-blur-sm">
+                  <Icon name="play" class="size-4" />
+                </span>
+              </span>
+            )}
+          </>
         ) : (
           <button type="button" class="block aspect-[4/3] w-full overflow-hidden bg-sunken px-3 pt-3 text-left" onClick={click} aria-label={t('filer.openItem', { name: it.name })}>
             <pre

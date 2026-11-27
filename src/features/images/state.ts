@@ -27,6 +27,7 @@ import { ImageApiError, generationCost, hasOption, sizeOf, type ImageModelInfo }
 import { deepinfraImageProvider, nanogptImageProvider, togetherImageProvider } from './providers/hosts';
 import { imageProviderList, imageProviderOf, registerImageProvider, type ImageCallContext, type ImageProvider } from './providers/types';
 import { makeImageTool, type ImageToolInput } from './tool';
+import type { IconName } from '../../components/ui';
 import { t } from './messages';
 
 // Image providers in menu order. A provider is offered once its key is set.
@@ -88,7 +89,24 @@ export interface LightboxItem {
   messageId?: string;
   /** The file name to download it as (the file manager knows it) */
   name?: string;
+  /** A video (stored with the images): played, and not offered image edits */
+  video?: boolean;
 }
+/** Actions another feature adds for an image (video: make a video from it), shown in the viewer and on image answers */
+export interface ImageAction {
+  id: string;
+  label(): string;
+  title(): string;
+  icon: IconName;
+  run(blobId: string, name?: string): void | Promise<void>;
+}
+export const imageActions: ImageAction[] = [];
+export function registerImageAction(a: ImageAction) {
+  const i = imageActions.findIndex((x) => x.id === a.id);
+  if (i >= 0) imageActions[i] = a;
+  else imageActions.push(a);
+}
+
 /** fromGallery: opened from the file manager (offers to open the image's conversation) */
 export const lightbox = signal<{ items: LightboxItem[]; index: number; fromGallery?: boolean } | null>(null);
 
@@ -255,7 +273,8 @@ function ensureImageKey(providerId?: string): boolean {
 
 /** Turn image mode on/off for the current conversation (or the new chat) */
 export async function setImageMode(on: boolean) {
-  await updateConversation({ imageMode: on });
+  // It takes the input box over from video mode
+  await updateConversation(on ? { imageMode: true, videoMode: false } : { imageMode: false });
   if (on) {
     void loadImageModels();
     void loadImageStyles();

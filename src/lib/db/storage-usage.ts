@@ -12,6 +12,8 @@ export interface StorageBreakdown {
   conversations: StorageUse;
   /** Images with their thumbnails */
   images: StorageUse;
+  /** Videos (kept with the images) with their thumbnails */
+  videos: StorageUse;
   /** Files with their earlier versions (count: files) */
   files: StorageUse;
   /** Bytes of the settings, the model lists, the usage log, saved prompts and skills */
@@ -37,10 +39,22 @@ async function measure(tables: string[], counted: string): Promise<StorageUse> {
   return { count: await db().table(counted).count(), bytes };
 }
 
+/** Images and videos share one table */
+async function media(): Promise<{ images: StorageUse; videos: StorageUse }> {
+  const images = { count: 0, bytes: 0 };
+  const videos = { count: 0, bytes: 0 };
+  await db().blobs.each((r) => {
+    const into = r.mime.startsWith('video/') ? videos : images;
+    into.count++;
+    into.bytes += approxBytes(r);
+  });
+  return { images, videos };
+}
+
 export async function storageBreakdown(): Promise<StorageBreakdown> {
   return {
     conversations: await measure(['conversations', 'messages'], 'conversations'),
-    images: await measure(['blobs'], 'blobs'),
+    ...(await media()),
     files: await measure(['files', 'fileVersions'], 'files'),
     other: (await measure(['settings', 'models', 'usage', 'prompts', 'skills'], 'settings')).bytes
   };

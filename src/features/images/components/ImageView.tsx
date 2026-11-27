@@ -13,6 +13,7 @@ import {
   deleteImages,
   estimateCost,
   editTargetFor,
+  imageActions,
   imageAction,
   imageModelOf,
   lightbox,
@@ -95,6 +96,32 @@ export function useImageUrl(blobId: string | undefined, size: 'full' | 'thumb' =
       releaseUrl(key);
     };
   }, [blobId, size, enabled]);
+  return url;
+}
+
+/**
+ * The object URL of stored bytes, made when blobId is set and freed when it changes or the component goes: for videos,
+ * too large to keep in the image cache
+ */
+export function useBlobUrl(blobId: string | undefined, load: (id: string) => Promise<Blob | null> = getImage): string | null | undefined {
+  const [url, setUrl] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    setUrl(undefined);
+    if (!blobId) return;
+    let made: string | null = null;
+    let alive = true;
+    void load(blobId)
+      .then((b) => {
+        made = b ? URL.createObjectURL(b) : null;
+        if (alive) setUrl(made);
+        else if (made) URL.revokeObjectURL(made);
+      })
+      .catch(() => alive && setUrl(null));
+    return () => {
+      alive = false;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [blobId]);
   return url;
 }
 
@@ -238,6 +265,16 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
           </Button>
         </div>
       )}
+      {m.status === 'done' && files.length === 1 && imageActions.length > 0 && (
+        <div class="flex flex-wrap gap-1.5">
+          {imageActions.map((a) => (
+            <Button key={a.id} class="text-xs" variant="outline" disabled={isStreaming.value} title={a.title()} onClick={() => void a.run(files[0].blobId)}>
+              <Icon name={a.icon} class="size-3.5" />
+              {a.label()}
+            </Button>
+          ))}
+        </div>
+      )}
       {img.suggestion && m.status === 'error' && (
         <div class="flex flex-wrap gap-1.5">
           {img.suggestion.prompt && (
@@ -285,7 +322,9 @@ function step(d: number) {
 export function Lightbox() {
   const lb = lightbox.value;
   const item = lb?.items[lb.index];
-  const url = useImageUrl(item?.blobId);
+  const imageUrl = useImageUrl(item?.video ? undefined : item?.blobId);
+  const videoUrl = useBlobUrl(item?.video ? item.blobId : undefined);
+  const url = item?.video ? videoUrl : imageUrl;
   const [editing, setEditing] = useState(false);
   const [prompt, setPrompt] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -305,14 +344,15 @@ export function Lightbox() {
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
   if (!lb || !item) return null;
+  const video = !!item.video;
   const msg = messages.value.find((m) => m.id === item.messageId);
   const source = msg ? messages.value.find((m) => m.id === msg.parentId) : undefined;
   const promptText = msg?.image?.params.prompt || source?.imageRequest?.prompt || '';
   // Edits run on the provider that made the image when it offers them, else on another one with a key
   const from = { providerId: msg?.meta?.providerId, model: msg?.meta?.model };
-  const upscaler = editTargetFor('upscale', from)?.provider;
-  const bgRemover = editTargetFor('remove-bg', from)?.provider;
-  const editor = editTargetFor('edit', from);
+  const upscaler = video ? undefined : editTargetFor('upscale', from)?.provider;
+  const bgRemover = video ? undefined : editTargetFor('remove-bg', from)?.provider;
+  const editor = video ? undefined : editTargetFor('edit', from);
   const editorName = editor && (editor.model ? (imageModelOf(editor.provider.id, editor.model)?.name ?? editor.model) : editor.provider.label);
   const chat = item.conversationId;
   const inThisChat = !!chat && currentId.value === chat;
@@ -333,7 +373,7 @@ export function Lightbox() {
     const a = document.createElement('a');
     a.href = url;
     const file = msg?.parts.find((p): p is FilePart => p.type === 'file' && p.blobId === item.blobId);
-    a.download = item.name ?? file?.name ?? `image-${item.blobId.slice(0, 8)}.png`;
+    a.download = item.name ?? file?.name ?? (video ? `video-${item.blobId.slice(0, 8)}.mp4` : `image-${item.blobId.slice(0, 8)}.png`);
     a.click();
   };
   return (
@@ -368,6 +408,13 @@ export function Lightbox() {
               {t('lb.removeBg')}
             </Button>
           )}
+          {!video &&
+            imageActions.map((a) => (
+              <Button key={a.id} class="text-xs text-white hover:bg-glass" title={a.title()} onClick={() => void act(async () => a.run(item.blobId, item.name))}>
+                <Icon name={a.icon} class="size-4" />
+                {a.label()}
+              </Button>
+            ))}
           {editor && (
             <Button class={cx('text-xs text-white hover:bg-glass', editing && 'bg-glass-strong')} disabled={isStreaming.value} aria-pressed={editing} title={t('lb.editTitle', { model: editorName!, cost: costText({ op: 'edit', providerId: editor.provider.id, model: editor.model }) })} onClick={() => setEditing(!editing)}>
               <Icon name="wand" class="size-4" />
@@ -376,7 +423,7 @@ export function Lightbox() {
           )}
           <IconButton
             class="text-white hover:bg-glass"
-            label={t('lb.delete')}
+            label={t(video ? 'lb.deleteVideo' : 'lb.delete')}
             onClick={async () => {
               const cur = lightbox.value;
               if (!cur || !(await confirmAndDelete([item.blobId]))) return;
@@ -426,7 +473,13 @@ export function Lightbox() {
         </form>
       )}
       <div class="relative flex min-h-0 flex-1 items-center justify-center p-2" onClick={(e) => e.target === e.currentTarget && close()}>
-        {url ? <img src={url} alt={promptText || t('lb.alt')} class="max-h-full max-w-full object-contain" /> : <Spinner class="size-6" />}
+        {!url ? (
+          <Spinner class="size-6" />
+        ) : video ? (
+          <video key={url} src={url} controls autoPlay playsInline class="max-h-full max-w-full" />
+        ) : (
+          <img src={url} alt={promptText || t('lb.alt')} class="max-h-full max-w-full object-contain" />
+        )}
         {lb.items.length > 1 && (
           <>
             <button type="button" class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass-strong" onClick={() => step(-1)} aria-label={t('lb.prev')} title={t('lb.prev')}>

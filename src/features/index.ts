@@ -3,6 +3,7 @@
 // lib/chat/request.ts) when imported. The order sets the order of input-box buttons, settings tabs
 // and message transforms (skills are put before attached files).
 import './images';
+import './video';
 import './files';
 import './sandbox';
 import './web';

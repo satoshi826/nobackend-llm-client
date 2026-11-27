@@ -8,7 +8,7 @@ export interface UsageRecord {
   at: number;
   providerId: string;
   model: string;
-  kind: 'chat' | 'summary' | 'suggest' | 'image';
+  kind: 'chat' | 'summary' | 'suggest' | 'image' | 'video';
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
@@ -37,7 +37,7 @@ export function makeUsageRecord(
   pricing?: ModelInfo['pricing']
 ): UsageRecord | null {
   const u = o.usage ?? {};
-  if (!u.inputTokens && !u.outputTokens && o.costUsd === undefined && o.kind !== 'image') return null;
+  if (!u.inputTokens && !u.outputTokens && o.costUsd === undefined && o.kind !== 'image' && o.kind !== 'video') return null;
   const est = o.costUsd === undefined ? estimateCost(u, pricing) : undefined;
   return {
     id: o.id,

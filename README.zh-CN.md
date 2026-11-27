@@ -21,6 +21,7 @@
 - **沙箱**: HTML 和 SVG 文件以页面形式显示，html / svg / js 代码块带有“运行”按钮，聊天模型可以运行 JavaScript 做精确计算（`run_javascript`，运行前确认）。这些都在无法访问应用、并阻止网络请求的隔离框架中运行（WebRTC 连接只在会阻止它的浏览器中被阻止，Chrome 不会）。
 - **文件**: 让模型"整理成报告"，它会把文档（Markdown、CSV 等）保存到"文件"标签页；长文档分段写入，并保留所有版本。"文件"标签页是一个文件管理器（卡片/列表视图、排序、按内容搜索、按类型和对话浏览、多选、拖放导入）。可以从设备或已保存的文件中附加文本、CSV、代码或 PDF（在浏览器内提取文字）。支持查看、编辑、下载和打印（保存为 PDF）。
 - **图像生成**（Venice、OpenAI、Gemini、OpenRouter、NanoGPT、DeepInfra、Together；按指令编辑支持 Gemini、NanoGPT、OpenAI、OpenRouter、Venice；放大和去除背景仅限 Venice）: 输入框的图像模式（模型、宽高比、分辨率、1–4 张、风格、反向提示词、种子），"相同设置再生成"/"生成相似图像"，放大、编辑、去除背景，图库，以及可选的让聊天模型生成图像的工具。图像保存在本地（设置口令后加密）。
+- **视频生成**（Venice、OpenRouter、Gemini）: 输入框的视频模式，设置其中任一密钥后显示（模型、时长、分辨率、宽高比、声音、首帧；可从图像生成动起来的视频，图像上有“生成视频”）。发送前显示价格。生成会在服务端持续数分钟，重新加载页面后也能继续等待（Venice、OpenRouter），也可以停止等待、之后再次等待。视频与图像一起保存。
 - **回复建议**: 在最新回答下方给出几条简短的后续回复，点击即可填入输入框。数量、参考最近几轮对话以及使用的模型都可以设置。
 - **网络**: 用提供商内置的搜索（Anthropic、Gemini、Groq、OpenRouter、Venice）或 Tavily 工具搜索；模型用 `fetch_url` 读取网页（HTML、文本、PDF），由另一次调用只提取所需内容后再交给模型（与 Claude Code 的 WebFetch 相同的方式）；用 `fetch_file` 导入文件。所有获取都在获取页面中确认，并可记住你允许的网站。
 - **技能（Skills）**: 兼容 SKILL.md 的操作说明。模型只在需要时才读取正文，你也可以用 `/名称` 手动指定。在对话中让它"把这个做成技能"，模型会起草一份，经你批准后保存。
@@ -48,7 +49,7 @@ VITE_JINA_BASE_URL=http://localhost:8787/jina \
 npm run dev
 ```
 
-**模拟密钥**: Venice 用 `mock-key`，Anthropic 用 `mock-ant`，Tavily 用 `tvly-mock`。Gemini（`mock-gem`）、OpenRouter（`mock-or`，仅模型列表、余额和图像）和 OpenAI（`mock-oai`）通过 `VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`、`VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1`、`VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1` 使用。模拟服务器也提供 Venice 的图像模型并生成 PNG：图像提示词包含 `違反` 时返回内容政策拒绝（附带改写建议），包含 `ぼかし` 时返回模糊处理的结果；对聊天模型说“絵を描いて”（图像工具开启时）会调用 `generate_image`。
+**模拟密钥**: Venice 用 `mock-key`，Anthropic 用 `mock-ant`，Tavily 用 `tvly-mock`。Gemini（`mock-gem`）、OpenRouter（`mock-or`，仅模型列表、余额、图像和视频）和 OpenAI（`mock-oai`）通过 `VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`、`VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1`、`VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1` 使用。模拟服务器也提供 Venice 的图像模型并生成 PNG，并受理三个视频 API 的生成（查询几次后返回一段短视频）：图像提示词包含 `違反` 时返回内容政策拒绝（附带改写建议），包含 `ぼかし` 时返回模糊处理的结果；对聊天模型说“絵を描いて”（图像工具开启时）会调用 `generate_image`。
 
 消息中的**关键词**会改变模拟服务器的行为:
 

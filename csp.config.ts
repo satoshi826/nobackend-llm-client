@@ -34,6 +34,8 @@ export function appCsp(env: Env, vaultOrigin?: string, fetchOrigin?: string): st
     "script-src 'self'",
     "style-src 'self'",
     "img-src 'self' data: blob:",
+    // Videos play from stored data only (object URLs), never from another site
+    'media-src blob:',
     "font-src 'self'",
     `connect-src 'self' ${o.appProviders.join(' ')}`,
     // 'self': the sandbox (/sandbox/), and the vault and the fetch page while they are hosted with the app. Once those

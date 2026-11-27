@@ -25,7 +25,7 @@ export function recordUsage(o: {
   conversationId?: string;
   providerId: string;
   model: string;
-  kind: 'chat' | 'summary' | 'suggest' | 'image';
+  kind: 'chat' | 'summary' | 'suggest' | 'image' | 'video';
   usage?: Usage;
   costUsd?: number;
   costEstimated?: boolean;

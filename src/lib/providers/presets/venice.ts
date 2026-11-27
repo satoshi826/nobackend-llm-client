@@ -52,7 +52,8 @@ export const venicePreset: ProviderPreset = {
     get extraDestinations(): [string, string][] {
       return [
         [tp('venice.searchProviders'), tp('venice.searchProvidersWhat')],
-        [tp('venice.thirdParties'), tp('venice.thirdPartiesWhat')]
+        [tp('venice.thirdParties'), tp('venice.thirdPartiesWhat')],
+        ['private-share.venice.ai', tp('venice.videoShareWhat')]
       ];
     }
   },

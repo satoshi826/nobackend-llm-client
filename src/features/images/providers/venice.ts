@@ -2,10 +2,10 @@
 // Requests that need the key go through the transport with an AuthRef (the vault attaches the key).
 // Images come back as base64 / raw bytes, so no new host has to be allowed by the CSP.
 import { joinUrl } from '../../../lib/providers/openai-compatible';
-import { base64ToBlob } from '../../../lib/db/images';
+import { base64ToBlob, blobToBase64 } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageCallContext, ImageProvider } from './types';
-import { ImageApiError, DEFAULT_ASPECTS, blobToBase64, fetchModelList, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { ImageApiError, DEFAULT_ASPECTS, fetchModelList, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 export function mapImageModel(raw: any, providerId = 'venice'): ImageModelInfo | null {

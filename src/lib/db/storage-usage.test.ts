@@ -21,5 +21,6 @@ describe('storage breakdown', () => {
     expect(b.files).toMatchObject({ count: 0 });
     expect(b.files.bytes).toBeGreaterThan(500);
     expect(b.images).toEqual({ count: 0, bytes: 0 });
+    expect(b.videos).toEqual({ count: 0, bytes: 0 });
   });
 });

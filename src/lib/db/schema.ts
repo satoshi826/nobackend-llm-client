@@ -24,6 +24,10 @@ export interface Conversation {
   imageMode?: boolean;
   /** Image model chosen for this conversation in image mode ("provider|model"; none = the default) */
   imageModel?: string;
+  /** Video mode: messages sent from the input box are video prompts (turning it on turns image mode off, and back) */
+  videoMode?: boolean;
+  /** Video model chosen for this conversation in video mode ("provider|model"; none = the default) */
+  videoModel?: string;
 }
 
 /** What an image request asks for (saved on the user message so it can be regenerated) */
@@ -64,6 +68,39 @@ export interface ImageResult {
   suggestion?: { prompt?: string; model?: string };
 }
 
+/** What a video request asks for (saved on the user message so it can be made again) */
+export interface VideoParams {
+  providerId: string;
+  model: string;
+  prompt: string;
+  /** Seconds */
+  duration: number;
+  resolution?: string;
+  aspectRatio?: string;
+  /** With sound (models that make it on request) */
+  audio?: boolean;
+  /** The first frame: a stored image */
+  startBlobId?: string;
+}
+
+/** A video job at the provider, kept while it runs so waiting can go on after a reload */
+export interface VideoJob {
+  id: string;
+  /** A one-time keyless download address some providers hand out when the job is queued (Venice) */
+  downloadUrl?: string;
+}
+
+/** What came back for a video request (saved on the assistant message; the video itself is a file part) */
+export interface VideoResult {
+  params: VideoParams;
+  job?: VideoJob;
+  /** USD: as the provider reported it, else the estimate shown before sending */
+  costUsd?: number;
+  costEstimated?: boolean;
+  /** A model the provider suggested after a content-policy rejection */
+  suggestedModel?: string;
+}
+
 export type MessageStatus = 'streaming' | 'done' | 'error' | 'aborted';
 
 export interface MessageRecord extends ChatMessage {
@@ -77,6 +114,10 @@ export interface MessageRecord extends ChatMessage {
   compaction?: { summary: string; coversUntilId: string; count: number; model?: string; auto?: boolean };
   /** Reply suggestions (made after an answer; encrypted along with the conversation) */
   suggestions?: string[];
+  /** Video request (user message) */
+  videoRequest?: VideoParams;
+  /** Video result (assistant message) */
+  video?: VideoResult;
   /** Image request (user message) */
   imageRequest?: ImageParams;
   /** Image result (assistant message); the images themselves are file parts pointing at the blobs table */

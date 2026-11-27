@@ -4,10 +4,10 @@
 // Prices are a table (the API lists none). GPT Image edits an image too (POST /v1/images/edits, as JSON
 // with the image as a data: URL).
 import { joinUrl } from '../../../lib/providers/openai-compatible';
-import { base64ToBlob } from '../../../lib/db/images';
+import { base64ToBlob, blobToDataUrl } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { ImageApiError, aspectAndTier, blobToDataUrl, fetchModelList, jsonPost, perImage, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
+import { ImageApiError, aspectAndTier, fetchModelList, jsonPost, perImage, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const GPT_SIZES: Record<string, string> = { '1:1': '1024x1024', '3:2': '1536x1024', '2:3': '1024x1536' };

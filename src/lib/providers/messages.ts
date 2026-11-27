@@ -55,6 +55,7 @@ export const t = defineMessages(
     'venice.searchProvidersWhat': 'Venice 内蔵の Web 検索をオンにしたときの検索語（Venice 経由）',
     'venice.thirdParties': '外部 AI 事業者',
     'venice.thirdPartiesWhat': 'Venice の「外部中継」のモデルを使ったときの会話（Venice が匿名化して中継）',
+    'venice.videoShareWhat': '一部の動画モデルで、できた動画の受け取り（キーは送りません）',
 
     'openrouter.tagline': '数百のモデルを 1 つのキーで。データを保存・学習に使う提供元は既定で経由しません。',
     'openrouter.keyGuide': 'OpenRouter の管理画面（Keys）でキーを作り、クレジットの上限（credit limit）を設定してください。キーが万一漏れても被害額が上限で止まります。',
@@ -152,6 +153,7 @@ export const t = defineMessages(
       'venice.searchProvidersWhat': "Search terms when Venice's built-in web search is on (via Venice)",
       'venice.thirdParties': 'Third-party AI companies',
       'venice.thirdPartiesWhat': "Conversations with Venice's relayed models (anonymized and relayed by Venice)",
+      'venice.videoShareWhat': 'Receiving finished videos of some video models (no key is sent)',
 
       'openrouter.tagline': 'Hundreds of models with one key. By default, skips upstream providers that store or train on your data.',
       'openrouter.keyGuide': 'In the OpenRouter dashboard (Keys), create a key and set a credit limit. If the key ever leaks, the damage stops at the limit.',
@@ -248,6 +250,7 @@ export const t = defineMessages(
       'venice.searchProvidersWhat': '开启 Venice 内置网页搜索时的搜索词（经由 Venice）',
       'venice.thirdParties': '外部 AI 厂商',
       'venice.thirdPartiesWhat': '使用 Venice“外部中转”模型时的对话（由 Venice 匿名化后中转）',
+      'venice.videoShareWhat': '部分视频模型下载生成的视频（不发送密钥）',
 
       'openrouter.tagline': '一个密钥即可使用数百个模型。默认不经过会存储数据或用数据训练的提供方。',
       'openrouter.keyGuide': '请在 OpenRouter 管理后台（Keys）创建密钥，并设置额度上限（credit limit）。即使密钥泄露，损失也会止于上限。',

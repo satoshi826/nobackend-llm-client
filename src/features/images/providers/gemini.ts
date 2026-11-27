@@ -4,10 +4,10 @@
 // Editing sends the image (inline, base64) with the instruction to the same generateContent.
 import type { ProviderConfig } from '../../../lib/providers/types';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
-import { base64ToBlob } from '../../../lib/db/images';
+import { base64ToBlob, blobToBase64 } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { ImageApiError, aspectAndTier, blobToBase64, fetchModelList, jsonPost, perImage, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
+import { ImageApiError, aspectAndTier, fetchModelList, jsonPost, perImage, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const ASPECTS = ['1:1', '3:2', '2:3', '4:3', '3:4', '4:5', '5:4', '16:9', '9:16', '21:9'];

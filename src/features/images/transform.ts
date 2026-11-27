@@ -6,8 +6,8 @@ import { t } from './messages';
 export function imageNote(m: MessageRecord, parts: Part[]): Part[] {
   if (m.role !== 'assistant') return parts;
   if (!m.image) {
-    // Images a chat model put in its reply: a note after the text
-    const n = m.parts.filter((p) => p.type === 'file').length;
+    // Images a chat model put in its reply: a note after the text (video answers have their own note)
+    const n = m.parts.filter((p) => p.type === 'file' && p.mimeType.startsWith('image/')).length;
     return n ? [...parts, { type: 'text', text: '\n' + t('note.inReply', { n }) }] : parts;
   }
   if (m.status !== 'done') return [];

@@ -67,21 +67,20 @@ async function makeThumb(blob: Blob): Promise<Blob | null> {
   }
 }
 
-async function storedThumb(blob: Blob, key: DataKey | null): Promise<BlobRecord['thumb']> {
-  const thumb = await makeThumb(blob);
-  return thumb ? (key ? seal(key, thumb) : thumb) : undefined;
-}
-
-/** Save an image (encrypted when a data key is set) */
-export async function putImage(meta: ImageMeta, blob: Blob, temporary: boolean): Promise<void> {
+/**
+ * Save an image or a video (encrypted when a data key is set). poster: a frame to make the thumbnail from (videos;
+ * an image is its own)
+ */
+export async function putImage(meta: ImageMeta, blob: Blob, temporary: boolean, poster?: Blob): Promise<void> {
   const { info, ...rest } = meta;
   const base = { ...rest, createdAt: Date.now(), size: blob.size };
+  const thumb = await makeThumb(poster ?? blob);
   if (temporary) {
-    mem.set(meta.id, { ...base, info, blob });
+    mem.set(meta.id, { ...base, info, blob, ...(thumb ? { thumb } : {}) });
     return;
   }
   const key = currentDataKey();
-  await db().blobs.put({ ...base, ...(await storedInfo(info, key)), ...(await stored(blob, key)), thumb: await storedThumb(blob, key) });
+  await db().blobs.put({ ...base, ...(await storedInfo(info, key)), ...(await stored(blob, key)), thumb: thumb ? (key ? await seal(key, thumb) : thumb) : undefined });
 }
 
 async function toBlob(rec: BlobRecord, key: DataKey | null = currentDataKey()): Promise<Blob> {
@@ -97,17 +96,20 @@ export async function getImage(id: string): Promise<Blob | null> {
 }
 
 /** The thumbnail of an image (made and saved on first use for images stored before thumbnails existed) */
+/** The thumbnail (made when first needed for older images); null for a video without one */
 export async function getImageThumb(id: string): Promise<Blob | null> {
+  const video = (r: BlobRecord) => r.mime.startsWith('video/');
   const m = mem.get(id);
-  if (m) return toBlob(m);
+  if (m) return m.thumb instanceof Blob ? m.thumb : video(m) ? null : toBlob(m);
   const rec = await db().blobs.get(id);
   if (!rec) return null;
   const key = currentDataKey();
   if (rec.thumb instanceof Blob) return rec.thumb;
   if (rec.thumb) {
     if (!key) throw new DataLockedError();
-    return open(key, rec.thumb, rec.mime);
+    return open(key, rec.thumb, video(rec) ? 'image/webp' : rec.mime);
   }
+  if (video(rec)) return null;
   const full = await toBlob(rec, key);
   const thumb = await makeThumb(full);
   if (thumb) await db().blobs.update(id, { thumb: key ? await seal(key, thumb) : thumb });
@@ -150,9 +152,11 @@ export async function resealImages(from: DataKey | null, to: DataKey | null, onP
     if (!already) {
       const blob = await toBlob(rec, from);
       const info = await infoOf(rec, from);
-      // The thumbnail is made again from the image (under the new key, or plain)
+      // The thumbnail moves to the new key (or plain); one never made is made from the image (a video has none to make)
+      const old = rec.thumb instanceof Blob ? rec.thumb : rec.thumb && from ? await open(from, rec.thumb, 'image/webp') : null;
+      const thumb = old ?? (rec.mime.startsWith('video/') ? null : await makeThumb(blob));
       const { blob: _b, enc: _e, thumb: _t, info: _i, infoEnc: _ie, ...meta } = rec;
-      await db().blobs.put({ ...meta, ...(await storedInfo(info, to)), ...(await stored(blob, to)), thumb: await storedThumb(blob, to) });
+      await db().blobs.put({ ...meta, ...(await storedInfo(info, to)), ...(await stored(blob, to)), thumb: thumb ? (to ? await seal(to, thumb) : thumb) : undefined });
     }
     onProgress?.(++done, ids.length);
   }
@@ -176,6 +180,15 @@ function toBase64(buf: ArrayBuffer): string {
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(s);
 }
+
+/** Bytes as base64, and as a data: URL (how APIs take an input image) */
+export async function blobToBase64(b: Blob): Promise<string> {
+  const bytes = new Uint8Array(await b.arrayBuffer());
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+export const blobToDataUrl = async (b: Blob) => `data:${b.type || 'image/png'};base64,${await blobToBase64(b)}`;
 
 export function base64ToBlob(data: string, mime: string): Blob {
   const bin = atob(data);

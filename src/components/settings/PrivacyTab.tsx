@@ -276,10 +276,11 @@ function StorageParts() {
       </p>
     );
   const { b, used, caches } = parts;
-  const known = b.conversations.bytes + b.images.bytes + b.files.bytes + b.other + caches;
+  const known = b.conversations.bytes + b.images.bytes + b.videos.bytes + b.files.bytes + b.other + caches;
   const rows: [string, number][] = [
     [t('privacy.partConversations', { n: formatNumber(b.conversations.count) }), b.conversations.bytes],
     [t('privacy.partImages', { n: formatNumber(b.images.count) }), b.images.bytes],
+    ...(b.videos.count ? [[t('privacy.partVideos', { n: formatNumber(b.videos.count) }), b.videos.bytes] as [string, number]] : []),
     [t('privacy.partFiles', { n: formatNumber(b.files.count) }), b.files.bytes],
     [t('privacy.partOther'), b.other],
     ...(caches ? [[t('privacy.partApp'), caches] as [string, number]] : []),

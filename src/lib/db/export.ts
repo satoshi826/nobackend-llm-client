@@ -1,5 +1,5 @@
 // JSON export / import. API keys are not included by default.
-import { db, SCHEMA_VERSION, type Conversation, type ImageParams, type MessageRecord, type SavedPrompt, type Skill } from './schema';
+import { db, SCHEMA_VERSION, type Conversation, type ImageParams, type MessageRecord, type SavedPrompt, type Skill, type VideoParams } from './schema';
 import { validateSkill } from '../skills/skill';
 import { seal, unseal } from './sealed';
 import { dataTables } from './data-tables';
@@ -136,6 +136,21 @@ function cleanImageParams(x: any): ImageParams | undefined {
   };
 }
 
+function cleanVideoParams(x: any): VideoParams | undefined {
+  if (!x || typeof x !== 'object' || !isStr(x.providerId) || !isStr(x.model) || !(Number(x.duration) > 0)) return undefined;
+  const str = (v: unknown) => (isStr(v) ? v : undefined);
+  return {
+    providerId: x.providerId,
+    model: x.model,
+    prompt: str(x.prompt) ?? '',
+    duration: Number(x.duration),
+    resolution: str(x.resolution),
+    aspectRatio: str(x.aspectRatio),
+    audio: x.audio === true || undefined,
+    startBlobId: str(x.startBlobId)
+  };
+}
+
 function cleanAttachments(x: unknown): Attachment[] | undefined {
   if (!Array.isArray(x)) return undefined;
   const out = x
@@ -178,10 +193,10 @@ export function validate(raw: unknown): ExportFile {
       groupId: isStr(m.groupId) ? m.groupId : undefined,
       createdAt: typeof m.createdAt === 'number' ? m.createdAt : Date.now(),
       role: m.role,
-      // Accept only text-like parts (file/tool parts have nothing to refer to)
-      // Text parts, plus image file parts (the image itself may or may not be in the file)
+      // Text parts, plus image and video file parts (the image or video itself may or may not be in the file); tool
+      // parts have nothing to refer to
       parts: m.parts
-        .filter((p: any) => ((p?.type === 'text' || p?.type === 'reasoning') && isStr(p.text)) || (p?.type === 'file' && isStr(p.blobId) && isStr(p.mimeType) && p.mimeType.startsWith('image/')))
+        .filter((p: any) => ((p?.type === 'text' || p?.type === 'reasoning') && isStr(p.text)) || (p?.type === 'file' && isStr(p.blobId) && isStr(p.mimeType) && /^(image|video)\//.test(p.mimeType)))
         .map((p: any) =>
           p.type === 'file'
             ? { type: 'file' as const, blobId: p.blobId, name: isStr(p.name) ? p.name : 'image', mimeType: p.mimeType, ...(Number.isFinite(p.width) ? { width: p.width, height: p.height } : {}) }
@@ -198,6 +213,15 @@ export function validate(raw: unknown): ExportFile {
         : undefined,
       attachments: cleanAttachments(m.attachments),
       imageRequest: cleanImageParams(m.imageRequest),
+      videoRequest: cleanVideoParams(m.videoRequest),
+      // A finished video answer (a job still running is not carried over: it belongs to this browser's wait)
+      video: m.video && cleanVideoParams(m.video.params)
+        ? {
+            params: cleanVideoParams(m.video.params)!,
+            costUsd: Number.isFinite(m.video.costUsd) ? m.video.costUsd : undefined,
+            costEstimated: !!m.video.costEstimated || undefined
+          }
+        : undefined,
       image: m.image && cleanImageParams(m.image.params)
         ? {
             params: cleanImageParams(m.image.params)!,

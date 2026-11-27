@@ -5,8 +5,32 @@
 //   "エラー" → error mid-stream / "残高" → 402 / "長文" → long output / "コード" → code blocks
 //   "画像"  → Markdown with external images (should be blocked) / "xss" → output containing dangerous HTML
 // Image API: /models?type=image, /image/generate (prompt "違反" → 422, "ぼかし" → blurred), /image/styles, /image/upscale, /image/edit, /image/background-remove
+// Video API (Venice, OpenRouter, Gemini): a job answers after a few asks with scripts/mock-video.mp4; prompt "違反" → 422
 import http from 'node:http';
 import zlib from 'node:zlib';
+import { readFileSync } from 'node:fs';
+
+const VIDEO = readFileSync(new URL('./mock-video.mp4', import.meta.url));
+/** Video jobs: how many times each was asked about (done on the third ask) */
+const videoJobs = new Map();
+/** Venice jobs that hand out a download address instead of answering retrieve with the video */
+const shareJobs = new Set();
+function binaryVideo(res) {
+  res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': VIDEO.length });
+  res.end(VIDEO);
+}
+/** Ask about a job: false while running, true once it is done */
+function videoReady(id) {
+  const n = (videoJobs.get(id) ?? 0) + 1;
+  videoJobs.set(id, n);
+  return n >= 3;
+}
+const VENICE_VIDEO_MODELS = [
+  { id: 'mock-video-t2v', type: 'video', model_spec: { name: 'Mock Video', privacy: 'private', constraints: { model_type: 'text-to-video', aspect_ratios: ['16:9', '9:16'], resolutions: ['480p', '720p'], durations: ['5s', '10s'], audio: true, audio_configurable: true } } },
+  { id: 'mock-video-i2v', type: 'video', model_spec: { name: 'Mock Video (image)', privacy: 'private', constraints: { model_type: 'image-to-video', resolutions: ['720p'], durations: ['5s'], audio: false } } },
+  { id: 'mock-video-private-t2v', type: 'video', model_spec: { name: 'Mock Video Share', privacy: 'anonymized', constraints: { model_type: 'text-to-video', aspect_ratios: ['16:9'], resolutions: ['720p'], durations: ['5s'], audio: true, audio_configurable: false } } },
+  { id: 'mock-video-edit', type: 'video', model_spec: { name: 'Mock Video Edit', constraints: { model_type: 'video' } } }
+];
 
 // ---- Tiny PNG encoder for the image mocks (solid colour with a diagonal stripe; optional transparent corners) ----
 const CRC = new Int32Array(256).map((_, n) => {
@@ -167,6 +191,29 @@ const server = http.createServer(async (req, res) => {
     if (!authed(req)) return json(res, 401, { error: 'Authentication failed' });
     return json(res, 200, { data: { balances: { USD: 42.5, DIEM: 0 } } });
   }
+  // ---- Venice video: /models?type=video, /video/quote, /video/queue, /video/retrieve, /video/complete, /share/<id> ----
+  if (path === '/models' && req.method === 'GET' && url.searchParams.get('type') === 'video') return json(res, 200, { object: 'list', type: 'video', data: VENICE_VIDEO_MODELS });
+  const share = /^\/share\/([\w-]+)$/.exec(url.pathname);
+  if (share && req.method === 'GET') return videoJobs.has(share[1]) ? binaryVideo(res) : json(res, 404, { error: 'not found' });
+  if (path.startsWith('/video/')) {
+    if (!authed(req)) return json(res, 401, { error: 'Authentication failed' });
+    const body = await readBody(req);
+    if (path === '/video/quote') return json(res, 200, { quote: (parseInt(body.duration) || 5) * (body.resolution === '480p' ? 0.03 : 0.05) + (body.audio ? 0.05 : 0) });
+    if (path === '/video/queue') {
+      if (String(body.prompt).includes('違反')) return json(res, 422, { error: 'Your prompt violates the content policy', suggested_prompt: 'a calm landscape' });
+      const id = `vq-${Date.now().toString(36)}`;
+      videoJobs.set(id, 0);
+      if (String(body.model).includes('private')) shareJobs.add(id);
+      return json(res, 200, { model: body.model, queue_id: id, ...(shareJobs.has(id) ? { download_url: `http://localhost:${port}/share/${id}` } : {}) });
+    }
+    if (path === '/video/retrieve') {
+      if (!videoJobs.has(body.queue_id)) return json(res, 404, { error: 'Media not found' });
+      if (!videoReady(body.queue_id)) return json(res, 200, { status: 'PROCESSING', average_execution_time: 15000, execution_duration: videoJobs.get(body.queue_id) * 5000 });
+      return shareJobs.has(body.queue_id) ? json(res, 200, { status: 'COMPLETED' }) : binaryVideo(res);
+    }
+    if (path === '/video/complete') return json(res, 200, { success: true });
+    return json(res, 404, { error: 'not found' });
+  }
   if (path.startsWith('/image/')) {
     if (!authed(req)) return json(res, 401, { error: 'Authentication failed' });
     if (path === '/image/styles' && req.method === 'GET') return json(res, 200, { object: 'list', data: ['3D Model', 'Anime', 'Cinematic', 'Comic Book'] });
@@ -257,6 +304,13 @@ const server = http.createServer(async (req, res) => {
   // ---- Gemini (native API) mock: /gemini/v1beta/... Key is x-goog-api-key: mock-gem ----
   if (url.pathname.startsWith('/gemini/v1beta/')) {
     if (req.headers['x-goog-api-key'] !== 'mock-gem') return json(res, 401, { error: { code: 401, message: 'API key not valid', status: 'UNAUTHENTICATED' } });
+    if (url.pathname === '/gemini/v1beta/interactions' && req.method === 'POST') {
+      const b = await readBody(req);
+      await sleep(3000);
+      const prompt = typeof b.input === 'string' ? b.input : (b.input ?? []).find((x) => x.type === 'text')?.text ?? '';
+      if (prompt.includes('違反')) return json(res, 400, { error: { code: 400, message: 'The request was blocked by safety filters', status: 'INVALID_ARGUMENT' } });
+      return json(res, 200, { id: 'v1_mock', status: 'completed', model: b.model, object: 'interaction', steps: [{ type: 'model_output', content: [{ type: 'video', mime_type: 'video/mp4', data: VIDEO.toString('base64') }] }] });
+    }
     if (url.pathname === '/gemini/v1beta/models')
       return json(res, 200, {
         models: [
@@ -312,6 +366,10 @@ const server = http.createServer(async (req, res) => {
   // ---- OpenRouter mock: /openrouter/api/v1/... Key is Authorization: Bearer mock-or ----
   if (url.pathname.startsWith('/openrouter/api/v1/')) {
     const p = url.pathname.slice('/openrouter/api/v1'.length);
+    if (p === '/videos/models') return json(res, 200, { data: [
+      { id: 'mock/veo', name: 'Mock Veo', supported_durations: [4, 8], supported_resolutions: ['720p', '1080p'], supported_aspect_ratios: ['16:9', '9:16'], supported_frame_images: ['first_frame', 'last_frame'], generate_audio: true, seed: true, pricing_skus: { duration_seconds_with_audio: '0.40', duration_seconds_without_audio: '0.20' } },
+      { id: 'mock/wan', name: 'Mock Wan', supported_durations: [5], supported_resolutions: ['480p', '720p'], supported_aspect_ratios: null, supported_frame_images: null, generate_audio: false, seed: false, pricing_skus: { duration_seconds_480p: '0.05', duration_seconds_720p: '0.10' } }
+    ] });
     if (p === '/images/models') return json(res, 200, { data: [
       { id: 'mock/seedream', name: 'Mock Seedream', architecture: { input_modalities: ['text'], output_modalities: ['image'] }, supported_parameters: { resolution: { type: 'enum', values: ['1K', '2K'] }, seed: { type: 'boolean' }, aspect_ratio: { type: 'enum', values: ['1:1', '16:9', '9:16'] } } },
       { id: 'mock/flux', name: 'Mock Flux', architecture: { input_modalities: ['text'], output_modalities: ['image'] }, supported_parameters: {} }
@@ -321,6 +379,20 @@ const server = http.createServer(async (req, res) => {
     if (p === '/models') return json(res, 200, { data: [{ id: 'mock/chat', name: 'Mock OR Chat', architecture: { input_modalities: ['text'], output_modalities: ['text'] }, supported_parameters: ['tools'], pricing: { prompt: '0.000001', completion: '0.000002' }, context_length: 32000 }] });
     if (req.headers.authorization !== 'Bearer mock-or') return json(res, 401, { error: { message: 'No auth credentials found', code: 401 } });
     if (p === '/key') return json(res, 200, { data: { label: 'mock', limit: 10, usage: 1, limit_remaining: 9 } });
+    if (p === '/videos' && req.method === 'POST') {
+      const b = await readBody(req);
+      if (String(b.prompt).includes('違反')) return json(res, 400, { error: { code: 400, message: 'Content policy violation' } });
+      const id = `ov-${Date.now().toString(36)}`;
+      videoJobs.set(id, 0);
+      return json(res, 202, { id, polling_url: `http://localhost:${port}/openrouter/api/v1/videos/${id}`, status: 'pending' });
+    }
+    const vid = /^\/videos\/([\w-]+)(\/content)?$/.exec(p);
+    if (vid && videoJobs.has(vid[1])) {
+      if (vid[2]) return binaryVideo(res);
+      return videoReady(vid[1])
+        ? json(res, 200, { id: vid[1], status: 'completed', unsigned_urls: [`http://localhost:${port}/openrouter/api/v1/videos/${vid[1]}/content?index=0`], usage: { cost: 0.48, is_byok: false } })
+        : json(res, 200, { id: vid[1], status: 'in_progress', status_detail: 'generating', progress: videoJobs.get(vid[1]) * 40 });
+    }
     if (p === '/images' && req.method === 'POST') {
       const b = await readBody(req);
       await sleep(700);

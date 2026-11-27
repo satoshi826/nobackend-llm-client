@@ -7,9 +7,10 @@
 // - DeepInfra: image models in the chat model list (tag image-gen), a price per image; sizes as width x height
 // - Together: image models in its keyed model list (type image); no prices in the list
 import type { AuthRef, ProviderConfig, Transport } from '../../../lib/providers/types';
+import { blobToDataUrl } from '../../../lib/db/images';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import type { ImageProvider } from './types';
-import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, blobToDataUrl, fetchModelList, imageCount, jsonPost, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, fetchModelList, imageCount, jsonPost, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const num = (x: unknown): number | undefined => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);

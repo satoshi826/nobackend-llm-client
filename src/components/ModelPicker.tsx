@@ -50,7 +50,7 @@ function ModelRow({ m, selected, onPick, showProvider }: { m: ModelInfo; selecte
           {selected && <Icon name="check" class="size-4 shrink-0 text-ink-strong" />}
           <span
             class="ml-auto shrink-0 text-xs text-muted tabular-nums"
-            title={m.pricing?.listedAt ? `${t('picker.priceTitle')}
+            data-tip={m.pricing?.listedAt ? `${t('picker.priceTitle')}
 ${t('picker.priceListed', { date: m.pricing.listedAt })}` : t('picker.priceTitle')}
           >
             {m.pricing?.listedAt && '≈ '}
@@ -99,7 +99,7 @@ ${t('picker.priceListed', { date: m.pricing.listedAt })}` : t('picker.priceTitle
         class={cx('absolute top-2 right-2 rounded-md p-1 hover:bg-glass-strong', fav ? 'text-ink-strong' : 'text-faint')}
         aria-pressed={fav}
         aria-label={fav ? t('picker.unbookmarkNamed', { name: m.name }) : t('picker.bookmarkNamed', { name: m.name })}
-        title={fav ? t('picker.unbookmark') : t('picker.bookmarkTitle')}
+        data-tip={fav ? t('picker.unbookmark') : t('picker.bookmarkTitle')}
         onClick={() => void toggleFavorite(m.providerId, m.id)}
       >
         <Icon name="star" filled={fav} class="size-4" />
@@ -121,7 +121,7 @@ function FilterChip({ label, count, on, title, onToggle }: { label: string; coun
     <button
       type="button"
       aria-pressed={on}
-      title={title}
+      data-tip={title}
       onClick={onToggle}
       class={cx(
         'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs',

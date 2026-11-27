@@ -3,6 +3,7 @@ import './styles.css';
 import { App } from './App';
 import { preloadLazyComponents } from './components/lazy';
 import { installSmoothScroll } from './components/smooth-scroll';
+import { installTooltips } from './components/tooltip';
 import { init } from './state/app';
 import { watchForUpdates } from './state/version';
 import { watchPageErrors } from './lib/error-log';
@@ -22,6 +23,8 @@ watchPageErrors(window);
 render(<App />, document.getElementById('app')!);
 // The wheel eases scrolling areas instead of jumping (components/smooth-scroll.ts)
 installSmoothScroll();
+// The app's own tooltips: names of icon buttons, full texts of cut-off ones (components/tooltip.ts)
+installTooltips();
 // The tools a measurement drives (seeding data, a simulated answer), as window.__perf
 if (perfMode) void import('./perf').then((m) => m.exposePerfTools());
 // Screens split into their own chunks are fetched in the background once the browser is idle

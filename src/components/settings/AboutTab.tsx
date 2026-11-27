@@ -30,7 +30,7 @@ function Version() {
         <div class="space-y-1.5">
           <Row label={t('about.version')}>{APP_BUILD.version}</Row>
           <Row label={t('about.commit')}>
-            <span title={APP_BUILD.commit}>{shortCommit(APP_BUILD.commit)}</span>
+            <span data-tip={APP_BUILD.commit}>{shortCommit(APP_BUILD.commit)}</span>
           </Row>
           <Row label={t('about.built')}>{APP_BUILD.builtAt ? formatDateTime(new Date(APP_BUILD.builtAt)) : '-'}</Row>
         </div>

@@ -698,7 +698,7 @@ function FilerTitle({ api, add }: { api: EntryApi; add: MenuAction[] }) {
     return (
       <div class="flex min-w-0 flex-1 items-center px-1">
         {title !== undefined ? (
-          <button type="button" class="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-sm hover:bg-glass-strong" title={t('filer.openChat')} onClick={() => void openConversation(conv)}>
+          <button type="button" class="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-sm hover:bg-glass-strong" data-tip={t('filer.openChat')} onClick={() => void openConversation(conv)}>
             <Icon name="chat" class="size-4 shrink-0 text-muted" />
             <span class="truncate font-medium text-ink-strong">{title}</span>
           </button>

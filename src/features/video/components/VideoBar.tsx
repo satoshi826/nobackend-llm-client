@@ -58,7 +58,7 @@ export function VideoBar() {
     <div class="space-y-1.5 px-3 pt-2.5 text-xs" role="group" aria-label={t('bar.group')}>
       <div class="flex flex-wrap items-center gap-1.5">
         {frame ? (
-          <span class="flex items-center gap-1 rounded-full border border-line py-0.5 pr-0.5 pl-0.5" title={t('bar.frameName', { name: frame.name ?? t('bar.frameImage') })}>
+          <span class="flex items-center gap-1 rounded-full border border-line py-0.5 pr-0.5 pl-0.5" data-tip={t('bar.frameName', { name: frame.name ?? t('bar.frameImage') })}>
             <ImageThumb blobId={frame.blobId} alt={t('bar.frame')} class="size-6 rounded-full!" onOpen={() => fileRef.current?.click()} />
             <span class="max-w-[7rem] truncate">{t('bar.frame')}</span>
             <IconButton class="px-1!" label={t('bar.frameClear')} onClick={() => (firstFrame.value = null)}>
@@ -125,7 +125,7 @@ export function VideoBar() {
             {t('bar.audio')}
           </Checkbox>
         )}
-        <span class="ml-auto text-muted tabular-nums" title={price ? t('bar.costPriceTitle') : t('bar.costEstimateTitle')}>
+        <span class="ml-auto text-muted tabular-nums" data-tip={price ? t('bar.costPriceTitle') : t('bar.costEstimateTitle')}>
           {q.asking ? t('bar.costAsking') : q.usd !== undefined ? t(price ? 'bar.costPrice' : 'bar.costEstimate', { cost: usd(q.usd) }) : t('bar.costUnknown')}
         </span>
       </div>

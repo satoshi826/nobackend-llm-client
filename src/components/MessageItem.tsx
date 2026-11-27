@@ -124,7 +124,7 @@ function Sources({ parts }: { parts: Extract<Part, { type: 'source' }>[] }) {
                 href={s.url}
                 target="_blank"
                 rel="noopener noreferrer nofollow"
-                title={s.snippet ?? s.url}
+                data-tip={s.snippet ?? s.url}
                 class="flex max-w-64 items-center gap-1.5 rounded-md border border-line px-2 py-1 text-xs hover:bg-glass"
               >
                 <span class="text-faint">{i + 1}</span>
@@ -312,32 +312,32 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
               <Icon name="code" class="size-3.5" />
             </IconButton>
           )}
-          <span class="ml-1 truncate" title={m.meta?.model}>
+          <span class="ml-1 truncate" data-tip={m.meta?.model}>
             {model?.name ?? m.meta?.model}
           </span>
           {usage && (
-            <span class="ml-2 tabular-nums" title={t('msg.tokensTitle')}>
+            <span class="ml-2 tabular-nums" data-tip={t('msg.tokensTitle')}>
               {t('msg.tokens', { input: usage.inputTokens != null ? formatNumber(usage.inputTokens) : '?', output: usage.outputTokens != null ? formatNumber(usage.outputTokens) : '?' })}
             </span>
           )}
           {!!usage?.cachedInputTokens && (
-            <span class="ml-1 text-ok tabular-nums" title={t('msg.cachedTitle')}>
+            <span class="ml-1 text-ok tabular-nums" data-tip={t('msg.cachedTitle')}>
               {t('msg.cached', { n: formatNumber(usage.cachedInputTokens) })}
             </span>
           )}
           {!!usage?.webSearches && (
-            <span class="ml-2 tabular-nums" title={t('msg.webSearchesTitle')}>
+            <span class="ml-2 tabular-nums" data-tip={t('msg.webSearchesTitle')}>
               {t('msg.webSearches', { n: formatNumber(usage.webSearches) })}
             </span>
           )}
           {m.meta?.costUsd != null ? (
-            <span class="ml-2 tabular-nums" title={t('msg.costTitle')}>
+            <span class="ml-2 tabular-nums" data-tip={t('msg.costTitle')}>
               ${m.meta.costUsd.toFixed(4)}
             </span>
           ) : (
             estimated != null && (
               // No cost reported (e.g. OpenAI, Anthropic): estimated from the model's list price, and marked so
-              <span class="ml-2 tabular-nums" title={t('msg.costEstimatedTitle')}>
+              <span class="ml-2 tabular-nums" data-tip={t('msg.costEstimatedTitle')}>
                 ≈${estimated.toFixed(4)}
               </span>
             )
@@ -391,7 +391,7 @@ function Suggestions({ m }: { m: MessageRecord }) {
             key={s}
             type="button"
             class="max-w-full truncate rounded-full border border-line px-3 py-1 text-left text-[13px] text-ink hover:border-line-strong hover:bg-glass"
-            title={s}
+            data-tip={s}
             onClick={() => {
               composerText.value = s;
               composerFocus.value++;

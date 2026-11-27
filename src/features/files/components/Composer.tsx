@@ -129,7 +129,7 @@ export function AttachmentChips({ conv }: { conv: Conversation }) {
         <button
           type="button"
           class="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs text-muted hover:bg-glass-strong hover:text-ink"
-          title={t('workDir.title')}
+          data-tip={t('workDir.title')}
           aria-label={t('workDir.label', { name: dir })}
           onClick={() => openFolder(dir)}
         >
@@ -141,12 +141,12 @@ export function AttachmentChips({ conv }: { conv: Conversation }) {
         <span
           key={a.fileId}
           class="inline-flex max-w-full items-center gap-1 rounded-full border border-line bg-glass-strong py-0.5 pr-1 pl-2 text-xs text-ink"
-          title={a.long ? t('attach.long', { n: formatNumber(ATTACH_INLINE_CHARS) }) : undefined}
+          data-tip={a.long ? t('attach.long', { n: formatNumber(ATTACH_INLINE_CHARS) }) : undefined}
         >
           {a.reading ? <Spinner class="size-3" /> : <Icon name="paperclip" class="size-3" />}
           <span class="truncate">{a.name}</span>
           {a.bytes !== undefined && <span class="text-muted tabular-nums">{formatBytes(a.bytes)}</span>}
-          <button type="button" aria-label={t('attach.remove', { name: a.name })} title={t('attach.remove', { name: a.name })} class="rounded-full p-0.5 hover:bg-glass-strong" onClick={() => detach(a.fileId)}>
+          <button type="button" aria-label={t('attach.remove', { name: a.name })} data-tip={t('attach.remove', { name: a.name })} class="rounded-full p-0.5 hover:bg-glass-strong" onClick={() => detach(a.fileId)}>
             <Icon name="x" class="size-3" />
           </button>
         </span>

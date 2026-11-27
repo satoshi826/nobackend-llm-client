@@ -324,6 +324,7 @@ export function Sidebar() {
           sidebarOpen.value ? 'translate-x-0' : '-translate-x-full'
         )}
         style={{ '--sidebar-w': `${width}px` }}
+        data-tip-beside
         aria-label={t('side.label')}
       >
         <WidthHandle width={width} onWidth={setWidth} />

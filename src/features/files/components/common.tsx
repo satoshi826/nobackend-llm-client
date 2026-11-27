@@ -174,7 +174,7 @@ export function SourceChat({ conversationId }: { conversationId?: string }) {
     <button
       type="button"
       class="flex max-w-[16rem] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted hover:bg-glass-strong hover:text-ink"
-      title={t('file.openSourceTitle', { title })}
+      data-tip={t('file.openSourceTitle', { title })}
       onClick={() => void openConversation(conversationId)}
     >
       <Icon name="chat" class="size-3.5 shrink-0" />

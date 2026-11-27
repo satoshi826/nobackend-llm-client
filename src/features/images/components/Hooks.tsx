@@ -58,13 +58,13 @@ export function ImageModelButton() {
   );
   const title = badge.title ? `${t('header.title')}\n${badge.title}` : t('header.title');
   // It moves to the bar's model menu, so it is a button only while the bar shows one
-  if (!imageReady.value || !generationModels.value.length) return <span class="flex min-w-0 items-center gap-1 px-2.5 py-1.5 text-xs text-muted" title={title}>{inner}</span>;
+  if (!imageReady.value || !generationModels.value.length) return <span class="flex min-w-0 items-center gap-1 px-2.5 py-1.5 text-xs text-muted" data-tip={title}>{inner}</span>;
   return (
     <button
       type="button"
       class="flex min-w-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs text-muted transition hover:bg-glass-strong hover:text-ink"
       onClick={() => document.querySelector<HTMLElement>('select[data-image-model]')?.focus()}
-      title={title}
+      data-tip={title}
     >
       {inner}
     </button>
@@ -76,7 +76,7 @@ export function UserImageRequest({ m }: { m: MessageRecord }) {
   const r = m.imageRequest;
   if (!r) return null;
   return (
-    <div class="mb-1 flex items-center gap-1 text-xs text-accent-text" title={t('request.title')}>
+    <div class="mb-1 flex items-center gap-1 text-xs text-accent-text" data-tip={t('request.title')}>
       <Icon name="image" class="size-3.5" />
       {r.op === 'generate'
         ? r.variants > 1

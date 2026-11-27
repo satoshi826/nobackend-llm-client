@@ -535,10 +535,10 @@ export function Lightbox() {
         <ViewerStage viewer={viewer} class="text-white/70" />
         {lb.items.length > 1 && (
           <>
-            <button type="button" class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass-strong" onClick={() => step(-1)} aria-label={t('lb.prev')} title={t('lb.prev')}>
+            <button type="button" class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass-strong" onClick={() => step(-1)} aria-label={t('lb.prev')} data-tip={t('lb.prev')}>
               <Icon name="chevron-left" />
             </button>
-            <button type="button" class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass-strong" onClick={() => step(1)} aria-label={t('lb.next')} title={t('lb.next')}>
+            <button type="button" class="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass-strong" onClick={() => step(1)} aria-label={t('lb.next')} data-tip={t('lb.next')}>
               <Icon name="chevron-right" />
             </button>
           </>

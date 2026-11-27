@@ -37,7 +37,7 @@ function Background() {
                   type="button"
                   role="radio"
                   aria-checked={bg.preset === id}
-                  title={t(`bg.preset.${id}`)}
+                  data-tip={t(`bg.preset.${id}`)}
                   class={cx('lift flex flex-col items-center gap-1.5 rounded-xl border p-1.5 text-xs', bg.preset === id ? 'border-accent text-ink-strong' : 'border-line text-muted hover:text-ink')}
                   onClick={() => void saveBackground({ preset: id })}
                 >

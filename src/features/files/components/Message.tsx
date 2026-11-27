@@ -79,12 +79,12 @@ function AttachmentChip({ a }: { a: NonNullable<MessageRecord['attachments']>[nu
       <span class="tabular-nums opacity-70">{file ? formatBytes(file.bytes) : exists ? '' : t('msg.fileDeleted')}</span>
     </>
   );
-  if (!exists) return <span class="inline-flex max-w-full items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs text-muted" title={title}>{inner}</span>;
+  if (!exists) return <span class="inline-flex max-w-full items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs text-muted" data-tip={title}>{inner}</span>;
   return (
     <button
       type="button"
       class="inline-flex max-w-full items-center gap-1 rounded-full border border-line bg-glass px-2 py-0.5 text-xs text-ink hover:border-line-strong hover:bg-glass-strong"
-      title={title}
+      data-tip={title}
       onClick={() => void openFile(a.fileId)}
     >
       {inner}

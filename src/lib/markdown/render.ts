@@ -44,14 +44,15 @@ function makeMarked(highlight: boolean): Marked {
         const inner = this.parser.parseInline(token.tokens);
         const href = token.href ?? '';
         if (!/^(https?:|mailto:|#)/i.test(href)) return `<span>${inner}</span>`;
-        const title = token.title ? ` title="${escapeHtml(token.title)}"` : '';
+        // A link's title shows as the app's tooltip (components/tooltip.ts)
+        const title = token.title ? ` data-tip="${escapeHtml(token.title)}"` : '';
         return `<a href="${escapeHtml(href)}"${title}>${inner}</a>`;
       },
       image(token: Tokens.Image) {
         const label = escapeHtml(token.text || token.title || t('image.alt'));
         const href = token.href ?? '';
         if (!/^https?:\/\//i.test(href)) return `<span class="md-img-blocked">${t('image.blocked', { label })}</span>`;
-        return `<a href="${escapeHtml(href)}" class="md-img-link" title="${escapeHtml(t('image.externalTitle'))}">🖼 ${label}</a>`;
+        return `<a href="${escapeHtml(href)}" class="md-img-link" data-tip="${escapeHtml(t('image.externalTitle'))}">🖼 ${label}</a>`;
       },
       code(token: Tokens.Code) {
         const lang = (token.lang ?? '').trim().split(/\s+/)[0].toLowerCase();
@@ -93,7 +94,7 @@ const PURIFY_CONFIG = {
     'a', 'b', 'blockquote', 'br', 'button', 'code', 'del', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'input',
     'li', 'ol', 'p', 'pre', 's', 'span', 'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'ul'
   ],
-  ALLOWED_ATTR: ['href', 'title', 'class', 'type', 'checked', 'disabled', 'data-copy', 'data-run', 'align', 'start'],
+  ALLOWED_ATTR: ['href', 'data-tip', 'class', 'type', 'checked', 'disabled', 'data-copy', 'data-run', 'align', 'start'],
   ALLOW_DATA_ATTR: false,
   FORBID_ATTR: ['style', 'id', 'name']
 };

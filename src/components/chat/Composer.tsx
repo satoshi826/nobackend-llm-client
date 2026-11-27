@@ -35,7 +35,7 @@ function ModelButton() {
       type="button"
       class="group flex min-w-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs text-muted transition duration-200 hover:bg-glass-strong hover:text-ink active:scale-[.97]"
       onClick={() => openModelPicker()}
-      title={note ? `${t('header.chooseModel')}
+      data-tip={note ? `${t('header.chooseModel')}
 ${note}` : t('header.chooseModel')}
       aria-label={`${t('header.chooseModel')}: ${model?.name ?? conv.modelId}`}
     >

@@ -84,7 +84,8 @@ export function Icon({ name, class: className = 'size-4', filled }: { name: Icon
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'outline' | 'danger' | 'remove' };
 
-export function Button({ variant = 'ghost', class: className, children, ...rest }: ButtonProps) {
+/** title on the shared controls (Button, Chip, Select) becomes the app's tooltip (components/tooltip.ts), not the browser's */
+export function Button({ variant = 'ghost', class: className, children, title, ...rest }: ButtonProps) {
   // primary: the one main action of a view; outline = secondary (glass); ghost: toolbar / icon buttons;
   // danger: a destructive action with a label (with the trash icon); remove: an icon-only delete, red only under the pointer
   const base =
@@ -97,7 +98,7 @@ export function Button({ variant = 'ghost', class: className, children, ...rest 
     remove: 'text-ink hover:bg-danger-soft hover:text-danger px-2 py-1.5'
   }[variant];
   return (
-    <button type="button" class={cx(base, v, className as string)} {...rest}>
+    <button type="button" class={cx(base, v, className as string)} data-tip={title} {...rest}>
       {children}
     </button>
   );
@@ -108,7 +109,7 @@ export function Button({ variant = 'ghost', class: className, children, ...rest 
  * pass `title` only when the tooltip should say more than the name.
  */
 export function IconButton({ label, ...rest }: Omit<ButtonProps, 'aria-label'> & { label: string }) {
-  return <Button aria-label={label} title={label} {...rest} />;
+  return <Button aria-label={label} {...rest} />;
 }
 
 /**
@@ -242,7 +243,6 @@ export function Segmented<T extends string>({
           aria-selected={value === x.id}
           tabIndex={value === x.id ? 0 : -1}
           aria-label={x.iconOnly ? x.label : undefined}
-          title={x.iconOnly ? x.label : undefined}
           onClick={() => onChange(x.id)}
           onKeyDown={(e) => {
             if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
@@ -321,36 +321,74 @@ export function Slider({
 }
 
 /**
- * Stepping through a set (images) with a finger: a sideways swipe, or a tap near the left or right edge, steps back or
- * forward. Spread the result on the area that shows the item. Only touch counts (a mouse has buttons and keys), and
- * not on a video (its controls take swipes and taps). The area lets the browser keep vertical scrolling and zoom
+ * Stepping through a set (images) with a finger. What is shown (the area's first child) follows a sideways drag; let
+ * go past a quarter of the width, or flicked, it slides out that way and the next one slides in from the other side,
+ * else it slides back. A tap near the left or right edge steps too. Spread the result on the area that shows the item.
+ * Only touch counts (a mouse has buttons and keys), and not on a video (its controls take swipes and taps). The area
+ * lets the browser keep vertical scrolling and zoom: a drag that starts vertical is left to it
  */
 export function useSwipeStep(step: ((d: 1 | -1) => void) | undefined) {
-  const start = useRef<{ x: number; y: number; at: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; at: number; area: HTMLElement; sideways: boolean | null } | null>(null);
   const handled = useRef(false);
   if (!step) return {};
+  const slideMs = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180;
+  const shown = (area: HTMLElement) => area.firstElementChild as HTMLElement | null;
+  const place = (item: HTMLElement | null, x: number, ms = 0) => {
+    if (!item) return;
+    item.style.transition = ms ? `translate ${ms}ms ease-out` : '';
+    item.style.translate = x ? `${x}px 0` : '';
+  };
   return {
-    class: 'touch-pan-y touch-pinch-zoom',
+    class: 'touch-pan-y touch-pinch-zoom overflow-hidden',
     onPointerDown: (e: PointerEvent) => {
       handled.current = false;
-      start.current = e.pointerType === 'touch' && !(e.target as Element).closest('video') ? { x: e.clientX, y: e.clientY, at: e.timeStamp } : null;
+      const touch = e.pointerType === 'touch' && !(e.target as Element).closest('video');
+      drag.current = touch ? { x: e.clientX, y: e.clientY, at: e.timeStamp, area: e.currentTarget as HTMLElement, sideways: null } : null;
     },
-    onPointerCancel: () => (start.current = null),
+    onPointerMove: (e: PointerEvent) => {
+      const d = drag.current;
+      if (!d) return;
+      const dx = e.clientX - d.x;
+      const dy = e.clientY - d.y;
+      // Which way the drag goes is decided once it has gone 10 px
+      if (d.sideways === null && Math.hypot(dx, dy) > 10) d.sideways = Math.abs(dx) > Math.abs(dy);
+      if (d.sideways) place(shown(d.area), dx);
+    },
+    onPointerCancel: () => {
+      const d = drag.current;
+      drag.current = null;
+      if (d) place(shown(d.area), 0, slideMs);
+    },
     onPointerUp: (e: PointerEvent) => {
-      const s = start.current;
-      start.current = null;
-      if (!s) return;
-      const dx = e.clientX - s.x;
-      const dy = e.clientY - s.y;
-      const ms = e.timeStamp - s.at;
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && ms < 800) {
+      const d = drag.current;
+      drag.current = null;
+      if (!d) return;
+      const dx = e.clientX - d.x;
+      const dy = e.clientY - d.y;
+      const ms = Math.max(1, e.timeStamp - d.at);
+      const width = d.area.clientWidth;
+      if (d.sideways) {
         handled.current = true;
-        step(dx < 0 ? 1 : -1);
+        if (Math.abs(dx) < width / 4 && !(Math.abs(dx) > 30 && Math.abs(dx) / ms > 0.5)) {
+          place(shown(d.area), 0, slideMs);
+          return;
+        }
+        const dir = dx < 0 ? 1 : -1;
+        // Out the way it was pushed; then the next one, from the other side
+        place(shown(d.area), -dir * width, slideMs);
+        setTimeout(() => {
+          step(dir);
+          requestAnimationFrame(() => {
+            const next = shown(d.area);
+            place(next, dir * width);
+            requestAnimationFrame(() => place(next, 0, slideMs));
+          });
+        }, slideMs);
         return;
       }
       // A tap: the outer fifth on either side steps (the middle is left to what is shown)
       if (Math.hypot(dx, dy) < 10 && ms < 400) {
-        const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const box = d.area.getBoundingClientRect();
         const at = (e.clientX - box.left) / box.width;
         if (at < 0.2 || at > 0.8) {
           handled.current = true;
@@ -537,9 +575,9 @@ export function TextArea({ compact, class: className, ...rest }: TextareaHTMLAtt
 }
 
 /** Drop-down choice */
-export function Select({ compact, class: className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement> & { compact?: boolean }) {
+export function Select({ compact, class: className, children, title, ...rest }: SelectHTMLAttributes<HTMLSelectElement> & { compact?: boolean }) {
   return (
-    <select class={cx(SELECT, compact ? 'px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-sm', className as string)} {...rest}>
+    <select class={cx(SELECT, compact ? 'px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-sm', className as string)} data-tip={title} {...rest}>
       {children}
     </select>
   );
@@ -557,10 +595,11 @@ export function SearchField({ value, onInput, placeholder, label, autoFocus, cla
 }
 
 /** Toggle chip / menu chip (pill). `on` marks a selected or active state */
-export function Chip({ on, class: className, children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { on?: boolean }) {
+export function Chip({ on, class: className, children, title, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { on?: boolean }) {
   return (
     <button
       type="button"
+      data-tip={title}
       class={cx(
         'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium transition duration-200 active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100',
         on ? 'border-transparent bg-accent-soft text-ink-strong' : 'border-line bg-glass text-muted hover:border-line-strong hover:text-ink',
@@ -634,7 +673,7 @@ export function Badge({ children, tone = 'zinc', title }: { children: ComponentC
     rose: 'bg-danger-soft text-danger'
   }[tone];
   return (
-    <span title={title} class={cx('inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium', toneCls)}>
+    <span data-tip={title} class={cx('inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium', toneCls)}>
       {children}
     </span>
   );

@@ -141,7 +141,7 @@ export function ImageBar() {
           {t('bar.details')}
           <Chevron open={details} />
         </button>
-        <span class="ml-auto text-muted tabular-nums" title={t('bar.costTitle')}>
+        <span class="ml-auto text-muted tabular-nums" data-tip={t('bar.costTitle')}>
           {cost !== undefined ? t(d.enhancePrompt ? 'bar.costEnhance' : 'bar.cost', { cost: usd(cost, cost < 0.1 ? 3 : 2) }) : t('bar.costUnknown')}
         </span>
       </div>

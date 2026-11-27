@@ -40,7 +40,7 @@ const costText = (v: UsageTotals) =>
 function Cost({ v }: { v: UsageTotals }) {
   if (v.requests > 0 && v.unknownCost === v.requests) return <span class="text-faint">—</span>;
   return (
-    <span title={v.estimated ? t('cost.estimatedTitle') : undefined}>
+    <span data-tip={v.estimated ? t('cost.estimatedTitle') : undefined}>
       {v.estimated ? t('cost.approx', { cost: fmtUsd(v.costUsd) }) : fmtUsd(v.costUsd)}
       {v.unknownCost > 0 && <span class="text-faint">+?</span>}
     </span>
@@ -85,7 +85,7 @@ function DailyBars({ days, metric }: { days: { day: string; totals: UsageTotals 
               class="flex h-full min-w-0 flex-1 items-end justify-center"
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
-              title={t('chart.barTitle', { day: dayLabel(d.day), value: metric === 'cost' ? fmtUsd(d.totals.costUsd) : fmtTok(v) })}
+              data-tip={t('chart.barTitle', { day: dayLabel(d.day), value: metric === 'cost' ? fmtUsd(d.totals.costUsd) : fmtTok(v) })}
             >
               <div
                 class={cx('w-full max-w-8 rounded-t-[4px] bg-accent transition-opacity', hover !== null && hover !== i && 'opacity-50')}
@@ -120,12 +120,12 @@ function Table({ rows }: { rows: { key: string; label: string; sub?: string; t: 
       <tbody class="divide-y divide-line tabular-nums">
         {rows.map((r) => (
           <tr key={r.key}>
-            <td class="max-w-0 truncate py-1.5 pr-2" title={r.sub ? t('table.withSub', { label: r.label, sub: r.sub }) : r.label}>
+            <td class="max-w-0 truncate py-1.5 pr-2" data-tip={r.sub ? t('table.withSub', { label: r.label, sub: r.sub }) : r.label}>
               {r.label}
               {r.sub && <span class="ml-1 text-faint">{r.sub}</span>}
             </td>
             <td class="py-1.5 text-right">{formatNumber(r.t.requests)}</td>
-            <td class="py-1.5 text-right" title={r.t.cachedInputTokens ? t('table.cached', { n: formatNumber(r.t.cachedInputTokens) }) : undefined}>
+            <td class="py-1.5 text-right" data-tip={r.t.cachedInputTokens ? t('table.cached', { n: formatNumber(r.t.cachedInputTokens) }) : undefined}>
               {fmtTok(r.t.inputTokens)}
             </td>
             <td class="py-1.5 text-right">{fmtTok(r.t.outputTokens)}</td>

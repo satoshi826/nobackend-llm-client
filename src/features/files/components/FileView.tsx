@@ -172,7 +172,7 @@ export function FileView({ id = '' }: { id?: string }) {
               <button
                 type="button"
                 class="flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left hover:bg-glass-strong"
-                title={t('file.rename')}
+                data-tip={t('file.rename')}
                 onClick={() => {
                   setName(baseName(f.name));
                   setRenaming(true);
@@ -342,7 +342,7 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
               <button
                 type="button"
                 class={cx('flex items-center gap-1 rounded-full px-2 py-1 text-xs tabular-nums hover:bg-glass-strong', problems ? 'text-danger' : 'text-muted hover:text-ink')}
-                title={t('file.logTitle')}
+                data-tip={t('file.logTitle')}
                 onClick={() => setLogOpen(true)}
               >
                 <Icon name={problems ? 'info' : 'code'} class="size-3.5" />

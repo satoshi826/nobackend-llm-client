@@ -127,7 +127,7 @@ function SkillRow({ s, onEdit }: { s: Skill; onEdit(): void }) {
           <div class="flex flex-wrap items-center gap-1.5">
             <span class="font-mono text-sm font-medium">{s.name}</span>
             {s.createdBy === 'model' && (
-              <span class="rounded bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent-text" title={t('tab.byModelTitle')}>
+              <span class="rounded bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent-text" data-tip={t('tab.byModelTitle')}>
                 {t('tab.byModel')}
               </span>
             )}

@@ -508,3 +508,25 @@ details[open] > summary::before { rotate: 45deg; }
     white-space: pre-wrap;
   }
 }
+
+/* The app's tooltip (components/tooltip.ts): one for the whole app, over everything, never in the way of the pointer */
+.tooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: 320px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-strong);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease-out;
+}
+.tooltip[data-shown] {
+  opacity: 1;
+  visibility: visible;
+}

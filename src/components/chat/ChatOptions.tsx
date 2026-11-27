@@ -4,7 +4,8 @@
 import { useRef, useState } from 'preact/hooks';
 import { currentConv, currentPath } from '../../state/conversations';
 import { chatOptionsOf, DEFAULT_CHAT_OPTIONS, setChatOptions, toolOn, type ChatOptions } from '../../state/chat-options';
-import { modelOf } from '../../state/models';
+import { modelOf, providerById } from '../../state/models';
+import { getPreset } from '../../lib/providers/registry';
 import { settings } from '../../state/settings';
 import { toolGroups, type ToolGroup } from '../../state/tool-registry';
 import { formatNumber } from '../../lib/i18n';
@@ -65,6 +66,9 @@ function ChatOptionsPanel() {
   const groupOn = (g: ToolGroup) => g.tools.some((x) => toolOn(o, g.id, x.name));
   const sum = (list: { tokens: number }[]) => list.reduce((n, x) => n + x.tokens, 0);
   const efforts = model?.capabilities.reasoningEffort ?? [];
+  // Some providers never take earlier reasoning back: there is nothing to choose
+  const cfg = providerById(conv.providerId);
+  const resends = !!model?.capabilities.reasoning && !!cfg && getPreset(cfg.preset).reasoningResend !== 'never';
   const maxes = MAX_TOKENS.filter((n) => !model?.maxOutputTokens || n <= model.maxOutputTokens);
   return (
     <div class="space-y-4 text-sm">
@@ -156,7 +160,7 @@ function ChatOptionsPanel() {
         </label>
       )}
 
-      {model?.capabilities.reasoning && (
+      {resends && (
         <label class="flex cursor-pointer items-start justify-between gap-4">
           <span>
             {t('opts.resend')}

@@ -43,6 +43,22 @@ export interface SandboxPage {
   storage?: { items: Record<string, string>; save(items: Record<string, string>): void };
 }
 
+/** A line of a shown page's console, or something that went wrong on it (sandbox/sandbox.html, watchPage) */
+export interface PageLog {
+  level: 'log' | 'info' | 'warn' | 'error' | 'debug' | 'exception' | 'resource' | 'csp';
+  text: string;
+}
+const LOG_LEVELS = new Set<string>(['log', 'info', 'warn', 'error', 'debug', 'exception', 'resource', 'csp']);
+
+/** Log entries as the sandbox sent them, in their own shape only */
+function cleanLogs(raw: unknown): PageLog[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((e) => (e && LOG_LEVELS.has(e.level) && typeof e.text === 'string' ? [{ level: e.level, text: e.text.slice(0, 1000) }] : []));
+}
+
+/** Whether a log entry says something went wrong (shown to the user as an error) */
+export const isProblem = (l: PageLog) => l.level === 'error' || l.level === 'exception' || l.level === 'resource' || l.level === 'csp';
+
 /** Characters a page may keep in its localStorage (keys and values together), as browsers allow about 5 MB */
 export const STORAGE_LIMIT = 5_000_000;
 
@@ -61,9 +77,10 @@ export function cleanStorage(raw: unknown): Record<string, string> | null {
 /**
  * Show html in a sandbox frame (call when the frame is created) and keep checking that the page answers; onStuck runs
  * when it stops answering, so the caller can remove the frame. With page, the html's references to the site's files
- * use those files (sandbox/rewrite.js), and its localStorage is the page's own. Returns a cleanup function
+ * use those files (sandbox/rewrite.js), and its localStorage is the page's own. onLog gets its console output and
+ * errors as they come. Returns a cleanup function
  */
-export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: () => void, page?: SandboxPage): () => void {
+export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: () => void, page?: SandboxPage, onLog?: (logs: PageLog[]) => void): () => void {
   const ctrl = new AbortController();
   let timer: ReturnType<typeof setInterval> | undefined;
   void connect(frame, ctrl.signal).then((port) => {
@@ -71,8 +88,9 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
     let last = Date.now();
     let n = 0;
     port.onmessage = (e) => {
-      const d = e.data as { type?: string; items?: unknown };
+      const d = e.data as { type?: string; items?: unknown; entries?: unknown };
       if (d?.type === 'pong') last = Date.now();
+      else if (d?.type === 'log') onLog?.(cleanLogs(d.entries));
       else if (d?.type === 'storage' && page?.storage) {
         // What the shown page sent: kept only in the shape storage has
         const items = cleanStorage(d.items);
@@ -91,6 +109,73 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
   });
   return () => ctrl.abort();
 }
+
+// ---- trying a page: shown in a hidden frame, its log and text read back ----
+export interface PageInspection {
+  logs: PageLog[];
+  /** The text the page shows (document.body.innerText), cut at INSPECT_TEXT */
+  text: string;
+  /** What the script given returned, or the error it threw */
+  scriptResult?: string;
+  scriptError?: string;
+  /** The page stopped answering (an endless loop, say) */
+  stuck?: boolean;
+}
+/** Characters of a tried page's text given back */
+export const INSPECT_TEXT = 4000;
+
+/**
+ * Show a page in a hidden sandbox frame (its localStorage only in memory, nothing saved), wait `waitMs`, run `script`
+ * on it if given, and read back its log and the text it shows. The frame is removed afterwards
+ */
+export async function inspectPage(html: string, page: SandboxPage | undefined, { waitMs, script }: { waitMs: number; script?: string }): Promise<PageInspection> {
+  const f = document.createElement('iframe');
+  f.setAttribute('sandbox', SANDBOX_FLAGS);
+  f.setAttribute('aria-hidden', 'true');
+  f.tabIndex = -1;
+  // Laid out at a desktop size, out of sight: what the page shows depends on its size
+  f.style.cssText = 'position:fixed;left:-10000px;top:0;width:1024px;height:768px;border:0;visibility:hidden';
+  const ports = connect(f);
+  f.src = SANDBOX_URL;
+  document.body.append(f);
+  const logs: PageLog[] = [];
+  const answers = new Map<string, (r: { result?: string; error?: string }) => void>();
+  try {
+    const port = await Promise.race([ports, sleep(RUN_TIMEOUT_MS).then(() => null)]);
+    if (!port) return { logs, text: '', stuck: true };
+    port.onmessage = (e) => {
+      const d = e.data as { type?: string; id?: string; entries?: unknown; result?: unknown; error?: unknown };
+      if (d?.type === 'log') logs.push(...cleanLogs(d.entries));
+      else if (d?.type === 'evalResult' && typeof d.id === 'string')
+        answers.get(d.id)?.({ result: typeof d.result === 'string' ? d.result : undefined, error: typeof d.error === 'string' ? d.error : undefined });
+    };
+    /** Run code on the page; null when it does not answer within `ms` (the page is stuck) */
+    const evalIn = (code: string, ms: number) =>
+      Promise.race([
+        new Promise<{ result?: string; error?: string }>((resolve) => {
+          const id = crypto.randomUUID();
+          answers.set(id, resolve);
+          port.postMessage({ type: 'eval', id, code });
+        }),
+        sleep(ms).then(() => null)
+      ]);
+    port.postMessage({ type: 'render', html, ...(page ? { path: page.path, files: page.files, storage: page.storage?.items } : {}) });
+    await sleep(waitMs);
+    const ran = script ? await evalIn(script, 5000) : undefined;
+    if (ran === null) return { logs, text: '', stuck: true };
+    // Changes the script made, and logs it caused, have a moment to show
+    if (script) await sleep(300);
+    const shown = await evalIn('return document.body ? document.body.innerText : ""', 2000);
+    if (shown === null) return { logs, text: '', stuck: true, scriptResult: ran?.result, scriptError: ran?.error };
+    // The last logs go out at most 0.2 s after they happen
+    await sleep(250);
+    return { logs, text: (shown.result ?? '').slice(0, INSPECT_TEXT), scriptResult: ran?.result, scriptError: ran?.error };
+  } finally {
+    f.remove();
+  }
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // ---- running code: hidden sandbox frames, jobs answered by id over their ports ----
 // Worker runs share one frame (each worker is stopped after its run). A run on the page itself (dom) gets a frame of

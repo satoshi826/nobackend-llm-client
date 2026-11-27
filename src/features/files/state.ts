@@ -20,7 +20,7 @@ import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
 import { fetchFromWeb } from '../../state/fetch-page';
 import type { Fetched } from '../../lib/fetcher/protocol';
-import { cleanStorage, runJavaScript, type SandboxPage } from '../../lib/sandbox/client';
+import { cleanStorage, inspectPage, runJavaScript, type SandboxPage } from '../../lib/sandbox/client';
 
 /** Let chat models write and read files (create_file / append_file / edit_file / read_file) */
 export const fileSettings = defineFeatureSettings('files', { fileTools: true }, (old) => pickLegacy(old, { fileTools: true }));
@@ -550,6 +550,11 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
       async remove(id) {
         await inFolder(id);
         await deleteFiles([id]);
+      },
+      async inspect(f, waitMs, script) {
+        const page = await pageOf(f);
+        // Its data as the user's preview has it, but what it stores while being tried is not kept
+        return inspectPage(fdb.currentText(f), { ...page, storage: page.storage && { items: page.storage.items, save: () => {} } }, { waitMs, script });
       },
       pathOf: (f) => relativeTo(dir(), f.name)
     },

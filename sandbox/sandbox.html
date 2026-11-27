@@ -14,6 +14,13 @@
                                            ({ key: value }) its localStorage starts with those items, and its changes
                                            go back as { type: 'storage', items }, at most every 0.5 s
     { type: 'storage', items }             (sent) the shown page's localStorage after it changed
+    { type: 'log', entries }               (sent) the shown page's console output and errors, as { level, text }
+                                           ('log', 'info', 'warn', 'error', 'debug'; 'exception' for an error not
+                                           caught or a rejection; 'resource' for a file that did not load; 'csp' for
+                                           what the sandbox blocked), file names in place of blob: URLs, at most 500
+    { type: 'eval', id, code }             run code on the shown page as the body of an async function and answer
+                                           { type: 'evalResult', id, result?, error? } (preview_page: a model trying
+                                           its page)
     { type: 'run', id, code, files?, dom?, timeoutMs }
                                            run code and answer { type: 'result', id, logs, result?, error? }: in a worker
                                            (stopped after timeoutMs), or with dom on this page itself, where DOMParser
@@ -128,6 +135,81 @@
           }, 500);
         }
 
+        const showValue = (v) => {
+          try {
+            return typeof v === 'string' ? v : (JSON.stringify(v) ?? String(v));
+          } catch {
+            return String(v);
+          }
+        };
+        // The console as this page found it: each shown page's console is wrapped anew around these
+        const plainConsole = {};
+        for (const level of ['log', 'info', 'warn', 'error', 'debug']) plainConsole[level] = console[level];
+
+        // What the shown page logs, what goes wrong in it, and what the sandbox blocks, back to the app. Called between
+        // document.open() (which drops every listener of the window and the document) and the page's own scripts
+        function watchPage(names) {
+          const pending = [];
+          let sent = 0;
+          let timer = 0;
+          const seen = new Set();
+          // A reference to no file of the site resolves against this page's own address: shown as the reference
+          const base = location.href.replace(/[^/]*$/, '');
+          const named = (text) =>
+            String(text)
+              .replace(/blob:null\/[\w-]+/g, (u) => names.get(u) || u)
+              .split(base)
+              .join('')
+              .slice(0, 1000);
+          const note = (level, text) => {
+            text = named(text);
+            // The same report is told once (both copies of the CSP report a block; a blocked file errors too)
+            if (sent >= 500 || seen.has(level + text)) return;
+            seen.add(level + text);
+            sent++;
+            pending.push({ level, text });
+            timer ||= setTimeout(() => {
+              timer = 0;
+              port.postMessage({ type: 'log', entries: pending.splice(0) });
+            }, 200);
+          };
+          for (const level of Object.keys(plainConsole)) {
+            console[level] = (...args) => {
+              note(level, args.map(showValue).join(' '));
+              plainConsole[level].apply(console, args);
+            };
+          }
+          addEventListener(
+            'error',
+            (e) => {
+              const el = e.target;
+              if (el && el !== window && el.nodeType === 1) notLoaded(el.getAttribute('src') || el.getAttribute('href') || el.tagName.toLowerCase());
+              else note('exception', (e.message || 'Error') + (e.filename ? ' (' + (e.filename === location.href ? 'inline script' : e.filename) + ', line ' + e.lineno + ')' : ''));
+            },
+            true
+          );
+          addEventListener('unhandledrejection', (e) => note('exception', 'Unhandled rejection: ' + showValue(e.reason && e.reason.stack ? e.reason.stack : e.reason)));
+          // A file the page asked for and did not get, with why: from the network, or not a file of its site
+          const notLoaded = (raw) => {
+            const ref = named(raw);
+            note('resource', 'Did not load: ' + ref + (/^(https?:)?\/\//i.test(ref) ? ' (the sandbox has no network)' : /^(data|blob):/i.test(ref) ? '' : ' (no such file in the site)'));
+          };
+          // What the CSP blocks: a file (a script, a stylesheet's image or font) is told as one that did not load
+          document.addEventListener('securitypolicyviolation', (e) => {
+            if (/^(script|style|img|media|font)-src/.test(e.effectiveDirective) && /^(https?|blob|data):/i.test(e.blockedURI)) notLoaded(e.blockedURI);
+            else note('csp', 'Blocked by the sandbox: ' + e.effectiveDirective + (e.blockedURI ? ' ' + e.blockedURI : ''));
+          });
+        }
+
+        async function evalHere(d) {
+          try {
+            const value = await new Function('return (async () => {\n' + d.code + '\n})()')();
+            port.postMessage({ type: 'evalResult', id: d.id, result: value === undefined ? undefined : showValue(value) });
+          } catch (err) {
+            port.postMessage({ type: 'evalResult', id: d.id, error: String((err && err.stack) || err) });
+          }
+        }
+
         function onPortMessage(e) {
           const d = e.data || {};
           if (d.type === 'ping') port.postMessage({ type: 'pong', n: d.n });
@@ -135,12 +217,15 @@
             const files = d.files && typeof d.files === 'object' ? d.files : {};
             if (d.dom) void runHere({ id: d.id, code: d.code, files });
             else run({ id: d.id, code: d.code, files, timeoutMs: d.timeoutMs });
-          } else if (d.type === 'render' && typeof d.html === 'string') {
+          } else if (d.type === 'eval' && typeof d.code === 'string') void evalHere(d);
+          else if (d.type === 'render' && typeof d.html === 'string') {
             noPeers();
-            const html = d.files && typeof d.files === 'object' && typeof d.path === 'string' ? rewritePage(d.html, d.path, d.files) : d.html;
+            const names = new Map();
+            const html = d.files && typeof d.files === 'object' && typeof d.path === 'string' ? rewritePage(d.html, d.path, d.files, names) : d.html;
             const kept = d.storage && typeof d.storage === 'object' ? d.storage : null;
             installStorage(makeStorage(kept, kept && keepStorage), makeStorage());
             document.open();
+            watchPage(names);
             // DNS prefetch hints could carry data in host names: asked off again for the new page
             document.write('<meta http-equiv="x-dns-prefetch-control" content="off">' + html);
             document.close();

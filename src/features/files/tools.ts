@@ -4,6 +4,7 @@
 import type { FileRecord } from '../../lib/db/schema';
 import { cleanFileName, currentText, MAX_FILE_CHARS } from '../../lib/db/files';
 import type { Tool } from '../../lib/tools/types';
+import { isProblem, type PageInspection } from '../../lib/sandbox/client';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
 import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
@@ -18,8 +19,9 @@ export const APPEND_FILE = 'append_file';
 export const MOVE_FILE = 'move_file';
 export const DELETE_FILE = 'delete_file';
 export const FETCH_FILE = 'fetch_file';
+export const PREVIEW_PAGE = 'preview_page';
 /** The file tools offered now (their permission is set together in settings) */
-export const FILE_TOOLS = [LIST_FILES, SEARCH_FILES, READ_FILE, WRITE_FILE, EDIT_FILE, APPEND_FILE, MOVE_FILE, DELETE_FILE, FETCH_FILE];
+export const FILE_TOOLS = [LIST_FILES, SEARCH_FILES, READ_FILE, WRITE_FILE, EDIT_FILE, APPEND_FILE, MOVE_FILE, DELETE_FILE, PREVIEW_PAGE, FETCH_FILE];
 /** Every name a file tool had, so the cards of older answers still show (create_file is now write_file) */
 export const FILE_TOOL_NAMES = [...FILE_TOOLS, 'create_file'];
 
@@ -33,7 +35,8 @@ const LABEL_KEYS = {
   [APPEND_FILE]: 'tool.append',
   [MOVE_FILE]: 'tool.move',
   [DELETE_FILE]: 'tool.delete',
-  [FETCH_FILE]: 'tool.fetch'
+  [FETCH_FILE]: 'tool.fetch',
+  [PREVIEW_PAGE]: 'tool.preview'
 } as const;
 /** Tool card title for a file tool (undefined for other tools) */
 export const fileToolLabel = (name: string): string | undefined => (name in LABEL_KEYS ? t(LABEL_KEYS[name as keyof typeof LABEL_KEYS]) : undefined);
@@ -81,6 +84,8 @@ export interface FileToolDeps {
   move(id: string, to: string): Promise<FileRecord>;
   /** Delete a file in the working folder */
   remove(id: string): Promise<void>;
+  /** Open a page of the working folder out of sight and read back what happened on it (nothing it stores is kept) */
+  inspect(f: FileRecord, waitMs: number, script?: string): Promise<PageInspection>;
   /** Fetch an address through the fetch page (the user is asked there). null when declined or failed */
   fetch(url: string, signal: AbortSignal): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null>;
   /** How the model sees a file's path: relative to the working folder (whole for a file outside it) */
@@ -393,6 +398,40 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     }
   };
 
+  const preview: Tool<{ file_id: string; wait_ms: number; script?: string }> = {
+    name: PREVIEW_PAGE,
+    label: t('tool.preview'),
+    description:
+      'Open an .html page of the working folder the way the user would see it (in the sandbox, with the files of its site and its localStorage, but nothing it stores is kept), and get back its console output, its errors (exceptions, files that did not load, anything the sandbox blocked) and the text it shows. Optionally run a short script on it first to try it (click a button, fill a field) and get what the script returns. Use it after writing or changing a page, and fix what it reports before telling the user the page works.',
+    parameters: {
+      type: 'object',
+      properties: {
+        file_id: FILE_ID,
+        wait_ms: { type: 'number', description: 'Optional. How long to let the page run before reading it, in ms; default 1500, at most 10000.' },
+        script: { type: 'string', description: 'Optional. JavaScript run on the page after the wait, as the body of an async function: e.g. "document.querySelector(\'#add\').click(); return document.querySelectorAll(\'li\').length;"' }
+      },
+      required: ['file_id']
+    },
+    risk: 'exec',
+    summarize: (i) => i.file_id,
+    prepare(raw) {
+      const r = obj(raw);
+      const script = str(r, 'script').trim();
+      return { file_id: requireId(r), wait_ms: Math.min(10_000, int(r.wait_ms, 0) ?? 1500), ...(script ? { script } : {}) };
+    },
+    async execute(i) {
+      const f = await mustGet(deps, i.file_id);
+      if (!/\.html?$/i.test(f.name)) throw new Error(t('tool.notPage'));
+      const r = await deps.inspect(f, i.wait_ms, i.script);
+      const out = [`Opened ${shown(f)} for ${i.wait_ms} ms.`];
+      if (r.stuck) out.push('The page stopped answering (an endless loop?), and was closed.');
+      out.push(r.logs.length ? `Console and errors (${r.logs.length}):\n${r.logs.map((l) => `[${l.level}] ${l.text}`).join('\n')}` : 'No console output and no errors.');
+      if (i.script) out.push(r.scriptError ? `The script threw: ${r.scriptError}` : `The script returned: ${r.scriptResult ?? 'undefined'}`);
+      if (!r.stuck) out.push(r.text.trim() ? `Text on the page:\n${r.text}` : 'The page shows no text.');
+      return { content: out.join('\n\n'), details: { ...details(f), problems: r.logs.filter(isProblem).length } };
+    }
+  };
+
   const fetchFile: Tool<{ url: string }> = {
     name: FETCH_FILE,
     label: t('tool.fetch'),
@@ -419,7 +458,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     }
   };
 
-  return hasFolder ? [list, search, read, write, edit, append, move, del, fetchFile] : [write, fetchFile];
+  return hasFolder ? [list, search, read, write, edit, append, move, del, preview, fetchFile] : [write, fetchFile];
 }
 /** System prompt note on the working folder and the files in it (paths relative to it) */
 export function filesNote(folder: string, files: { id: string; path: string; size: number }[] | null): string {

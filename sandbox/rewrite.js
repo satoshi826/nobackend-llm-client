@@ -2,8 +2,9 @@
 // media) come from what the app passed in, not from the network, which the sandbox's CSP blocks. The build puts this
 // file into the sandbox page's own script (vite.config.ts), so it uses only what that page has: DOMParser, Blob,
 // URL.createObjectURL. It must not contain a closing script tag.
-//   rewritePage(html, path, files): path is the page's own project path ('site/index.html'); files maps project paths
-//   (no leading slash, e.g. 'site/css/style.css') to text or a Blob. Returns the html to write.
+//   rewritePage(html, path, files, names): path is the page's own project path ('site/index.html'); files maps project
+//   paths (no leading slash, e.g. 'site/css/style.css') to text or a Blob. Returns the html to write. names (a Map,
+//   optional) gets each blob: URL made, with the path it stands for, so messages about it can name the file.
 // A reference resolves from the folder of the file it is in ('/' is the project root). Absolute URLs ('https:',
 // 'data:', '//host', '#top'), bare module specifiers ('react') and paths not in files are left as they are.
 // - A stylesheet becomes a <style> with its text (the CSP allows no blob: styles). Its url()s resolve from the
@@ -66,7 +67,7 @@ function resolvePath(ref, from) {
   return parts.join('/');
 }
 
-function rewritePage(html, path, files) {
+function rewritePage(html, path, files, names) {
   const assets = new Map(); // path → blob: URL of the file as it is
   const modules = new Map(); // path → blob: URL of the rewritten module
   const inProgress = new Set(); // modules and stylesheets being rewritten: a reference back to one is a cycle
@@ -77,6 +78,7 @@ function rewritePage(html, path, files) {
     if (!assets.has(p)) {
       const f = files[p];
       assets.set(p, URL.createObjectURL(f instanceof Blob && f.type ? f : new Blob([f], { type: typeOf(p) })));
+      names?.set(assets.get(p), p);
     }
     return assets.get(p);
   }
@@ -88,6 +90,7 @@ function rewritePage(html, path, files) {
     if (inProgress.has(p)) return null;
     inProgress.add(p);
     const url = URL.createObjectURL(new Blob([rewriteModule(text(p), p)], { type: 'text/javascript' }));
+    names?.set(url, p);
     inProgress.delete(p);
     modules.set(p, url);
     return url;

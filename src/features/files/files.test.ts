@@ -36,6 +36,12 @@ function memDeps(scope = new Set<string>()) {
       return next;
     },
     pathOf: (f) => f.name,
+    // As the sandbox would report a page that throws while it starts
+    inspect: async (_f, _wait, script) => ({
+      logs: [{ level: 'exception', text: 'ReferenceError: x is not defined (js/app.js:3)' }],
+      text: 'Count 0',
+      ...(script ? { scriptResult: '1' } : {})
+    }),
     list: async () => [...files.values()].filter((f) => scope.has(f.id)).map((f) => ({ path: f.name, kind: 'file' as const, size: f.size })),
     // As the sandbox worker does it (state.ts)
     async search(pattern, ignoreCase, only) {
@@ -182,6 +188,18 @@ describe('file tools', () => {
     await run(deps, 'delete_file', { file_id: 'style.css' });
     expect(files.has(id)).toBe(false);
   });
+  it('tries a page and reports its errors, the script’s result and its text', async () => {
+    const { deps } = memDeps();
+    await run(deps, 'write_file', { name: 'index.html', content: '<p>Count 0</p>' });
+    await run(deps, 'write_file', { name: 'notes.md', content: 'x' });
+    const r = await run(deps, 'preview_page', { file_id: 'index.html', script: 'return 1' });
+    expect(r.content).toContain('[exception] ReferenceError: x is not defined (js/app.js:3)');
+    expect(r.content).toContain('The script returned: 1');
+    expect(r.content).toContain('Text on the page:\nCount 0');
+    expect((r.details as { problems: number }).problems).toBe(1);
+    await expect(run(deps, 'preview_page', { file_id: 'notes.md' })).rejects.toThrow(/html/);
+    expect(tool(deps, 'preview_page').prepare({ file_id: 'a.html', wait_ms: 99_999 })).toEqual({ file_id: 'a.html', wait_ms: 10_000 });
+  });
   it('turns globs into path patterns', () => {
     const m = (glob: string, path: string) => new RegExp(globSource(glob), 'i').test(path);
     expect(m('**', 'a/b/c.js')).toBe(true);
@@ -209,7 +227,7 @@ describe('file tools', () => {
     expect(Object.keys((create.parameters as { properties: object }).properties)).toContain('folder');
     expect(create.prepare({ name: 'a.md', content: 'x', folder: 'todo-app' })).toEqual({ name: 'a.md', content: 'x', folder: 'todo-app' });
     const after = makeFileTools(deps, { hasFolder: true });
-    expect(after.map((t) => t.name)).toEqual(['list_files', 'search_files', 'read_file', 'write_file', 'edit_file', 'append_file', 'move_file', 'delete_file', 'fetch_file']);
+    expect(after.map((t) => t.name)).toEqual(['list_files', 'search_files', 'read_file', 'write_file', 'edit_file', 'append_file', 'move_file', 'delete_file', 'preview_page', 'fetch_file']);
     const write = after.find((t) => t.name === 'write_file')!;
     expect(Object.keys((write.parameters as { properties: object }).properties)).not.toContain('folder');
     expect(write.prepare({ name: 'a.md', content: 'x', folder: 'ignored' })).toEqual({ name: 'a.md', content: 'x' });

@@ -6,10 +6,10 @@ import * as repo from '../lib/db/repo';
 import { pathToLeaf, resolveLeaf } from '../lib/chat/tree';
 import { titleFrom } from '../lib/chat/title';
 import { settings } from './settings';
-import { defaultModel, visibleModels } from './models';
+import { accountInUse, defaultModel, visibleModels } from './models';
 import { mainView, sidebarOpen, sidebarTab } from './ui';
 import { registerRoute, setHash as setRouteHash } from './router';
-import { keyInfos, keyReady, vaultStatusKnown } from './keys';
+import { keyInfos, vaultStatusKnown } from './keys';
 import { t } from './messages';
 
 export const conversations = signal<Conversation[]>([]);
@@ -58,9 +58,9 @@ effect(() => {
   void keyInfos.value;
   void visibleModels.value;
   const d = draft.peek();
-  if (currentId.peek() !== null || keyReady(d.providerId)) return;
+  if (currentId.peek() !== null || accountInUse(d.providerId)) return;
   const m = defaultModel();
-  if (m.modelId && m.providerId !== d.providerId && keyReady(m.providerId)) draft.value = { ...d, providerId: m.providerId, modelId: m.modelId };
+  if (m.modelId && m.providerId !== d.providerId && accountInUse(m.providerId)) draft.value = { ...d, providerId: m.providerId, modelId: m.modelId };
 });
 
 export const isDraft = computed(() => currentId.value === null);

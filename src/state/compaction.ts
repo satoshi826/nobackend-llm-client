@@ -3,14 +3,13 @@ import { computed, signal } from '@preact/signals';
 import type { MessageRecord } from '../lib/db/schema';
 import * as repo from '../lib/db/repo';
 import { getPreset } from '../lib/providers/registry';
-import { accountById } from '../lib/keys/accounts';
 import { formatNumber } from '../lib/i18n';
 import { buildTranscript, estimateRequest, planCompaction, summarize, summaryInstruction, type RequestEstimate } from '../lib/chat/compact';
 import { estimateTokens } from '../lib/chat/context';
 import { vaultTransport as transport } from '../lib/vault/client';
 import { settings } from './settings';
-import { authFor, keyReady } from './keys';
-import { modelOf, providerById } from './models';
+import { authFor } from './keys';
+import { accountInUse, modelOf, providerById } from './models';
 import { currentConv, currentId, currentPath, messages, putMessage, updateConversation } from './conversations';
 import { showToast } from './ui';
 import { contributedSystemNotes } from './tool-registry';
@@ -33,7 +32,7 @@ export const contextUsage = computed<RequestEstimate & { limit: number | null; r
 function compactionModel(): { providerId: string; modelId: string } {
   const conv = currentConv.value;
   const ref = parseModelRef(settings.value.compactModel);
-  return ref && modelOf(ref.providerId, ref.modelId) && keyReady(ref.providerId) ? ref : { providerId: conv.providerId, modelId: conv.modelId };
+  return ref && modelOf(ref.providerId, ref.modelId) && accountInUse(ref.providerId) ? ref : { providerId: conv.providerId, modelId: conv.modelId };
 }
 
 /** What compacting now would do: how many messages are summarized and kept, by which model, and what it sends. null when too short */
@@ -44,8 +43,8 @@ export const compactionPreview = computed(() => {
   const model = modelOf(ref.providerId, ref.modelId);
   const tokens = estimateTokens(summaryInstruction()) + estimateTokens(buildTranscript(plan, null));
   const price = model?.pricing?.inputPerMTok;
-  // The summarizing model can be called now (its key is ready, or it needs none)
-  const ready = keyReady(ref.providerId) || !!accountById(ref.providerId)?.keyOptional;
+  // The summarizing model can be called now (its connection is on and unlocked)
+  const ready = accountInUse(ref.providerId);
   return { count: plan.toSummarize.length, kept: plan.kept, model: model?.name ?? ref.modelId, tokens, inputUsd: price != null ? (tokens * price) / 1e6 : null, ready };
 });
 

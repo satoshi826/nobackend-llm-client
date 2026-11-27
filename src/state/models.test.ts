@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defaultModel, enabledProviders, isFavorite, modelOf, models, modelsStates, refreshModels, toggleFavorite, visibleModels } from './models';
+import { accountInUse, connections, defaultModel, enabledProviders, isFavorite, modelOf, models, modelsStates, refreshModels, toggleFavorite, visibleModels } from './models';
 import { authFor, keyInfos, keyReady } from './keys';
 import { DEFAULT_SETTINGS, settings, type Settings } from './settings';
 import { EMPTY_KEY_STATUS } from '../lib/keys/accounts';
@@ -30,14 +30,38 @@ describe('keys', () => {
   });
 });
 
+describe('accounts in use', () => {
+  it('a connection’s key is in use only while the connection is on; a service’s key whenever it is set', () => {
+    withKeys('venice', 'tavily');
+    use({ enabledProviders: ['venice'] });
+    expect(accountInUse('venice')).toBe(true);
+    expect(accountInUse('tavily')).toBe(true);
+    use({ enabledProviders: [] });
+    expect(accountInUse('venice')).toBe(false);
+    expect(accountInUse('tavily')).toBe(true);
+    keyInfos.value = {};
+    use({ enabledProviders: ['venice'] });
+    expect(accountInUse('venice')).toBe(false);
+  });
+});
+
 describe('providers and models', () => {
-  it('lists enabled providers in on-screen order, whatever order they were enabled in', () => {
+  it('lists connections turned on in on-screen order, whatever order they were turned on in', () => {
+    withKeys('venice', 'anthropic', 'openrouter');
     use({ enabledProviders: ['venice', 'anthropic', 'openrouter'] });
     const order = enabledProviders.value.map((p) => p.id);
     expect(order).toEqual(PRESET_ORDER.filter((id) => ['venice', 'anthropic', 'openrouter'].includes(id)));
   });
 
-  it('offers only models of enabled providers that are online', () => {
+  it('has a connection for each stored key, on or off, and none without a key', () => {
+    withKeys('venice', 'openrouter');
+    use({ enabledProviders: ['venice', 'anthropic'] });
+    expect(connections.value.map((p) => p.id).sort()).toEqual(['openrouter', 'venice']);
+    expect(enabledProviders.value.map((p) => p.id)).toEqual(['venice']);
+  });
+
+  it('offers only models of connections turned on that are online', () => {
+    withKeys('venice', 'openrouter');
     use({ enabledProviders: ['venice'] });
     models.value = [model('venice', 'a'), model('venice', 'gone', { offline: true }), model('openrouter', 'b')];
     expect(visibleModels.value.map((m) => m.id)).toEqual(['a']);
@@ -74,8 +98,9 @@ describe('defaultModel', () => {
     expect(defaultModel()).toEqual({ providerId: 'openrouter', modelId: 'o1' });
   });
 
-  it('falls back to the first enabled provider with no model when nothing is listed', () => {
+  it('falls back to the first connection turned on with no model when nothing is listed', () => {
     models.value = [];
+    withKeys('venice');
     use({ enabledProviders: ['venice'] });
     expect(defaultModel()).toEqual({ providerId: 'venice', modelId: '' });
     use({ enabledProviders: [] });

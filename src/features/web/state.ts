@@ -6,10 +6,9 @@ import { getPreset } from '../../lib/providers/registry';
 import { pageText } from '../../lib/fetcher/page-text';
 import { extractFromPage } from '../../lib/chat/extract';
 import type { ToolResult } from '../../lib/tools/types';
-import { accountById } from '../../lib/keys/accounts';
 import { vaultTransport as transport } from '../../lib/vault/client';
 import { authFor, keyReady, keyStatus } from '../../state/keys';
-import { modelOf, providerById } from '../../state/models';
+import { accountInUse, modelOf, providerById } from '../../state/models';
 import { settings } from '../../state/settings';
 import { fetchFromWeb } from '../../state/fetch-page';
 import { parseModelRef, providerOptionsFor, recordUsage } from '../../state/request-helpers';
@@ -74,7 +73,7 @@ function pageReader(conv: Conversation) {
     if (!page.text.trim()) return { content: `No text could be read from ${where}.`, isError: true, details: { url: got.url } };
     const ref = parseModelRef(webSettings.value.value.readerModel) ?? { providerId: conv.providerId, modelId: conv.modelId };
     const cfg = providerById(ref.providerId);
-    if (!cfg || !ref.modelId || !(keyReady(cfg.id) || accountById(cfg.id)?.keyOptional)) return { content: 'No model is available to read the page.', isError: true, details: { url: got.url } };
+    if (!cfg || !ref.modelId || !accountInUse(cfg.id)) return { content: 'No model is available to read the page.', isError: true, details: { url: got.url } };
     const answer = await extractFromPage({ ...page, url: got.url }, prompt, {
       provider: cfg,
       preset: getPreset(cfg.preset),

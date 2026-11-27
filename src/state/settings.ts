@@ -25,7 +25,10 @@ export interface Settings {
   providerSettings: Record<string, Record<string, boolean>>;
   temperature: number | null;
   lastBackupAt: number | null;
-  /** LLM providers in use (if empty, show the screen for choosing a provider first) */
+  /**
+   * Connections turned on. A provider is a connection while its key is stored (state/models.ts connections); one that
+   * needs no key is a connection while it is here. A connection with a key that is not here is turned off
+   */
   enabledProviders: string[];
   /** Send previous reasoning (reasoning_content) back to the model */
   resendReasoning: boolean;

@@ -9,12 +9,11 @@ import { childrenOf, deepestLatestLeaf, pathToLeaf } from '../lib/chat/tree';
 import { estimateTokens } from '../lib/chat/context';
 import { vaultTransport as transport } from '../lib/vault/client';
 import { settings, saveSettings } from './settings';
-import { authFor, keyReady } from './keys';
-import { modelOf, providerById } from './models';
+import { authFor } from './keys';
+import { accountInUse, modelOf, providerById } from './models';
 import { conversations, currentConv, currentId, endWriting, liveMessages, messages, persistDraft, putMessage, takeWriting, touchConversation, updateConversation } from './conversations';
 import { batch } from '@preact/signals';
 import { openSettings, showToast } from './ui';
-import { accountById } from '../lib/keys/accounts';
 import { contributedBuiltinWebSearch, contributedDynamicTools, contributedTools, requestHandlerFor, systemPromptFor, type ToolProviderContext } from './tool-registry';
 import { controllers, setStreaming, streamingConv } from './runs';
 import { fetchBalance, observeProviderBalance, recordProviderSpend } from './balance';
@@ -45,11 +44,11 @@ function flushUpdates() {
 }
 
 // ---- Sending and generation ----
-/** If no key is usable, open settings and return false */
+/** If the connection cannot be used now (removed, turned off, or locked), open settings and return false */
 function ensureKey(providerId: string): boolean {
-  if (keyReady(providerId) || accountById(providerId)?.keyOptional) return true;
+  if (accountInUse(providerId)) return true;
   openSettings('connections');
-  showToast(t('gen.setKeyFirst', { name: providerById(providerId)?.name ?? providerId }), 'error');
+  showToast(t('gen.notInUse', { name: providerById(providerId)?.name ?? providerId }), 'error');
   return false;
 }
 

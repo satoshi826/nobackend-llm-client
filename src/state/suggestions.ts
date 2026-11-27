@@ -6,10 +6,9 @@ import { getPreset } from '../lib/providers/registry';
 import { generateSuggestions } from '../lib/chat/suggest';
 import { vaultTransport as transport } from '../lib/vault/client';
 import { settings } from './settings';
-import { authFor, keyReady } from './keys';
-import { providerById } from './models';
+import { authFor } from './keys';
+import { accountInUse, providerById } from './models';
 import { messages, putMessage } from './conversations';
-import { accountById } from '../lib/keys/accounts';
 import { parseModelRef, providerOptionsFor, recordUsage } from './request-helpers';
 
 // ---- Reply suggestions ----
@@ -31,7 +30,7 @@ export async function suggestReplies(conv: Conversation, final: MessageRecord, h
   if (!final.parts.some((p) => p.type === 'text' && p.text.trim())) return;
   const ref = parseModelRef(s.suggestionModel) ?? { providerId: conv.providerId, modelId: conv.modelId };
   const cfg = providerById(ref.providerId);
-  if (!cfg || !ref.modelId || !(keyReady(cfg.id) || accountById(cfg.id)?.keyOptional)) return;
+  if (!cfg || !ref.modelId || !accountInUse(cfg.id)) return;
   cancelSuggestions();
   const ctrl = new AbortController();
   suggestCtrl = ctrl;

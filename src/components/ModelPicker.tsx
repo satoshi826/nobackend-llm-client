@@ -3,8 +3,8 @@ import { useMemo, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { currentConv } from '../state/conversations';
 import { regenerateWith, chooseModel } from '../state/generation';
-import { keyInfos, keyReady } from '../state/keys';
-import { enabledProviders, modelsStates, refreshAllModels, visibleModels, isFavorite, toggleFavorite, providerById } from '../state/models';
+import { keyInfos } from '../state/keys';
+import { accountInUse, enabledProviders, modelsStates, refreshAllModels, visibleModels, isFavorite, toggleFavorite, providerById } from '../state/models';
 import { saveSettings, settings } from '../state/settings';
 import { modal, modelPickerTarget } from '../state/ui';
 import type { ModelInfo } from '../lib/providers/types';
@@ -183,10 +183,10 @@ export function ModelPicker() {
   const selModel = conv.modelId;
   const { modelSort: sort, modelFilters: filters } = settings.value;
   const target = modelPickerTarget.value;
-  // Regenerating runs at once, so it offers only providers that can be called now; choosing a model for the chat may
-  // pick one whose key is set up next
+  // Regenerating runs at once, so it offers only connections that can be called now; choosing a model for the chat may
+  // pick one of a locked connection (unlocked next)
   const regen = target.kind === 'regenerate';
-  const provs = regen ? enabledProviders.value.filter((p) => keyReady(p.id) || !!PRESETS[p.preset]?.keyOptional) : enabledProviders.value;
+  const provs = regen ? enabledProviders.value.filter((p) => accountInUse(p.id)) : enabledProviders.value;
   const favs = settings.value.favoriteModels;
   const all = regen ? visibleModels.value.filter((m) => provs.some((p) => p.id === m.providerId)) : visibleModels.value;
 

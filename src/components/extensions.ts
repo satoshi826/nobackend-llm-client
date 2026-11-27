@@ -181,3 +181,15 @@ export async function collectComposerExtras(conv: Conversation): Promise<SendExt
   }
   return out;
 }
+
+// ---- connections ----
+/** Something a feature does with a connection, named on that connection in Settings → 接続とキー */
+export interface ConnectionFeature {
+  id: string;
+  label: Text;
+  icon: IconName;
+  /** Whether this connection (a provider id) offers it */
+  offeredBy(providerId: string): boolean;
+}
+export const connectionFeatures: ConnectionFeature[] = [];
+export const registerConnectionFeature = (f: ConnectionFeature) => upsert(connectionFeatures, f, 'id');

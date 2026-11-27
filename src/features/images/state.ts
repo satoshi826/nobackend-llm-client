@@ -11,7 +11,8 @@ import { baseName } from '../../lib/paths';
 import { providerConfigOf } from '../../lib/keys/accounts';
 import { plainTransport } from '../../lib/providers/transport';
 import { vaultTransport as transport } from '../../lib/vault/client';
-import { authFor, keyReady } from '../../state/keys';
+import { authFor } from '../../state/keys';
+import { accountInUse } from '../../state/models';
 import { defineFeatureSettings, pickLegacy } from '../../state/feature-settings';
 import { openSettings, showToast } from '../../state/ui';
 import { recordUsage } from '../../state/request-helpers';
@@ -163,10 +164,17 @@ export const imageModelsError = signal<string | null>(null);
 const styleLists = signal<Record<string, string[]>>({});
 export const imageStyles = computed(() => styleLists.value[currentImageModel.value?.providerId ?? ''] ?? []);
 
-/** Image providers whose key is set (generation needs it, so only their models are offered) */
-export const readyImageProviders = computed(() => imageProviderList().filter((p) => keyReady(p.account)));
+/** Image providers in use (key set, connection on): only their models are offered */
+export const readyImageProviders = computed(() => imageProviderList().filter((p) => accountInUse(p.account)));
 /** Image generation needs the key of at least one image provider */
 export const imageReady = computed(() => readyImageProviders.value.length > 0);
+// Loaded lists follow the providers in use: turning a connection on or off, or setting, removing or locking a key,
+// loads them again (each provider's list from its 6-hour cache)
+const readyImageIds = computed(() => readyImageProviders.value.map((p) => p.id).join(' '));
+effect(() => {
+  void readyImageIds.value;
+  if (imageModels.peek().length) void loadImageModels();
+});
 
 /** Where an edit runs: a provider, and the model for edits from a prompt ('' = the provider's own) */
 export interface EditTarget {
@@ -204,7 +212,7 @@ export function editTargetFor(op: EditOp, from: { providerId?: string; model?: s
 const cacheKey = (id: string) => `cache:imageModels:v2:${id}`;
 let loading: Promise<void> | null = null;
 
-/** Image models of every provider whose key is set (each list cached for 6 hours) */
+/** Image models of every provider in use (each list cached for 6 hours) */
 export function loadImageModels(force = false): Promise<void> {
   if (loading) return loading;
   loading = (async () => {
@@ -232,7 +240,7 @@ export function loadImageModels(force = false): Promise<void> {
 /** Style presets of the current model's provider (once per provider) */
 export async function loadImageStyles() {
   const p = imageProviderOf(currentImageModel.value?.providerId ?? '');
-  if (!p?.listStyles || p.id in styleLists.value || !keyReady(p.account)) return;
+  if (!p?.listStyles || p.id in styleLists.value || !accountInUse(p.account)) return;
   try {
     const list = await p.listStyles(callContext(p.id));
     styleLists.value = { ...styleLists.value, [p.id]: list };
@@ -306,7 +314,7 @@ effect(() => {
 const randomSeed = () => Math.floor(Math.random() * 999_999_999);
 
 /** Whether an image provider can be used now (its key is set and unlocked) */
-export const imageProviderReady = (providerId: string) => keyReady(imageProviderOf(providerId)?.account ?? providerId);
+export const imageProviderReady = (providerId: string) => accountInUse(imageProviderOf(providerId)?.account ?? providerId);
 
 function ensureImageKey(providerId?: string): boolean {
   if (providerId ? imageProviderReady(providerId) : imageReady.value) return true;

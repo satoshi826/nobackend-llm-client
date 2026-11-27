@@ -1,7 +1,8 @@
 // Video generation feature. Importing this module registers it with the core through extension points;
 // the core never imports anything from here. It stores videos with the images and borrows the images feature's
 // viewer and thumbnails (through its index), and adds "make a video" to images.
-import { registerAssistantExtra, registerComposerAddon, registerModelSlot, registerUserMessageExtra } from '../../components/extensions';
+import { registerAssistantExtra, registerComposerAddon, registerConnectionFeature, registerModelSlot, registerUserMessageExtra } from '../../components/extensions';
+import { videoProviderList } from './providers/types';
 import { registerMessageTransform } from '../../lib/chat/request';
 import type { MessageRecord } from '../../lib/db/schema';
 import type { Part } from '../../lib/providers/types';
@@ -21,6 +22,7 @@ registerComposerAddon({
       : null
 });
 registerModelSlot({ id: 'video', when: (conv) => !!conv.videoMode, Component: VideoModelButton });
+registerConnectionFeature({ id: 'video', label: () => t('mode.button'), icon: 'video', offeredBy: (id) => videoProviderList().some((p) => p.account === id) });
 registerAssistantExtra({ id: 'video', Component: VideoAnswer, owns: (m) => !!m.video });
 registerUserMessageExtra(UserVideoRequest);
 registerImageAction({

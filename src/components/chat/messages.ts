@@ -62,7 +62,7 @@ export const t = defineMessages(
       'このアプリはサーバーを持ちません。会話はこのブラウザにだけ保存され、あなたの API キーで LLM の提供元に直接接続します。アカウント登録・解析ツール・外部スクリプトはありません。',
     'onb.introProvider':
       'このアプリはサーバーを持ちません。会話はこのブラウザにだけ保存され、あなたの API キーで {name} に直接接続します。アカウント登録・解析ツール・外部スクリプトはありません。',
-    'onb.chooseProvider': '使う接続先を選んでください',
+    'onb.chooseProvider': '最初の接続先を追加してください',
     'onb.addLater': 'あとから設定の「接続とキー」で、ほかの接続先も追加できます。',
     'onb.passHeading': 'キーと会話をパスフレーズで守りますか？',
     'onb.passText': 'キーを保存しました。パスフレーズを設定すると、API キーと会話（保存済みのプロンプト・スキルも）を暗号化して保存します。',
@@ -134,7 +134,7 @@ export const t = defineMessages(
         'This app has no server. Your conversations are stored only in this browser, and it connects straight to the LLM provider with your API key. No sign-up, no analytics, no third-party scripts.',
       'onb.introProvider':
         'This app has no server. Your conversations are stored only in this browser, and it connects straight to {name} with your API key. No sign-up, no analytics, no third-party scripts.',
-      'onb.chooseProvider': 'Choose a provider',
+      'onb.chooseProvider': 'Add your first provider',
       'onb.addLater': 'You can add more providers later in Settings → Connections and keys.',
       'onb.passHeading': 'Protect your keys and conversations with a passphrase?',
       'onb.passText': 'Your key is saved. With a passphrase, your API keys and conversations (including saved prompts and skills) are stored encrypted.',
@@ -202,7 +202,7 @@ export const t = defineMessages(
       'onb.welcome': '开始使用',
       'onb.introAny': '本应用没有服务器。对话只保存在此浏览器中，并使用你的 API 密钥直接连接 LLM 服务商。无需注册账号，不使用分析工具或外部脚本。',
       'onb.introProvider': '本应用没有服务器。对话只保存在此浏览器中，并使用你的 API 密钥直接连接 {name}。无需注册账号，不使用分析工具或外部脚本。',
-      'onb.chooseProvider': '请选择要使用的服务商',
+      'onb.chooseProvider': '请添加第一个服务商',
       'onb.addLater': '之后也可以在设置的“连接与密钥”中添加其他服务商。',
       'onb.passHeading': '要用口令保护密钥和对话吗？',
       'onb.passText': '密钥已保存。设置口令后，API 密钥和对话（包括已保存的提示词和技能）将加密保存。',

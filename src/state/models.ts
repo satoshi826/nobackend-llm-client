@@ -5,7 +5,7 @@ import type { ModelInfo, ProviderConfig, ProviderError } from '../lib/providers/
 import { getAdapter, getPreset, PRESET_ORDER, PRESETS } from '../lib/providers/registry';
 import { plainTransport } from '../lib/providers/transport';
 import { vaultTransport } from '../lib/vault/client';
-import { authFor, keyReady } from './keys';
+import { authFor, keyReady, keyStatus } from './keys';
 import { ProviderFailure } from '../lib/providers/errors';
 import { providerConfigOf } from '../lib/keys/accounts';
 import { compareModels } from '../lib/model-list';
@@ -20,14 +20,32 @@ export const providers = signal<ProviderConfig[]>(PRESET_ORDER.map((id) => provi
 export const models = signal<ModelInfo[]>([]);
 export const modelsStates = signal<Record<string, ModelsState>>({});
 
-/** Providers in use (in on-screen order, not the order they were enabled in settings) */
-export const enabledProviders = computed(() => providers.value.filter((p) => settings.value.enabledProviders.includes(p.id)));
+const needsNoKey = (p: ProviderConfig) => !!PRESETS[p.preset]?.keyOptional;
+
+/**
+ * Connections the user added (on or off), in on-screen order: a provider is one while its key is stored (locked or
+ * not); one that needs no key, while it is turned on. There is no connection without a key
+ */
+export const connections = computed(() => providers.value.filter((p) => (needsNoKey(p) ? settings.value.enabledProviders.includes(p.id) : keyStatus(p.id).present)));
+
+/** Connections turned on: their models are offered, and features use their keys (in on-screen order) */
+export const enabledProviders = computed(() => connections.value.filter((p) => settings.value.enabledProviders.includes(p.id)));
 
 /** Selectable models (those offered by enabled providers) */
 export const visibleModels = computed(() => {
   const enabled = new Set(enabledProviders.value.map((p) => p.id));
   return models.value.filter((m) => enabled.has(m.providerId) && !m.offline);
 });
+
+/**
+ * Whether an account can be used now. A connection: turned on, and its key unlocked (or it needs none). A service
+ * (web search, ...): its key is set and unlocked. Every feature asks this, so a connection turned off is used nowhere
+ */
+export function accountInUse(id: string): boolean {
+  const p = providers.value.find((x) => x.id === id);
+  if (!p) return keyReady(id);
+  return enabledProviders.value.includes(p) && (keyReady(id) || needsNoKey(p));
+}
 
 export function providerById(id: string): ProviderConfig | undefined {
   return providers.value.find((p) => p.id === id);
@@ -121,10 +139,9 @@ export async function setProviderEnabled(id: string, enabled: boolean) {
 export function defaultModel(): { providerId: string; modelId: string } {
   const s = settings.value;
   const vis = visibleModels.value;
-  // Providers that can be used right away (key ready, or no key needed) come first
-  const usable = (id: string) => keyReady(id) || !!PRESETS[providerById(id)?.preset ?? '']?.keyOptional;
-  if (s.lastModelId && usable(s.lastProviderId) && vis.some((m) => m.id === s.lastModelId && m.providerId === s.lastProviderId)) return { providerId: s.lastProviderId, modelId: s.lastModelId };
-  const ordered = [...enabledProviders.value].sort((a, b) => Number(usable(b.id)) - Number(usable(a.id)));
+  // Connections that can be used right away (not locked) come first
+  if (s.lastModelId && accountInUse(s.lastProviderId) && vis.some((m) => m.id === s.lastModelId && m.providerId === s.lastProviderId)) return { providerId: s.lastProviderId, modelId: s.lastModelId };
+  const ordered = [...enabledProviders.value].sort((a, b) => Number(accountInUse(b.id)) - Number(accountInUse(a.id)));
   for (const p of ordered) {
     const list = vis.filter((m) => m.providerId === p.id);
     const m = list.find((x) => x.tags?.includes('default')) ?? list[0];

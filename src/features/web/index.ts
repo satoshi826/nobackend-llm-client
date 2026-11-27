@@ -1,7 +1,9 @@
 // The web feature: searching (the chat provider's own search, or the Tavily tool) and reading pages (fetch_url).
 // On by default; turned off in Settings → Web (no per-conversation switch).
 // Importing this module registers it with the core through extension points.
-import { registerSettingsTab, registerToolView } from '../../components/extensions';
+import { registerConnectionFeature, registerSettingsTab, registerToolView } from '../../components/extensions';
+import { getPreset } from '../../lib/providers/registry';
+import { providerById } from '../../state/models';
 import { SearchResults } from './components/Web';
 import { lazyComponent } from '../../components/lazy';
 import { t } from './messages';
@@ -44,4 +46,15 @@ registerSettingsTab({
   label: () => t('tabLabel'),
   icon: 'globe',
   Component: lazyComponent(() => import('./components/SearchSettings').then((m) => m.SearchSettings))
+});
+
+// The connection's own search (no Tavily key needed)
+registerConnectionFeature({
+  id: 'web-search',
+  label: () => t('webSearch'),
+  icon: 'globe',
+  offeredBy: (id) => {
+    const cfg = providerById(id);
+    return !!cfg && !!getPreset(cfg.preset).nativeWebSearch;
+  }
 });

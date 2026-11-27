@@ -1,11 +1,11 @@
 // Screens shown instead of the conversation: empty new chat, first provider, key setup / unlock, passphrase prompt
 import { currentConv, updateConversation } from '../../state/conversations';
 import { vaultState } from '../../state/keys';
-import { hostOfProvider as hostOf, providerById, providers, setProviderEnabled } from '../../state/models';
+import { providerById } from '../../state/models';
 import { saveSettings } from '../../state/settings';
 import { openSettings } from '../../state/ui';
-import { getPreset } from '../../lib/providers/registry';
 import { KeyPanel, VaultSecurityPanel } from '../KeyPanel';
+import { AddConnection } from '../AddConnection';
 import { Button, Icon } from '../ui';
 import { t } from './messages';
 import { around } from '../messages';
@@ -25,12 +25,8 @@ export function EmptyState() {
   );
 }
 
-/** Screen for choosing the first provider to use (when no provider is enabled) */
+/** Screen for adding the first connection (when no connection is on) */
 export function ProviderChooser() {
-  const choose = async (id: string) => {
-    await setProviderEnabled(id, true);
-    await updateConversation({ providerId: id, modelId: '' });
-  };
   return (
     <div class="scroll-thin flex-1 overflow-y-auto">
       <div class="mx-auto max-w-lg px-5 py-10">
@@ -42,27 +38,7 @@ export function ProviderChooser() {
           {t('onb.introAny')}
         </p>
         <h2 class="mt-6 mb-2 text-sm font-semibold">{t('onb.chooseProvider')}</h2>
-        <ul class="space-y-2">
-          {providers.value.map((p) => {
-            const preset = getPreset(p.preset);
-            return (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  class="w-full rounded-xl border border-line p-3 text-left hover:border-line-strong hover:bg-glass"
-                  onClick={() => void choose(p.id)}
-                >
-                  <div class="flex items-center gap-2">
-                    <span class="font-medium">{preset.label}</span>
-                    <span class="truncate text-xs text-muted">{hostOf(p.id)}</span>
-                    <Icon name="chevron-right" class="ml-auto size-4 shrink-0 text-faint" />
-                  </div>
-                  {preset.tagline && <p class="mt-1 text-xs leading-5 text-muted">{preset.tagline}</p>}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <AddConnection heading={false} onAdded={(id) => void updateConversation({ providerId: id, modelId: '' })} />
         <p class="mt-4 text-xs text-muted">{t('onb.addLater')}</p>
       </div>
     </div>

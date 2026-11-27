@@ -12,6 +12,7 @@ import { providerConfigOf } from '../../lib/keys/accounts';
 import { plainTransport } from '../../lib/providers/transport';
 import { vaultTransport as transport } from '../../lib/vault/client';
 import { authFor, keyReady } from '../../state/keys';
+import { accountInUse } from '../../state/models';
 import { dataLock } from '../../state/lock';
 import { defineFeatureSettings } from '../../state/feature-settings';
 import { openSettings, showToast } from '../../state/ui';
@@ -44,8 +45,8 @@ export interface VideoDefaults {
 const DEFAULTS: VideoDefaults = { providerId: '', model: '', duration: 5, resolution: '720p', aspectRatio: '16:9', audio: true };
 export const videoSettings = defineFeatureSettings('video', { videoDefaults: DEFAULTS });
 
-/** Video providers whose key is set; video mode is offered only when there is one */
-export const readyVideoProviders = computed(() => videoProviderList().filter((p) => keyReady(p.account)));
+/** Video providers in use (key set, connection on); video mode is offered only when there is one */
+export const readyVideoProviders = computed(() => videoProviderList().filter((p) => accountInUse(p.account)));
 export const videoReady = computed(() => readyVideoProviders.value.length > 0);
 
 function providerFor(id: string): VideoProvider {
@@ -62,10 +63,16 @@ function callContext(providerId: string, signal?: AbortSignal): VideoCallContext
 // ---- models ----
 export const videoModels = signal<VideoModelInfo[]>([]);
 export const videoModelsError = signal<string | null>(null);
+// Loaded lists follow the providers in use (as image models do)
+const readyVideoIds = computed(() => readyVideoProviders.value.map((p) => p.id).join(' '));
+effect(() => {
+  void readyVideoIds.value;
+  if (videoModels.peek().length) void loadVideoModels();
+});
 const cacheKey = (id: string) => `cache:videoModels:${id}`;
 let loading: Promise<void> | null = null;
 
-/** Video models of every provider whose key is set (each list cached for 6 hours) */
+/** Video models of every provider in use (each list cached for 6 hours) */
 export function loadVideoModels(force = false): Promise<void> {
   if (loading) return loading;
   loading = (async () => {
@@ -192,7 +199,7 @@ export async function makeVideoFrom(blobId: string, name?: string) {
 }
 
 /** Whether a video provider can be used now (its key is set and unlocked) */
-export const videoProviderReady = (providerId: string) => keyReady(videoProviderOf(providerId)?.account ?? providerId);
+export const videoProviderReady = (providerId: string) => accountInUse(videoProviderOf(providerId)?.account ?? providerId);
 
 function ensureVideoKey(providerId?: string): boolean {
   if (providerId ? videoProviderReady(providerId) : videoReady.value) return true;

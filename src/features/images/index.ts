@@ -3,6 +3,7 @@
 import {
   registerAssistantExtra,
   registerComposerAddon,
+  registerConnectionFeature,
   registerModelSlot,
   registerOverlay,
   registerSettingsTab,
@@ -14,6 +15,7 @@ import { ImageModelButton, ImageBarAbove, ImageModeButton, ImageSettings, ImageT
 import { ImageAnswer, Lightbox, ReplyImages } from './components/ImageView';
 import { imageNote } from './transform';
 import { currentImageModel, imageReady, sendImagePrompt } from './state';
+import { imageProviderList } from './providers/types';
 import { GENERATE_IMAGE } from './tool';
 import { imageCount, t } from './messages';
 
@@ -54,5 +56,6 @@ registerToolView({
   Detail: ImageToolDetail
 });
 registerSettingsTab({ id: 'images', label: () => t('settings.title'), icon: 'image', Component: ImageSettings });
+registerConnectionFeature({ id: 'images', label: () => t('settings.title'), icon: 'image', offeredBy: (id) => imageProviderList().some((p) => p.account === id) });
 registerOverlay(Lightbox);
 registerMessageTransform(imageNote);

@@ -7,7 +7,7 @@ import { useRef, useState } from 'preact/hooks';
 import { Button, Icon, IconButton, cx, type IconName } from '../../../components/ui';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { openFolder } from '../state';
-import { conversations, openConversation } from '../../../state/conversations';
+import { conversationTitles, openConversation } from '../../../state/conversations';
 import { t } from '../messages';
 
 /** Something a menu offers. note: a short note after its name (what it costs); danger: deleting (last, apart, in red) */
@@ -168,17 +168,17 @@ export function FolderCrumbs({ folder }: { folder: string }) {
 
 /** The chat something was made in, as a link to it (shown while that chat exists) */
 export function SourceChat({ conversationId }: { conversationId?: string }) {
-  const conv = conversationId ? conversations.value.find((c) => c.id === conversationId) : undefined;
-  if (!conv) return null;
+  const title = conversationId ? conversationTitles.value.get(conversationId) : undefined;
+  if (!conversationId || title === undefined) return null;
   return (
     <button
       type="button"
       class="flex max-w-[16rem] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted hover:bg-glass-strong hover:text-ink"
-      title={t('file.openSourceTitle', { title: conv.title })}
-      onClick={() => void openConversation(conv.id)}
+      title={t('file.openSourceTitle', { title })}
+      onClick={() => void openConversation(conversationId)}
     >
       <Icon name="chat" class="size-3.5 shrink-0" />
-      <span class="truncate">{conv.title}</span>
+      <span class="truncate">{title}</span>
     </button>
   );
 }

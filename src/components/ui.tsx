@@ -329,6 +329,31 @@ export function useDebounced<T>(value: T, ms = 200): T {
   return settled;
 }
 
+/**
+ * A long list drawn in batches as it scrolls: the first `batch` items at once, then `batch` more each time `mark`
+ * (an element put after the list, see MoreMark) comes within 1200px of the bottom of `root`. Starts again from the
+ * first batch when anything in `restart` changes
+ */
+export function useBatches(total: number, batch: number, root: RefObject<HTMLElement | null>, restart: readonly unknown[]) {
+  const mark = useRef<HTMLDivElement>(null);
+  const [limit, setLimit] = useState(batch);
+  // oxlint-disable-next-line react/exhaustive-deps -- `restart` is the caller's list of what starts it again
+  useEffect(() => setLimit(batch), restart);
+  useEffect(() => {
+    const el = mark.current;
+    if (!root.current || !el) return;
+    const io = new IntersectionObserver((seen) => seen.some((e) => e.isIntersecting) && setLimit((n) => n + batch), { root: root.current, rootMargin: '0px 0px 1200px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [limit, total, batch, root]);
+  return { limit, mark, more: total > limit };
+}
+
+/** Put after a list drawn with useBatches: the next batch is drawn when this comes near the bottom of the view */
+export function MoreMark({ batches }: { batches: { mark: RefObject<HTMLDivElement | null>; more: boolean } }) {
+  return batches.more ? <div ref={batches.mark} class="h-px" /> : null;
+}
+
 type Box = { x: number; y: number; w: number; h: number };
 
 /**

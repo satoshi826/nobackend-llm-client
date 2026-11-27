@@ -89,12 +89,18 @@ export async function renumberTakenPaths(): Promise<number> {
 export async function moveIntoWorkDirs(convs: Conversation[]): Promise<Conversation[]> {
   const changed: Conversation[] = [];
   await withTakenPaths(async () => {
+    // Each conversation's files, gathered once (a conversation's moves change only its own files' paths)
+    const byConversation = new Map<string, FileRecord[]>();
+    for (const f of allFiles()) {
+      if (!f.conversationId || isTemporary(f.id)) continue;
+      const list = byConversation.get(f.conversationId);
+      if (list) list.push(f);
+      else byConversation.set(f.conversationId, [f]);
+    }
     for (const c of convs) {
       if (c.workDir || c.temporary) continue;
-      const files = allFiles()
-        .filter((f) => f.conversationId === c.id && !isTemporary(f.id))
-        .sort((a, b) => a.createdAt - b.createdAt);
-      if (!files.length) continue;
+      const files = byConversation.get(c.id)?.sort((a, b) => a.createdAt - b.createdAt);
+      if (!files) continue;
       const mine = new Set(files.map((f) => f.id));
       const top = files[0].name.slice(0, files[0].name.indexOf('/') + 1);
       const topOf = (p: string) => p.slice(0, p.indexOf('/') + 1);

@@ -81,6 +81,17 @@ function sortConversations(list: Conversation[]): Conversation[] {
 
 export type { SearchHit } from '../lib/db/repo';
 /** Messages whose text matches a search (the sidebar's search) */
+let titles = new Map<string, string>();
+/**
+ * Each conversation's title by id. The same Map until a title changes, is added or goes, so what shows titles is not
+ * drawn again when a conversation only moves (a message sent in it)
+ */
+export const conversationTitles = computed(() => {
+  const next = new Map(conversations.value.map((c) => [c.id, c.title]));
+  if (next.size !== titles.size || [...next].some(([id, title]) => titles.get(id) !== title)) titles = next;
+  return titles;
+});
+
 export const searchMessages = (query: string, signal?: AbortSignal): Promise<repo.SearchHit[]> => repo.searchMessages(query, signal);
 
 /** How many saved things (files, images) a chat made: they can go with it when it is deleted */

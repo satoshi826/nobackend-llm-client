@@ -12,7 +12,7 @@ import { askConfirm } from '../../../components/ConfirmDialog';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { FilesHeader } from './FilesHeader';
 import { openConversation } from '../../../state/conversations';
-import { Button, Checkbox, EmptyState, Icon, IconButton, Modal, Segmented, Spinner, TextField, cx, useDebounced, type IconName } from '../../../components/ui';
+import { Button, Checkbox, EmptyState, Icon, IconButton, Modal, MoreMark, Segmented, Spinner, TextField, cx, useBatches, useDebounced, type IconName } from '../../../components/ui';
 import { allFolders, filterItems, foldersIn, NATURAL_ORDER, previewText, sortItems, type FilerItem, type FolderItem } from '../filer';
 import {
   chatInFolder,
@@ -195,18 +195,8 @@ export function Filer() {
   const list = items ?? NO_ITEMS;
   // Drawn in batches as the list scrolls: the first screenful shows at once, even with thousands of entries
   const scrollArea = useRef<HTMLDivElement>(null);
-  const moreMark = useRef<HTMLDivElement>(null);
-  const [limit, setLimit] = useState(BATCH);
-  useEffect(() => setLimit(BATCH), [view, conv, folder, query]);
-  const shown = useMemo(() => list.slice(0, limit), [list, limit]);
-  useEffect(() => {
-    const root = scrollArea.current;
-    const mark = moreMark.current;
-    if (!root || !mark) return;
-    const io = new IntersectionObserver((seen) => seen.some((e) => e.isIntersecting) && setLimit((n) => n + BATCH), { root, rootMargin: '0px 0px 1200px 0px' });
-    io.observe(mark);
-    return () => io.disconnect();
-  }, [limit, list.length]);
+  const batches = useBatches(list.length, BATCH, scrollArea, [view, conv, folder, query]);
+  const shown = useMemo(() => list.slice(0, batches.limit), [list, batches.limit]);
   // Every entry in the order shown: folders first
   const keys = useMemo(() => [...folders.map(folderKey), ...list.map((i) => i.key)], [folders, list]);
   // Drop picks that disappeared (deleted, moved)
@@ -461,8 +451,7 @@ export function Filer() {
         ) : (
           <ListView folders={folders} items={shown} prefs={prefs} picked={picked} all={picked.size > 0 && picked.size === keys.length} onAll={toggleAll} api={api} />
         )}
-        {/* The next batch is drawn when this comes near the bottom of the view */}
-        {list.length > limit && <div ref={moreMark} class="h-px" />}
+        <MoreMark batches={batches} />
       </div>
 
       {dialog?.kind === 'move' && (

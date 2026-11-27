@@ -1,5 +1,5 @@
 // Sidebar: tabs (conversations + tabs registered by features), notices, settings
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { memo } from 'preact/compat';
 import { useComputed } from '@preact/signals';
 import { useDialog } from './dialog';
@@ -12,22 +12,32 @@ import { dataLock, lockNow } from '../state/lock';
 import { providerById } from '../state/models';
 import { newerBuild } from '../state/version';
 import { openSettings, showToast, sidebarOpen, sidebarTab } from '../state/ui';
-import { Button, EmptyState, Icon, IconButton, RowHighlight, SearchField, Segmented, TextField, cx, useSelectedBox } from './ui';
+import { Button, EmptyState, Icon, IconButton, MoreMark, RowHighlight, SearchField, Segmented, TextField, cx, useBatches, useSelectedBox } from './ui';
 import { askConfirm, askConfirmWithCheck } from './ConfirmDialog';
 import { sidebarTabs, textOf } from './extensions';
 import { t } from './messages';
 import { formatDate, formatNumber } from '../lib/i18n';
 
-function groupLabel(ts: number): string {
-  const d = new Date(ts);
+/** The label of the group a conversation last changed at `ts` goes in, counted from today (made once per listing) */
+function grouper(): (ts: number) => string {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  if (ts >= start) return t('side.today');
-  if (ts >= start - 86400_000) return t('side.yesterday');
-  if (ts >= start - 7 * 86400_000) return t('side.last7');
-  if (ts >= start - 30 * 86400_000) return t('side.last30');
-  return formatDate(d, { year: 'numeric', month: 'long' });
+  const months = new Map<number, string>();
+  return (ts) => {
+    if (ts >= start) return t('side.today');
+    if (ts >= start - 86400_000) return t('side.yesterday');
+    if (ts >= start - 7 * 86400_000) return t('side.last7');
+    if (ts >= start - 30 * 86400_000) return t('side.last30');
+    const d = new Date(ts);
+    const k = d.getFullYear() * 12 + d.getMonth();
+    let label = months.get(k);
+    if (label === undefined) months.set(k, (label = formatDate(d, { year: 'numeric', month: 'long' })));
+    return label;
+  };
 }
+
+/** Rows drawn at once in the conversation list (more as it scrolls) */
+const BATCH = 100;
 
 /** A conversation in the list; drawn again only when it, its being open, or its being answered changes */
 const Row = memo(function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet?: string }) {
@@ -156,23 +166,14 @@ function Notices() {
 
 const MOBILE = '(max-width: 767px)';
 
-export function Sidebar() {
-  const asideRef = useRef<HTMLElement>(null);
+/**
+ * The conversations tab: new chat, search, and the list grouped by when each conversation last changed. Kept apart
+ * from the sidebar's frame, so opening or closing the sidebar does not draw the list again
+ */
+function Chats() {
   const navRef = useRef<HTMLElement>(null);
   // The open conversation's background slides to it (like the settings tabs)
   const current = useSelectedBox(navRef, '[aria-current="true"]');
-  const [mobile, setMobile] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(MOBILE).matches);
-  useEffect(() => {
-    const mq = matchMedia(MOBILE);
-    const f = () => setMobile(mq.matches);
-    mq.addEventListener('change', f);
-    return () => mq.removeEventListener('change', f);
-  }, []);
-  // On phones the sidebar is a drawer: a dialog while open, and out of the tab order while closed
-  useDialog(asideRef, { onClose: () => (sidebarOpen.value = false), active: mobile && sidebarOpen.value });
-  useEffect(() => {
-    if (asideRef.current) asideRef.current.inert = mobile && !sidebarOpen.value;
-  }, [mobile, sidebarOpen.value]);
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<Map<string, SearchHit>>(new Map());
   // Full-text search of message bodies (200ms after typing stops)
@@ -191,20 +192,70 @@ export function Sidebar() {
       clearTimeout(timer);
     };
   }, [q]);
+  const ql = q.trim().toLowerCase();
+  const openId = currentId.value;
+  const all = conversations.value;
+  // Pinned first, then the groups by date, as one list of headings and rows (so it can be drawn in batches)
+  const lines = useMemo(() => {
+    const list = all.filter((c) => !ql || c.title.toLowerCase().includes(ql) || hits.has(c.id));
+    const out: ({ heading: string } | Conversation)[] = [];
+    const pinned = list.filter((c) => c.pinned);
+    if (pinned.length) out.push({ heading: t('side.pinned') }, ...pinned);
+    const groupOf = grouper();
+    let last = '';
+    for (const c of list) {
+      if (c.pinned) continue;
+      const g = groupOf(c.updatedAt);
+      if (g !== last) out.push({ heading: (last = g) });
+      out.push(c);
+    }
+    return out;
+  }, [all, ql, hits]);
+  const batches = useBatches(lines.length, BATCH, navRef, [ql]);
+  return (
+    <>
+      <div class={cx('space-y-2 px-2 pb-2', !sidebarTabs.length && 'pt-2')}>
+        <Button variant="outline" class="w-full justify-start" onClick={() => startNewChat(false)}>
+          <Icon name="plus" />
+          {t('side.newChat')}
+        </Button>
+        <SearchField placeholder={t('side.searchPlaceholder')} label={t('side.searchLabel')} value={q} onInput={setQ} />
+      </div>
+      <nav ref={navRef} class="scroll-thin relative isolate flex-1 overflow-y-auto px-2 pb-2">
+        <RowHighlight box={current} class="inset-x-2" />
+        {lines.slice(0, batches.limit).map((x, i) =>
+          'heading' in x ? (
+            <h3 key={`h:${x.heading}`} class={cx('px-2.5 py-1 text-xs font-medium text-muted', i > 0 && 'mt-3')}>
+              {x.heading}
+            </h3>
+          ) : (
+            <Row key={x.id} c={x} active={x.id === openId} snippet={ql ? hits.get(x.id)?.snippet : undefined} />
+          )
+        )}
+        <MoreMark batches={batches} />
+        {lines.length === 0 && <EmptyState icon={q ? 'search' : 'chat'}>{q ? t('side.notFound') : t('side.empty')}</EmptyState>}
+      </nav>
+    </>
+  );
+}
+
+export function Sidebar() {
+  const asideRef = useRef<HTMLElement>(null);
+  const [mobile, setMobile] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(MOBILE).matches);
+  useEffect(() => {
+    const mq = matchMedia(MOBILE);
+    const f = () => setMobile(mq.matches);
+    mq.addEventListener('change', f);
+    return () => mq.removeEventListener('change', f);
+  }, []);
+  // On phones the sidebar is a drawer: a dialog while open, and out of the tab order while closed
+  useDialog(asideRef, { onClose: () => (sidebarOpen.value = false), active: mobile && sidebarOpen.value });
+  useEffect(() => {
+    if (asideRef.current) asideRef.current.inert = mobile && !sidebarOpen.value;
+  }, [mobile, sidebarOpen.value]);
   const tab = sidebarTab.value;
   const allTabs = [{ id: 'chats', label: t('side.chats'), icon: 'chat' as const }, ...sidebarTabs];
   const ActivePanel = sidebarTabs.find((x) => x.id === tab)?.Panel;
-  const ql = q.trim().toLowerCase();
-  const openId = currentId.value;
-  const list = conversations.value.filter((c) => !ql || c.title.toLowerCase().includes(ql) || hits.has(c.id));
-  const pinned = list.filter((c) => c.pinned);
-  const groups: [string, Conversation[]][] = [];
-  for (const c of list.filter((c) => !c.pinned)) {
-    const g = groupLabel(c.updatedAt);
-    const last = groups[groups.length - 1];
-    if (last && last[0] === g) last[1].push(c);
-    else groups.push([g, [c]]);
-  }
 
   return (
     <>
@@ -233,39 +284,7 @@ export function Sidebar() {
             class="m-2"
           />
         )}
-        {ActivePanel ? (
-          <ActivePanel />
-        ) : (
-        <>
-        <div class={cx('space-y-2 px-2 pb-2', !sidebarTabs.length && 'pt-2')}>
-          <Button variant="outline" class="w-full justify-start" onClick={() => startNewChat(false)}>
-            <Icon name="plus" />
-            {t('side.newChat')}
-          </Button>
-          <SearchField placeholder={t('side.searchPlaceholder')} label={t('side.searchLabel')} value={q} onInput={setQ} />
-        </div>
-        <nav ref={navRef} class="scroll-thin relative isolate flex-1 space-y-3 overflow-y-auto px-2 pb-2">
-          <RowHighlight box={current} class="inset-x-2" />
-          {pinned.length > 0 && (
-            <section>
-              <h3 class="px-2.5 py-1 text-xs font-medium text-muted">{t('side.pinned')}</h3>
-              {pinned.map((c) => (
-                <Row key={c.id} c={c} active={c.id === openId} snippet={ql ? hits.get(c.id)?.snippet : undefined} />
-              ))}
-            </section>
-          )}
-          {groups.map(([label, cs]) => (
-            <section key={label}>
-              <h3 class="px-2.5 py-1 text-xs font-medium text-muted">{label}</h3>
-              {cs.map((c) => (
-                <Row key={c.id} c={c} active={c.id === openId} snippet={ql ? hits.get(c.id)?.snippet : undefined} />
-              ))}
-            </section>
-          ))}
-          {list.length === 0 && <EmptyState icon={q ? 'search' : 'chat'}>{q ? t('side.notFound') : t('side.empty')}</EmptyState>}
-        </nav>
-        </>
-        )}
+        {ActivePanel ? <ActivePanel /> : <Chats />}
         <Notices />
         <div class="flex items-center gap-2 border-t border-line p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           <Button class="justify-start" onClick={() => openSettings()}>

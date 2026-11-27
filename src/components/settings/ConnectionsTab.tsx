@@ -8,7 +8,7 @@ import { vaultIsolated, VAULT_ORIGIN } from '../../lib/vault/client';
 import { getPreset } from '../../lib/providers/registry';
 import { KeyPanel, VaultSecurityPanel } from '../KeyPanel';
 import { Badge, Button, Icon, Select, cx } from '../ui';
-import { Section, Toggle } from '../settings-ui';
+import { Section, Switch, Toggle } from '../settings-ui';
 import { AccountRow } from './AccountRow';
 import { AddConnection } from '../AddConnection';
 import { connectionFeatures, textOf } from '../extensions';
@@ -82,7 +82,7 @@ export function ConnectionsTab() {
                 open={open === p.id}
                 onToggle={() => setOpen(open === p.id ? '' : p.id)}
                 right={
-                  <input type="checkbox" role="switch" class="switch shrink-0" checked={on} aria-label={t('conn.onLabel', { name: p.name })} onChange={(e) => void setProviderEnabled(p.id, (e.target as HTMLInputElement).checked)} />
+                  <Switch checked={on} label={t('conn.onLabel', { name: p.name })} onChange={(v) => void setProviderEnabled(p.id, v)} />
                 }
               >
                 <ConnectionDetails id={p.id} />

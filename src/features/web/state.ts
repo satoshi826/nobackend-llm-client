@@ -14,6 +14,8 @@ import { fetchFromWeb } from '../../state/fetch-page';
 import { parseModelRef, providerOptionsFor, recordUsage } from '../../state/request-helpers';
 import { defineFeatureSettings } from '../../state/feature-settings';
 import { registerToolProvider } from '../../state/tool-registry';
+import { chatOptionsOf, toolOn } from '../../state/chat-options';
+import { t } from './messages';
 import { extractText } from '../files';
 import { makeFetchUrlTool, webSearchTool } from './tools';
 
@@ -98,9 +100,13 @@ const readsPages = () => settings.value.toolPermissions.fetch_url !== 'deny';
 
 registerToolProvider({
   id: 'web',
+  label: () => t('tabLabel'),
   tools: ({ conv, model }) => [
     ...(searchRouteFor(conv.providerId, conv.modelId) === 'tools' ? [webSearchTool] : []),
     ...(model?.capabilities.tools && readsPages() ? [makeFetchUrlTool(pageReader(conv))] : [])
   ],
-  builtinWebSearch: ({ conv }) => (searchRouteFor(conv.providerId, conv.modelId) === 'native' ? 'auto' : undefined)
+  // The provider's own search is not a tool sent to the model; the chat can still turn it off, as web_search
+  switches: ({ conv }) => (searchRouteFor(conv.providerId, conv.modelId) === 'native' ? [{ name: webSearchTool.name, label: webSearchTool.label }] : []),
+  builtinWebSearch: ({ conv }) =>
+    searchRouteFor(conv.providerId, conv.modelId) === 'native' && toolOn(chatOptionsOf(conv.id), 'web', webSearchTool.name) ? 'auto' : undefined
 });

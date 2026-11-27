@@ -19,6 +19,11 @@ export function Section({ title, children }: { title?: string; children: Compone
   );
 }
 
+/** An on/off switch on its own; label names it where no visible text does (a switch at the end of a row) */
+export function Switch({ checked, onChange, label, disabled, class: className }: { checked: boolean; onChange(v: boolean): void; label?: string; disabled?: boolean; class?: string }) {
+  return <input type="checkbox" role="switch" class={cx('switch shrink-0', className)} checked={checked} disabled={disabled} aria-label={label} onChange={(e) => onChange((e.target as HTMLInputElement).checked)} />;
+}
+
 export function Toggle({ checked, onChange, title, desc, disabled }: { checked: boolean; onChange(v: boolean): void; title: string; desc?: string; disabled?: boolean }) {
   return (
     <label class={cx('flex cursor-pointer items-start justify-between gap-4 text-sm', disabled && 'cursor-not-allowed opacity-50')}>
@@ -26,7 +31,7 @@ export function Toggle({ checked, onChange, title, desc, disabled }: { checked: 
         {title}
         {desc && <span class="mt-0.5 block text-xs text-muted">{desc}</span>}
       </span>
-      <input type="checkbox" role="switch" class="switch mt-0.5" checked={checked} disabled={disabled} onChange={(e) => onChange((e.target as HTMLInputElement).checked)} />
+      <Switch class="mt-0.5" checked={checked} disabled={disabled} onChange={onChange} />
     </label>
   );
 }

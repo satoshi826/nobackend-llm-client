@@ -13,6 +13,7 @@ import { Popover } from '../menu';
 import { PageHeader } from '../PageHeader';
 import { sentences } from '../messages';
 import { t } from './messages';
+import { ChatOptionsButton } from './ChatOptions';
 import { formatNumber } from '../../lib/i18n';
 
 /** Where the context goes, in the order shown; the shades tell the parts of the bar apart (no colors of their own) */
@@ -183,6 +184,7 @@ export function Header() {
       <div class="ml-auto flex shrink-0 items-center gap-0.5">
         {!draft && <ConversationCost />}
         {!draft && <ContextMeter />}
+        <ChatOptionsButton />
         <Button aria-label={t('header.systemPrompt')} title={t('header.systemPromptTitle')} onClick={() => (modal.value = 'system')} class={cx('text-xs', conv.systemPrompt && 'text-ink-strong')}>
           <Icon name="sliders" class="size-4" />
           <span class="hidden sm:inline">{t('header.instructions')}</span>

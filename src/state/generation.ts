@@ -14,6 +14,8 @@ import { accountInUse, modelOf, providerById } from './models';
 import { conversations, currentConv, currentId, endWriting, liveMessages, messages, persistDraft, putMessage, takeWriting, touchConversation, updateConversation } from './conversations';
 import { batch } from '@preact/signals';
 import { openSettings, showToast } from './ui';
+import { chatOptionsOf } from './chat-options';
+import type { ChatParams } from '../lib/providers/types';
 import { contributedBuiltinWebSearch, contributedDynamicTools, contributedTools, requestHandlerFor, systemPromptFor, type ToolProviderContext } from './tool-registry';
 import { controllers, setStreaming, streamingConv } from './runs';
 import { fetchBalance, observeProviderBalance, recordProviderSpend } from './balance';
@@ -88,6 +90,17 @@ export async function sendMessage(text: string, extras: SendExtras = {}) {
   await generateReply(conv.id, user.id);
 }
 
+/** The request's parameters: the temperature from settings, and this chat's answer length and reasoning effort */
+function replyParams(convId: string): ChatParams | undefined {
+  const o = chatOptionsOf(convId);
+  const p: ChatParams = {
+    ...(settings.value.temperature != null ? { temperature: settings.value.temperature } : {}),
+    ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}),
+    ...(o.reasoningEffort ? { reasoningEffort: o.reasoningEffort } : {})
+  };
+  return Object.keys(p).length ? p : undefined;
+}
+
 /** Generate an assistant answer as a child of parentUserId (also used for regeneration) */
 async function generateReply(convId: string, parentUserId: string) {
   cancelSuggestions();
@@ -132,14 +145,14 @@ async function generateReply(convId: string, parentUserId: string) {
       model: conv.modelId,
       history,
       systemPrompt,
-      params: settings.value.temperature != null ? { temperature: settings.value.temperature } : undefined,
+      params: replyParams(conv.id),
       providerOptions,
       webSearch: nativeSearch === 'off' ? undefined : nativeSearch,
       imageOutput: !!model?.capabilities.imageOutput,
       saveImage: (data, mimeType) => saveReplyImage(conv, draft.id, data, mimeType),
       contextLength: model?.contextLength,
       maxOutputTokens: model?.maxOutputTokens,
-      resendReasoning: settings.value.resendReasoning,
+      resendReasoning: chatOptionsOf(conv.id).resendReasoning ?? settings.value.resendReasoning,
       cacheKey: conv.id,
       tools,
       dynamicTools: (turn) => contributedDynamicTools(toolCtx, turn),

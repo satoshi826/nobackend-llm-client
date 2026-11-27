@@ -188,6 +188,7 @@ const NOTE_FILES = 200;
 
 registerToolProvider({
   id: 'files',
+  label: () => t('files'),
   // Until the working folder exists only write_file and fetch_file; once a file made it (in this answer too) all
   tools: ({ conv, history }) => (fileSettings.value.value.fileTools ? fileTools(conv, history) : []),
   dynamicTools: ({ conv, history }) => (fileSettings.value.value.fileTools && workDirOf(conv.id) ? fileTools(conv, history) : []),

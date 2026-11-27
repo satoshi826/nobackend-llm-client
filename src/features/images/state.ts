@@ -623,6 +623,7 @@ async function runImageTool(conv: Conversation, messageId: string, input: ImageT
 // Chat models can create images when the user turned it on (needs the image provider's key)
 registerToolProvider({
   id: 'images',
+  label: () => t('settings.title'),
   tools: ({ conv, messageId }) => {
     if (!imageSettings.value.value.imageTool || !imageReady.value) return [];
     // Load the model list now, so the approval card can name the model and its price

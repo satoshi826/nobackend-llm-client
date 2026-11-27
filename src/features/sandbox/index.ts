@@ -12,6 +12,7 @@ import { t } from './messages';
 // Turned off in settings ("使わない"), the tool is not offered at all
 registerToolProvider({
   id: 'sandbox',
+  label: () => t('tabLabel'),
   tools: ({ conv, model, history }) =>
     model?.capabilities.tools && settings.value.toolPermissions[RUN_JAVASCRIPT] !== 'deny' ? [makeRunJavaScriptTool((id) => conversationFile(conv, history, id))] : []
 });

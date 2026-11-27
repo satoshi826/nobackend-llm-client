@@ -7,6 +7,7 @@ import { pathToLeaf, resolveLeaf } from '../lib/chat/tree';
 import { titleFrom } from '../lib/chat/title';
 import { settings } from './settings';
 import { accountInUse, defaultModel, visibleModels } from './models';
+import { moveChatOptions } from './chat-options';
 import { mainView, sidebarOpen, sidebarTab } from './ui';
 import { registerRoute, setHash as setRouteHash } from './router';
 import { keyInfos, vaultStatusKnown } from './keys';
@@ -192,6 +193,8 @@ export async function persistDraft(firstText: string): Promise<Conversation> {
   const now = Date.now();
   const conv: Conversation = { ...draft.value, id: repo.newId(), title: titleFrom(firstText), createdAt: now, updatedAt: now };
   await repo.putConversation(conv);
+  // What was chosen for the new chat (tools, answer length, reasoning) stays with it
+  moveChatOptions(DRAFT_ID, conv.id);
   batch(() => {
     conversations.value = [conv, ...conversations.value];
     currentId.value = conv.id;

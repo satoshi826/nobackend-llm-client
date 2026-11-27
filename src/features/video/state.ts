@@ -184,8 +184,11 @@ export async function makeVideoFrom(blobId: string, name?: string) {
   await setVideoMode(true);
 }
 
+/** Whether a video provider can be used now (its key is set and unlocked) */
+export const videoProviderReady = (providerId: string) => keyReady(videoProviderOf(providerId)?.account ?? providerId);
+
 function ensureVideoKey(providerId?: string): boolean {
-  if (providerId ? keyReady(videoProviderOf(providerId)?.account ?? providerId) : videoReady.value) return true;
+  if (providerId ? videoProviderReady(providerId) : videoReady.value) return true;
   openSettings('connections');
   showToast(t('bar.needKey'), 'error');
   return false;
@@ -263,15 +266,18 @@ export async function runVideoJob(convId: string, userMsgId: string, override: P
 export async function resumeVideoJob(messageId: string) {
   const m = messages.value.find((x) => x.id === messageId);
   const conv = m && conversations.value.find((c) => c.id === m.conversationId);
-  if (!m?.video?.job || !conv) return;
+  if (!m?.video?.job || !conv || !ensureVideoKey(m.video.params.providerId)) return;
   await follow(conv, { ...m, status: 'streaming', error: undefined });
 }
 
-/** An error that says nothing about the job itself: the network, rate limits, the provider's server trouble */
+/**
+ * An error that says nothing about the job itself: the network, rate limits, the provider's server trouble, or the
+ * key (the job finishes once the key works again)
+ */
 function transient(e: unknown): boolean {
   if (!(e instanceof VideoApiError)) return (e as Error)?.name !== 'AbortError';
   const { kind, status } = e.error;
-  return kind === 'network-or-cors' || kind === 'rate-limit' || (kind === 'server' && status !== undefined && status >= 500);
+  return kind === 'network-or-cors' || kind === 'rate-limit' || kind === 'auth' || (kind === 'server' && status !== undefined && status >= 500);
 }
 
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -393,5 +399,6 @@ registerUserRequestHandler({
   id: 'video',
   matches: (m) => !!m.videoRequest,
   run: (convId, userMsgId) => runVideoJob(convId, userMsgId),
-  edit: (orig, text) => (orig.videoRequest ? { videoRequest: { ...orig.videoRequest, prompt: text } } : {})
+  ready: (m) => !!m.videoRequest && videoProviderReady(m.videoRequest.providerId),
+  edit: (orig, text) => (orig.videoRequest ? { videoRequest: { ...orig.videoRequest, prompt: text } } : undefined)
 });

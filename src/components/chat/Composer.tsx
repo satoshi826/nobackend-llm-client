@@ -71,7 +71,8 @@ export function Composer() {
   const active = activeComposerMode(conv);
   const addons = visibleComposerAddons(conv);
   const api: ComposerApi = { text, setText, focus: () => ref.current?.focus(), box: boxRef.current };
-  const canSend = !!text.trim() || (!active && addons.some((a) => a.hasContent?.()));
+  // A mode sends only when it can (e.g. its model is ready); a chat message needs a chosen model
+  const canSend = active ? !!text.trim() && active.mode.ready : !!conv.modelId && (!!text.trim() || addons.some((a) => a.hasContent?.()));
 
   const submit = async () => {
     if (!canSend || streaming) return;

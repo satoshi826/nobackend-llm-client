@@ -125,7 +125,7 @@ function ContextDetails({ pct, tone, busy, onSettings }: { pct: number | null; t
               )
             : t('context.tooShort')}
         </p>
-        <Button variant="primary" class="w-full" disabled={!plan || busy || isStreaming.value} aria-busy={busy} onClick={() => void compactConversation()}>
+        <Button variant="primary" class="w-full" disabled={!plan?.ready || busy || isStreaming.value} aria-busy={busy} onClick={() => void compactConversation()}>
           {busy ? <Spinner class="size-4" /> : <Icon name="compress" />}
           {t('context.compact')}
         </Button>

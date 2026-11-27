@@ -7,7 +7,7 @@ import { listImages, putImage } from '../../lib/db/images';
 import type { Attachment, Conversation, FileRecord, ImageSource, MessageRecord } from '../../lib/db/schema';
 import type { ImageMeta } from './filer';
 import { imagesVersion } from '../images';
-import { showChat } from '../../state/conversations';
+import { currentConv, showChat, updateConversation } from '../../state/conversations';
 import { defineFeatureSettings, pickLegacy } from '../../state/feature-settings';
 import { mainView, showToast, sidebarOpen, sidebarTab, type MainViewState } from '../../state/ui';
 import { registerRoute, setHash } from '../../state/router';
@@ -270,6 +270,9 @@ export async function useInChat(ids: string[]) {
 
 /** Attach a file that is already in the Files tab */
 export async function attachExisting(id: string) {
+  // Image and video prompts take no files: back to chat, where the attachment shows and is sent
+  const conv = currentConv.value;
+  if (conv.imageMode || conv.videoMode) await updateConversation({ imageMode: false, videoMode: false });
   if (pendingAttachments.value.some((a) => a.fileId === id)) return;
   const f = await fdb.getFile(id);
   if (f) pendingAttachments.value = [...pendingAttachments.value, { fileId: f.id, name: f.name, chars: f.size }];

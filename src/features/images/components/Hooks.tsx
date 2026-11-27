@@ -29,9 +29,10 @@ import { ImageBar } from './ImageBar';
 import { t, usd } from '../messages';
 import { ToolImages } from './ImageView';
 
-/** Toggle in the input box's toolbar */
+/** Toggle in the input box's toolbar; shown only when a provider that makes images has a key (and while on, to turn it off) */
 export function ImageModeButton({ conv }: { conv: Conversation }) {
   const on = !!conv.imageMode;
+  if (!imageReady.value && !on) return null;
   return (
     <Chip aria-pressed={on} on={on} title={on ? t('mode.titleOn') : t('mode.titleOff')} onClick={() => void setImageMode(!on)}>
       <Icon name="image" class="size-3.5" />
@@ -49,16 +50,24 @@ export function ImageBarAbove({ conv }: { conv: Conversation }) {
 export function ImageModelButton() {
   const m = currentImageModel.value;
   const badge = currentPrivacyLabel();
+  const inner = (
+    <>
+      <Icon name="image" class="size-3.5 shrink-0" />
+      <span class="max-w-[11rem] truncate">{m?.name ?? t('imageModel')}</span>
+      {m && badge.tone === 'green' && <Icon name="eye-off" class="size-3 shrink-0 text-ok" />}
+    </>
+  );
+  const title = badge.title ? `${t('header.title')}\n${badge.title}` : t('header.title');
+  // It moves to the bar's model menu, so it is a button only while the bar shows one
+  if (!imageReady.value || !generationModels.value.length) return <span class="flex min-w-0 items-center gap-1 px-2.5 py-1.5 text-xs text-muted" title={title}>{inner}</span>;
   return (
     <button
       type="button"
       class="flex min-w-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs text-muted transition hover:bg-glass-strong hover:text-ink"
       onClick={() => document.querySelector<HTMLElement>('select[data-image-model]')?.focus()}
-      title={badge.title ? `${t('header.title')}\n${badge.title}` : t('header.title')}
+      title={title}
     >
-      <Icon name="image" class="size-3.5 shrink-0" />
-      <span class="max-w-[11rem] truncate">{m?.name ?? t('imageModel')}</span>
-      {m && badge.tone === 'green' && <Icon name="eye-off" class="size-3 shrink-0 text-ok" />}
+      {inner}
     </button>
   );
 }

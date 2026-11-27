@@ -77,8 +77,10 @@ export interface UserRequestHandler {
   id: string;
   matches(user: MessageRecord): boolean;
   run(convId: string, userMsgId: string): Promise<void>;
-  /** Extra fields for an edited copy of the user message */
-  edit?(orig: MessageRecord, newText: string): Partial<MessageRecord>;
+  /** Whether running it (again) can work now, e.g. its provider has a key: regenerate and edit are offered only then */
+  ready(user: MessageRecord): boolean;
+  /** Extra fields for an edited copy of the user message; without it (for this message) its text cannot be edited */
+  edit?(orig: MessageRecord, newText: string): Partial<MessageRecord> | undefined;
 }
 
 const requestHandlers = new Map<string, UserRequestHandler>();

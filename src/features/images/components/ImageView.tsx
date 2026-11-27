@@ -9,11 +9,13 @@ import { isStreaming } from '../../../state/runs';
 import { modal, showToast } from '../../../state/ui';
 import { Button, Disclosure, Icon, Shimmer, Spinner, cx, IconButton } from '../../../components/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
+import { copyText } from '../../../components/clipboard';
 import {
   deleteImages,
   estimateCost,
   editTargetFor,
   imageActions,
+  imageProviderReady,
   imageAction,
   imageModelOf,
   lightbox,
@@ -206,6 +208,8 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
   const files = m.parts.filter((x): x is FilePart => x.type === 'file');
   const items: LightboxItem[] = files.map((f) => ({ blobId: f.blobId, conversationId: m.conversationId, messageId: m.id }));
   const model = imageModelOf(p.providerId, p.model);
+  // Running it again needs its provider's key
+  const rerun = imageProviderReady(p.providerId);
   if (m.status === 'streaming')
     return (
       <div class="flex items-center gap-2 text-sm text-muted" role="status">
@@ -250,7 +254,7 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
           <p class="mt-1 whitespace-pre-wrap text-muted">{img.enhancedPrompt}</p>
         </Disclosure>
       )}
-      {m.status === 'done' && p.op === 'generate' && (
+      {m.status === 'done' && p.op === 'generate' && rerun && (
         <div class="flex flex-wrap gap-1.5">
           {/* Same picture again needs a seed (some providers take none) */}
           {img.seed !== undefined && (
@@ -275,7 +279,7 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
           ))}
         </div>
       )}
-      {img.suggestion && m.status === 'error' && (
+      {img.suggestion && m.status === 'error' && rerun && (
         <div class="flex flex-wrap gap-1.5">
           {img.suggestion.prompt && (
             <Button class="text-xs" variant="outline" disabled={isStreaming.value} onClick={() => void retryWithSuggestion(m.id, 'prompt')} title={img.suggestion.prompt}>
@@ -350,9 +354,11 @@ export function Lightbox() {
   const promptText = msg?.image?.params.prompt || source?.imageRequest?.prompt || '';
   // Edits run on the provider that made the image when it offers them, else on another one with a key
   const from = { providerId: msg?.meta?.providerId, model: msg?.meta?.model };
-  const upscaler = video ? undefined : editTargetFor('upscale', from)?.provider;
-  const bgRemover = video ? undefined : editTargetFor('remove-bg', from)?.provider;
-  const editor = video ? undefined : editTargetFor('edit', from);
+  // Bytes not stored in this browser (e.g. a backup restored without images): nothing to download or work on
+  const missing = url === null;
+  const upscaler = video || missing ? undefined : editTargetFor('upscale', from)?.provider;
+  const bgRemover = video || missing ? undefined : editTargetFor('remove-bg', from)?.provider;
+  const editor = video || missing ? undefined : editTargetFor('edit', from);
   const editorName = editor && (editor.model ? (imageModelOf(editor.provider.id, editor.model)?.name ?? editor.model) : editor.provider.label);
   const chat = item.conversationId;
   const inThisChat = !!chat && currentId.value === chat;
@@ -383,14 +389,16 @@ export function Lightbox() {
           {lb.index + 1} / {lb.items.length}
         </span>
         <div class="ml-auto flex flex-wrap items-center gap-1">
-          <IconButton class="text-white hover:bg-glass" onClick={download} label={t('lb.download')}>
-            <Icon name="download" />
-          </IconButton>
+          {url && (
+            <IconButton class="text-white hover:bg-glass" onClick={download} label={t('lb.download')}>
+              <Icon name="download" />
+            </IconButton>
+          )}
           {promptText && (
             <IconButton
               class="text-white hover:bg-glass"
               label={t('lb.copyPrompt')}
-              onClick={() => void navigator.clipboard.writeText(promptText).then(() => showToast(t('lb.copied')))}
+              onClick={() => void copyText(promptText, t('lb.copied'))}
             >
               <Icon name="copy" />
             </IconButton>
@@ -409,6 +417,7 @@ export function Lightbox() {
             </Button>
           )}
           {!video &&
+            !missing &&
             imageActions.filter((a) => a.shown()).map((a) => (
               <Button key={a.id} class="text-xs text-white hover:bg-glass" title={a.title()} onClick={() => void act(async () => a.run(item.blobId, item.name))}>
                 <Icon name={a.icon} class="size-4" />
@@ -473,7 +482,9 @@ export function Lightbox() {
         </form>
       )}
       <div class="relative flex min-h-0 flex-1 items-center justify-center p-2" onClick={(e) => e.target === e.currentTarget && close()}>
-        {!url ? (
+        {missing ? (
+          <p class="text-sm text-white/70">{t('thumb.failed')}</p>
+        ) : !url ? (
           <Spinner class="size-6" />
         ) : video ? (
           <video key={url} src={url} controls autoPlay playsInline class="max-h-full max-w-full" />

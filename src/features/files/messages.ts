@@ -74,6 +74,7 @@ export const t = defineMessages(
     // messages
     'msg.partial': '先頭 {sent} 文字を送信（全体 {total} 文字）',
     'msg.sent': '送信した内容',
+    'msg.fileDeleted': '削除済み',
 
     // settings
     'settings.desc':
@@ -230,6 +231,7 @@ export const t = defineMessages(
 
       'msg.partial': 'Sent the first {sent} of {total} characters',
       'msg.sent': 'Sent content',
+      'msg.fileDeleted': 'deleted',
 
       'settings.desc':
         'Models can save reports and long documents as files (the Files tab in the sidebar). You can also have a model read text or PDFs with Attach in the input box. Files are stored only in this browser and are encrypted when you set a passphrase.',
@@ -381,6 +383,7 @@ export const t = defineMessages(
 
       'msg.partial': '已发送前 {sent} 个字符（共 {total} 个字符）',
       'msg.sent': '已发送的内容',
+      'msg.fileDeleted': '已删除',
 
       'settings.desc':
         '模型可以把报告和长文档保存为文件（侧边栏的“文件”标签页）。也可以通过输入框中的“附件”让模型读取文本或 PDF。文件只保存在此浏览器中，设置口令后会被加密。',

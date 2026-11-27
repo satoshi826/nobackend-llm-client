@@ -5,6 +5,7 @@ import type { FileRecord, FileVersion } from '../../../lib/db/schema';
 import { conversations, openConversation, showChat } from '../../../state/conversations';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
+import { copyText } from '../../../components/clipboard';
 import { Markdown } from '../../../components/Markdown';
 import { PageHeader } from '../../../components/PageHeader';
 import { Badge, Button, Icon, IconButton, Segmented, Select, Spinner, TextField } from '../../../components/ui';
@@ -185,7 +186,7 @@ export function FileView({ id = '' }: { id?: string }) {
             </Button>
           )}
           <MoreMenu
-            onCopy={() => void navigator.clipboard.writeText(shown.text).then(() => showToast(t('file.copied')))}
+            onCopy={() => void copyText(shown.text, t('file.copied'))}
             onDownload={() => downloadFile(f, shown)}
             onPrint={print}
             source={conv ? { title: conv.title, open: () => void openConversation(conv.id) } : null}

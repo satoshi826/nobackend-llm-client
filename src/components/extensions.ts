@@ -22,6 +22,8 @@ export interface ComposerMode {
   id: string;
   placeholder: string;
   touchPlaceholder: string;
+  /** Whether sending can work now (e.g. a model with a key is chosen); the send button waits for it */
+  ready: boolean;
   send(text: string, conv: Conversation): void | Promise<void>;
 }
 

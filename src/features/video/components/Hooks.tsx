@@ -6,7 +6,7 @@ import { getImageThumb } from '../../../lib/db/images';
 import { formatNumber } from '../../../lib/i18n';
 import { isStreaming } from '../../../state/runs';
 import { Button, Chip, Icon, Shimmer, Spinner } from '../../../components/ui';
-import { currentVideoModel, privacyLabelOf, resumeVideoJob, runVideoJob, setVideoMode, videoModelOf, videoProgress, videoReady } from '../state';
+import { currentVideoModel, offeredModels, privacyLabelOf, resumeVideoJob, runVideoJob, setVideoMode, videoModelOf, videoProgress, videoProviderReady, videoReady } from '../state';
 import { videoProviderOf } from '../providers/types';
 import { useBlobUrl } from '../../images';
 import { VideoBar } from './VideoBar';
@@ -33,16 +33,24 @@ export function VideoBarAbove({ conv }: { conv: Conversation }) {
 export function VideoModelButton() {
   const m = currentVideoModel.value;
   const badge = privacyLabelOf(m);
+  const inner = (
+    <>
+      <Icon name="video" class="size-3.5 shrink-0" />
+      <span class="max-w-[11rem] truncate">{m?.name ?? t('videoModel')}</span>
+      {m && badge.tone === 'green' && <Icon name="eye-off" class="size-3 shrink-0 text-ok" />}
+    </>
+  );
+  const title = badge.title ? `${t('header.title')}\n${badge.title}` : t('header.title');
+  // It moves to the bar's model menu, so it is a button only while the bar shows one
+  if (!videoReady.value || !offeredModels.value.length) return <span class="flex min-w-0 items-center gap-1 px-2.5 py-1.5 text-xs text-muted" title={title}>{inner}</span>;
   return (
     <button
       type="button"
       class="flex min-w-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs text-muted transition hover:bg-glass-strong hover:text-ink"
       onClick={() => document.querySelector<HTMLElement>('select[data-video-model]')?.focus()}
-      title={badge.title ? `${t('header.title')}\n${badge.title}` : t('header.title')}
+      title={title}
     >
-      <Icon name="video" class="size-3.5 shrink-0" />
-      <span class="max-w-[11rem] truncate">{m?.name ?? t('videoModel')}</span>
-      {m && badge.tone === 'green' && <Icon name="eye-off" class="size-3 shrink-0 text-ok" />}
+      {inner}
     </button>
   );
 }
@@ -87,6 +95,8 @@ function VideoAnswerBody({ m }: { m: MessageRecord }) {
   const box = file?.width ? { aspectRatio: `${file.width} / ${file.height}` } : { aspectRatio: '16 / 9' };
   const model = videoModelOf(p.providerId, p.model);
   const resumable = !!videoProviderOf(p.providerId)?.check;
+  // Waiting again and making again need the provider's key
+  const rerun = videoProviderReady(p.providerId);
   if (m.status === 'streaming') {
     const progress = videoProgress.value[m.id];
     return (
@@ -106,16 +116,20 @@ function VideoAnswerBody({ m }: { m: MessageRecord }) {
       {(m.status === 'aborted' || m.status === 'error') && v.job && (
         <div class="space-y-1.5">
           {m.status === 'aborted' && <p class="text-sm text-muted">{t('answer.stopped')}</p>}
-          <Button class="text-xs" disabled={isStreaming.value} onClick={() => void resumeVideoJob(m.id)}>
-            <Icon name="refresh" class="size-3.5" />
-            {t('answer.waitAgain')}
-          </Button>
+          {rerun && (
+            <Button class="text-xs" disabled={isStreaming.value} onClick={() => void resumeVideoJob(m.id)}>
+              <Icon name="refresh" class="size-3.5" />
+              {t('answer.waitAgain')}
+            </Button>
+          )}
         </div>
       )}
       {m.status === 'done' && !file && <p class="text-sm text-muted">{t('answer.deleted')}</p>}
       {file &&
         // The box keeps the video's shape (stored with it), so nothing moves when it starts
-        (playing && src ? (
+        (playing && src === null ? (
+          <p class="text-sm text-muted">{t('answer.missing')}</p>
+        ) : playing && src ? (
           <video src={src} poster={poster ?? undefined} controls autoPlay playsInline class="max-h-[70vh] w-full max-w-xl rounded-lg bg-black" style={box} />
         ) : (
           <button
@@ -140,7 +154,7 @@ function VideoAnswerBody({ m }: { m: MessageRecord }) {
           {v.costUsd !== undefined && <span class="tabular-nums">{v.costEstimated ? t('answer.costEstimated', { cost: usd(v.costUsd) }) : usd(v.costUsd)}</span>}
         </div>
       )}
-      {(m.status === 'done' || m.status === 'error') && m.parentId && (
+      {(m.status === 'done' || m.status === 'error') && m.parentId && rerun && (
         <div class="flex flex-wrap gap-1.5">
           <Button class="text-xs" disabled={isStreaming.value} onClick={() => void runVideoJob(m.conversationId, m.parentId!)}>
             <Icon name="sparkle" class="size-3.5" />

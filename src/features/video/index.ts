@@ -7,7 +7,7 @@ import type { MessageRecord } from '../../lib/db/schema';
 import type { Part } from '../../lib/providers/types';
 import { registerImageAction } from '../images';
 import { UserVideoRequest, VideoAnswer, VideoBarAbove, VideoModeButton, VideoModelButton } from './components/Hooks';
-import { makeVideoFrom, sendVideoPrompt, videoReady } from './state';
+import { currentVideoModel, makeVideoFrom, sendVideoPrompt, videoReady } from './state';
 import { t } from './messages';
 
 registerComposerAddon({
@@ -17,7 +17,7 @@ registerComposerAddon({
   Above: VideoBarAbove,
   mode: (conv) =>
     conv.videoMode
-      ? { id: 'video', placeholder: t('mode.placeholder'), touchPlaceholder: t('mode.touchPlaceholder'), send: (text) => sendVideoPrompt(text) }
+      ? { id: 'video', placeholder: t('mode.placeholder'), touchPlaceholder: t('mode.touchPlaceholder'), ready: videoReady.value && !!currentVideoModel.value, send: (text) => sendVideoPrompt(text) }
       : null
 });
 registerModelSlot({ id: 'video', when: (conv) => !!conv.videoMode, Component: VideoModelButton });

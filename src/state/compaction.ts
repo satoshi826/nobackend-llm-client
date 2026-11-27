@@ -3,6 +3,7 @@ import { computed, signal } from '@preact/signals';
 import type { MessageRecord } from '../lib/db/schema';
 import * as repo from '../lib/db/repo';
 import { getPreset } from '../lib/providers/registry';
+import { accountById } from '../lib/keys/accounts';
 import { formatNumber } from '../lib/i18n';
 import { buildTranscript, estimateRequest, planCompaction, summarize, summaryInstruction, type RequestEstimate } from '../lib/chat/compact';
 import { estimateTokens } from '../lib/chat/context';
@@ -43,7 +44,9 @@ export const compactionPreview = computed(() => {
   const model = modelOf(ref.providerId, ref.modelId);
   const tokens = estimateTokens(summaryInstruction()) + estimateTokens(buildTranscript(plan, null));
   const price = model?.pricing?.inputPerMTok;
-  return { count: plan.toSummarize.length, kept: plan.kept, model: model?.name ?? ref.modelId, tokens, inputUsd: price != null ? (tokens * price) / 1e6 : null };
+  // The summarizing model can be called now (its key is ready, or it needs none)
+  const ready = keyReady(ref.providerId) || !!accountById(ref.providerId)?.keyOptional;
+  return { count: plan.toSummarize.length, kept: plan.kept, model: model?.name ?? ref.modelId, tokens, inputUsd: price != null ? (tokens * price) / 1e6 : null, ready };
 });
 
 /** The compaction in effect (the last one on the current path) */

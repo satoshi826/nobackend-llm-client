@@ -202,7 +202,7 @@ export async function editUserMessage(userId: string, newText: string) {
   const conv = currentConv.value;
   const orig = messages.value.find((x) => x.id === userId);
   const handler = requestHandlerFor(orig);
-  if (!currentId.value || !orig || !newText.trim() || (!handler && !ensureKey(conv.providerId))) return;
+  if (!currentId.value || !orig || !newText.trim() || (handler ? !handler.ready(orig) : !ensureKey(conv.providerId))) return;
   const user: MessageRecord = {
     ...orig,
     id: repo.newId(),

@@ -13,7 +13,7 @@ import { registerMessageTransform } from '../../lib/chat/request';
 import { ImageModelButton, ImageBarAbove, ImageModeButton, ImageSettings, ImageToolDetail, UserImageRequest, imageToolNote } from './components/Hooks';
 import { ImageAnswer, Lightbox, ReplyImages } from './components/ImageView';
 import { imageNote } from './transform';
-import { sendImagePrompt } from './state';
+import { currentImageModel, imageReady, sendImagePrompt } from './state';
 import { GENERATE_IMAGE } from './tool';
 import { imageCount, t } from './messages';
 
@@ -31,6 +31,7 @@ registerComposerAddon({
           id: 'images',
           placeholder: t('mode.placeholder'),
           touchPlaceholder: t('mode.touchPlaceholder'),
+          ready: imageReady.value && !!currentImageModel.value,
           send: (text) => sendImagePrompt(text)
         }
       : null

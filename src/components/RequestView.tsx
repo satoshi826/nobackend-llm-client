@@ -1,8 +1,8 @@
 // Developer view of one reply's requests: the body sent to the provider at each step, with the system prompt and the
 // tools picked out of it (each provider puts them in its own place)
 import { sentRequestsOf, type SentRequest } from '../state/sent-requests';
-import { showToast } from '../state/ui';
 import { Button, Disclosure, Icon } from './ui';
+import { copyText } from './clipboard';
 import { formatNumber } from '../lib/i18n';
 import { systemOf, toolsOf } from '../lib/providers/request-parts';
 import { t } from './messages';
@@ -29,7 +29,7 @@ function Step({ r, n }: { r: SentRequest; n: number }) {
         <span class="font-medium text-ink">{t('req.step', { n })}</span>
         <span class="truncate font-mono">{where}</span>
         <span class="tabular-nums">{t('req.size', { kb: formatNumber(Math.ceil(full.length / 1024)) })}</span>
-        <Button class="ml-auto text-xs" onClick={() => void navigator.clipboard.writeText(full).then(() => showToast(t('req.copied')))}>
+        <Button class="ml-auto text-xs" onClick={() => void copyText(full, t('req.copied'))}>
           <Icon name="copy" class="size-3.5" />
           {t('req.copy')}
         </Button>

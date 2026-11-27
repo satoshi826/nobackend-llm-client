@@ -266,8 +266,11 @@ effect(() => {
 
 const randomSeed = () => Math.floor(Math.random() * 999_999_999);
 
+/** Whether an image provider can be used now (its key is set and unlocked) */
+export const imageProviderReady = (providerId: string) => keyReady(imageProviderOf(providerId)?.account ?? providerId);
+
 function ensureImageKey(providerId?: string): boolean {
-  if (providerId ? keyReady(imageProviderOf(providerId)?.account ?? providerId) : imageReady.value) return true;
+  if (providerId ? imageProviderReady(providerId) : imageReady.value) return true;
   openSettings('connections');
   showToast(t('bar.needKey'), 'error');
   return false;
@@ -532,12 +535,14 @@ export async function deleteImages(ids: string[]) {
   await deleteImageRecords(ids);
 }
 
-// Regenerating / editing an image request runs the image job again (with a new seed)
+// Regenerating / editing an image request runs the image job again (with a new seed). Upscaling and background
+// removal take no prompt, so their text is not edited
 registerUserRequestHandler({
   id: 'images',
   matches: (m) => !!m.imageRequest,
   run: (convId, userMsgId) => runImageJob(convId, userMsgId, { seed: undefined }),
-  edit: (orig, text) => (orig.imageRequest ? { imageRequest: { ...orig.imageRequest, prompt: text } } : {})
+  ready: (m) => !!m.imageRequest && imageProviderReady(m.imageRequest.providerId),
+  edit: (orig, text) => (orig.imageRequest && (orig.imageRequest.op === 'generate' || orig.imageRequest.op === 'edit') ? { imageRequest: { ...orig.imageRequest, prompt: text } } : undefined)
 });
 
 // ---- generate_image tool (chat models) ----

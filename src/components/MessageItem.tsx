@@ -5,13 +5,15 @@ import type { MessageRecord } from '../lib/db/schema';
 import type { Part } from '../lib/providers/types';
 import { messages } from '../state/conversations';
 import { editUserMessage, regenerate, switchSibling } from '../state/generation';
+import { requestHandlerFor } from '../state/tool-registry';
 import { isStreaming } from '../state/runs';
 import { suggestingFor } from '../state/suggestions';
 import { modelOf } from '../state/models';
 import { settings } from '../state/settings';
 import { sentRequestsOf } from '../state/sent-requests';
 import { RequestView } from './RequestView';
-import { composerFocus, composerText, openModelPicker, showToast } from '../state/ui';
+import { copyText } from './clipboard';
+import { composerFocus, composerText, openModelPicker } from '../state/ui';
 import { Markdown } from './Markdown';
 import { ToolCallCard } from './ToolCallCard';
 import { assistantExtras, toolViewFor, userMessageExtras } from './extensions';
@@ -60,15 +62,6 @@ function SiblingNav({ m }: { m: MessageRecord }) {
       </IconButton>
     </div>
   );
-}
-
-async function copy(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast(t('msg.copied'));
-  } catch {
-    showToast(t('msg.copyFailed'), 'error');
-  }
 }
 
 function Reasoning({ part, streaming }: { part: Extract<Part, { type: 'reasoning' }>; streaming: boolean }) {
@@ -149,6 +142,9 @@ function Sources({ parts }: { parts: Extract<Part, { type: 'source' }>[] }) {
 function UserMessage({ m }: { m: MessageRecord }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(textOf(m));
+  // A request a feature answers (images, videos) can be edited only when its text means something and it can run now
+  const handler = requestHandlerFor(m);
+  const editable = !handler || (handler.ready(m) && !!handler.edit?.(m, textOf(m)));
   if (editing) {
     return (
       <div class="ml-auto w-full max-w-[85%]">
@@ -185,19 +181,23 @@ function UserMessage({ m }: { m: MessageRecord }) {
       {textOf(m) && <UserText text={textOf(m)} />}
       <div class="mt-1 flex items-center gap-0.5 opacity-60 transition group-hover:opacity-100 focus-within:opacity-100">
         <SiblingNav m={m} />
-        <IconButton label={t('msg.copy')} onClick={() => copy(textOf(m))}>
-          <Icon name="copy" class="size-3.5" />
-        </IconButton>
-        <IconButton
-          label={t('msg.edit')}
-          disabled={isStreaming.value}
-          onClick={() => {
-            setDraft(textOf(m));
-            setEditing(true);
-          }}
-        >
-          <Icon name="edit" class="size-3.5" />
-        </IconButton>
+        {textOf(m) && (
+          <IconButton label={t('msg.copy')} onClick={() => copyText(textOf(m))}>
+            <Icon name="copy" class="size-3.5" />
+          </IconButton>
+        )}
+        {editable && (
+          <IconButton
+            label={t('msg.edit')}
+            disabled={isStreaming.value}
+            onClick={() => {
+              setDraft(textOf(m));
+              setEditing(true);
+            }}
+          >
+            <Icon name="edit" class="size-3.5" />
+          </IconButton>
+        )}
       </div>
     </div>
   );
@@ -243,6 +243,10 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
   const estimated = m.meta?.costUsd == null && usage ? estimateCost(usage, model?.pricing) : undefined;
   // A feature answers this message itself (e.g. images): no waiting text, no "another model"
   const owned = assistantExtras.some((x) => x.owns?.(m));
+  // Its request runs again only when the feature can run it now (e.g. its provider still has a key)
+  const request = messages.value.find((x) => x.id === m.parentId);
+  const handler = requestHandlerFor(request);
+  const rerunnable = !handler || handler.ready(request!);
   // The developer button: shows the requests recorded for this reply in this session
   const [reqOpen, setReqOpen] = useState(false);
   const showReq = settings.value.developerMode && sentRequestsOf(m.id).length > 0;
@@ -281,11 +285,13 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
       {!streaming && (
         <div class="mt-1.5 flex flex-wrap items-center gap-0.5 text-xs text-muted opacity-70 transition group-hover:opacity-100 focus-within:opacity-100">
           <SiblingNav m={m} />
-          <IconButton label={t('msg.copy')} onClick={() => copy(textOf(m))}>
-            <Icon name="copy" class="size-3.5" />
-          </IconButton>
+          {textOf(m) && (
+            <IconButton label={t('msg.copy')} onClick={() => copyText(textOf(m))}>
+              <Icon name="copy" class="size-3.5" />
+            </IconButton>
+          )}
           {/* One regenerate control: the arrow reruns with the same model, the chevron picks another model */}
-          <span class="inline-flex items-center rounded-[10px] transition hover:bg-glass">
+          {rerunnable && <span class="inline-flex items-center rounded-[10px] transition hover:bg-glass">
             <IconButton label={t('msg.regenerate')} disabled={isStreaming.value} onClick={() => regenerate(m.id)} class="group/re">
               <Icon name="refresh" class="size-3.5 transition-transform duration-500 group-hover/re:rotate-180" />
             </IconButton>
@@ -299,7 +305,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
                 <Icon name="chevron-down" class="size-3" />
               </IconButton>
             )}
-          </span>
+          </span>}
           {showReq && (
             <IconButton label={t('msg.request')} aria-pressed={reqOpen} class={cx(reqOpen && 'bg-glass-strong')} onClick={() => setReqOpen(!reqOpen)}>
               <Icon name="code" class="size-3.5" />

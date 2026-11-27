@@ -1,11 +1,11 @@
-// Settings → 表示: background and language (the theme choice is hidden while the app is dark only; see DARK_ONLY in state/settings.ts)
+// Settings → 表示: background, scrolling and language (the theme choice is hidden while the app is dark only; see DARK_ONLY in state/settings.ts)
 import { useRef } from 'preact/hooks';
 import { saveSettings, settings } from '../../state/settings';
 import { showToast } from '../../state/ui';
 import { backgroundImage, backgroundOf, clearBackgroundImage, GLOW_ORDER, GLOW_PRESETS, loadBackgroundImage, MAX_SPEED, saveBackground, setBackgroundImage, type BackgroundSetting } from '../../state/background';
 import { LANGS, LANG_NAMES, type Lang } from '../../lib/i18n';
 import { Button, Segmented, Select, Slider, cx, Icon } from '../ui';
-import { Section } from '../settings-ui';
+import { Section, Toggle } from '../settings-ui';
 import { t } from './messages';
 
 const KINDS: BackgroundSetting['kind'][] = ['glow', 'solid', 'image'];
@@ -124,6 +124,9 @@ export function AppearanceTab() {
   return (
     <div class="space-y-6">
       <Background />
+      <Section title={t('scroll.title')}>
+        <Toggle checked={s.smoothScroll} onChange={(v) => void saveSettings({ smoothScroll: v })} title={t('scroll.smooth')} desc={t('scroll.smoothDesc')} />
+      </Section>
       <Section title="言語 / Language">
         <label class="flex items-center justify-between gap-3 text-sm">
           {t('appearance.language')}

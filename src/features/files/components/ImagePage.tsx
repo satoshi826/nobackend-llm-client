@@ -2,7 +2,7 @@
 // and a way to the images listed with it
 import { useEffect, useState } from 'preact/hooks';
 import { folderOf } from '../../../lib/paths';
-import { Button, Icon, IconButton, Spinner, TextField } from '../../../components/ui';
+import { Button, Icon, IconButton, Spinner, TextField, cx, useSwipeStep } from '../../../components/ui';
 import { useImageViewer, ViewerStage, type LightboxItem, type ViewerTool } from '../../images';
 import { closeFileView, fileReturnsToChat, imagesToStep, openFolder, openImage } from '../state';
 import { useFilerItems } from './filer-items';
@@ -29,6 +29,7 @@ export function ImagePage({ id = '' }: { id?: string }) {
   });
   const [prompt, setPrompt] = useState('');
   useEffect(() => setPrompt(''), [id]);
+  const swipe = useSwipeStep(siblings.length > 1 ? go : undefined);
   // Arrow keys step through the images (not while typing)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -145,7 +146,7 @@ export function ImagePage({ id = '' }: { id?: string }) {
           </Button>
         </form>
       )}
-      <div class="flex min-h-0 flex-1 items-center justify-center p-3 text-muted sm:p-4 md:pl-1">
+      <div {...swipe} class={cx('flex min-h-0 flex-1 items-center justify-center p-3 text-muted sm:p-4 md:pl-1', swipe.class)}>
         <ViewerStage viewer={viewer} />
       </div>
       {viewer.promptText && <p class="mx-auto max-w-3xl px-4 pb-3 text-center text-xs text-muted">{viewer.promptText}</p>}

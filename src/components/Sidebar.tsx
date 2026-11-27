@@ -12,6 +12,7 @@ import { dataLock, lockNow } from '../state/lock';
 import { providerById } from '../state/models';
 import { newerBuild } from '../state/version';
 import { openSettings, showToast, sidebarOpen, sidebarTab } from '../state/ui';
+import { DEFAULT_SETTINGS, SIDEBAR_WIDTH, saveSettings, settings } from '../state/settings';
 import { Button, EmptyState, Icon, IconButton, MoreMark, RowHighlight, SearchField, Segmented, TextField, cx, useBatches, useSelectedBox } from './ui';
 import { askConfirm, askConfirmWithCheck } from './ConfirmDialog';
 import { sidebarTabs, textOf } from './extensions';
@@ -239,8 +240,64 @@ function Chats() {
   );
 }
 
+/**
+ * The sidebar's right edge on wide screens: dragged (or moved with the arrow keys) it sets the width, saved when let
+ * go; a double click puts the default back
+ */
+function WidthHandle({ width, onWidth }: { width: number; onWidth(w: number): void }) {
+  const fit = (w: number) => Math.round(Math.max(SIDEBAR_WIDTH.min, Math.min(SIDEBAR_WIDTH.max, w)));
+  const save = (w: number) => void saveSettings({ sidebarWidth: fit(w) });
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={t('side.resize')}
+      aria-valuenow={width}
+      aria-valuemin={SIDEBAR_WIDTH.min}
+      aria-valuemax={SIDEBAR_WIDTH.max}
+      tabIndex={0}
+      class="group/edge absolute inset-y-4 -right-2.5 z-10 hidden w-2 cursor-col-resize touch-none justify-center outline-none md:flex"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const el = e.currentTarget;
+        el.setPointerCapture(e.pointerId);
+        const from = e.clientX;
+        let w = width;
+        const move = (m: PointerEvent) => onWidth((w = fit(width + m.clientX - from)));
+        const up = () => {
+          el.removeEventListener('pointermove', move);
+          el.removeEventListener('pointerup', up);
+          el.removeEventListener('pointercancel', up);
+          save(w);
+        };
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+      }}
+      onDblClick={() => {
+        onWidth(DEFAULT_SETTINGS.sidebarWidth);
+        save(DEFAULT_SETTINGS.sidebarWidth);
+      }}
+      onKeyDown={(e) => {
+        const by = e.key === 'ArrowLeft' ? -16 : e.key === 'ArrowRight' ? 16 : 0;
+        if (!by) return;
+        e.preventDefault();
+        onWidth(fit(width + by));
+        save(width + by);
+      }}
+    >
+      <span class="h-full w-0.5 rounded-full bg-transparent transition-colors group-hover/edge:bg-line-strong group-focus-visible/edge:bg-accent group-active/edge:bg-accent" />
+    </div>
+  );
+}
+
 export function Sidebar() {
   const asideRef = useRef<HTMLElement>(null);
+  // The saved width, or the one being dragged to (saved when the drag ends)
+  const [dragged, setWidth] = useState<number | null>(null);
+  const width = dragged ?? settings.value.sidebarWidth;
+  useEffect(() => setWidth(null), [settings.value.sidebarWidth]);
   const [mobile, setMobile] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(MOBILE).matches);
   useEffect(() => {
     const mq = matchMedia(MOBILE);
@@ -263,11 +320,13 @@ export function Sidebar() {
       <aside
         ref={asideRef}
         class={cx(
-          'panel fixed inset-y-0 left-0 z-30 flex w-72 flex-col rounded-r-[22px] transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)] md:glass md:static md:translate-x-0 md:rounded-[22px] md:shadow-none',
+          'panel fixed inset-y-0 left-0 z-30 flex w-72 flex-col rounded-r-[22px] transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)] md:glass md:relative md:w-(--sidebar-w) md:shrink-0 md:translate-x-0 md:rounded-[22px] md:shadow-none',
           sidebarOpen.value ? 'translate-x-0' : '-translate-x-full'
         )}
+        style={{ '--sidebar-w': `${width}px` }}
         aria-label={t('side.label')}
       >
+        <WidthHandle width={width} onWidth={setWidth} />
         {sidebarTabs.length > 0 && (
           <Segmented
             label={t('side.tabsLabel')}

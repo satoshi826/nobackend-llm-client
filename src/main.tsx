@@ -2,6 +2,7 @@ import { render } from 'preact';
 import './styles.css';
 import { App } from './App';
 import { preloadLazyComponents } from './components/lazy';
+import { installSmoothScroll } from './components/smooth-scroll';
 import { init } from './state/app';
 import { watchForUpdates } from './state/version';
 import { watchPageErrors } from './lib/error-log';
@@ -19,6 +20,8 @@ if (perfMode) {
 // Uncaught errors are kept in memory for the diagnostics text (Settings → 情報)
 watchPageErrors(window);
 render(<App />, document.getElementById('app')!);
+// The wheel eases scrolling areas instead of jumping (components/smooth-scroll.ts)
+installSmoothScroll();
 // The tools a measurement drives (seeding data, a simulated answer), as window.__perf
 if (perfMode) void import('./perf').then((m) => m.exposePerfTools());
 // Screens split into their own chunks are fetched in the background once the browser is idle

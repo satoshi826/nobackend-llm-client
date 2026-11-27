@@ -41,6 +41,10 @@ export interface Settings {
   passphrasePrompted: boolean;
   /** Lock after this many minutes of inactivity (0 disables; only when a passphrase is set) */
   autoLockMinutes: number;
+  /** The wheel eases scrolling areas toward where it points instead of jumping (components/smooth-scroll.ts) */
+  smoothScroll: boolean;
+  /** Width of the sidebar on wide screens, in px (SIDEBAR_WIDTH bounds it) */
+  sidebarWidth: number;
   /** Show reply suggestions after an answer */
   replySuggestions: boolean;
   /** Developer view: show the request bodies sent for each reply (Settings → 情報) */
@@ -82,6 +86,8 @@ export const DEFAULT_SETTINGS: Settings = {
   passphrasePrompted: false,
   autoLockMinutes: 0,
   favoriteModels: [],
+  smoothScroll: true,
+  sidebarWidth: 288,
   replySuggestions: true,
   developerMode: false,
   codeRunButtons: true,
@@ -94,6 +100,9 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const settings = signal<Settings>(DEFAULT_SETTINGS);
+
+/** How wide the sidebar may be made (px) */
+export const SIDEBAR_WIDTH = { min: 220, max: 480 };
 
 /** Stored settings over the defaults (tool permissions merged one by one) */
 export function settingsFrom(stored: Partial<Settings>): Settings {

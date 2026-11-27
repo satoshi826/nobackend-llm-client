@@ -8,7 +8,7 @@ import { currentId, openConversation } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
 import { IdleButton } from '../../../components/IdleButton';
 import { modal, showToast } from '../../../state/ui';
-import { Button, Disclosure, Icon, ScrollArea, Shimmer, Spinner, cx, IconButton, type IconName } from '../../../components/ui';
+import { Button, Disclosure, Icon, ScrollArea, Shimmer, Spinner, cx, IconButton, useSwipeStep, type IconName } from '../../../components/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { copyText } from '../../../components/clipboard';
 import {
@@ -472,6 +472,7 @@ export function Lightbox() {
   const [prompt, setPrompt] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
   useDialog(rootRef, { onClose: close, active: !!lb });
+  const swipe = useSwipeStep(lb && lb.items.length > 1 ? step : undefined);
   useEffect(() => setPrompt(''), [item?.blobId]);
   useEffect(() => {
     // Arrow keys switch images (not while typing). Esc and focus are handled by useDialog
@@ -530,7 +531,7 @@ export function Lightbox() {
           </Button>
         </form>
       )}
-      <div class="relative flex min-h-0 flex-1 items-center justify-center p-2" onClick={(e) => e.target === e.currentTarget && close()}>
+      <div {...swipe} class={cx('relative flex min-h-0 flex-1 items-center justify-center p-2', swipe.class)} onClick={(e) => e.target === e.currentTarget && close()}>
         <ViewerStage viewer={viewer} class="text-white/70" />
         {lb.items.length > 1 && (
           <>

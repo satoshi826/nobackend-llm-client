@@ -320,6 +320,54 @@ export function Slider({
   );
 }
 
+/**
+ * Stepping through a set (images) with a finger: a sideways swipe, or a tap near the left or right edge, steps back or
+ * forward. Spread the result on the area that shows the item. Only touch counts (a mouse has buttons and keys), and
+ * not on a video (its controls take swipes and taps). The area lets the browser keep vertical scrolling and zoom
+ */
+export function useSwipeStep(step: ((d: 1 | -1) => void) | undefined) {
+  const start = useRef<{ x: number; y: number; at: number } | null>(null);
+  const handled = useRef(false);
+  if (!step) return {};
+  return {
+    class: 'touch-pan-y touch-pinch-zoom',
+    onPointerDown: (e: PointerEvent) => {
+      handled.current = false;
+      start.current = e.pointerType === 'touch' && !(e.target as Element).closest('video') ? { x: e.clientX, y: e.clientY, at: e.timeStamp } : null;
+    },
+    onPointerCancel: () => (start.current = null),
+    onPointerUp: (e: PointerEvent) => {
+      const s = start.current;
+      start.current = null;
+      if (!s) return;
+      const dx = e.clientX - s.x;
+      const dy = e.clientY - s.y;
+      const ms = e.timeStamp - s.at;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && ms < 800) {
+        handled.current = true;
+        step(dx < 0 ? 1 : -1);
+        return;
+      }
+      // A tap: the outer fifth on either side steps (the middle is left to what is shown)
+      if (Math.hypot(dx, dy) < 10 && ms < 400) {
+        const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const at = (e.clientX - box.left) / box.width;
+        if (at < 0.2 || at > 0.8) {
+          handled.current = true;
+          step(at < 0.2 ? -1 : 1);
+        }
+      }
+    },
+    // The click that follows a handled swipe or tap does nothing else (a click on the backdrop closes the viewer)
+    onClickCapture: (e: MouseEvent) => {
+      if (!handled.current) return;
+      handled.current = false;
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  };
+}
+
 /** The value as it was once it stopped changing for `ms` (for work that should not run on every keystroke) */
 export function useDebounced<T>(value: T, ms = 200): T {
   const [settled, setSettled] = useState(value);
@@ -559,7 +607,7 @@ export function Modal({
         class={cx(
           'frosted rise-glass flex w-full flex-col sm:max-h-[92dvh] sm:rounded-[22px]',
           fullOnPhone ? 'max-h-dvh rounded-none border-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] sm:border sm:pt-0 sm:pb-0' : 'max-h-[92dvh] rounded-t-[22px]',
-          wide ? 'sm:max-w-3xl' : 'sm:max-w-lg',
+          wide ? 'sm:max-w-3xl lg:max-w-4xl' : 'sm:max-w-lg',
           // Height (one place, so the classes never compete): fixed keeps it whatever the content; otherwise it follows the content
           fixed ? (fullOnPhone ? 'h-dvh' : 'h-[92dvh]') + ' sm:h-[min(44rem,92dvh)]' : fullOnPhone && 'h-dvh sm:h-auto'
         )}

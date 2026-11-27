@@ -223,7 +223,7 @@ export function Segmented<T extends string>({
   const ref = useRef<HTMLDivElement>(null);
   const box = useSelectedBox(ref, '[aria-selected="true"]');
   return (
-    <div ref={ref} role="tablist" aria-label={label} class={cx('relative rounded-xl bg-sunken p-0.5', stretch ? 'flex' : 'inline-flex', className)}>
+    <div ref={ref} role="tablist" aria-label={label} class={cx('relative rounded-xl border border-line bg-sunken p-0.5', stretch ? 'flex' : 'inline-flex', className)}>
       {box && (
         <span
           aria-hidden="true"

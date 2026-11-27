@@ -1,8 +1,9 @@
 // Repository layer. Temporary chat conversations are kept in memory only and never written to IndexedDB.
 // With a passphrase, the content of conversations, messages, saved prompts and skills is stored encrypted (sealed.ts).
-import { db, type Conversation, type MessageRecord, type SavedPrompt, type ModelRecord, type Skill } from './schema';
+import { db, type Conversation, type MessageRecord, type SavedPrompt, type ModelRecord, type SettingRecord, type Skill } from './schema';
 import type { UsageRecord } from '../usage';
-import { currentDataKey, seal, unseal, type SealedTable } from './sealed';
+import { currentDataKey, openValue, seal, sealValue, unseal, type SealedTable } from './sealed';
+import type { Sealed } from '../crypto/data';
 import type { DataKey } from '../crypto/data';
 import { dataTables } from './data-tables';
 
@@ -210,6 +211,29 @@ export async function getSetting<T>(key: string, fallback: T): Promise<T> {
 }
 export const setSetting = (key: string, value: unknown) => db().settings.put({ key, value });
 
+/**
+ * Settings that hold the user's own text (the default instructions, image prompts) are stored encrypted with a
+ * passphrase, like conversations, and so can be read only once unlocked; the rest stay readable before (language,
+ * theme, the lock itself). These keys are resealed with the rest of the data
+ */
+const sealedSettingKeys = new Set<string>();
+export function sealSettingKey(key: string) {
+  sealedSettingKeys.add(key);
+}
+export async function getSealedSetting<T>(key: string, fallback: T): Promise<T> {
+  const r = (await db().settings.get(key)) as { value?: unknown; enc?: Sealed } | undefined;
+  return r ? openValue<T>(r) : fallback;
+}
+export async function setSealedSetting(key: string, value: unknown) {
+  await db().settings.put({ key, ...(await sealValue(value)) } as SettingRecord);
+}
+async function resealSettings(from: DataKey | null, to: DataKey | null) {
+  for (const key of sealedSettingKeys) {
+    const r = (await db().settings.get(key)) as { value?: unknown; enc?: Sealed } | undefined;
+    if (r) await db().settings.put({ key, ...(await sealValue(await openValue(r, from), to)) } as SettingRecord);
+  }
+}
+
 // ---- Switching encryption on/off (setting / removing the passphrase) ----
 const CORE_SEALED_TABLES = ['conversations', 'messages', 'prompts', 'skills'] as const;
 
@@ -234,6 +258,7 @@ export async function resealTable(t: SealedTable, from: DataKey | null, to: Data
 export async function resealAll(from: DataKey | null, to: DataKey | null, onProgress?: (done: number, total: number) => void): Promise<void> {
   for (const t of CORE_SEALED_TABLES) await resealTable(t, from, to, onProgress);
   for (const t of dataTables()) await t.reseal?.(from, to, onProgress);
+  await resealSettings(from, to);
   clearSearchCache();
 }
 

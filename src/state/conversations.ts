@@ -5,7 +5,7 @@ import type { Conversation, MessageRecord } from '../lib/db/schema';
 import * as repo from '../lib/db/repo';
 import { pathToLeaf, resolveLeaf } from '../lib/chat/tree';
 import { titleFrom } from '../lib/chat/title';
-import { settings } from './settings';
+import { textSettings } from './settings';
 import { accountInUse, defaultModel, visibleModels } from './models';
 import { moveChatOptions } from './chat-options';
 import { mainView, sidebarOpen, sidebarTab } from './ui';
@@ -32,7 +32,7 @@ function makeDraft(temporary: boolean): Conversation {
     currentLeafId: null,
     providerId: m.providerId,
     modelId: m.modelId,
-    systemPrompt: settings.value.defaultSystemPrompt,
+    systemPrompt: textSettings.value.value.defaultSystemPrompt,
     webSearch: 'off',
     pinned: 0,
     tags: [],

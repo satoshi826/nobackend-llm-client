@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { currentConv, updateConversation } from '../state/conversations';
-import { saveSettings, settings } from '../state/settings';
+import { textSettings } from '../state/settings';
 import { modal, showToast } from '../state/ui';
 import { deleteSavedPrompt, listSavedPrompts, savePrompt } from '../state/prompts';
 import type { SavedPrompt } from '../lib/db/schema';
@@ -41,17 +41,17 @@ export function SystemPromptModal() {
           <Button
             variant="outline"
             onClick={async () => {
-              await saveSettings({ defaultSystemPrompt: text });
+              await textSettings.save({ defaultSystemPrompt: text });
               showToast(t('sys.madeDefault'));
             }}
           >
             <Icon name="pin" />
             {t('sys.makeDefault')}
           </Button>
-          {settings.value.defaultSystemPrompt && (
+          {textSettings.value.value.defaultSystemPrompt && (
             <Button
               onClick={async () => {
-                await saveSettings({ defaultSystemPrompt: '' });
+                await textSettings.save({ defaultSystemPrompt: '' });
                 showToast(t('sys.defaultCleared'));
               }}
             >

@@ -227,7 +227,9 @@ export interface SavedPrompt {
 
 export interface SettingRecord {
   key: string;
-  value: unknown;
+  /** The value, or (a setting that holds the user's text, with a passphrase) enc instead */
+  value?: unknown;
+  enc?: Sealed;
 }
 
 /**

@@ -22,7 +22,7 @@ import { deleteFiles } from './manage';
 import { pageOf } from './pages';
 
 /** Let chat models work on the files of their working folder (the file tools) */
-export const fileSettings = defineFeatureSettings('files', { fileTools: true }, (old) => pickLegacy(old, { fileTools: true }));
+export const fileSettings = defineFeatureSettings('files', { fileTools: true }, { legacy: (old) => pickLegacy(old, { fileTools: true }) });
 
 /** Keep what was fetched in the conversation's working folder (so its tools can read it): a file, or an image */
 async function saveFetched(r: Fetched, conv: Conversation): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null> {

@@ -7,7 +7,7 @@ describe('feature settings', () => {
   it('copies values from the old core settings once, then reads their own record', async () => {
     await repo.setSetting('settings', { imageTool: true, imageFormat: 'png', theme: 'dark', fileTools: 'yes' });
     const defaults = { imageTool: false, imageFormat: 'webp' as 'webp' | 'png', fileTools: true };
-    const s = defineFeatureSettings('test-images', defaults, (old) => pickLegacy(old, defaults));
+    const s = defineFeatureSettings('test-images', defaults, { legacy: (old) => pickLegacy(old, defaults) });
     await loadFeatureSettings();
     // fileTools had the wrong type in the old record, so the default stays
     expect(s.value.value).toEqual({ imageTool: true, imageFormat: 'png', fileTools: true });

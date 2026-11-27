@@ -1,7 +1,7 @@
 // JSON export / import. API keys are not included by default.
 import { db, SCHEMA_VERSION, type Conversation, type ImageParams, type MessageRecord, type SavedPrompt, type Skill, type VideoParams } from './schema';
 import { validateSkill } from '../skills/skill';
-import { seal, unseal } from './sealed';
+import { openValue, seal, unseal } from './sealed';
 import { dataTables } from './data-tables';
 import type { Attachment } from './schema';
 import { t } from './messages';
@@ -37,8 +37,8 @@ export async function exportAll(includeImages = false): Promise<ExportFile> {
     prompts: await openAll(await d.prompts.toArray()),
     skills: await openAll(await d.skills.toArray()),
     ...(await tableRows(includeImages)),
-    // Connection settings and keys are excluded (avoids attacks that swap baseUrl via import)
-    settings: (await d.settings.toArray()).filter((s) => !String(s.key).startsWith('secret'))
+    // Connection settings and keys are excluded (avoids attacks that swap baseUrl via import); encrypted ones opened
+    settings: await Promise.all((await d.settings.toArray()).filter((s) => !String(s.key).startsWith('secret')).map(async (s) => ({ key: s.key, value: s.enc ? await openValue(s) : s.value })))
   };
 }
 

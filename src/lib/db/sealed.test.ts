@@ -60,6 +60,23 @@ describe('sealed storage', () => {
     expect(await unseal(stored as typeof m, k)).toEqual(m);
   });
 
+  it('stores settings that hold the user\'s text encrypted, reseals them, and opens them in backups', async () => {
+    repo.sealSettingKey('settings:test-text');
+    const k = await generateDataKey();
+    setDataKey(k);
+    await repo.setSealedSetting('settings:test-text', { defaultSystemPrompt: '秘密の指示' });
+    const stored = await db().settings.get('settings:test-text');
+    expect(stored?.enc).toBeDefined();
+    expect(JSON.stringify(stored)).not.toContain('秘密');
+    expect(await repo.getSealedSetting('settings:test-text', null)).toEqual({ defaultSystemPrompt: '秘密の指示' });
+    expect((await exportAll(false)).settings.find((x) => x.key === 'settings:test-text')?.value).toEqual({ defaultSystemPrompt: '秘密の指示' });
+    // Passphrase removed: back to plain text
+    await repo.resealAll(k, null);
+    setDataKey(null);
+    expect(await db().settings.get('settings:test-text')).toEqual({ key: 'settings:test-text', value: { defaultSystemPrompt: '秘密の指示' } });
+    await db().settings.delete('settings:test-text');
+  });
+
   it('repo encrypts at rest, decrypts on read, and searches decrypted text', async () => {
     const k = await generateDataKey();
     setDataKey(k);

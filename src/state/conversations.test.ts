@@ -20,7 +20,7 @@ import {
   writingOf
 } from './conversations';
 import { restoreRoute } from './router';
-import { DEFAULT_SETTINGS, settings } from './settings';
+import { DEFAULT_SETTINGS, settings, textSettings } from './settings';
 import { mainView } from './ui';
 import * as repo from '../lib/db/repo';
 import { db, type Conversation, type MessageRecord } from '../lib/db/schema';
@@ -57,7 +57,8 @@ async function store(c: Conversation, list: MessageRecord[] = []) {
 }
 
 beforeEach(() => {
-  settings.value = { ...DEFAULT_SETTINGS, defaultSystemPrompt: 'Be kind.' };
+  settings.value = { ...DEFAULT_SETTINGS };
+  textSettings.value.value = { defaultSystemPrompt: 'Be kind.' };
   startNewChat();
 });
 afterEach(async () => {

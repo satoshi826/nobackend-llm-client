@@ -1,6 +1,8 @@
 // User settings
 import { signal } from '@preact/signals';
 import * as repo from '../lib/db/repo';
+import { defineFeatureSettings, pickLegacy } from './feature-settings';
+import { registerDataLoader } from './lifecycle';
 import { detectLang, getLang, setLang, setLanguageTracker, type Lang } from '../lib/i18n';
 import type { Permission } from '../lib/tools/types';
 
@@ -12,7 +14,6 @@ export interface Settings {
   /** Last used model (new chats start with it) */
   lastProviderId: string;
   lastModelId: string;
-  defaultSystemPrompt: string;
   /** Sort order and filters of the model list */
   modelSort: ModelSort;
   modelFilters: ModelFilter[];
@@ -70,7 +71,6 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   lastProviderId: '',
   lastModelId: '',
-  defaultSystemPrompt: '',
   modelSort: 'recommended',
   modelFilters: [],
   theme: 'dark',
@@ -106,8 +106,25 @@ export const SIDEBAR_WIDTH = { min: 220, max: 480 };
 
 /** Stored settings over the defaults (tool permissions merged one by one) */
 export function settingsFrom(stored: Partial<Settings>): Settings {
-  return { ...DEFAULT_SETTINGS, ...stored, toolPermissions: { ...DEFAULT_SETTINGS.toolPermissions, ...stored.toolPermissions } };
+  // Development only (goes before the first release): the default instructions moved to textSettings
+  const { defaultSystemPrompt: _moved, ...rest } = stored as Partial<Settings> & { defaultSystemPrompt?: unknown };
+  return { ...DEFAULT_SETTINGS, ...rest, toolPermissions: { ...DEFAULT_SETTINGS.toolPermissions, ...rest.toolPermissions } };
 }
+
+/**
+ * The user's own text among the core settings (the instructions new chats start with): sealed with a passphrase
+ * like conversations, so it is read with the data, after unlocking
+ */
+export const textSettings = defineFeatureSettings('chat', { defaultSystemPrompt: '' }, {
+  sealed: true,
+  // Development only (goes before the first release): it used to be in the core record, in plain text
+  legacy: (old) => pickLegacy(old, { defaultSystemPrompt: '' })
+});
+// Development only (goes before the first release): once moved, drop the plain copy from the core record
+registerDataLoader(async () => {
+  const stored = await repo.getSetting<Record<string, unknown>>('settings', {});
+  if ('defaultSystemPrompt' in stored) await repo.setSetting('settings', settings.value);
+});
 
 export async function loadSettings() {
   settings.value = settingsFrom(await repo.getSetting<Partial<Settings>>('settings', {}));

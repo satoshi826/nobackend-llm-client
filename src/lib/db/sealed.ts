@@ -53,6 +53,18 @@ export async function seal<T extends object>(table: SealedTable, rec: T, key: Da
   return { ...(plain as T), enc: await sealJSON(key, secret) };
 }
 
+/** A whole value in its stored form: encrypted with a data key, as it is without one (settings that hold the user's text) */
+export async function sealValue(value: unknown, key: DataKey | null = dataKey): Promise<{ value: unknown } | { enc: Sealed }> {
+  return key ? { enc: await sealJSON(key, value) } : { value };
+}
+
+/** A whole value back from its stored form */
+export async function openValue<T>(stored: { value?: unknown; enc?: Sealed }, key: DataKey | null = dataKey): Promise<T> {
+  if (!stored.enc) return stored.value as T;
+  if (!key) throw new DataLockedError();
+  return openJSON<T>(key, stored.enc);
+}
+
 /** Restore from the stored form (unchanged if not encrypted) */
 export async function unseal<T extends object>(rec: WithEnc<T>, key: DataKey | null = dataKey): Promise<T> {
   if (!rec?.enc) return rec;

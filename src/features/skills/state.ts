@@ -31,9 +31,9 @@ export const builtinSkills: Skill[] = BUILTIN_SKILLS.map((b) => ({
   allowedTools: b.allowedTools
 }));
 /** Built-in skills that are turned off */
-export const skillSettings = defineFeatureSettings('skills', { disabledBuiltinSkills: [] as string[] }, (old) =>
-  Array.isArray(old.disabledBuiltinSkills) ? { disabledBuiltinSkills: old.disabledBuiltinSkills.filter((x): x is string => typeof x === 'string') } : {}
-);
+export const skillSettings = defineFeatureSettings('skills', { disabledBuiltinSkills: [] as string[] }, {
+  legacy: (old) => (Array.isArray(old.disabledBuiltinSkills) ? { disabledBuiltinSkills: old.disabledBuiltinSkills.filter((x): x is string => typeof x === 'string') } : {})
+});
 /** Usable skills (enabled built-ins + user skills) */
 export const allSkills = computed(() => [...builtinSkills.filter((s) => !skillSettings.value.value.disabledBuiltinSkills.includes(s.name)), ...skills.value]);
 /** Skills the model can choose from the list */

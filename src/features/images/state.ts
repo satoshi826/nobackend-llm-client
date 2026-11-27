@@ -63,9 +63,13 @@ const DEFAULT_IMAGE_SETTINGS = {
   /** Let chat models create images with the generate_image tool */
   imageTool: true
 };
-export const imageSettings = defineFeatureSettings('images', DEFAULT_IMAGE_SETTINGS, (old) => {
-  const p = pickLegacy(old, DEFAULT_IMAGE_SETTINGS);
-  return p.imageDefaults ? { ...p, imageDefaults: { ...DEFAULT_IMAGE_SETTINGS.imageDefaults, ...p.imageDefaults } } : p;
+// Sealed: the bar's last options hold the user's own text (the negative prompt)
+export const imageSettings = defineFeatureSettings('images', DEFAULT_IMAGE_SETTINGS, {
+  sealed: true,
+  legacy: (old) => {
+    const p = pickLegacy(old, DEFAULT_IMAGE_SETTINGS);
+    return p.imageDefaults ? { ...p, imageDefaults: { ...DEFAULT_IMAGE_SETTINGS.imageDefaults, ...p.imageDefaults } } : p;
+  }
 });
 
 /** Changes to an existing image, and the provider method that runs each */

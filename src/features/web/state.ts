@@ -24,9 +24,9 @@ import { makeFetchUrlTool, webSearchTool } from './tools';
  * searchEngine: on connections with their own search, 'builtin' (native, the default) or 'tools' (Tavily, when usable)
  * readerModel: the model that reads fetched pages ("provider|model"; '' = the conversation's)
  */
-export const webSettings = defineFeatureSettings('web', { enabled: true, searchEngine: 'builtin' as 'builtin' | 'tools', readerModel: '' }, (old) =>
-  old.searchEngine === 'tools' ? { searchEngine: 'tools' as const } : {}
-);
+export const webSettings = defineFeatureSettings('web', { enabled: true, searchEngine: 'builtin' as 'builtin' | 'tools', readerModel: '' }, {
+  legacy: (old) => (old.searchEngine === 'tools' ? { searchEngine: 'tools' as const } : {})
+});
 
 export type SearchRoute = 'native' | 'tools' | null;
 

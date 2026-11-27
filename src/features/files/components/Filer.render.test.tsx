@@ -5,7 +5,7 @@ import 'fake-indexeddb/auto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { startPerfCounting } from '../../../lib/perf/counter';
+import { startPerfCounting } from '../../../perf/counter';
 import { createFile, newFile } from '../../../lib/db/files';
 import { filerView, refreshFiles, refreshImages } from '../state';
 import { Filer } from './Filer';

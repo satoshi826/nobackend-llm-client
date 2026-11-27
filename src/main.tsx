@@ -7,7 +7,7 @@ import { installTooltips } from './components/tooltip';
 import { init } from './state/app';
 import { watchForUpdates } from './state/version';
 import { watchPageErrors } from './lib/error-log';
-import { perfMode, startPerfCounting } from './lib/perf/counter';
+import { perfMode, startPerfCounting } from './perf/counter';
 import { setDatabaseName } from './lib/db/schema';
 // Features register themselves with the core (extension points) when imported
 import './features';
@@ -26,7 +26,8 @@ installSmoothScroll();
 // The app's own tooltips: names of icon buttons, full texts of cut-off ones (components/tooltip.ts)
 installTooltips();
 // The tools a measurement drives (seeding data, a simulated answer), as window.__perf
-if (perfMode) void import('./perf').then((m) => m.exposePerfTools());
+// Written out (not PERF_BUILD) so a release build drops the import, and the perf tools with it
+if ((import.meta.env.DEV || import.meta.env.VITE_PERF === '1') && perfMode) void import('./perf').then((m) => m.exposePerfTools());
 // Screens split into their own chunks are fetched in the background once the browser is idle
 preloadLazyComponents();
 init().catch((e) => {

@@ -8,7 +8,7 @@ import { currentId, currentPath, touchConversation } from '../state/conversation
 import { scheduleMessageUpdate } from '../state/generation';
 import { beginRun, endRun } from '../state/runs';
 import { saveSettings } from '../state/settings';
-import type { PerfCounts } from '../lib/perf/counter';
+import type { PerfCounts } from './counter';
 import { generateDataKey } from '../lib/crypto/data';
 import { currentDataKey, seal, setDataKey } from '../lib/db/sealed';
 

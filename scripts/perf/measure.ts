@@ -1,6 +1,6 @@
 // One measurement in a browser page: the time a step takes until the page is ready, and what the page did for it
 // until it settled (CPU time by kind, blocking time, Preact's rendering work). Counting in the page is the app's own
-// perf mode (src/lib/perf/counter.ts), switched on by setting window.__PERF__ before it loads.
+// perf mode (src/perf/counter.ts), switched on by setting window.__PERF__ before it loads.
 import type { CDPSession, Page } from 'playwright';
 
 /** Values of one step: 'time' and the rest, in ms or counts */

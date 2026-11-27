@@ -44,7 +44,8 @@ const git = (...a: string[]) => execFileSync('git', a, { cwd: ROOT, encoding: 'u
 /** Build a version into tmp/perf/builds/<name>: 'working' is the checkout as it is (uncommitted changes too) */
 function build(ref: string, name: string): string {
   const out = join(TMP, 'builds', name);
-  const env = { ...process.env, VITE_CUSTOM_PROVIDERS: PERF_PROVIDERS };
+  // VITE_PERF: a build that can measure (a release build leaves perf mode out)
+  const env = { ...process.env, VITE_CUSTOM_PROVIDERS: PERF_PROVIDERS, VITE_PERF: '1' };
   let cwd = ROOT;
   if (ref !== 'working') {
     cwd = join(TMP, 'src', name);

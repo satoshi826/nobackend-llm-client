@@ -1,6 +1,7 @@
-// Counting rendering work for performance measurements (scripts/perf, and `?perf` by hand). Off unless the page is
-// opened in perf mode: the perf runner sets window.__PERF__ before the app loads, and `?perf` in the address does the
-// same by hand. Then every component render, mount, unmount and commit is counted in window.__perfCounts, by component
+// Counting rendering work for performance measurements (scripts/perf, and `?perf` by hand). Only in a build made for
+// it: the dev server, or a build with VITE_PERF=1 (the perf runner makes one); a release build has no perf mode at all.
+// There it is on when the page is opened in perf mode: the perf runner sets window.__PERF__ before the app loads, and
+// `?perf` in the address does the same by hand. Then every component render, mount, unmount and commit is counted in window.__perfCounts, by component
 // name too (names are kept in development builds only; a production build counts them under minified names).
 import { options } from 'preact';
 
@@ -26,7 +27,10 @@ export interface PerfCounts {
   byParent: Record<string, number>;
 }
 
-export const perfMode = typeof window !== 'undefined' && (window.__PERF__ === true || new URLSearchParams(location.search).has('perf'));
+/** A build that can measure (decided when it is built, so a release build leaves the perf code out) */
+export const PERF_BUILD = import.meta.env.DEV || import.meta.env.VITE_PERF === '1';
+
+export const perfMode = PERF_BUILD && typeof window !== 'undefined' && (window.__PERF__ === true || new URLSearchParams(location.search).has('perf'));
 
 /** Preact's hooks for its own tools (minified names: before render, commit) */
 type VNode = { type: unknown; __c?: object; __?: VNode | null };

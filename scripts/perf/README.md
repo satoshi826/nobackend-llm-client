@@ -33,8 +33,9 @@ side, even two sets of values that do not overlap stay above the limit.
 ## How it works
 
 - The app counts its rendering work in perf mode: `window.__PERF__` set before it loads (or `?perf` in the address by
-  hand). Perf mode also keeps its data in a database of its own, and exposes `window.__perf` (seeding data, a
-  simulated streaming answer, and `start()` / `stop()` for counting by hand): `src/lib/perf/counter.ts`,
+  hand). Perf mode exists only in builds made for it: the dev server, and builds with `VITE_PERF=1`, which the runner
+  makes; a release build has none. It keeps its data in a database of its own, and exposes `window.__perf` (seeding
+  data, a simulated streaming answer, and `start()` / `stop()` for counting by hand): `src/perf/counter.ts`,
   `src/perf/index.ts`.
 - Perf builds add a provider that needs no key and answers from the mock server, so the chat shows without keys.
 - Scenarios: `scenarios.ts`. A step's `ready` condition runs in the page and looks at what is on screen

@@ -52,6 +52,8 @@ Threats the design holds against, and the rule that holds each one.
 - **Dependencies point one way:** `lib` → `state` → `components` → `features`. `lib` never imports state, UI or features; the core never imports a feature; a feature uses another only through its `index.ts`; the vault imports nothing from the app. *Check:* `npm run lint:deps` (part of `npm run build`).
 - **Features join through extension points.** A feature registers itself; adding one never means editing the core. A new extension point is added only when a second feature needs the same hook, or a feature would otherwise have to edit a core file.
 - **Built for thousands to tens of thousands of items.** Everything keeps working without trouble when conversations, files or images number in the thousands to tens of thousands; designs pay attention to performance with that in mind.
+- **Only what changed is drawn again.** An answer being written updates its own message only, and list rows get props that stay the same unless the row changed. *Why:* with thousands of rows or a long answer, redrawing everything makes the app stall, and nothing on screen shows it. *Check:* render-count tests (`Filer.render.test.tsx`) and `npm run perf`.
+- **Performance work is measured.** A change made for speed is compared with its base by `npm run perf` (scripts/perf), and the result goes in its commit message. *Why:* a change that should be faster may do nothing, or make another step slower.
 - **The first screen loads only what it shows.** Other screens and large libraries load when first opened.
 - **The vault page has no framework** and builds its DOM with `createElement` / `textContent` only.
 - **Boundaries narrow upstream shapes.** Provider responses and stored records are turned into the app's own types where they enter; the rest of the code never sees a provider's raw shape.
@@ -62,6 +64,6 @@ Threats the design holds against, and the rule that holds each one.
 
 ## 7. Verifying a change
 
-- `npm test`, `npm run typecheck` and `npm run lint:deps` pass.
+- `npm test`, `npm run typecheck`, `npm run lint` and `npm run lint:deps` pass.
 - Behavior is checked in the browser, against the mock server when it needs a provider (README).
 - UI changes go through the design system's checklist ([design-system.md](design-system.md) §2).

@@ -164,6 +164,8 @@ async function saveStorage(path: string, items: Record<string, string>, page: Fi
   const st = storageState(path);
   st.items = items;
   const text = JSON.stringify(items);
+  // Escapes can make the JSON longer than the items: what a file cannot hold is not saved (and said so)
+  if (text.length > fdb.MAX_FILE_CHARS) return showToast(t('storage.tooBig'), 'error');
   try {
     await withTakenPaths(async (space) => {
       const at = atPath(path);

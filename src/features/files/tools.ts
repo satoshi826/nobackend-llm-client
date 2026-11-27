@@ -149,6 +149,15 @@ export function globSource(glob: string): string {
   return `^${out}$`;
 }
 
+/** A glob the model gave, refused when it does not make a pattern (an unclosed "{", say) */
+function checkGlob(glob: string) {
+  try {
+    new RegExp(globSource(glob));
+  } catch {
+    throw new Error(t('tool.badGlob', { glob }));
+  }
+}
+
 const FILE_ID = { type: 'string', description: 'The file\'s path in the working folder (e.g. "js/app.js"), or its id.' };
 
 /**
@@ -166,7 +175,11 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     risk: 'read',
     defaultPermission: FILE_TOOLS_DEFAULT,
     summarize: (i) => i.pattern,
-    prepare: (raw) => ({ pattern: str(obj(raw), 'pattern').trim().replace(/^\/+/, '') || '**' }),
+    prepare(raw) {
+      const pattern = str(obj(raw), 'pattern').trim().replace(/^\/+/, '') || '**';
+      checkGlob(pattern);
+      return { pattern };
+    },
     async execute(i) {
       const re = new RegExp(globSource(i.pattern), 'i');
       const found = (await deps.list()).filter((e) => re.test(e.path)).sort((a, b) => a.path.localeCompare(b.path));
@@ -203,6 +216,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
         throw new Error(t('tool.badPattern', { message: (e as Error).message }));
       }
       const glob = str(r, 'glob').trim().replace(/^\/+/, '');
+      if (glob) checkGlob(glob);
       return { pattern, glob: glob || null, ignore_case: r.ignore_case === true };
     },
     async execute(i) {

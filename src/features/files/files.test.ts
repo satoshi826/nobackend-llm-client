@@ -173,6 +173,7 @@ describe('file tools', () => {
     const found = await run(deps, 'search_files', { pattern: 'render\\(', glob: '**/*.js' });
     expect(found.content).toBe('js/app.js:2: function render() {}\njs/app.js:3: render();');
     expect(() => tool(deps, 'search_files').prepare({ pattern: '(' })).toThrow(/正規表現/);
+    expect(() => tool(deps, 'list_files').prepare({ pattern: '*.{html,css' })).toThrow(/波かっこ/);
     const id = [...files.values()].find((f) => f.name === 'css/style.css')!.id;
     await run(deps, 'move_file', { file_id: 'css/style.css', to: 'style.css' });
     expect(files.get(id)!.name).toBe('style.css');

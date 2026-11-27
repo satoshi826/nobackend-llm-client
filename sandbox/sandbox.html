@@ -124,15 +124,19 @@
           }
         }
 
-        // The shown page's localStorage goes back to the app, at most every 0.5 s (the newest items when it goes)
+        // The shown page's localStorage goes back to the app, at most every 0.5 s (the newest items when it goes), and at
+        // once when the page goes away (the frame removed, shown again), so its last change is not lost
         let storageItems = null;
         let storageTimer = 0;
+        function sendStorage() {
+          clearTimeout(storageTimer);
+          storageTimer = 0;
+          if (storageItems) port.postMessage({ type: 'storage', items: storageItems });
+          storageItems = null;
+        }
         function keepStorage(items) {
           storageItems = items;
-          storageTimer ||= setTimeout(() => {
-            storageTimer = 0;
-            port.postMessage({ type: 'storage', items: storageItems });
-          }, 500);
+          storageTimer ||= setTimeout(sendStorage, 500);
         }
 
         const showValue = (v) => {
@@ -163,9 +167,13 @@
               .slice(0, 1000);
           const note = (level, text) => {
             text = named(text);
-            // The same report is told once (both copies of the CSP report a block; a blocked file errors too)
-            if (sent >= 500 || seen.has(level + text)) return;
-            seen.add(level + text);
+            // A file that did not load, or a block, is told once (both copies of the CSP report it; a blocked file errors
+            // too); what the page logs is told every time
+            if (sent >= 500) return;
+            if (level === 'resource' || level === 'csp') {
+              if (seen.has(level + text)) return;
+              seen.add(level + text);
+            }
             sent++;
             pending.push({ level, text });
             timer ||= setTimeout(() => {
@@ -195,6 +203,7 @@
             note('resource', 'Did not load: ' + ref + (/^(https?:)?\/\//i.test(ref) ? ' (the sandbox has no network)' : /^(data|blob):/i.test(ref) ? '' : ' (no such file in the site)'));
           };
           // What the CSP blocks: a file (a script, a stylesheet's image or font) is told as one that did not load
+          addEventListener('pagehide', sendStorage);
           document.addEventListener('securitypolicyviolation', (e) => {
             if (/^(script|style|img|media|font)-src/.test(e.effectiveDirective) && /^(https?|blob|data):/i.test(e.blockedURI)) notLoaded(e.blockedURI);
             else note('csp', 'Blocked by the sandbox: ' + e.effectiveDirective + (e.blockedURI ? ' ' + e.blockedURI : ''));

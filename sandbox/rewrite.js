@@ -5,7 +5,8 @@
 //   rewritePage(html, path, files, names): path is the page's own project path ('site/index.html'); files maps project
 //   paths (no leading slash, e.g. 'site/css/style.css') to text or a Blob. Returns the html to write. names (a Map,
 //   optional) gets each blob: URL made, with the path it stands for, so messages about it can name the file.
-// A reference resolves from the folder of the file it is in ('/' is the project root). Absolute URLs ('https:',
+// A reference resolves from the folder of the file it is in ('/' is the project root), and matches a path whatever its
+// case. Absolute URLs ('https:',
 // 'data:', '//host', '#top'), bare module specifiers ('react') and paths not in files are left as they are.
 // - A stylesheet becomes a <style> with its text (the CSP allows no blob: styles). Its url()s resolve from the
 //   stylesheet's own path, and an @import of a project stylesheet without conditions is inlined in its place (one with
@@ -71,6 +72,12 @@ function rewritePage(html, path, files, names) {
   const assets = new Map(); // path → blob: URL of the file as it is
   const modules = new Map(); // path → blob: URL of the rewritten module
   const inProgress = new Set(); // modules and stylesheets being rewritten: a reference back to one is a cycle
+  // Paths match whatever their case (in NFC), as in the app: 'CSS/Style.css' finds 'css/style.css'
+  const keys = new Map(Object.keys(files).map((k) => [k.normalize('NFC').toLowerCase(), k]));
+  const at = (ref, from) => {
+    const p = resolvePath(ref, from);
+    return p === null ? null : Object.hasOwn(files, p) ? p : (keys.get(p.normalize('NFC').toLowerCase()) ?? p);
+  };
   const has = (p) => p !== null && Object.hasOwn(files, p);
   const text = (p) => (typeof files[p] === 'string' ? files[p] : null);
 
@@ -100,7 +107,7 @@ function rewritePage(html, path, files, names) {
     return code.replace(IMPORT, (all, head, q, spec) => {
       // Only relative and root specifiers name files; 'react' or 'lib/x' are bare, left for an import map
       if (!/^\.{0,2}\//.test(spec) || spec.startsWith('//')) return all;
-      const p = resolvePath(spec, from);
+      const p = at(spec, from);
       const url = has(p) ? moduleUrl(p) : null;
       return url ? head + q + url + q : all;
     });
@@ -117,7 +124,7 @@ function rewritePage(html, path, files, names) {
 
   function rewriteCss(css, from) {
     return css.replace(CSS_REF, (all, _q1, importUrl, _q2, importText, _q3, url) => {
-      const p = resolvePath(url ?? importUrl ?? importText, from);
+      const p = at(url ?? importUrl ?? importText, from);
       if (!has(p)) return all;
       return url === undefined ? (stylesheet(p) ?? all) : `url("${asset(p)}")`;
     });
@@ -125,7 +132,7 @@ function rewritePage(html, path, files, names) {
 
   /** The URL for a reference from the page: the file's blob: URL when it is a project file, else the reference */
   const ref = (r, make = asset) => {
-    const p = resolvePath(r, path);
+    const p = at(r, path);
     return (has(p) && make(p)) || r;
   };
 
@@ -134,7 +141,7 @@ function rewritePage(html, path, files, names) {
   for (const el of doc.querySelectorAll('style')) el.textContent = rewriteCss(el.textContent, path);
   for (const el of doc.querySelectorAll('[style]')) el.setAttribute('style', rewriteCss(el.getAttribute('style'), path));
   for (const link of doc.querySelectorAll('link[rel~="stylesheet" i][href]')) {
-    const p = resolvePath(link.getAttribute('href'), path);
+    const p = at(link.getAttribute('href'), path);
     const css = has(p) ? stylesheet(p) : null;
     if (css === null) continue;
     const style = doc.createElement('style');

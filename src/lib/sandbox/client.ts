@@ -11,6 +11,8 @@ export const SANDBOX_URL = `${(import.meta as any).env?.BASE_URL ?? '/'}sandbox/
 export const SANDBOX_FLAGS = 'allow-scripts allow-forms';
 /** A shown page that does not answer for this long is stuck (an endless loop) and is removed */
 const STUCK_MS = 5_000;
+/** The sandbox page that has not announced itself after this long will not (it failed to load) */
+const CONNECT_MS = 10_000;
 
 export interface RunResult {
   logs: string[];
@@ -59,8 +61,8 @@ function cleanLogs(raw: unknown): PageLog[] {
 /** Whether a log entry says something went wrong (shown to the user as an error) */
 export const isProblem = (l: PageLog) => l.level === 'error' || l.level === 'exception' || l.level === 'resource' || l.level === 'csp';
 
-/** Characters a page may keep in its localStorage (keys and values together), as browsers allow about 5 MB */
-export const STORAGE_LIMIT = 5_000_000;
+/** Characters a page may keep in its localStorage (keys and values together): within a file's limit once saved as JSON */
+export const STORAGE_LIMIT = 1_500_000;
 
 /** A page's localStorage items as it sent them: strings only and within STORAGE_LIMIT, else null */
 export function cleanStorage(raw: unknown): Record<string, string> | null {
@@ -83,7 +85,13 @@ export function cleanStorage(raw: unknown): Record<string, string> | null {
 export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: () => void, page?: SandboxPage, onLog?: (logs: PageLog[]) => void): () => void {
   const ctrl = new AbortController();
   let timer: ReturnType<typeof setInterval> | undefined;
+  // A sandbox page that never announces itself (it failed to load) counts as stuck, rather than a blank frame
+  const waiting = setTimeout(() => {
+    ctrl.abort();
+    onStuck();
+  }, CONNECT_MS);
   void connect(frame, ctrl.signal).then((port) => {
+    clearTimeout(waiting);
     if (ctrl.signal.aborted) return port.close();
     let last = Date.now();
     let n = 0;
@@ -105,9 +113,13 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
       port.close();
       onStuck();
     }, 1000);
-    ctrl.signal.addEventListener('abort', () => (clearInterval(timer), port.close()), { once: true });
+    // On the way out the page sends what it had not saved yet: the port stays open for that a moment
+    ctrl.signal.addEventListener('abort', () => (clearInterval(timer), setTimeout(() => port.close(), 300)), { once: true });
   });
-  return () => ctrl.abort();
+  return () => {
+    clearTimeout(waiting);
+    ctrl.abort();
+  };
 }
 
 // ---- trying a page: shown in a hidden frame, its log and text read back ----
@@ -135,14 +147,18 @@ export async function inspectPage(html: string, page: SandboxPage | undefined, {
   f.tabIndex = -1;
   // Laid out at a desktop size, out of sight: what the page shows depends on its size
   f.style.cssText = 'position:fixed;left:-10000px;top:0;width:1024px;height:768px;border:0;visibility:hidden';
-  const ports = connect(f);
+  const giveUp = new AbortController();
+  const ports = connect(f, giveUp.signal);
   f.src = SANDBOX_URL;
   document.body.append(f);
   const logs: PageLog[] = [];
   const answers = new Map<string, (r: { result?: string; error?: string }) => void>();
   try {
-    const port = await Promise.race([ports, sleep(RUN_TIMEOUT_MS).then(() => null)]);
-    if (!port) return { logs, text: '', stuck: true };
+    const port = await Promise.race([ports, sleep(RUN_TIMEOUT_MS, signal).then(() => null)]);
+    if (!port) {
+      giveUp.abort();
+      return { logs, text: '', stuck: true };
+    }
     port.onmessage = (e) => {
       const d = e.data as { type?: string; id?: string; entries?: unknown; result?: unknown; error?: unknown };
       if (d?.type === 'log') logs.push(...cleanLogs(d.entries));

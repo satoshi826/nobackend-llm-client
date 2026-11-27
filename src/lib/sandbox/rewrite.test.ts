@@ -123,3 +123,10 @@ describe('rewritePage', () => {
     expect(await textOf(bUrl)).toBe("import './a.js';");
   });
 });
+
+describe('rewritePage paths', () => {
+  it('finds a site file whatever the case of the reference, as the app compares paths', () => {
+    const html = rewritePage('<img id="a" src="IMG/Logo.PNG">', 'index.html', { 'img/logo.png': 'x' });
+    expect(attr(html, '#a', 'src')).toMatch(/^blob:/);
+  });
+});

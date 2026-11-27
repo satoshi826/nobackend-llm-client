@@ -25,3 +25,11 @@ export async function restoreRoute(hash = location.hash) {
 export function setHash(next: string) {
   if (location.hash !== next) history.replaceState(null, '', next || location.pathname);
 }
+
+/** A new place the browser's Back returns from (e.g. a folder opened in the Files tab), not a change of the current one */
+export function pushHash(next: string) {
+  if (location.hash !== next) history.pushState(null, '', next || location.pathname);
+}
+
+// Back and Forward open what the hash they land on names (tests run without a window)
+if (typeof window !== 'undefined') window.addEventListener('popstate', () => void restoreRoute(location.hash));

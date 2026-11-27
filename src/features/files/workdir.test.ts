@@ -8,7 +8,7 @@ import { putConversation } from '../../lib/db/repo';
 import { conversations } from '../../state/conversations';
 import { contributedTools } from '../../state/tool-registry';
 import type { ModelInfo } from '../../lib/providers/types';
-import { siteOf, workDirOf } from './state';
+import { moveItems, siteOf, workDirOf } from './state';
 
 const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
 const model = { capabilities: { tools: true } } as ModelInfo;
@@ -137,5 +137,20 @@ describe('sites', () => {
     expect(siteOf('p/notes/memo.html', paths)).toBe('p/notes/');
     // The top is never a site, even with an index.html there
     expect(siteOf('counter.html', paths)).toBe('');
+  });
+});
+
+describe('moving into folders', () => {
+  it('gives an image made in a chat its shown name as its first path, still as made, and numbers a taken one', async () => {
+    await putImage({ id: 'made', mime: 'image/png', conversationId: 'c' }, new Blob(['x'], { type: 'image/png' }), false);
+    await putFile(newFile({ id: 'f', name: 'pics/Chat 1.png.md', kind: 'document', text: 'x', by: 'model' }));
+    await moveItems([{ id: 'made', type: 'image', name: 'Chat 1.png' }, { id: 'f', type: 'file', name: 'pics/Chat 1.png.md' }], 'pics/');
+    const im = (await listImages()).find((i) => i.id === 'made')!;
+    expect(im.info).toEqual({ name: 'pics/Chat 1.png', source: { kind: 'made' } });
+    // Already there: stays as it is
+    expect((await getFile('f'))!.name).toBe('pics/Chat 1.png.md');
+    await putFile(newFile({ id: 'g', name: 'other/Chat 1.png.md', kind: 'document', text: 'y', by: 'model' }));
+    await moveItems([{ id: 'g', type: 'file', name: 'other/Chat 1.png.md' }], 'pics/');
+    expect((await getFile('g'))!.name).toBe('pics/Chat 1.png (2).md');
   });
 });

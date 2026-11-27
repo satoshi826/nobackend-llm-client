@@ -2,7 +2,7 @@
 // Depends on core state; core state never imports this module (it registers itself through extension points).
 import { effect, signal } from '@preact/signals';
 import * as fdb from '../../lib/db/files';
-import { folderNameFor, freeFolder, freePath, isInside, moveFolder, moveIntoWorkDirs, pathFree, pathKey, renumberTakenPaths, withTakenPaths } from '../../lib/db/paths';
+import { folderNameFor, freeFolder, freePath, isInside, moveFolder, moveIntoWorkDirs, takenPaths, pathFree, pathKey, renumberTakenPaths, withTakenPaths } from '../../lib/db/paths';
 import { getSetting, newId, setSetting } from '../../lib/db/repo';
 import { getImage, listImages, putImage, renameImages } from '../../lib/db/images';
 import type { Attachment, Conversation, FileRecord, ImageSource, MessageRecord } from '../../lib/db/schema';
@@ -12,7 +12,7 @@ import { conversations, currentConv, showChat, startNewChat, updateConversation 
 import { registerDataLoader } from '../../state/lifecycle';
 import { defineFeatureSettings, pickLegacy } from '../../state/feature-settings';
 import { mainView, showToast, sidebarOpen, sidebarTab, type MainViewState } from '../../state/ui';
-import { registerRoute, setHash } from '../../state/router';
+import { pushHash, registerRoute, setHash } from '../../state/router';
 import { registerToolProvider } from '../../state/tool-registry';
 import { extractText } from './extract';
 import { filesNote, makeFileTools, MAX_MATCHES, type Match } from './tools';
@@ -191,19 +191,34 @@ export async function setFilerPrefs(patch: Partial<FilerPrefs>) {
   await setSetting(PREFS_KEY, filerPrefs.value);
 }
 
+/**
+ * The Files tab in one of its three ways of showing things: by type (view), by chat (conversationId), or by folder
+ * (view 'all', no chat; folder null is the top). Choosing one leaves the others
+ */
 export function openFiler(view?: FilerView, conversationId?: string | null, folder?: string | null) {
+  showFiler(view, conversationId, folder);
+  setHash(filerHash());
+}
+
+function showFiler(view?: FilerView, conversationId?: string | null, folder?: string | null) {
   if (view) filerView.value = view;
   if (conversationId !== undefined) filerConversation.value = conversationId;
   if (folder !== undefined) filerFolder.value = folder;
   mainView.value = { kind: 'files' };
   sidebarTab.value = 'files';
   sidebarOpen.value = false;
-  setHash('#/files');
 }
 
-/** The Files tab showing what is inside a folder */
-export function openFolder(folder: string) {
-  openFiler('all', null, folder);
+/** The hash of what the Files tab shows: a folder has its own ('#/files/todo-app/js/'), so a reload reopens it */
+const filerHash = () => {
+  const f = filerView.value === 'all' && !filerConversation.value ? filerFolder.value : null;
+  return f ? `#/files/${f.split('/').map(encodeURIComponent).join('/')}` : '#/files';
+};
+
+/** Open a folder (null: the top) as a new place, so the browser's Back returns to where this was */
+export function openFolder(folder: string | null) {
+  showFiler('all', null, folder);
+  pushHash(filerHash());
 }
 
 /**
@@ -218,6 +233,17 @@ export async function renameFolder(from: string, raw: string): Promise<boolean> 
     showToast(t('folder.intoItself'), 'error');
     return false;
   }
+  // A new folder with nothing in it yet is only a name on screen
+  const taken = await takenPaths();
+  if (!taken.some((o) => isInside(o.path, from)) && newFolders.value.some((p) => pathKey(p) === pathKey(from))) {
+    if (freeFolder(to, taken) !== to) {
+      showToast(t('folder.taken', { name: to }), 'error');
+      return false;
+    }
+    newFolders.value = newFolders.value.map((p) => (pathKey(p) === pathKey(from) ? to : p));
+    if (filerFolder.value && pathKey(filerFolder.value) === pathKey(from)) filerFolder.value = to;
+    return true;
+  }
   const ok = await withTakenPaths(() => moveFolder(from, to));
   if (!ok) {
     showToast(t('folder.taken', { name: to }), 'error');
@@ -228,21 +254,55 @@ export async function renameFolder(from: string, raw: string): Promise<boolean> 
   return true;
 }
 
-/** Move files and images into `folder` ('' is the top); a name already there gets a number */
-export async function moveItems(fileIds: string[], imageIds: string[], folder: string) {
+/**
+ * Move files and images into `folder` ('' is the top); a name already there gets a number. Each comes with the name
+ * it is shown by: an image made in a chat has no path yet, and gets that name as its first
+ */
+export async function moveItems(items: { id: string; type: 'file' | 'image'; name: string }[], folder: string) {
   await withTakenPaths(async (taken) => {
     const images: { id: string; name: string }[] = [];
-    for (const id of [...fileIds, ...imageIds]) {
-      const own = taken.find((o) => o.id === id);
-      if (!own) continue;
-      const path = freePath(folder + fdb.baseName(own.path), taken, id);
+    for (const it of items) {
+      let own = taken.find((o) => o.id === it.id);
+      if (!own) taken.push((own = { id: it.id, path: fdb.cleanFileName(it.name, 'png') }));
+      const path = freePath(folder + fdb.baseName(own.path), taken, it.id);
       own.path = path;
-      const f = fileIds.includes(id) ? await fdb.getFile(id) : undefined;
+      const f = it.type === 'file' ? await fdb.getFile(it.id) : undefined;
       if (f) await fdb.putFile({ ...f, name: path, updatedAt: Date.now() });
-      else images.push({ id, name: path });
+      else if (it.type === 'image') images.push({ id: it.id, name: path });
     }
     await renameImages(images);
   });
+}
+
+/** Rename a file or an image (its name in its folder); false (after a toast) when that path is in use */
+export async function renameItem(it: { id: string; type: 'file' | 'image'; name: string }, raw: string): Promise<boolean> {
+  const path = fdb.folderOf(it.name) + fdb.cleanFileName(raw, fdb.extOf(it.name) || (it.type === 'image' ? 'png' : 'md'));
+  if (it.type === 'file') return renameFile(it.id, path);
+  return withTakenPaths(async (taken) => {
+    if (!pathFree(path, taken, it.id)) {
+      showToast(t('rename.taken', { name: path }), 'error');
+      return false;
+    }
+    await renameImages([{ id: it.id, name: path }]);
+    return true;
+  });
+}
+
+/** Folders made with "New folder": shown while nothing is in them, until the app is opened again */
+export const newFolders = signal<string[]>([]);
+
+/** Make a new folder in `parent` (shown there, empty, to drop or move things into); false (after a toast) when that name is in use */
+export async function createFolder(parent: string, raw: string): Promise<boolean> {
+  const name = fdb.cleanFolderName(raw);
+  if (!name) return false;
+  const path = parent + name;
+  const taken = await takenPaths();
+  if (freeFolder(path, taken) !== path || newFolders.value.some((f) => pathKey(f) === pathKey(path))) {
+    showToast(t('folder.exists', { name: path }), 'error');
+    return false;
+  }
+  newFolders.value = [...newFolders.value, path];
+  return true;
 }
 
 /** Start a new chat whose working folder is `folder`, so its model works on the files already there */
@@ -270,7 +330,19 @@ export function closeFileView() {
   else openFiler();
 }
 
-registerRoute({ pattern: /^#\/files$/, open: () => openFiler() });
+registerRoute({ pattern: /^#\/files$/, open: () => openFiler(undefined, undefined, filerView.value === 'all' && !filerConversation.value ? null : undefined) });
+registerRoute({
+  pattern: /^#\/files\/(.+\/)$/,
+  open: (m) => {
+    let folder: string;
+    try {
+      folder = m[1].split('/').map(decodeURIComponent).join('/');
+    } catch {
+      return openFiler('all', null, null);
+    }
+    openFiler('all', null, fdb.cleanFolderName(folder) || null);
+  }
+});
 registerRoute({
   pattern: /^#\/f\/([\w-]+)$/,
   open: async (m) => {
@@ -395,13 +467,13 @@ async function saveFetched(r: Fetched, conv: Conversation): Promise<{ kind: 'fil
   return rec ? { kind: 'file', file: rec } : null;
 }
 
-/** Upload from the file manager into the Files tab (not attached to anything): images as images, the rest as text (PDFs too) */
-export async function importFromDevice(files: File[]) {
+/** Upload from the file manager into `folder` ('' is the top; not attached to anything): images as images, the rest as text (PDFs too) */
+export async function importFromDevice(files: File[], folder = '') {
   const jobs = files.map((f) => ({ id: newId(), file: f }));
   importing.value = [...importing.value, ...jobs.map((j) => ({ id: j.id, name: j.file.name }))];
   const done = await Promise.all(
     jobs.map(async (j) => {
-      const r = j.file.type.startsWith('image/') ? await importImage(j.file, j.id, { kind: 'upload' }) : !!(await importOne(j.file, j.id, false));
+      const r = j.file.type.startsWith('image/') ? await importImage(j.file, j.id, { kind: 'upload' }, undefined, folder) : !!(await importOne(j.file, j.id, false, undefined, undefined, folder));
       importing.value = importing.value.filter((x) => x.id !== j.id);
       return r;
     })

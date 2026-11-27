@@ -227,9 +227,10 @@ export interface SealedBytes {
 }
 
 /** Where an image came from when it was not made in a chat: the user's device, or a web address fetched on request */
-export type ImageSource = { kind: 'upload' } | { kind: 'web'; url: string };
+/** Where an image came from: the user's device, the web, or a chat that made it (named when it was moved into a folder) */
+export type ImageSource = { kind: 'upload' } | { kind: 'web'; url: string } | { kind: 'made' };
 
-/** Name and origin of an image brought in by the user (images made in a chat have none) */
+/** Name (its path) and origin of an image: one brought in by the user, or one made in a chat once it was moved (others have none) */
 export interface ImageInfo {
   name: string;
   source: ImageSource;

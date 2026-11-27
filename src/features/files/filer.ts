@@ -27,7 +27,7 @@ export function toItems(files: FileRecord[], images: ImageMeta[], convTitle: (id
       const video = im.mime.startsWith('video/');
       // A made image has no path: its shown name is not one either, so a '/' in the chat's title makes no folder
       const name = im.info?.name ?? `${((im.conversationId && convTitle(im.conversationId)) || t(video ? 'videoName' : 'imageName')).replace(/\//g, '／')} ${stamp}.${ext}`;
-      return { type: 'image', key: `i:${im.id}`, id: im.id, name, kind: im.info ? 'upload' : 'document', ext, size: im.size, updatedAt: im.createdAt, conversationId: im.conversationId, messageId: im.messageId, source: im.info?.source, video };
+      return { type: 'image', key: `i:${im.id}`, id: im.id, name, kind: im.info && im.info.source.kind !== 'made' ? 'upload' : 'document', ext, size: im.size, updatedAt: im.createdAt, conversationId: im.conversationId, messageId: im.messageId, source: im.info?.source, video };
     })
   ];
 }

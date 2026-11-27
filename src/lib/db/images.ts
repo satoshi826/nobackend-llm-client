@@ -124,18 +124,19 @@ export async function getImageThumb(id: string): Promise<Blob | null> {
  */
 export async function renamedImageRecord(id: string, rename: (name: string) => string): Promise<BlobRecord | undefined> {
   const rec = await db().blobs.get(id);
-  const info = rec && (await infoOf(rec));
-  if (!rec || !info?.name) return undefined;
+  if (!rec) return undefined;
+  // An image made in a chat has no name until it is given one (moved into a folder)
+  const info = (await infoOf(rec)) ?? { name: '', source: { kind: 'made' as const } };
   const { info: _i, infoEnc: _e, ...rest } = rec;
   return { ...rest, ...(await storedInfo({ ...info, name: rename(info.name) }, currentDataKey())) };
 }
 
-/** Rename named images (stored or temporary) */
+/** Name or rename images (stored or temporary); a made one gets its first name this way */
 export async function renameImages(changes: { id: string; name: string }[]): Promise<void> {
   const recs: BlobRecord[] = [];
   for (const c of changes) {
     const m = mem.get(c.id);
-    if (m?.info) mem.set(c.id, { ...m, info: { ...m.info, name: c.name } });
+    if (m) mem.set(c.id, { ...m, info: { ...(m.info ?? { source: { kind: 'made' as const } }), name: c.name } });
     else {
       const r = await renamedImageRecord(c.id, () => c.name);
       if (r) recs.push(r);
@@ -275,7 +276,7 @@ registerDataTable<ExportedImage>({
         typeof im.id === 'string' &&
         (im.conversationId === undefined || typeof im.conversationId === 'string') &&
         (im.messageId === undefined || typeof im.messageId === 'string') &&
-        (im.info === undefined || (typeof im.info?.name === 'string' && (im.info.source?.kind === 'upload' || (im.info.source?.kind === 'web' && typeof im.info.source.url === 'string')))) &&
+        (im.info === undefined || (typeof im.info?.name === 'string' && (im.info.source?.kind === 'upload' || im.info.source?.kind === 'made' || (im.info.source?.kind === 'web' && typeof im.info.source.url === 'string')))) &&
         typeof im.mime === 'string' &&
         typeof im.data === 'string' &&
         typeof im.createdAt === 'number'

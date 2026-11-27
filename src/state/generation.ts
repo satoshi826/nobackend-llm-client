@@ -11,7 +11,8 @@ import { vaultTransport as transport } from '../lib/vault/client';
 import { settings, saveSettings } from './settings';
 import { authFor, keyReady } from './keys';
 import { modelOf, providerById } from './models';
-import { conversations, currentConv, currentId, liveMessages, messages, persistDraft, putMessage, touchConversation, updateConversation } from './conversations';
+import { conversations, currentConv, currentId, endWriting, liveMessages, messages, persistDraft, putMessage, takeWriting, touchConversation, updateConversation } from './conversations';
+import { batch } from '@preact/signals';
 import { openSettings, showToast } from './ui';
 import { accountById } from '../lib/keys/accounts';
 import { contributedBuiltinWebSearch, contributedDynamicTools, contributedTools, requestHandlerFor, systemPromptFor, type ToolProviderContext } from './tool-registry';
@@ -37,7 +38,10 @@ function flushUpdates() {
   if (!pendingUpdates.size) return;
   const ups = new Map(pendingUpdates);
   pendingUpdates.clear();
-  messages.value = messages.value.map((m) => ups.get(m.id) ?? m);
+  batch(() => {
+    const settled = takeWriting(ups);
+    if (settled.size) messages.value = messages.value.map((m) => settled.get(m.id) ?? m);
+  });
 }
 
 // ---- Sending and generation ----
@@ -172,6 +176,7 @@ async function generateReply(convId: string, parentUserId: string) {
     void suggestReplies(conv, final, history);
   } finally {
     liveMessages.delete(draft.id);
+    endWriting(draft.id);
     controllers.delete(conv.id);
     setStreaming(conv.id, false);
     touchConversation(conv.id);

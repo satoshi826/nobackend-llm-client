@@ -121,7 +121,12 @@ async function stream(o: { tokens: number; perFrame?: number }) {
 
 /** By hand: `__perf.start()`, do something, `__perf.stop()` prints what was rendered meanwhile */
 let mark: { at: number; counts: PerfCounts } | null = null;
-const copy = (c: PerfCounts): PerfCounts => ({ ...c, byName: { ...c.byName } });
+const copy = (c: PerfCounts): PerfCounts => ({ ...c, byName: { ...c.byName }, byParent: { ...c.byParent } });
+const grown = (now: Record<string, number>, was: Record<string, number>) =>
+  Object.entries(now)
+    .map(([k, n]) => [k, n - (was[k] ?? 0)] as const)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1]);
 function start() {
   mark = { at: performance.now(), counts: copy(window.__perfCounts!) };
 }
@@ -129,15 +134,13 @@ function stop() {
   if (!mark) throw new Error('Call __perf.start() first');
   const now = window.__perfCounts!;
   const was = mark.counts;
-  const byName = Object.entries(now.byName)
-    .map(([name, n]) => [name, n - (was.byName[name] ?? 0)] as const)
-    .filter(([, n]) => n > 0)
-    .sort((a, b) => b[1] - a[1]);
+  const byName = grown(now.byName, was.byName);
+  const byParent = grown(now.byParent, was.byParent);
   const result = { ms: Math.round(performance.now() - mark.at), renders: now.renders - was.renders, mounts: now.mounts - was.mounts, unmounts: now.unmounts - was.unmounts, commits: now.commits - was.commits };
   console.table(result);
   console.table(Object.fromEntries(byName.slice(0, 25)));
   mark = null;
-  return { ...result, byName: Object.fromEntries(byName) };
+  return { ...result, byName: Object.fromEntries(byName), byParent: Object.fromEntries(byParent) };
 }
 
 export function exposePerfTools() {

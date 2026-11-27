@@ -1,5 +1,7 @@
 // Sidebar: tabs (conversations + tabs registered by features), notices, settings
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { memo } from 'preact/compat';
+import { useComputed } from '@preact/signals';
 import { useDialog } from './dialog';
 import type { Conversation } from '../lib/db/schema';
 import { conversations, countMadeIn, currentId, openConversation, removeConversation, searchMessages, showChat, startNewChat, updateConversation, type SearchHit } from '../state/conversations';
@@ -27,10 +29,12 @@ function groupLabel(ts: number): string {
   return formatDate(d, { year: 'numeric', month: 'long' });
 }
 
-function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet?: string }) {
+/** A conversation in the list; drawn again only when it, its being open, or its being answered changes */
+const Row = memo(function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet?: string }) {
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(c.title);
-  const live = streamingConv.value.has(c.id);
+  // Whether this one is being answered (not the whole set: another conversation's answer does not draw this row)
+  const live = useComputed(() => streamingConv.value.has(c.id)).value;
   if (renaming) {
     return (
       <form
@@ -101,7 +105,7 @@ function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet
       </div>
     </div>
   );
-}
+});
 
 /** Things that need the user's attention (shown together in one place) */
 function Notices() {

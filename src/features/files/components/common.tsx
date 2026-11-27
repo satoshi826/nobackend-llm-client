@@ -37,7 +37,8 @@ export function ActionMenu({
   onOpenChange,
   class: cls
 }: {
-  actions: MenuAction[];
+  /** The items, or a function that builds them when the menu opens (for menus on many entries) */
+  actions: MenuAction[] | (() => MenuAction[]);
   label?: string;
   icon?: IconName;
   text?: string;
@@ -52,13 +53,14 @@ export function ActionMenu({
   const open = shown ?? own;
   const set = onOpenChange ?? setOwn;
   const wrap = useRef<HTMLSpanElement>(null);
-  if (!actions.length) return null;
+  if (Array.isArray(actions) && !actions.length) return null;
+  const items = open ? (typeof actions === 'function' ? actions() : actions) : [];
   const toggle = (e: MouseEvent) => {
     // On a card or a row, the click opens the menu only
     e.stopPropagation();
     set(!open);
   };
-  const firstDanger = actions.findIndex((a) => a.danger);
+  const firstDanger = items.findIndex((a) => a.danger);
   return (
     <span ref={wrap} class={cls}>
       {text ? (
@@ -74,7 +76,7 @@ export function ActionMenu({
       )}
       {open && (
         <Popover anchor={wrap.current} onClose={() => set(false)} placement={start ? 'bottom-start' : 'bottom-end'} label={text ?? label} class="w-64">
-          {actions.map((a, i) => (
+          {items.map((a, i) => (
             <span key={i}>
               {i === firstDanger && i > 0 && <MenuSeparator />}
               <MenuItem

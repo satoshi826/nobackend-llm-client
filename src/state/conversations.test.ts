@@ -15,7 +15,9 @@ import {
   persistDraft,
   removeConversation,
   startNewChat,
-  updateConversation
+  takeWriting,
+  updateConversation,
+  writingOf
 } from './conversations';
 import { restoreRoute } from './router';
 import { DEFAULT_SETTINGS, settings } from './settings';
@@ -156,5 +158,20 @@ describe('conversation list', () => {
     expect(isDraft.value).toBe(true);
     expect(conversations.value).toEqual([]);
     expect(await repo.listMessages('c')).toEqual([]);
+  });
+});
+
+describe('a message being written', () => {
+  it('grows in its own signal; the messages change only when it starts and ends', () => {
+    const m = (text: string, status: 'streaming' | 'done') => ({ id: 'w1', conversationId: 'c', parentId: null, role: 'assistant', createdAt: 1, status, parts: [{ type: 'text', text }] }) as never;
+    // It starts: the messages take it, and it gets its own signal
+    expect([...takeWriting(new Map([['w1', m('a', 'streaming')]])).keys()]).toEqual(['w1']);
+    expect(writingOf('w1')?.value).toMatchObject({ status: 'streaming' });
+    // It grows: only its signal changes
+    expect(takeWriting(new Map([['w1', m('ab', 'streaming')]])).size).toBe(0);
+    expect((writingOf('w1')!.value as { parts: { text: string }[] }).parts[0].text).toBe('ab');
+    // It ends: the messages take the last copy, and the signal goes
+    expect([...takeWriting(new Map([['w1', m('abc', 'done')]])).keys()]).toEqual(['w1']);
+    expect(writingOf('w1')).toBeUndefined();
   });
 });

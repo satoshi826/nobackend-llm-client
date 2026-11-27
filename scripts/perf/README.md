@@ -27,7 +27,8 @@ Each scenario fills an empty database (not measured), then measures its steps. F
 All but `time` are counted until the page has settled after it is ready (no long task for 1 s).
 
 A difference is marked (🔴 slower, 🟢 faster) when the Mann–Whitney U test gives p < 0.01 and the medians differ by 3%
-or more. Counts that are the same in every run are compared as they are.
+or more. Counts that are the same in every run are compared as they are. Use 7 runs or more (the default): with 5 a
+side, even two sets of values that do not overlap stay above the limit.
 
 ## How it works
 

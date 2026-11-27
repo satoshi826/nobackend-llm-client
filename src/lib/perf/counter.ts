@@ -22,13 +22,16 @@ export interface PerfCounts {
   commits: number;
   /** Renders by component name */
   byName: Record<string, number>;
+  /** Renders by the nearest component above and the component ('Header > Button'): where repeated renders come from */
+  byParent: Record<string, number>;
 }
 
 export const perfMode = typeof window !== 'undefined' && (window.__PERF__ === true || new URLSearchParams(location.search).has('perf'));
 
 /** Preact's hooks for its own tools (minified names: before render, commit) */
+type VNode = { type: unknown; __c?: object; __?: VNode | null };
 type Hooks = {
-  __r?: (vnode: { type: unknown; __c?: object }) => void;
+  __r?: (vnode: VNode) => void;
   __c?: (vnode: unknown, queue: unknown) => void;
   unmount?: (vnode: { type: unknown }) => void;
 };
@@ -38,7 +41,7 @@ const nameOf = (type: unknown): string => (typeof type === 'function' ? (type as
 /** Start counting (once, before the app renders) */
 export function startPerfCounting() {
   if (window.__perfCounts) return;
-  const counts: PerfCounts = { renders: 0, mounts: 0, unmounts: 0, commits: 0, byName: {} };
+  const counts: PerfCounts = { renders: 0, mounts: 0, unmounts: 0, commits: 0, byName: {}, byParent: {} };
   window.__perfCounts = counts;
   const o = options as unknown as Hooks;
   const seen = new WeakSet<object>();
@@ -52,6 +55,11 @@ export function startPerfCounting() {
     }
     const name = nameOf(vnode.type);
     counts.byName[name] = (counts.byName[name] ?? 0) + 1;
+    // The nearest component above (Preact's parent link: '__')
+    let up = vnode.__;
+    while (up && typeof up.type !== 'function') up = up.__;
+    const pair = `${up ? nameOf(up.type) : '(root)'} > ${name}`;
+    counts.byParent[pair] = (counts.byParent[pair] ?? 0) + 1;
     render?.(vnode);
   };
   const commit = o.__c;

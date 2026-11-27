@@ -1,6 +1,6 @@
 // Conversation list, the displayed conversation, and its messages.
 // A new chat is treated the same way, as an "unsaved conversation (draft)", and is saved on the first send.
-import { batch, computed, effect, signal } from '@preact/signals';
+import { batch, computed, effect, signal, type Signal } from '@preact/signals';
 import type { Conversation, MessageRecord } from '../lib/db/schema';
 import * as repo from '../lib/db/repo';
 import { pathToLeaf, resolveLeaf } from '../lib/chat/tree';
@@ -105,10 +105,41 @@ export function startNewChat(temporary = false) {
 /** Messages newer than the DB, such as in-progress drafts (registered by generation) */
 export const liveMessages = new Map<string, MessageRecord>();
 
+/**
+ * Each message being written, as it grows: only that message's view reads it, so `messages` (and the lists, the path
+ * and the context meter made from it) change when a message starts or ends, not with every piece of text
+ */
+const writing = new Map<string, Signal<MessageRecord>>();
+export const writingOf = (id: string): Signal<MessageRecord> | undefined => writing.get(id);
+
+/** A message is no longer written (it ended, also while another conversation was open) */
+export const endWriting = (id: string) => writing.delete(id);
+
+/**
+ * Take updates of messages: the ones still being written go to their own signal; the others (one that started or
+ * ended, or any other change) are returned, for `messages`
+ */
+export function takeWriting(updates: Map<string, MessageRecord>): Map<string, MessageRecord> {
+  const settled = new Map<string, MessageRecord>();
+  for (const [id, m] of updates) {
+    const live = writing.get(id);
+    if (live && m.status === 'streaming') {
+      live.value = m;
+      continue;
+    }
+    settled.set(id, m);
+    if (m.status === 'streaming') writing.set(id, signal(m));
+    else writing.delete(id);
+  }
+  return settled;
+}
+
 export async function openConversation(id: string) {
   const stored = await repo.listMessages(id);
   // For in-progress messages use the latest copy in memory; ones left in progress (interrupted by a reload) are treated as stopped
   const list = stored.map((m) => liveMessages.get(m.id) ?? (m.status === 'streaming' ? { ...m, status: 'aborted' as const } : m));
+  // `messages` holds each message's latest copy from here; one still written gets its own signal again with its next piece
+  writing.clear();
   for (const d of liveMessages.values()) if (d.conversationId === id && !list.some((m) => m.id === d.id)) list.push(d);
   batch(() => {
     currentId.value = id;

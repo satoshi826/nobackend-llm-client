@@ -5,6 +5,7 @@
 // entries can be dragged onto a folder, and files from the device dropped anywhere (into the open folder).
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { memo } from 'preact/compat';
 import { baseName, cleanFolderName, folderOf, isInside, pathKey } from '../../../lib/paths';
 import { confirmAndDelete, ImageThumb } from '../../images';
 import { askConfirm } from '../../../components/ConfirmDialog';
@@ -50,6 +51,10 @@ import { t } from '../messages';
 const SORT_KEYS = { updated: 'sort.updated', name: 'sort.name', type: 'sort.type', size: 'sort.size' } as const;
 /** What an entry dragged inside the file manager carries: the keys of the entries it moves */
 const DRAG_TYPE = 'application/x-filer-entries';
+/** The list before it has loaded: one array, so what is made from it is not made again each time */
+const NO_ITEMS: FilerItem[] = [];
+/** Entries drawn at first, and added each time the list scrolls near its end */
+const BATCH = 120;
 
 const kindIcon = (it: FilerItem): IconName => (it.type === 'image' && it.video ? 'video' : VIEW_ICONS[it.type === 'image' ? 'image' : it.kind]);
 const folderKey = (f: FolderItem) => `d:${f.path}`;
@@ -111,13 +116,23 @@ function useLongPress(onLong: () => void) {
 
 /** One line of an entry's menu */
 /** What the file manager can do with entries, handed to each of them */
+/**
+ * What the file manager can do with entries. One object for the screen's life (its methods reach the latest state),
+ * so entries that did not change are not drawn again
+ */
 interface EntryApi {
-  /** The menu of an entry */
+  /** The menu of an entry (built when it opens) */
   actions(key: string): MenuAction[];
   /** Move the entries with these keys into a folder ('' is the top) */
   dropInto(folder: string, keys: string[]): void;
   /** The keys a drag of this entry carries: every selected one when it is selected, else itself */
   dragKeys(key: string): string[];
+  /** Pick or unpick an entry (range: up from the last one picked, as with Shift-click) */
+  toggle(key: string, range: boolean): void;
+  /** Open an entry: a folder, a file, an image */
+  open(key: string): void;
+  /** Whether entries are being picked (a click picks then) */
+  selecting(): boolean;
 }
 
 type Dialog =
@@ -177,7 +192,21 @@ export function Filer() {
     setPicked(new Set());
     lastIndex.current = null;
   }, [view, conv, folder, filerQuery.value]);
-  const list = items ?? [];
+  const list = items ?? NO_ITEMS;
+  // Drawn in batches as the list scrolls: the first screenful shows at once, even with thousands of entries
+  const scrollArea = useRef<HTMLDivElement>(null);
+  const moreMark = useRef<HTMLDivElement>(null);
+  const [limit, setLimit] = useState(BATCH);
+  useEffect(() => setLimit(BATCH), [view, conv, folder, query]);
+  const shown = useMemo(() => list.slice(0, limit), [list, limit]);
+  useEffect(() => {
+    const root = scrollArea.current;
+    const mark = moreMark.current;
+    if (!root || !mark) return;
+    const io = new IntersectionObserver((seen) => seen.some((e) => e.isIntersecting) && setLimit((n) => n + BATCH), { root, rootMargin: '0px 0px 1200px 0px' });
+    io.observe(mark);
+    return () => io.disconnect();
+  }, [limit, list.length]);
   // Every entry in the order shown: folders first
   const keys = useMemo(() => [...folders.map(folderKey), ...list.map((i) => i.key)], [folders, list]);
   // Drop picks that disappeared (deleted, moved)
@@ -242,7 +271,7 @@ export function Filer() {
     setPicked(new Set());
   };
 
-  const api: EntryApi = {
+  const current: EntryApi = {
     actions(key) {
       const f = folderOfKey(key);
       if (f)
@@ -267,8 +296,29 @@ export function Filer() {
       ];
     },
     dropInto: (target, entryKeys) => void moveInto(target, entryKeys),
-    dragKeys: (key) => (picked.has(key) ? [...picked] : [key])
+    dragKeys: (key) => (picked.has(key) ? [...picked] : [key]),
+    toggle: toggleKey,
+    open(key) {
+      const f = folderOfKey(key);
+      if (f) return openFolder(f.path);
+      const it = itemOfKey(key);
+      if (it) open(it);
+    },
+    selecting: () => picked.size > 0
   };
+  const latest = useRef(current);
+  latest.current = current;
+  const api = useMemo<EntryApi>(
+    () => ({
+      actions: (k) => latest.current.actions(k),
+      dropInto: (f, ks) => latest.current.dropInto(f, ks),
+      dragKeys: (k) => latest.current.dragKeys(k),
+      toggle: (k, r) => latest.current.toggle(k, r),
+      open: (k) => latest.current.open(k),
+      selecting: () => latest.current.selecting()
+    }),
+    []
+  );
   const selecting = picked.size > 0;
   const emptyNew = here !== null && !!folder && folders.length === 0 && list.length === 0;
   const count = items ? items.length + folders.length : null;
@@ -370,7 +420,8 @@ export function Filer() {
       />
 
       {/* Room at the top for a card that lifts on hover (the scroll area clips it otherwise) */}
-      <div class="scroll-thin min-h-0 flex-1 overflow-y-auto px-3 pt-1 pb-3 sm:px-4 sm:pb-4 md:pr-7 md:pl-1">
+      {/* .selecting shows every entry's check (entries are not drawn again for it) */}
+      <div ref={scrollArea} class={cx('scroll-thin min-h-0 flex-1 overflow-y-auto px-3 pt-1 pb-3 sm:px-4 sm:pb-4 md:pr-7 md:pl-1', selecting && 'selecting')}>
         {!items ? (
           <p class="flex items-center gap-2 text-sm text-muted">
             <Spinner class="size-4" />
@@ -391,7 +442,7 @@ export function Filer() {
             {folders.length > 0 && (
               <div class="mb-3 grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
                 {folders.map((f) => (
-                  <FolderTile key={f.path} f={f} picked={picked.has(folderKey(f))} selecting={selecting} onToggle={(range) => toggleKey(folderKey(f), range)} api={api} />
+                  <FolderTile key={f.path} f={f} picked={picked.has(folderKey(f))} api={api} />
                 ))}
               </div>
             )}
@@ -402,14 +453,16 @@ export function Filer() {
                   <span class="max-w-full truncate px-2">{u.name}</span>
                 </div>
               ))}
-              {items.map((it) => (
-                <Card key={it.key} it={it} picked={picked.has(it.key)} selecting={selecting} onToggle={(range) => toggleKey(it.key, range)} onOpen={() => open(it)} api={api} />
+              {shown.map((it) => (
+                <Card key={it.key} it={it} picked={picked.has(it.key)} api={api} />
               ))}
             </div>
           </>
         ) : (
-          <ListView folders={folders} items={items} prefs={prefs} picked={picked} all={picked.size > 0 && picked.size === keys.length} onToggle={toggleKey} onOpen={open} onAll={toggleAll} api={api} />
+          <ListView folders={folders} items={shown} prefs={prefs} picked={picked} all={picked.size > 0 && picked.size === keys.length} onAll={toggleAll} api={api} />
         )}
+        {/* The next batch is drawn when this comes near the bottom of the view */}
+        {list.length > limit && <div ref={moreMark} class="h-px" />}
       </div>
 
       {dialog?.kind === 'move' && (
@@ -470,10 +523,10 @@ const dragHandlers = (key: string, api: EntryApi) => ({
 });
 
 /** A folder among the entries: a compact tile above the cards, to open, select, drag or drop onto */
-function FolderTile({ f, picked, selecting, onToggle, api }: { f: FolderItem; picked: boolean; selecting: boolean; onToggle(range: boolean): void; api: EntryApi }) {
+const FolderTile = memo(function FolderTile({ f, picked, api }: { f: FolderItem; picked: boolean; api: EntryApi }) {
   const key = folderKey(f);
   const [menu, setMenu] = useState(false);
-  const press = useLongPress(() => onToggle(false));
+  const press = useLongPress(() => api.toggle(key, false));
   const drop = useDropTarget(f.path, api);
   return (
     <div
@@ -495,19 +548,19 @@ function FolderTile({ f, picked, selecting, onToggle, api }: { f: FolderItem; pi
         round
         checked={picked}
         label={t('filer.select', { name: f.name })}
-        onChange={(_, e) => onToggle(e.shiftKey)}
+        onChange={(_, e) => api.toggle(key, e.shiftKey)}
         // In place of the folder's icon, inside the tile (the scroll area would clip it outside)
-        class={cx('absolute top-1/2 left-2.5 z-10 -translate-y-1/2', !picked && !selecting && 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:hidden')}
+        class={cx('absolute top-1/2 left-2.5 z-10 -translate-y-1/2', !picked && 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:hidden [.selecting_&]:inline-flex! [.selecting_&]:opacity-100!')}
       />
       <button
         type="button"
         class="flex min-w-0 flex-1 items-center gap-2 text-left"
-        onClick={(e) => (press.consume() ? undefined : selecting || e.ctrlKey || e.metaKey || e.shiftKey ? onToggle(e.shiftKey) : openFolder(f.path))}
+        onClick={(e) => (press.consume() ? undefined : api.selecting() || e.ctrlKey || e.metaKey || e.shiftKey ? api.toggle(key, e.shiftKey) : openFolder(f.path))}
         aria-label={t('folder.open', { name: f.name })}
       >
         <Icon
           name="folder"
-          class={cx('size-5 shrink-0 text-muted', picked || selecting ? 'opacity-0' : '[@media(hover:hover)]:group-focus-within:opacity-0 [@media(hover:hover)]:group-hover:opacity-0')}
+          class={cx('size-5 shrink-0 text-muted', picked ? 'opacity-0' : '[@media(hover:hover)]:group-focus-within:opacity-0 [@media(hover:hover)]:group-hover:opacity-0 [.selecting_&]:opacity-0')}
         />
         <span class="min-w-0">
           <span class="block truncate text-sm text-ink-strong">{f.name}</span>
@@ -515,21 +568,22 @@ function FolderTile({ f, picked, selecting, onToggle, api }: { f: FolderItem; pi
         </span>
       </button>
       {/* An entry's menu: from its "…" button, or a right click on it (the browser's own menu otherwise) */}
-      <ActionMenu compact label={t('filer.itemActions')} actions={api.actions(key)} open={menu} onOpenChange={setMenu} class={cx(!menu && 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100')} />
+      <ActionMenu compact label={t('filer.itemActions')} actions={() => api.actions(key)} open={menu} onOpenChange={setMenu} class={cx(!menu && 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100')} />
     </div>
   );
-}
+});
 
-function Card({ it, picked, selecting, onToggle, onOpen, api }: { it: FilerItem; picked: boolean; selecting: boolean; onToggle(range: boolean): void; onOpen(): void; api: EntryApi }) {
-  const press = useLongPress(() => onToggle(false));
+/** An entry as a card; drawn again only when it or its check changes */
+const Card = memo(function Card({ it, picked, api }: { it: FilerItem; picked: boolean; api: EntryApi }) {
+  const press = useLongPress(() => api.toggle(it.key, false));
   const [menu, setMenu] = useState(false);
   const click = (e: MouseEvent) => {
     if (press.consume()) return;
     // While selecting, clicks select; Ctrl / Cmd / Shift-click selects too
-    if (selecting || e.ctrlKey || e.metaKey || e.shiftKey) {
+    if (api.selecting() || e.ctrlKey || e.metaKey || e.shiftKey) {
       e.preventDefault();
-      onToggle(e.shiftKey);
-    } else onOpen();
+      api.toggle(it.key, e.shiftKey);
+    } else api.open(it.key);
   };
   return (
     <div
@@ -551,13 +605,13 @@ function Card({ it, picked, selecting, onToggle, onOpen, api }: { it: FilerItem;
         round
         checked={picked}
         label={t('filer.select', { name: it.name })}
-        onChange={(_, e) => onToggle(e.shiftKey)}
-        class={cx('absolute top-2 left-2 z-10', !picked && !selecting && 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:hidden')}
+        onChange={(_, e) => api.toggle(it.key, e.shiftKey)}
+        class={cx('absolute top-2 left-2 z-10', !picked && 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:hidden [.selecting_&]:inline-flex! [.selecting_&]:opacity-100!')}
       />
       <div class="relative">
         {it.type === 'image' ? (
           <>
-            <ImageThumb blobId={it.id} alt={it.name} class="aspect-[4/3] w-full rounded-none!" onOpen={() => (press.consume() ? undefined : selecting ? onToggle(false) : onOpen())} />
+            <ImageThumb blobId={it.id} alt={it.name} class="aspect-[4/3] w-full rounded-none!" onOpen={() => (press.consume() ? undefined : api.selecting() ? api.toggle(it.key, false) : api.open(it.key))} />
             {it.video && (
               <span class="pointer-events-none absolute inset-0 grid place-items-center">
                 <span class="grid size-10 place-items-center rounded-full bg-black/50 text-white backdrop-blur-sm">
@@ -592,11 +646,11 @@ function Card({ it, picked, selecting, onToggle, onOpen, api }: { it: FilerItem;
             </span>
           </span>
         </button>
-        <ActionMenu compact label={t('filer.itemActions')} actions={api.actions(it.key)} open={menu} onOpenChange={setMenu} class={cx('mt-1 mr-1', !menu && 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100')} />
+        <ActionMenu compact label={t('filer.itemActions')} actions={() => api.actions(it.key)} open={menu} onOpenChange={setMenu} class={cx('mt-1 mr-1', !menu && 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100')} />
       </div>
     </div>
   );
-}
+});
 
 /** A menu item that is one of several choices: a check marks the chosen one */
 function Choice({ on, icon, onSelect, children }: { on: boolean; icon?: IconName; onSelect(): void; children: string }) {
@@ -845,9 +899,6 @@ function ListRow({
   icon,
   details,
   picked,
-  selecting,
-  onToggle,
-  onOpen,
   api,
   dropFolder
 }: {
@@ -858,14 +909,11 @@ function ListRow({
   icon: IconName;
   details: [string, string, string, string];
   picked: boolean;
-  selecting: boolean;
-  onToggle(range: boolean): void;
-  onOpen(): void;
   api: EntryApi;
   /** A folder's path: entries can be dropped on its row */
   dropFolder?: string;
 }) {
-  const press = useLongPress(() => onToggle(false));
+  const press = useLongPress(() => api.toggle(rowKey, false));
   const drop = useDropTarget(dropFolder ?? '', api);
   const [menu, setMenu] = useState(false);
   return (
@@ -882,13 +930,13 @@ function ListRow({
       }}
     >
       <td class="py-1.5 pl-1">
-        <Checkbox checked={picked} label={t('filer.select', { name: label })} onChange={(_, e) => onToggle(e.shiftKey)} />
+        <Checkbox checked={picked} label={t('filer.select', { name: label })} onChange={(_, e) => api.toggle(rowKey, e.shiftKey)} />
       </td>
       <td class="py-1.5">
         <button
           type="button"
           class="flex w-full min-w-0 items-center gap-2 rounded-md text-left hover:text-ink-strong"
-          onClick={(e) => (press.consume() ? undefined : selecting || e.ctrlKey || e.metaKey || e.shiftKey ? onToggle(e.shiftKey) : onOpen())}
+          onClick={(e) => (press.consume() ? undefined : api.selecting() || e.ctrlKey || e.metaKey || e.shiftKey ? api.toggle(rowKey, e.shiftKey) : api.open(rowKey))}
         >
           <Icon name={icon} class="size-4 shrink-0 text-muted" />
           <span class="truncate">{name}</span>
@@ -899,7 +947,7 @@ function ListRow({
       <td class="py-1.5 text-xs text-muted tabular-nums">{details[2]}</td>
       <td class="hidden truncate py-1.5 text-xs text-muted lg:table-cell">{details[3]}</td>
       <td class="w-9 py-1 text-right">
-        <ActionMenu compact label={t('filer.itemActions')} actions={api.actions(rowKey)} open={menu} onOpenChange={setMenu} class={cx(!menu && 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100')} />
+        <ActionMenu compact label={t('filer.itemActions')} actions={() => api.actions(rowKey)} open={menu} onOpenChange={setMenu} class={cx(!menu && 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100')} />
       </td>
     </tr>
   );
@@ -911,8 +959,6 @@ function ListView({
   prefs,
   picked,
   all,
-  onToggle,
-  onOpen,
   onAll,
   api
 }: {
@@ -921,12 +967,9 @@ function ListView({
   prefs: FilerPrefs;
   picked: Set<string>;
   all: boolean;
-  onToggle(key: string, range: boolean): void;
-  onOpen(it: FilerItem): void;
   onAll(): void;
   api: EntryApi;
 }) {
-  const selecting = picked.size > 0;
   return (
     <table class="w-full table-fixed text-sm">
       <thead class="text-left text-xs text-muted">
@@ -944,37 +987,43 @@ function ListView({
       </thead>
       <tbody>
         {folders.map((f) => (
-          <ListRow
-            key={f.path}
-            rowKey={folderKey(f)}
-            label={f.name}
-            name={f.name}
-            icon="folder"
-            details={[t('folder.type'), f.count ? t('folder.count', { n: formatNumber(f.count) }) : t('folder.isEmpty'), f.count ? formatDate(f.updatedAt) : '', '']}
-            picked={picked.has(folderKey(f))}
-            selecting={selecting}
-            onToggle={(range) => onToggle(folderKey(f), range)}
-            onOpen={() => openFolder(f.path)}
-            api={api}
-            dropFolder={f.path}
-          />
+          <FolderRow key={f.path} f={f} picked={picked.has(folderKey(f))} api={api} />
         ))}
         {items.map((it) => (
-          <ListRow
-            key={it.key}
-            rowKey={it.key}
-            label={it.name}
-            name={<PathName name={it.name} from={filerFolder.value} />}
-            icon={kindIcon(it)}
-            details={[it.ext, formatBytes(it.size), formatDate(it.updatedAt), convTitle(it.conversationId) ?? '']}
-            picked={picked.has(it.key)}
-            selecting={selecting}
-            onToggle={(range) => onToggle(it.key, range)}
-            onOpen={() => onOpen(it)}
-            api={api}
-          />
+          <ItemRow key={it.key} it={it} picked={picked.has(it.key)} api={api} />
         ))}
       </tbody>
     </table>
   );
 }
+
+/** A folder as a row; drawn again only when it or its check changes */
+const FolderRow = memo(function FolderRow({ f, picked, api }: { f: FolderItem; picked: boolean; api: EntryApi }) {
+  return (
+    <ListRow
+      rowKey={folderKey(f)}
+      label={f.name}
+      name={f.name}
+      icon="folder"
+      details={[t('folder.type'), f.count ? t('folder.count', { n: formatNumber(f.count) }) : t('folder.isEmpty'), f.count ? formatDate(f.updatedAt) : '', '']}
+      picked={picked}
+      api={api}
+      dropFolder={f.path}
+    />
+  );
+});
+
+/** A file or an image as a row; drawn again only when it or its check changes */
+const ItemRow = memo(function ItemRow({ it, picked, api }: { it: FilerItem; picked: boolean; api: EntryApi }) {
+  return (
+    <ListRow
+      rowKey={it.key}
+      label={it.name}
+      name={<PathName name={it.name} from={filerFolder.value} />}
+      icon={kindIcon(it)}
+      details={[it.ext, formatBytes(it.size), formatDate(it.updatedAt), convTitle(it.conversationId) ?? '']}
+      picked={picked}
+      api={api}
+    />
+  );
+});

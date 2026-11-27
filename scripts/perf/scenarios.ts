@@ -66,7 +66,8 @@ export const SCENARIOS: Scenario[] = [
     async run(probe, base, cpu) {
       await prepare(probe, base, cpu);
       const out: Record<string, Metrics> = {};
-      out.open = await probe.load(`${base}/#/files?type=text`, `${entries()} >= ${SEED.files}`);
+      // Ready when a screenful shows (an app that draws every entry first is ready only after all of them)
+      out.open = await probe.load(`${base}/#/files?type=text`, `${entries()} >= 60`);
       // Pick five entries one by one (their check boxes show on hover; clicked directly)
       out.select = await probe.action(async () => {
         const boxes = probe.page.locator('[data-entry] input[type="checkbox"]');

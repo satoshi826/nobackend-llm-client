@@ -32,7 +32,8 @@ function args() {
     base: get('base', 'HEAD'),
     head: get('head', 'working'),
     only: a.includes('--only'),
-    runs: Number(get('runs', '5')),
+    // 7 at least for a mark: with 5 a side, even two sets that do not overlap give p ≈ 0.012 (above the 0.01 limit)
+    runs: Number(get('runs', '7')),
     cpu: Number(get('cpu', '4')),
     scenarios: get('scenarios', SCENARIOS.map((s) => s.name).join(',')).split(',')
   };

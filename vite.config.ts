@@ -171,7 +171,7 @@ export default defineConfig(({ mode, command }) => {
     },
     test: {
       environment: 'node',
-      include: ['src/**/*.test.ts', 'vault/**/*.test.ts', 'fetch/**/*.test.ts', 'relay/**/*.test.ts']
+      include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'vault/**/*.test.ts', 'fetch/**/*.test.ts', 'relay/**/*.test.ts']
     }
   } as any;
 });

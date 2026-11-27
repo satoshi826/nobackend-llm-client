@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { renderMarkdown as renderNodes, settledEnd } from './render';
+import { renderMarkdown as renderNodes, renderMarkdownCached, settledEnd } from './render';
 
 /** The rendered nodes as HTML, for assertions */
 function renderMarkdown(src: string, opts: Parameters<typeof renderNodes>[1]): string {
@@ -74,5 +74,17 @@ describe('settledEnd', () => {
     const src = 'A.\n\nB.\n\nC';
     const first = settledEnd('A.\n\nB');
     expect(src.slice(0, settledEnd(src, first))).toBe('A.\n\nB.\n\n');
+  });
+});
+
+describe('renderMarkdownCached', () => {
+  it('gives what renderMarkdown gives, as a copy of its own each time', () => {
+    const src = '# Title\n\nSome **bold** text\n\n```js\nconst a = 1;\n```';
+    const html = (f: DocumentFragment) => Array.from(f.childNodes, (n) => (n as Element).outerHTML ?? n.textContent).join('');
+    const first = renderMarkdownCached(src, { highlight: false });
+    expect(html(first)).toBe(html(renderNodes(src, { highlight: false })));
+    // Changing one copy (a page adds a run's result) does not change the next
+    first.firstChild!.textContent = 'changed';
+    expect(html(renderMarkdownCached(src, { highlight: false }))).toBe(html(renderNodes(src, { highlight: false })));
   });
 });

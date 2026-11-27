@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks';
 import { computed, useComputed } from '@preact/signals';
 import type { MessageRecord } from '../lib/db/schema';
 import type { Part } from '../lib/providers/types';
-import { messages, messagesById } from '../state/conversations';
+import { messages, messagesById, writingOf } from '../state/conversations';
 import { editUserMessage, regenerate, switchSibling } from '../state/generation';
 import { requestHandlerFor } from '../state/tool-registry';
 import { isStreaming } from '../state/runs';
@@ -408,7 +408,9 @@ function Suggestions({ m }: { m: MessageRecord }) {
 }
 
 /** One message. Memoized: while a reply streams, only that reply's object changes, so the others are skipped */
-export const MessageItem = memo(function MessageItem({ m, isLast }: { m: MessageRecord; isLast?: boolean }) {
+export const MessageItem = memo(function MessageItem({ m: stored, isLast }: { m: MessageRecord; isLast?: boolean }) {
+  // While it is written, its latest copy (only this message draws again as it grows)
+  const m = writingOf(stored.id)?.value ?? stored;
   if (m.compaction) return <CompactionDivider m={m} />;
   return (
     <div class={cx('py-3', Date.now() - m.createdAt < 4000 && 'rise')} data-message-id={m.id}>

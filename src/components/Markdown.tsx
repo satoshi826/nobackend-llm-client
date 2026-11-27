@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { ensureHighlighter, isHighlighterReady, renderMarkdown, settledEnd } from '../lib/markdown/render';
+import { ensureHighlighter, isHighlighterReady, renderMarkdown, renderMarkdownCached, settledEnd } from '../lib/markdown/render';
 import { render as renderInto } from 'preact';
 import { cx } from './ui';
 import { settings } from '../state/settings';
@@ -44,7 +44,7 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
     if (!streaming) {
       settled.current = null;
       // Do not highlight while streaming (expensive, and the code is incomplete)
-      el.replaceChildren(renderMarkdown(text, { highlight: hlReady, citations }));
+      el.replaceChildren(renderMarkdownCached(text, { highlight: hlReady, citations }));
       return;
     }
     const cites = citations?.join('|') ?? '';

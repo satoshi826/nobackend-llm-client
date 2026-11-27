@@ -141,6 +141,28 @@ export function renderMarkdown(src: string, opts: { highlight: boolean; citation
 // ---- Streaming ----
 const LIST_OR_INDENT = /^(\s|[-*+](\s|$)|\d{1,9}([.)](\s|$)|$))/;
 
+/** Finished answers rendered before, by source and options: a view that is drawn again (a chat opened again) clones them */
+const rendered = new Map<string, DocumentFragment>();
+const RENDERED_MAX = 400;
+
+/**
+ * renderMarkdown for text that is finished (not one being streamed): the same nodes, from a cache when rendered
+ * before. Parsing, sanitizing and highlighting cost far more than cloning the result
+ */
+export function renderMarkdownCached(src: string, opts: { highlight: boolean; citations?: string[] }): DocumentFragment {
+  const key = `${opts.highlight ? 1 : 0}\u0000${opts.citations?.join('\u0001') ?? ''}\u0000${src}`;
+  let frag = rendered.get(key);
+  if (frag) {
+    // Most recently used last, so the oldest goes first
+    rendered.delete(key);
+  } else {
+    frag = renderMarkdown(src, opts);
+    if (rendered.size >= RENDERED_MAX) rendered.delete(rendered.keys().next().value!);
+  }
+  rendered.set(key, frag);
+  return frag.cloneNode(true) as DocumentFragment;
+}
+
 /**
  * While a reply streams in, where the part that later text can no longer change ends: after the last blank line
  * outside a code fence that is followed by the start of a new top-level block (not an indented line or a list item,

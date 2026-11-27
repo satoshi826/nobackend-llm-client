@@ -3,7 +3,7 @@
 // Their model lists carry prices, context and capabilities; each has its own shape, read here (docs/specs/provider-research.md).
 // Reasoning comes as `reasoning` / `reasoning_content` or inline <think> (all handled by the adapter); it is never sent back.
 import type { ModelInfo, ProviderPreset } from '../types';
-import { checkKey, joinUrl, numberOf as num } from '../openai-compatible';
+import { checkKey, flexTier, joinUrl, numberOf as num } from '../openai-compatible';
 import { builtinBaseUrl } from '../endpoints';
 import { t as tp } from '../messages';
 
@@ -32,6 +32,8 @@ function host(o: {
   keyCheckPath?: string;
   hasPrivateModels?: boolean;
   balanceApi?: ProviderPreset['balanceApi'];
+  /** Its cheaper flex tier, as the part of the list price it costs */
+  flexPriceFactor?: number;
 }): ProviderPreset {
   const corsHost = new URL(builtinBaseUrl(o.id, env) || 'https://invalid').host;
   const preset: ProviderPreset = {
@@ -62,6 +64,7 @@ function host(o: {
     modelsPath: o.modelsPath ?? 'models',
     mapModel: o.mapModel,
     ...(o.balanceApi ? { balanceApi: o.balanceApi } : {}),
+    ...(o.flexPriceFactor !== undefined ? flexTier(o.flexPriceFactor) : {}),
     ...(o.keyCheckPath ? { validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, o.keyCheckPath!), f, preset.corsHint) } : {})
   };
   return preset;
@@ -95,6 +98,8 @@ export const deepinfraPreset = host({
   id: 'deepinfra',
   label: 'DeepInfra',
   publicModels: true,
+  // Flex is billed at 0.8 of the standard price, on the models that offer it
+  flexPriceFactor: 0.8,
   mapModel(raw, providerId) {
     const id = str(raw?.id);
     const m = raw?.metadata ?? {};

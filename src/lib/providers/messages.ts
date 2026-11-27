@@ -68,6 +68,12 @@ export const t = defineMessages(
       'Anthropic Console（console.anthropic.com）の API Keys でキーを作り、Limits でワークスペースの利用上限（spend limit）を設定してください。キーが万一漏れても被害額が上限で止まります。',
 
     'openrouter.searchNote': '検索は OpenRouter が行います（既定は Exa。モデルの提供元が検索を持つ場合はそれを使用）。1 回あたり約 0.7 セントが追加でかかります。',
+    'openrouter.noLowBits': '4 ビットに軽量化した版を使わない',
+    'openrouter.noLowBitsDesc': '安い提供元は、モデルを 4 ビットに軽量化（量子化）して動かしていることがあり、答えの質が落ちることがあります。オン（既定）なら、6 ビット以上の提供元と、軽量化の程度を公表していない提供元だけを使います。',
+    'openrouter.cheapest': 'いちばん安い提供元から使う',
+    'openrouter.cheapestDesc': 'オフ（既定）でも、OpenRouter は安い提供元を多めに使います。オンなら、毎回いちばん安い提供元から順に試します。速さは劣ることがあります。',
+    'flex.label': '安さを優先する（flex）',
+    'flex.desc': '空いているときに処理される安い枠で送ります。料金は {percent}% 安くなりますが、返事が遅くなることがあります。使えないときや対応していないモデルでは、通常の枠で送り直します。',
     'gemini.tagline': 'Google の Gemini。無料枠では、送った内容が Google のサービス改善に使われることがあります。',
     'gemini.keyGuide':
       'Google AI Studio（aistudio.google.com）でキーを作ってください。無料枠のキーでは、送った内容が Google のサービス改善に使われ、人が読むこともあります（有料枠では使われません）。有料にする場合は Google Cloud の請求設定で予算を設定してください。',
@@ -166,6 +172,12 @@ export const t = defineMessages(
         'In the Anthropic Console (console.anthropic.com), create a key under API Keys and set a workspace spend limit under Limits. If the key ever leaks, the damage stops at the limit.',
 
       'openrouter.searchNote': "OpenRouter runs the search (Exa by default, or the model provider's own search when it has one). Each search adds about 0.7 cents.",
+      'openrouter.noLowBits': 'Skip 4-bit versions',
+      'openrouter.noLowBitsDesc': 'Cheap providers sometimes run a model shrunk to 4 bits (quantized), which can lower answer quality. When on (the default), only providers at 6 bits or more, and those that do not say, are used.',
+      'openrouter.cheapest': 'Use the cheapest provider first',
+      'openrouter.cheapestDesc': 'Even when off (the default), OpenRouter favors cheaper providers. When on, it tries them cheapest first every time, which can be slower.',
+      'flex.label': 'Prefer lower cost (flex)',
+      'flex.desc': 'Sends requests in a cheaper tier served when capacity is free: {percent}% less, but replies can be slower. When it is unavailable, or the model does not offer it, the request is sent again in the standard tier.',
       'gemini.tagline': "Google's Gemini. On the free tier, what you send may be used to improve Google's services.",
       'gemini.keyGuide':
         "Create a key in Google AI Studio (aistudio.google.com). With a free-tier key, what you send is used to improve Google's services and may be read by people (not on the paid tier). If you switch to paid, set a budget in Google Cloud billing.",
@@ -263,6 +275,12 @@ export const t = defineMessages(
         '请在 Anthropic Console（console.anthropic.com）的 API Keys 中创建密钥，并在 Limits 中设置工作区的用量上限（spend limit）。即使密钥泄露，损失也会止于上限。',
 
       'openrouter.searchNote': '搜索由 OpenRouter 执行（默认使用 Exa；模型的提供方有自带搜索时使用其搜索）。每次搜索约额外收费 0.7 美分。',
+      'openrouter.noLowBits': '不使用 4 位轻量化版本',
+      'openrouter.noLowBitsDesc': '便宜的提供方有时以 4 位轻量化（量化）运行模型，回答质量可能下降。开启时（默认），只使用 6 位及以上的提供方和未公开量化程度的提供方。',
+      'openrouter.cheapest': '优先使用最便宜的提供方',
+      'openrouter.cheapestDesc': '关闭时（默认），OpenRouter 也会更多地使用便宜的提供方。开启后，每次都从最便宜的提供方开始尝试，速度可能较慢。',
+      'flex.label': '优先低价（flex）',
+      'flex.desc': '以空闲时处理的低价档位发送：费用降低 {percent}%，但回复可能变慢。该档位不可用或模型不支持时，会以标准档位重新发送。',
       'gemini.tagline': 'Google 的 Gemini。使用免费额度时，发送的内容可能会被用于改进 Google 的服务。',
       'gemini.keyGuide':
         '请在 Google AI Studio（aistudio.google.com）创建密钥。使用免费额度的密钥时，发送的内容会被用于改进 Google 的服务，也可能被人工查看（付费额度不会）。如改为付费，请在 Google Cloud 的结算设置中设置预算。',

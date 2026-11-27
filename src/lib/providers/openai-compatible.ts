@@ -116,8 +116,32 @@ export function buildChatBody(cfg: ProviderConfig, preset: ProviderPreset, req: 
   if (req.tools?.length) {
     body.tools = req.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
   }
+  if (preset.flex && req.providerOptions?.[preset.id]?.service_tier === 'flex') body.service_tier = 'flex';
   if (preset.transformRequest) body = preset.transformRequest(body, req);
   return body;
+}
+
+/**
+ * A provider's cheaper, lower-priority tier as a setting of the connection (off by default). A request it refuses is
+ * sent again in the standard tier (streamChat), and an answer it served is priced at `priceFactor` of the list price
+ */
+export function flexTier(priceFactor: number): Pick<ProviderPreset, 'flex' | 'settings' | 'requestOptions'> {
+  return {
+    flex: { priceFactor },
+    settings: [
+      {
+        key: 'flex',
+        get label() {
+          return tp('flex.label');
+        },
+        get desc() {
+          return tp('flex.desc', { percent: Math.round((1 - priceFactor) * 100) });
+        },
+        default: false
+      }
+    ],
+    requestOptions: ({ settings }) => (settings.flex ? { service_tier: 'flex' } : undefined)
+  };
 }
 
 export const openAICompatibleAdapter: ProviderAdapter = {
@@ -160,18 +184,26 @@ async function* streamChat(
 ): AsyncGenerator<ProviderEvent> {
   const url = joinUrl(effectiveBase(cfg), 'chat/completions');
   const body = buildChatBody(cfg, preset, req);
-  let res: Response;
-  try {
-    res = await transport.fetch(
+  const send = (b: Record<string, any>) =>
+    transport.fetch(
       url,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...cfg.extraHeaders },
-        body: JSON.stringify(body),
+        body: JSON.stringify(b),
         signal: req.signal
       },
       auth
     );
+  let res: Response;
+  try {
+    res = await send(body);
+    // The flex tier can refuse a request (busy, or not offered for this model): once more in the standard tier
+    if (body.service_tier === 'flex' && !res.ok && res.status !== 401 && res.status !== 403) {
+      void res.body?.cancel();
+      const { service_tier: _flex, ...standard } = body;
+      res = await send(standard);
+    }
   } catch (e) {
     if (e instanceof ProviderFailure) {
       yield { type: 'error', error: e.error };
@@ -195,6 +227,8 @@ async function* streamChat(
   const seenSources = new Set<string>();
   let finishReason: ProviderEvent & { type: 'done' } = { type: 'done', reason: 'stop' };
   let gotFinish = false;
+  // The tier that served the answer, as the response says (priced lower when it was flex)
+  let tier: string | undefined;
 
   try {
     for await (const msg of parseSSE(res.body, req.signal)) {
@@ -222,6 +256,7 @@ async function* streamChat(
       if (preset.parseExtra) {
         for (const ev of preset.parseExtra(chunk, seenSources)) yield ev;
       }
+      if (typeof chunk?.service_tier === 'string') tier = chunk.service_tier;
       const choice = Array.isArray(chunk?.choices) ? chunk.choices[0] : undefined;
       if (choice) {
         const delta = choice.delta ?? choice.message ?? {};
@@ -246,7 +281,8 @@ async function* streamChat(
             inputTokens: u.prompt_tokens,
             cachedInputTokens: u.prompt_tokens_details?.cached_tokens ?? u.cache_read_input_tokens ?? u.prompt_cache_hit_tokens ?? undefined,
             outputTokens: u.completion_tokens,
-            reasoningTokens: u.completion_tokens_details?.reasoning_tokens
+            reasoningTokens: u.completion_tokens_details?.reasoning_tokens,
+            ...(tier === 'flex' && preset.flex ? { priceFactor: preset.flex.priceFactor } : {})
           },
           costUsd: typeof cost === 'number' ? cost : undefined
         };

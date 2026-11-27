@@ -29,7 +29,8 @@ export function estimateCost(u: Usage, pricing: ModelInfo['pricing'] | undefined
   const input = u.inputTokens ?? 0;
   const cached = pricing.cachedInputPerMTok != null ? Math.min(input, u.cachedInputTokens ?? 0) : 0;
   const inPrice = pricing.inputPerMTok ?? 0;
-  return ((input - cached) * inPrice + cached * (pricing.cachedInputPerMTok ?? inPrice) + (u.outputTokens ?? 0) * (pricing.outputPerMTok ?? 0)) / 1_000_000;
+  const full = (input - cached) * inPrice + cached * (pricing.cachedInputPerMTok ?? inPrice) + (u.outputTokens ?? 0) * (pricing.outputPerMTok ?? 0);
+  return (full * (u.priceFactor ?? 1)) / 1_000_000;
 }
 
 export function makeUsageRecord(

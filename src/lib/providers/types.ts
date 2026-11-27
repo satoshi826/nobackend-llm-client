@@ -97,6 +97,8 @@ export interface Usage {
   reasoningTokens?: number;
   /** Searches the provider ran (native web search) */
   webSearches?: number;
+  /** The part of the list price charged, when the provider served a cheaper tier (flex: 0.5); the full price when absent */
+  priceFactor?: number;
 }
 
 export interface ChatMessage {
@@ -237,6 +239,11 @@ export interface ProviderPreset {
     note?: string;
   };
   settings?: ProviderSetting[];
+  /**
+   * The provider's cheaper, lower-priority tier (service_tier: 'flex'), offered as the setting `flex` (flexTier in
+   * openai-compatible.ts). priceFactor: the part of the list price it costs
+   */
+  flex?: { priceFactor: number };
   /** Provider-specific request options (passed to transformRequest as req.providerOptions[preset.id]) */
   requestOptions?(ctx: RequestOptionsContext): Record<string, unknown> | undefined;
   /** Response headers the key vault may return to the app (balance etc.) */

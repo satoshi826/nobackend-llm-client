@@ -7,6 +7,8 @@ const BASE_URL = builtinBaseUrl('openrouter', (import.meta as any).env ?? {});
 
 /** Search results per search (OpenRouter bills per search request) */
 const MAX_RESULTS = 5;
+/** Quantizations of 6 bits or more, and providers that do not say (the noLowBits setting) */
+const ENOUGH_BITS = ['fp6', 'int8', 'fp8', 'fp16', 'bf16', 'fp32', 'unknown'];
 
 /**
  * Sources, images and search counts out of a chunk (streaming delta or a whole message).
@@ -123,8 +125,38 @@ export const openrouterPreset: ProviderPreset = {
     };
   },
 
+  settings: [
+    {
+      key: 'noLowBits',
+      get label() {
+        return tp('openrouter.noLowBits');
+      },
+      get desc() {
+        return tp('openrouter.noLowBitsDesc');
+      },
+      default: true
+    },
+    {
+      key: 'cheapest',
+      get label() {
+        return tp('openrouter.cheapest');
+      },
+      get desc() {
+        return tp('openrouter.cheapestDesc');
+      },
+      default: false
+    }
+  ],
+  // Provider routing preferences, put into body.provider next to data_collection (transformRequest)
+  requestOptions: ({ settings }) => ({
+    ...(settings.noLowBits ? { quantizations: ENOUGH_BITS } : {}),
+    ...(settings.cheapest ? { sort: 'price' } : {})
+  }),
+
   transformRequest(body, req) {
     const out = { ...body };
+    const routing = req.providerOptions?.openrouter;
+    if (routing && Object.keys(routing).length) out.provider = { ...out.provider, ...routing };
     if (req.webSearch) out.tools = [...(out.tools ?? []), { type: 'openrouter:web_search', parameters: { max_results: MAX_RESULTS } }];
     if (req.imageOutput) out.modalities = ['image', 'text'];
     // OpenRouter uses the reasoning: { effort } format

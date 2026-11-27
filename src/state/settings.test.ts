@@ -22,9 +22,9 @@ describe('provider-specific behaviour lives in presets', () => {
     expect(v.requestOptions?.({ purpose: 'chat', webSearch: 'off', settings: { includeSystemPrompt: true } })).toEqual({ include_venice_system_prompt: true });
     expect(v.requestOptions?.({ purpose: 'summary', webSearch: 'off', settings: {} })).toMatchObject({ strip_thinking_response: true });
   });
-  it('OpenRouter has no Venice options', () => {
-    const o = PRESETS.openrouter;
-    expect(o.requestOptions).toBeUndefined();
+  it('OpenRouter has no Venice options, only its own routing', () => {
+    const opts = PRESETS.openrouter.requestOptions?.({ purpose: 'chat', webSearch: 'off', settings: { includeSystemPrompt: true, noLowBits: false, cheapest: true } });
+    expect(opts).toEqual({ sort: 'price' });
   });
   it('the vault passes through headers declared by presets', () => {
     expect(PASSTHROUGH_HEADERS).toContain('x-venice-balance-usd');

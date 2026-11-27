@@ -39,4 +39,21 @@ describe('OpenRouter preset', () => {
     expect(body.reasoning_effort).toBeUndefined();
     expect(body.venice_parameters).toBeUndefined();
   });
+  it('routes by the connection settings: 4-bit versions skipped by default, cheapest first when asked', () => {
+    const request = (settings: Record<string, boolean>) =>
+      buildChatBody(cfg, openrouterPreset, {
+        model: 'm',
+        messages: [],
+        providerOptions: { openrouter: openrouterPreset.requestOptions!({ purpose: 'chat', webSearch: 'off', settings })! },
+        signal: new AbortController().signal
+      });
+    const byDefault = request({ noLowBits: true, cheapest: false });
+    expect(byDefault.provider.data_collection).toBe('deny');
+    expect(byDefault.provider.quantizations).toContain('fp8');
+    expect(byDefault.provider.quantizations).toContain('unknown');
+    expect(byDefault.provider.quantizations).not.toContain('fp4');
+    expect(byDefault.provider.quantizations).not.toContain('int4');
+    expect(byDefault.provider.sort).toBeUndefined();
+    expect(request({ noLowBits: false, cheapest: true }).provider).toEqual({ data_collection: 'deny', sort: 'price' });
+  });
 });

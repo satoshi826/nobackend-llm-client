@@ -1,7 +1,7 @@
 // Built-in providers other than Venice / OpenRouter, and OpenAI-compatible providers added at build time.
 // All of them need a key to fetch the model list, so it is fetched through the key vault (modelsNeedKey).
 import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
-import { checkKey, joinUrl, numberOf } from '../openai-compatible';
+import { checkKey, flexTier, joinUrl, numberOf } from '../openai-compatible';
 import { builtinBaseUrl, parseCustomProviders, type CustomProviderDef } from '../endpoints';
 import { t as tp } from '../messages';
 
@@ -135,6 +135,8 @@ export const openaiPreset: ProviderPreset = {
       return tp('openai.destinationNote');
     }
   },
+  // Flex is billed at Batch API rates, half the standard price
+  ...flexTier(0.5),
   defaults: { name: 'OpenAI', kind: 'openai-compatible', preset: 'openai', baseUrl: builtinBaseUrl('openai', env), modelListMode: 'fetch', enabled: false },
   browserAccess: 'direct',
   modelsPath: 'models',

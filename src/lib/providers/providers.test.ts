@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { PRESETS } from './registry';
 import { parseSSE } from './sse';
 import { ThinkSplitter } from './think-splitter';
-import { openAICompatibleAdapter, toOpenAIMessages } from './openai-compatible';
+import { flexTier, openAICompatibleAdapter, toOpenAIMessages } from './openai-compatible';
+import { estimateCost } from '../usage';
 import { venicePreset } from './presets/venice';
 import { plainTransport } from './transport';
 import { classifyError } from './errors';
@@ -264,5 +265,64 @@ describe('balance APIs', () => {
     expect(PRESETS.deepseek.balanceApi!.read({ balance_infos: [{ currency: 'CNY', total_balance: '50' }, { currency: 'USD', total_balance: '4.20' }] })).toBe(4.2);
     expect(PRESETS.deepseek.balanceApi!.read({ balance_infos: [{ currency: 'CNY', total_balance: '50' }] })).toBeUndefined();
     expect(PRESETS.nanogpt.balanceApi!.read({ usd_balance: '1.75', nano_balance: '9' })).toBe(1.75);
+  });
+});
+
+describe('flex tier', () => {
+  const flexPreset = { ...venicePreset, id: 'flexy', transformRequest: undefined, ...flexTier(0.5) };
+  const flexCfg: ProviderConfig = { ...cfg, preset: 'flexy' };
+  const ask = (t: Transport, flex: boolean) =>
+    collect(
+      openAICompatibleAdapter.chat(
+        flexCfg,
+        flexPreset,
+        cred,
+        {
+          model: 'm',
+          messages: [{ id: '1', role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
+          providerOptions: { flexy: flexPreset.requestOptions!({ purpose: 'chat', webSearch: 'off', settings: { flex: flex } }) ?? {} },
+          signal: new AbortController().signal
+        },
+        t
+      )
+    );
+  const answer = (tier: string) => [
+    sse({ service_tier: tier, choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+    sse({ service_tier: tier, choices: [], usage: { prompt_tokens: 10, completion_tokens: 5 } }),
+    'data: [DONE]\n\n'
+  ];
+
+  it('asks for flex only when the setting is on, and prices an answer flex served at its share', async () => {
+    const bodies: any[] = [];
+    const t: Transport = {
+      async fetch(_url, init) {
+        bodies.push(JSON.parse(String(init.body)));
+        return new Response(streamOf(answer('flex')), { status: 200 });
+      }
+    };
+    const evs = await ask(t, true);
+    expect(bodies[0].service_tier).toBe('flex');
+    const usage = evs.find((e) => e.type === 'usage') as Extract<ProviderEvent, { type: 'usage' }>;
+    expect(usage.usage.priceFactor).toBe(0.5);
+    expect(estimateCost(usage.usage, { inputPerMTok: 1, outputPerMTok: 2, currency: 'USD' })).toBeCloseTo((10 * 1 + 5 * 2) / 2 / 1e6);
+    await ask(t, false);
+    expect(bodies[1].service_tier).toBeUndefined();
+  });
+
+  it('sends a request flex refuses again in the standard tier, priced in full', async () => {
+    const bodies: any[] = [];
+    const t: Transport = {
+      async fetch(_url, init) {
+        bodies.push(JSON.parse(String(init.body)));
+        return bodies.length === 1
+          ? new Response(JSON.stringify({ error: { message: 'Resource unavailable' } }), { status: 429 })
+          : new Response(streamOf(answer('default')), { status: 200 });
+      }
+    };
+    const evs = await ask(t, true);
+    expect(bodies.map((b) => b.service_tier)).toEqual(['flex', undefined]);
+    expect(evs.some((e) => e.type === 'error')).toBe(false);
+    const usage = evs.find((e) => e.type === 'usage') as Extract<ProviderEvent, { type: 'usage' }>;
+    expect(usage.usage.priceFactor).toBeUndefined();
   });
 });

@@ -37,17 +37,17 @@ describe('working folder', () => {
     await putConversation(c);
     conversations.value = [c];
     const first = toolsFor(c);
-    expect(first.names).toEqual(['create_file', 'fetch_file']);
-    await first.run('create_file', { name: 'index.html', content: '<p>hi</p>', folder: 'Todo App' });
+    expect(first.names).toEqual(['write_file', 'fetch_file']);
+    await first.run('write_file', { name: 'index.html', content: '<p>hi</p>', folder: 'Todo App' });
     expect(workDirOf('c1')).toBe('Todo App/');
     const next = toolsFor(c);
     expect(next.names).toContain('read_file');
     // Paths are relative to the folder; a leading "/" means the folder too
-    await next.run('create_file', { name: '/js/app.js', content: 'x' });
+    await next.run('write_file', { name: '/js/app.js', content: 'x' });
     expect((await listFiles()).map((f) => f.name).sort()).toEqual(['Todo App/index.html', 'Todo App/js/app.js']);
     expect((await next.run('read_file', { file_id: 'JS/APP.js' })).content).toContain('x');
     // The same path again is the same file
-    const again = await next.run('create_file', { name: 'index.html', content: '<p>2</p>' });
+    const again = await next.run('write_file', { name: 'index.html', content: '<p>2</p>' });
     expect(again.content).toMatch(/^Replaced/);
   });
 
@@ -56,10 +56,10 @@ describe('working folder', () => {
     const b = conv('b');
     const d = conv('d');
     conversations.value = [a, b, d];
-    await toolsFor(a).run('create_file', { name: 'x.md', content: '1', folder: 'notes' });
-    await toolsFor(b).run('create_file', { name: 'x.md', content: '2', folder: 'Notes' });
+    await toolsFor(a).run('write_file', { name: 'x.md', content: '1', folder: 'notes' });
+    await toolsFor(b).run('write_file', { name: 'x.md', content: '2', folder: 'Notes' });
     expect([workDirOf('a'), workDirOf('b')]).toEqual(['notes/', 'Notes (2)/']);
-    await expect(toolsFor(d).run('create_file', { name: 'x.md', content: '3' })).rejects.toThrow(/folder/);
+    await expect(toolsFor(d).run('write_file', { name: 'x.md', content: '3' })).rejects.toThrow(/folder/);
     expect(workDirOf('d')).toBe('');
     // When no one chose a name (a fetched file came first): after the file, and the date only for nothing better
     expect(folderNameFor('Market Report.pdf', 0)).toBe('Market Report/');
@@ -76,13 +76,13 @@ describe('working folder', () => {
     await expect(plain.run('read_file', { file_id: 'out' })).rejects.toThrow(/使えません|can't be used/);
     await expect(plain.run('read_file', { file_id: '../theirs/secret.md' })).rejects.toThrow();
     // A file written to a path outside lands inside: there is no way to name another folder
-    await plain.run('create_file', { name: '../theirs/secret.md', content: 'overwrite?' });
+    await plain.run('write_file', { name: '../theirs/secret.md', content: 'overwrite?' });
     expect((await getFile('out'))!.current.text).toBe('secret');
     expect((await listFiles()).some((f) => f.name === 'mine/theirs/secret.md')).toBe(true);
     const history = [{ attachments: [{ fileId: 'out' }], parts: [] } as unknown as MessageRecord];
     const attached = toolsFor(c, history);
     expect((await attached.run('read_file', { file_id: 'out' })).content).toContain('secret');
-    await expect(attached.run('edit_file', { file_id: 'out', content: 'changed' })).rejects.toThrow(/読むことしか|only be read/);
+    await expect(attached.run('edit_file', { file_id: 'out', old_string: 'secret', new_string: 'changed' })).rejects.toThrow(/読むことしか|only be read/);
   });
 });
 

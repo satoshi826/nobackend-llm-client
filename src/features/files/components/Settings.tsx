@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { fileUsage } from '../../../lib/db/files';
 import { PermissionSelect, Section, Toggle } from '../../../components/settings-ui';
-import { FILE_TOOL_NAMES } from '../tools';
+import { FILE_TOOLS } from '../tools';
 import { fileSettings } from '../state';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
@@ -24,7 +24,7 @@ export function FilesSettings() {
         title={t('settings.toggle')}
         desc={t('settings.toggleDesc', { tokens: formatNumber(600) })}
       />
-      {fileSettings.value.value.fileTools && <PermissionSelect label={t('settings.permission')} tools={FILE_TOOL_NAMES} fallback="allow" />}
+      {fileSettings.value.value.fileTools && <PermissionSelect label={t('settings.permission')} tools={FILE_TOOLS} fallback="allow" />}
     </Section>
   );
 }

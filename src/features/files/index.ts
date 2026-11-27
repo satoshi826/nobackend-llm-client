@@ -35,8 +35,8 @@ registerToolView({
   icon: 'file',
   summary: (p) => {
     const d = p.uiDetails as { name?: string } | undefined;
-    const i = (p.input ?? {}) as { name?: string; file_id?: string };
-    return d?.name ?? i.name ?? i.file_id ?? '';
+    const i = (p.input ?? {}) as { name?: string; file_id?: string; pattern?: string };
+    return d?.name ?? i.name ?? i.file_id ?? i.pattern ?? '';
   },
   doneStatus: (p) => (p.name === 'read_file' ? t('tool.readDone') : undefined),
   Detail: FileToolDetail

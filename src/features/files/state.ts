@@ -15,12 +15,12 @@ import { mainView, showToast, sidebarOpen, sidebarTab, type MainViewState } from
 import { registerRoute, setHash } from '../../state/router';
 import { registerToolProvider } from '../../state/tool-registry';
 import { extractText } from './extract';
-import { filesNote, makeFileTools } from './tools';
+import { filesNote, makeFileTools, MAX_MATCHES, type Match } from './tools';
 import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
 import { fetchFromWeb } from '../../state/fetch-page';
 import type { Fetched } from '../../lib/fetcher/protocol';
-import { cleanStorage, type SandboxPage } from '../../lib/sandbox/client';
+import { cleanStorage, runJavaScript, type SandboxPage } from '../../lib/sandbox/client';
 
 /** Let chat models write and read files (create_file / append_file / edit_file / read_file) */
 export const fileSettings = defineFeatureSettings('files', { fileTools: true }, (old) => pickLegacy(old, { fileTools: true }));
@@ -465,8 +465,43 @@ export async function conversationFile(conv: Conversation, history: MessageRecor
 /** A path as the model sees it: relative to the working folder (whole when outside it) */
 const relativeTo = (dir: string, path: string) => (dir && isInside(path, dir) ? path.slice(dir.length) : path);
 
+/**
+ * Lines of the working folder's files that match a pattern from the model. It runs in a sandbox worker, stopped
+ * after RUN_TIMEOUT_MS: a pattern that backtracks without end must not freeze the app
+ */
+async function searchFolder(dir: string, pattern: string, ignoreCase: boolean, only: string | null): Promise<Match[]> {
+  if (!dir) return [];
+  const pick = only ? new RegExp(only, 'i') : null;
+  const files: Record<string, string> = {};
+  for (const f of await fdb.listFiles()) {
+    const path = f.name.slice(dir.length);
+    if (isInside(f.name, dir) && (!pick || pick.test(path))) files[path] = fdb.currentText(f);
+  }
+  const code = `const re = new RegExp(${JSON.stringify(pattern)}, ${JSON.stringify(ignoreCase ? 'i' : '')});
+const out = [];
+for (const [path, text] of Object.entries(files).sort(([a], [b]) => a.localeCompare(b))) {
+  const lines = text.split('\\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (!re.test(lines[i])) continue;
+    out.push({ path, line: i + 1, text: lines[i].slice(0, 2000) });
+    if (out.length > ${MAX_MATCHES}) return out;
+  }
+}
+return out;`;
+  const r = await runJavaScript(code, { files });
+  if (r.error || r.result === undefined) throw new Error(t('tool.searchFailed', { message: r.error ?? '' }));
+  return JSON.parse(r.result) as Match[];
+}
+
 function fileTools(conv: Conversation, history: MessageRecord[]) {
   const dir = () => workDirOf(conv.id);
+  /** A file the model may change: one in the working folder (one attached from outside is only read) */
+  const inFolder = async (id: string) => {
+    const f = await fdb.getFile(id);
+    if (!f) throw new Error(t('tool.notFound'));
+    if (!dir() || !isInside(f.name, dir())) throw new Error(t('tool.readOnly', { name: f.name }));
+    return f;
+  };
   return makeFileTools(
     {
       async fetch(url, signal) {
@@ -490,11 +525,31 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
       },
       get: (ref) => readableFile(conv.id, history, ref),
       async update(id, text, append) {
-        const f = await fdb.getFile(id);
-        if (!f) throw new Error(t('tool.notFound'));
-        // A file attached from outside the folder is only read: a change goes into a new file in the folder
-        if (!dir() || !isInside(f.name, dir())) throw new Error(t('tool.readOnly', { name: f.name }));
-        return fdb.setText(f, text, 'model', append);
+        return fdb.setText(await inFolder(id), text, 'model', append);
+      },
+      async list() {
+        const d = dir();
+        if (!d) return [];
+        const [files, images] = await Promise.all([fdb.listFiles(), listImages()]);
+        return [
+          ...files.filter((f) => isInside(f.name, d)).map((f) => ({ path: f.name.slice(d.length), kind: 'file' as const, size: f.size })),
+          ...images.filter((im) => im.info?.name && isInside(im.info.name, d)).map((im) => ({ path: im.info!.name.slice(d.length), kind: 'image' as const, size: im.size }))
+        ];
+      },
+      search: (pattern, ignoreCase, only) => searchFolder(dir(), pattern, ignoreCase, only),
+      async move(id, to) {
+        const f = await inFolder(id);
+        const full = dir() + to;
+        return withTakenPaths(async (taken) => {
+          if (!pathFree(full, taken, id)) throw new Error(t('tool.moveTaken', { name: to }));
+          const next = { ...f, name: full, mime: fdb.mimeFromName(full), updatedAt: Date.now() };
+          await fdb.putFile(next);
+          return next;
+        });
+      },
+      async remove(id) {
+        await inFolder(id);
+        await deleteFiles([id]);
       },
       pathOf: (f) => relativeTo(dir(), f.name)
     },

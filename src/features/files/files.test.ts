@@ -12,7 +12,7 @@ import { registerMessageTransform } from '../../lib/chat/request';
 
 registerMessageTransform(attachmentsTransform);
 import { parseDelimited } from './csv';
-import { filesNote, makeFileTools, READ_CHUNK, type FileToolDeps } from './tools';
+import { filesNote, globSource, makeFileTools, READ_LINES, type FileToolDeps } from './tools';
 
 const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
 
@@ -36,6 +36,25 @@ function memDeps(scope = new Set<string>()) {
       return next;
     },
     pathOf: (f) => f.name,
+    list: async () => [...files.values()].filter((f) => scope.has(f.id)).map((f) => ({ path: f.name, kind: 'file' as const, size: f.size })),
+    // As the sandbox worker does it (state.ts)
+    async search(pattern, ignoreCase, only) {
+      const re = new RegExp(pattern, ignoreCase ? 'i' : '');
+      const pick = only ? new RegExp(only, 'i') : null;
+      return [...files.values()]
+        .filter((f) => scope.has(f.id) && (!pick || pick.test(f.name)))
+        .flatMap((f) => currentText(f).split('\n').flatMap((text, i) => (re.test(text) ? [{ path: f.name, line: i + 1, text }] : [])));
+    },
+    async move(id, to) {
+      if ([...files.values()].some((f) => f.name === to)) throw new Error('taken');
+      const next = { ...files.get(id)!, name: to };
+      files.set(id, next);
+      return next;
+    },
+    async remove(id) {
+      files.delete(id);
+      scope.delete(id);
+    },
     // Stands in for the fetch page: "decline" in the address means the user said no; .png is an image
     async fetch(url) {
       if (url.includes('decline')) return null;
@@ -83,23 +102,23 @@ describe('file names and versions', () => {
 describe('file tools', () => {
   it('names files by path, and writing to a path the conversation has replaces that file', async () => {
     const { deps, files } = memDeps();
-    const c = await run(deps, 'create_file', { name: '/site//css/style.css', content: 'a{}' });
+    const c = await run(deps, 'write_file', { name: '/site//css/style.css', content: 'a{}' });
     expect((c.details as { name: string }).name).toBe('site/css/style.css');
-    const again = await run(deps, 'create_file', { name: 'site/css/style.css', content: 'b{}' });
+    const again = await run(deps, 'write_file', { name: 'site/css/style.css', content: 'b{}' });
     expect(again.content).toContain('Replaced');
     expect(files.size).toBe(1);
     // Read and edit by path as well as by id
     expect((await run(deps, 'read_file', { file_id: 'site/css/style.css' })).content).toContain('b{}');
-    await run(deps, 'edit_file', { file_id: 'site/css/style.css', find: 'b{}', replace: 'c{}' });
+    await run(deps, 'edit_file', { file_id: 'site/css/style.css', old_string: 'b{}', new_string: 'c{}' });
     expect(currentText([...files.values()][0])).toBe('c{}');
   });
   it('creates, appends, edits by find/replace and reads in chunks', async () => {
     const { deps, files } = memDeps();
-    const c = await run(deps, 'create_file', { name: 'report', content: '# Title\nintro' });
+    const c = await run(deps, 'write_file', { name: 'report', content: '# Title\nintro' });
     expect((c.details as { name: string }).name).toBe('report.md');
     const id = (c.details as { fileId: string }).fileId;
     await run(deps, 'append_file', { file_id: id, content: '\n## More' });
-    await run(deps, 'edit_file', { file_id: id, find: 'intro', replace: 'Introduction' });
+    await run(deps, 'edit_file', { file_id: id, old_string: 'intro', new_string: 'Introduction' });
     const f = files.get(id)!;
     expect(currentText(f)).toBe('# Title\nIntroduction\n## More');
     const r = await run(deps, 'read_file', { file_id: id });
@@ -108,14 +127,17 @@ describe('file tools', () => {
   });
   it('refuses a file without a name, so the model writes the call again', () => {
     const { deps } = memDeps();
-    expect(() => tool(deps, 'create_file').prepare({ content: 'x' })).toThrow(/name/);
+    expect(() => tool(deps, 'write_file').prepare({ content: 'x' })).toThrow(/name/);
   });
   it('rejects ambiguous or missing find text, and both modes at once', async () => {
     const { deps } = memDeps();
-    const id = ((await run(deps, 'create_file', { name: 'a.txt', content: 'x x' })).details as { fileId: string }).fileId;
-    await expect(run(deps, 'edit_file', { file_id: id, find: 'x', replace: 'y' })).rejects.toThrow(/複数/);
-    await expect(run(deps, 'edit_file', { file_id: id, find: 'zzz', replace: 'y' })).rejects.toThrow(/見つかりません/);
-    expect(() => tool(deps, 'edit_file').prepare({ file_id: id, content: 'a', find: 'x', replace: 'y' })).toThrow(/どちらか一方/);
+    const id = ((await run(deps, 'write_file', { name: 'a.txt', content: 'x x' })).details as { fileId: string }).fileId;
+    await expect(run(deps, 'edit_file', { file_id: id, old_string: 'x', new_string: 'y' })).rejects.toThrow(/複数/);
+    await expect(run(deps, 'edit_file', { file_id: id, old_string: 'zzz', new_string: 'y' })).rejects.toThrow(/見つかりません/);
+    expect(() => tool(deps, 'edit_file').prepare({ file_id: id, old_string: 'x' })).toThrow(/new_string/);
+    // Every occurrence, when asked
+    const r = await run(deps, 'edit_file', { file_id: id, old_string: 'x', new_string: 'y', replace_all: true });
+    expect(r.content).toContain('2 replacements');
   });
   it('cannot touch files outside the conversation', async () => {
     const scope = new Set<string>();
@@ -124,13 +146,52 @@ describe('file tools', () => {
     await expect(run(deps, 'read_file', { file_id: 'other' })).rejects.toThrow(/使えません/);
     await expect(run(deps, 'append_file', { file_id: 'other', content: 'x' })).rejects.toThrow(/使えません/);
   });
-  it('reads long files in pages', async () => {
+  it('reads with line numbers, in pages of lines (and of characters)', async () => {
     const { deps } = memDeps();
-    const id = ((await run(deps, 'create_file', { name: 'long.txt', content: 'a'.repeat(READ_CHUNK + 10) })).details as { fileId: string }).fileId;
+    const total = READ_LINES + 500;
+    const text = Array.from({ length: total }, (_, i) => `line ${i + 1}`).join('\n');
+    const id = ((await run(deps, 'write_file', { name: 'long.txt', content: text })).details as { fileId: string }).fileId;
     const first = await run(deps, 'read_file', { file_id: id });
-    expect(first.content).toContain(`offset=${READ_CHUNK}`);
-    const second = await run(deps, 'read_file', { file_id: id, offset: READ_CHUNK });
-    expect(second.content).toContain('end of file');
+    expect(first.content).toContain('     1\tline 1');
+    // The character limit ends this page before READ_LINES lines; the note says where to go on
+    const next = Number(/continue with offset=(\d+)/.exec(first.content)![1]);
+    expect(next).toBeGreaterThan(1);
+    expect(first.content).not.toContain(`\tline ${next}\n`);
+    const second = await run(deps, 'read_file', { file_id: id, offset: next, limit: 2 });
+    expect(second.content).toContain(`${next}\tline ${next}`);
+    expect(second.content).toContain(`continue with offset=${next + 2}`);
+    expect((await run(deps, 'read_file', { file_id: id, offset: total - 1 })).content).toContain(`end of file; ${total} lines`);
+  });
+  it('lists by glob, searches lines, moves and deletes', async () => {
+    const { deps, files } = memDeps();
+    await run(deps, 'write_file', { name: 'index.html', content: '<script src="js/app.js"></script>' });
+    await run(deps, 'write_file', { name: 'js/app.js', content: 'const a = 1;\nfunction render() {}\nrender();' });
+    await run(deps, 'write_file', { name: 'css/style.css', content: 'body {}' });
+    expect((await run(deps, 'list_files', { pattern: '**/*.js' })).content).toBe('js/app.js (43 chars)');
+    expect((await run(deps, 'list_files', {})).content.split('\n')).toHaveLength(3);
+    expect((await run(deps, 'list_files', { pattern: '*.{html,css}' })).content).toBe('index.html (33 chars)');
+    const found = await run(deps, 'search_files', { pattern: 'render\\(', glob: '**/*.js' });
+    expect(found.content).toBe('js/app.js:2: function render() {}\njs/app.js:3: render();');
+    expect(() => tool(deps, 'search_files').prepare({ pattern: '(' })).toThrow(/正規表現/);
+    const id = [...files.values()].find((f) => f.name === 'css/style.css')!.id;
+    await run(deps, 'move_file', { file_id: 'css/style.css', to: 'style.css' });
+    expect(files.get(id)!.name).toBe('style.css');
+    await expect(run(deps, 'move_file', { file_id: 'style.css', to: 'index.html' })).rejects.toThrow();
+    // Deleting is asked every time
+    expect(tool(deps, 'delete_file').alwaysAsk).toBe(true);
+    await run(deps, 'delete_file', { file_id: 'style.css' });
+    expect(files.has(id)).toBe(false);
+  });
+  it('turns globs into path patterns', () => {
+    const m = (glob: string, path: string) => new RegExp(globSource(glob), 'i').test(path);
+    expect(m('**', 'a/b/c.js')).toBe(true);
+    expect(m('*.js', 'a/b.js')).toBe(false);
+    expect(m('**/*.js', 'b.js')).toBe(true);
+    expect(m('a/**/c.js', 'a/c.js')).toBe(true);
+    expect(m('src/?.ts', 'src/a.ts')).toBe(true);
+    expect(m('*.{css,scss}', 'x.scss')).toBe(true);
+    expect(m('a+b.md', 'a+b.md')).toBe(true);
+    expect(m('a+b.md', 'aab.md')).toBe(false);
   });
   it('names the working folder and lists its files for the system prompt', () => {
     expect(filesNote('app/', [])).toContain('"app/"');
@@ -143,14 +204,15 @@ describe('file tools', () => {
   it('offers only create_file and fetch_file until the working folder exists, and lets the model name it', () => {
     const { deps } = memDeps();
     const before = makeFileTools(deps, { hasFolder: false });
-    expect(before.map((t) => t.name)).toEqual(['create_file', 'fetch_file']);
+    expect(before.map((t) => t.name)).toEqual(['write_file', 'fetch_file']);
     const create = before[0];
     expect(Object.keys((create.parameters as { properties: object }).properties)).toContain('folder');
     expect(create.prepare({ name: 'a.md', content: 'x', folder: 'todo-app' })).toEqual({ name: 'a.md', content: 'x', folder: 'todo-app' });
     const after = makeFileTools(deps, { hasFolder: true });
-    expect(after.map((t) => t.name)).toEqual(['create_file', 'append_file', 'edit_file', 'read_file', 'fetch_file']);
-    expect(Object.keys((after[0].parameters as { properties: object }).properties)).not.toContain('folder');
-    expect(after[0].prepare({ name: 'a.md', content: 'x', folder: 'ignored' })).toEqual({ name: 'a.md', content: 'x' });
+    expect(after.map((t) => t.name)).toEqual(['list_files', 'search_files', 'read_file', 'write_file', 'edit_file', 'append_file', 'move_file', 'delete_file', 'fetch_file']);
+    const write = after.find((t) => t.name === 'write_file')!;
+    expect(Object.keys((write.parameters as { properties: object }).properties)).not.toContain('folder');
+    expect(write.prepare({ name: 'a.md', content: 'x', folder: 'ignored' })).toEqual({ name: 'a.md', content: 'x' });
   });
 });
 

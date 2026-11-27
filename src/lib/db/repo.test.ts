@@ -2,6 +2,8 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import * as repo from './repo';
 import { db, type Conversation, type MessageRecord, type ModelRecord } from './schema';
+import { setDataKey } from './sealed';
+import { generateDataKey } from '../crypto/data';
 
 const conv = (id: string, extra: Partial<Conversation> = {}): Conversation => ({
   id,
@@ -88,6 +90,29 @@ describe('searchMessages', () => {
     }
     expect((await repo.searchMessages('find')).map((h) => h.conversationId).sort()).toEqual(['a', 'b', 'c', 't']);
     expect(await repo.searchMessages('find', undefined, 2)).toHaveLength(2);
+  });
+
+  it('with a passphrase, decrypts stored messages once, keeps up with saves and deletes, and finds the newest first', async () => {
+    setDataKey(await generateDataKey());
+    try {
+      await repo.putConversation(conv('a'));
+      await repo.putConversation(conv('b'));
+      await repo.putMessage(msg('a1', 'a', 'Secret one', 1), false);
+      await repo.putMessage(msg('b1', 'b', 'secret two', 2), false);
+      // As after a reload: what is stored is read and decrypted by the first search
+      repo.clearSearchCache();
+      const [first, second] = await Promise.all([repo.searchMessages('SECRET'), repo.searchMessages('secret')]);
+      expect(first.map((h) => h.messageId)).toEqual(['b1', 'a1']);
+      expect(second).toEqual(first);
+      await repo.putMessage(msg('a2', 'a', 'a newer secret', 3), false);
+      expect((await repo.searchMessages('secret')).map((h) => h.messageId)).toEqual(['a2', 'b1']);
+      await repo.deleteConversation('a');
+      expect((await repo.searchMessages('secret')).map((h) => h.messageId)).toEqual(['b1']);
+    } finally {
+      // Encrypted rows go before the key does (the shared clean-up reads what is stored)
+      await Promise.all(['conversations', 'messages'].map((t) => db().table(t).clear()));
+      setDataKey(null);
+    }
   });
 });
 

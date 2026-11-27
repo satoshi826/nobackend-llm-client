@@ -46,7 +46,8 @@ export async function deleteConversation(id: string, withItems = false): Promise
     await db().conversations.delete(id);
   });
   for (const t of dataTables()) await t.onConversationDeleted?.(id, { temporary: false, withItems });
-  for (const [k, m] of searchCache) if (m.conversationId === id) searchCache.delete(k);
+  for (const [k, m] of searchIndex) if (m.conversationId === id) searchIndex.delete(k);
+  searchOrder = null;
 }
 
 /** Images and files made in or brought into a stored conversation, which deleting it can take along */
@@ -71,8 +72,11 @@ export async function putMessage(m: MessageRecord, temporary: boolean): Promise<
     return;
   }
   const copy = structuredClone(m);
-  // The decrypted copy for search is needed only when stored text is encrypted
-  if (currentDataKey()) searchCache.set(copy.id, copy);
+  // Decrypted text for search is kept only when stored text is encrypted (else search reads the database)
+  if (currentDataKey()) {
+    searchIndex.set(copy.id, searchableOf(copy));
+    searchOrder = null;
+  }
   await db().messages.put(await seal('messages', copy));
 }
 
@@ -83,57 +87,93 @@ export interface SearchHit {
   snippet: string;
 }
 
+/** A message as search reads it: only its text parts */
+interface Searchable {
+  id: string;
+  conversationId: string;
+  createdAt: number;
+  texts: string[];
+}
+
+function searchableOf(m: MessageRecord): Searchable {
+  return { id: m.id, conversationId: m.conversationId, createdAt: m.createdAt, texts: m.parts.flatMap((p) => (p.type === 'text' ? [p.text] : [])) };
+}
+
+/** Where `q` (lowercased) first shows in a message, with a little text around it */
+function hitIn(m: Searchable, q: string): SearchHit | undefined {
+  for (const text of m.texts) {
+    const i = text.toLowerCase().indexOf(q);
+    if (i < 0) continue;
+    const start = Math.max(0, i - 20);
+    // Strip Markdown syntax (table rules, headings, emphasis, etc.) for display
+    const raw = text.slice(start, i + q.length + 40).replace(/\|?-{3,}\|?|[|#*`>]+/g, ' ');
+    return { conversationId: m.conversationId, messageId: m.id, snippet: (start > 0 ? '…' : '') + raw.replace(/\s+/g, ' ').trim() };
+  }
+}
+
 /**
- * Full-text search over conversation text (case-insensitive substring match). Returns the first match per conversation.
- * signal: stops the scan once a newer search has started
+ * Full-text search over conversation text (case-insensitive substring match). Returns the first match per conversation,
+ * newest first. signal: stops the scan once a newer search has started
  */
 export async function searchMessages(query: string, signal?: AbortSignal, limit = 50): Promise<SearchHit[]> {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const hits = new Map<string, SearchHit>();
-  const consider = (m: MessageRecord) => {
+  const consider = (m: Searchable) => {
     if (hits.has(m.conversationId)) return;
-    for (const p of m.parts) {
-      if (p.type !== 'text') continue;
-      const i = p.text.toLowerCase().indexOf(q);
-      if (i >= 0) {
-        const start = Math.max(0, i - 20);
-        // Strip Markdown syntax (table rules, headings, emphasis, etc.) for display
-        const raw = p.text.slice(start, i + q.length + 40).replace(/\|?-{3,}\|?|[|#*`>]+/g, ' ');
-        const snippet = (start > 0 ? '…' : '') + raw.replace(/\s+/g, ' ').trim();
-        hits.set(m.conversationId, { conversationId: m.conversationId, messageId: m.id, snippet });
-        return;
-      }
-    }
+    const hit = hitIn(m, q);
+    if (hit) hits.set(m.conversationId, hit);
   };
-  for (const m of memMessages.values()) consider(m);
+  for (const m of memMessages.values()) consider(searchableOf(m));
   if (!currentDataKey()) {
     await db()
       .messages.orderBy('createdAt')
       .reverse()
       .until(() => hits.size >= limit || !!signal?.aborted)
-      .each(consider);
+      .each((m) => consider(searchableOf(m)));
     return [...hits.values()];
   }
-  // When encrypted, search decrypted text kept in memory (everything is decrypted only the first time)
-  if (!searchCacheFull) {
-    for (const raw of await db().messages.toArray()) if (!searchCache.has(raw.id)) searchCache.set(raw.id, await unseal(raw));
-    searchCacheFull = true;
-  }
-  for (const m of [...searchCache.values()].sort((a, b) => b.createdAt - a.createdAt)) {
-    if (signal?.aborted) break;
+  // When encrypted, search the decrypted text kept in memory (decrypted once, the first time)
+  searchLoad ??= loadSearchIndex().catch((e) => {
+    searchLoad = null;
+    throw e;
+  });
+  await searchLoad;
+  searchOrder ??= [...searchIndex.values()].sort((a, b) => b.createdAt - a.createdAt);
+  for (const m of searchOrder) {
+    if (signal?.aborted || hits.size >= limit) break;
     consider(m);
-    if (hits.size >= limit) break;
   }
   return [...hits.values()];
 }
 
-/** Decrypted text (for search while encrypted). Gone on lock, since the whole page is reloaded */
-const searchCache = new Map<string, MessageRecord>();
-let searchCacheFull = false;
+/** Decrypted text for search while encrypted (searchable form only). Gone on lock, since the whole page is reloaded */
+const searchIndex = new Map<string, Searchable>();
+/** searchIndex newest first; null after a change, sorted again by the next search */
+let searchOrder: Searchable[] | null = null;
+/** The first decryption of every message, shared by the searches started while it runs */
+let searchLoad: Promise<void> | null = null;
+
+/** Decrypt every stored message for search, a batch at a time, letting the page draw and take input every 30 ms */
+async function loadSearchIndex() {
+  const rows = await db().messages.toArray();
+  let since = performance.now();
+  for (let i = 0; i < rows.length; i += 200) {
+    const opened = await Promise.all(rows.slice(i, i + 200).map((r) => unseal<MessageRecord>(r)));
+    // A message saved meanwhile is already there, newer
+    for (const m of opened) if (!searchIndex.has(m.id)) searchIndex.set(m.id, searchableOf(m));
+    if (performance.now() - since > 30) {
+      await new Promise((r) => setTimeout(r, 0));
+      since = performance.now();
+    }
+  }
+  searchOrder = null;
+}
+
 export function clearSearchCache() {
-  searchCache.clear();
-  searchCacheFull = false;
+  searchIndex.clear();
+  searchOrder = null;
+  searchLoad = null;
 }
 
 // ---- usage ----

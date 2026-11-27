@@ -61,7 +61,7 @@ export function makeFileTools(deps: FileToolDeps): Tool[] {
     name: CREATE_FILE,
     label: t('tool.create'),
     description:
-      "Create a new text file in the user's Files tab and return its id. Use it when the user asks for a document or a deliverable (a report, notes, a translation, a table, code), or when the answer is too long for a chat message. To change a file that already exists use edit_file. Write Markdown (.md) unless another format fits better (.csv, .json, .txt, .py, ...). For a long document, write the first part here and continue with append_file. Afterwards reply briefly with what the file contains; do not repeat its text in the chat.",
+      "Create a new text file in the user's Files tab and return its id. Use it when the user asks for a document or a deliverable (a report, notes, a translation, a table, code), or when the answer is too long for a chat message. To change a file that already exists use edit_file. Write Markdown (.md) unless another format fits better (.csv, .json, .txt, .py, ...). For a long document, write the first part here and continue with append_file. An .html or .svg file opens as a page in a sandbox with no network: put all CSS and JavaScript in the file itself (images as data: URLs); CDN scripts, web fonts and links to other files do not load. Afterwards reply briefly with what the file contains; do not repeat its text in the chat.",
     parameters: {
       type: 'object',
       properties: {

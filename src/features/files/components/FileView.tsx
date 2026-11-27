@@ -1,4 +1,5 @@
 // A file in the main area: read, edit, go through versions, download, print (to PDF), use in a chat
+import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { currentVersion, extOf, versionsOf, versionText } from '../../../lib/db/files';
 import type { FileRecord, FileVersion } from '../../../lib/db/schema';
@@ -8,6 +9,7 @@ import { askConfirm } from '../../../components/ConfirmDialog';
 import { filesVersion } from '../../../state/stored';
 import { copyText } from '../../../components/clipboard';
 import { Markdown } from '../../../components/Markdown';
+import { useDialog } from '../../../components/dialog';
 import { PageHeader } from '../../../components/PageHeader';
 import { Badge, Button, Icon, IconButton, Segmented, Select, Spinner, TextField } from '../../../components/ui';
 import { SandboxFrame, svgPage } from '../../../components/SandboxFrame';
@@ -305,9 +307,15 @@ function FileBody({ text, ext }: { text: string; ext: string }) {
   return <pre class="font-mono text-sm break-words whitespace-pre-wrap">{text}</pre>;
 }
 
-/** An HTML or SVG file: shown as a page in the sandbox (its scripts run there, without network), or as its code */
+/**
+ * An HTML or SVG file: shown as a page in the sandbox (its scripts run there, without network), or as its code. The
+ * page can start again (reload) and open over the whole window (its own run of the page)
+ */
 function PageBody({ text, svg }: { text: string; svg: boolean }) {
   const [view, setView] = useState<'preview' | 'code'>(settings.value.htmlFilePreview ? 'preview' : 'code');
+  const [run, setRun] = useState(0);
+  const [full, setFull] = useState(false);
+  const page = svg ? svgPage(text) : text;
   return (
     <div class="space-y-2">
       <div class="flex flex-wrap items-center gap-2">
@@ -320,14 +328,50 @@ function PageBody({ text, svg }: { text: string; svg: boolean }) {
           value={view}
           onChange={setView}
         />
-        {view === 'preview' && <span class="text-xs text-muted">{t('file.sandboxNote')}</span>}
+        {view === 'preview' && <span class="min-w-0 flex-1 text-xs text-muted">{t('file.sandboxNote')}</span>}
+        {view === 'preview' && (
+          <div class="ml-auto flex items-center gap-0.5">
+            <IconButton label={t('file.reload')} onClick={() => setRun(run + 1)}>
+              <Icon name="refresh" />
+            </IconButton>
+            <IconButton label={t('file.fillWindow')} onClick={() => setFull(true)}>
+              <Icon name="expand" />
+            </IconButton>
+          </div>
+        )}
       </div>
       {view === 'preview' ? (
-        <SandboxFrame html={svg ? svgPage(text) : text} title={t('file.preview')} class="h-[70vh]" />
+        <SandboxFrame key={run} html={page} title={t('file.preview')} class="h-[70vh]" />
       ) : (
         <pre class="font-mono text-sm break-words whitespace-pre-wrap">{text}</pre>
       )}
+      {full && <FullPage html={page} onClose={() => setFull(false)} />}
     </div>
+  );
+}
+
+/**
+ * The page filling the whole window, its buttons floating over its top right corner. Rendered at the page root: the
+ * file panel's glass (backdrop-filter) would otherwise hold a fixed layer inside it
+ */
+function FullPage({ html, onClose }: { html: string; onClose(): void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [run, setRun] = useState(0);
+  useDialog(ref, { onClose, active: true });
+  return createPortal(
+    <div ref={ref} class="fixed inset-0 z-[70] bg-white" role="dialog" aria-modal="true" aria-label={t('file.preview')}>
+      {/* First in the layer, so focus starts on a button: keys pressed inside the page's frame never reach the app (Esc) */}
+      <div class="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-2 z-10 flex items-center gap-0.5 rounded-full bg-black/60 p-0.5 text-white backdrop-blur-sm">
+        <IconButton class="text-white hover:bg-glass" label={t('file.reload')} onClick={() => setRun(run + 1)}>
+          <Icon name="refresh" />
+        </IconButton>
+        <IconButton class="text-white hover:bg-glass" label={t('file.closeFill')} onClick={onClose} data-dialog-close data-autofocus>
+          <Icon name="x" />
+        </IconButton>
+      </div>
+      <SandboxFrame key={run} html={html} title={t('file.preview')} class="h-full rounded-none! border-0!" />
+    </div>,
+    document.body
   );
 }
 

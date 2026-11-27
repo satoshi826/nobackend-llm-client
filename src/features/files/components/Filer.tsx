@@ -477,6 +477,7 @@ function FolderTile({ f, picked, selecting, onToggle, api }: { f: FolderItem; pi
   const drop = useDropTarget(f.path, api);
   return (
     <div
+      data-entry={key}
       class={cx(
         'lift group relative flex items-center gap-2 rounded-xl border bg-glass py-1.5 pr-1 pl-2.5 select-none [-webkit-touch-callout:none]',
         picked ? 'border-accent ring-2 ring-accent/40' : drop.over ? 'border-accent bg-accent-soft' : 'border-line hover:border-line-strong'
@@ -532,6 +533,7 @@ function Card({ it, picked, selecting, onToggle, onOpen, api }: { it: FilerItem;
   };
   return (
     <div
+      data-entry={it.key}
       class={cx(
         'lift group relative flex flex-col overflow-hidden rounded-[18px] border bg-glass select-none [-webkit-touch-callout:none]',
         picked ? 'border-accent ring-2 ring-accent/40' : 'border-line hover:border-line-strong'
@@ -868,6 +870,7 @@ function ListRow({
   const [menu, setMenu] = useState(false);
   return (
     <tr
+      data-entry={rowKey}
       class={cx('group border-b border-line select-none [-webkit-touch-callout:none]', picked ? 'bg-accent-soft' : dropFolder !== undefined && drop.over ? 'bg-accent-soft' : 'hover:bg-glass')}
       {...press.handlers}
       {...(dropFolder !== undefined ? drop.handlers : {})}

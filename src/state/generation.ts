@@ -27,7 +27,8 @@ import { saveReplyImage } from './media';
 
 let pendingFlush = 0;
 const pendingUpdates = new Map<string, MessageRecord>();
-function scheduleMessageUpdate(m: MessageRecord) {
+/** Show a message that changed while it is written (applied once per frame; a perf measurement drives it too) */
+export function scheduleMessageUpdate(m: MessageRecord) {
   pendingUpdates.set(m.id, { ...m, parts: m.parts.map((p) => ({ ...p })) });
   if (!pendingFlush) pendingFlush = requestAnimationFrame(flushUpdates);
 }

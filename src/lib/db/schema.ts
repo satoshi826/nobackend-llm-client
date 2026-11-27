@@ -351,7 +351,14 @@ export class AppDB extends Dexie {
 }
 
 let _db: AppDB | null = null;
+let dbName = 'nobackend-llm-client';
 export function db(): AppDB {
-  if (!_db) _db = new AppDB();
+  if (!_db) _db = new AppDB(dbName);
   return _db;
+}
+
+/** Use another database (perf mode keeps its generated data apart from the real one); call before the first db() */
+export function setDatabaseName(name: string) {
+  if (_db) throw new Error('The database is already open');
+  dbName = name;
 }

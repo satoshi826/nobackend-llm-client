@@ -22,13 +22,16 @@ export async function restoreRoute(hash = location.hash) {
   }
 }
 
+/** The address without its hash: the query stays (`?perf` keeps perf mode's own data) */
+const withoutHash = () => location.pathname + location.search;
+
 export function setHash(next: string) {
-  if (location.hash !== next) history.replaceState(null, '', next || location.pathname);
+  if (location.hash !== next) history.replaceState(null, '', next || withoutHash());
 }
 
 /** A new place the browser's Back returns from (e.g. a folder opened in the Files tab), not a change of the current one */
 export function pushHash(next: string) {
-  if (location.hash !== next) history.pushState(null, '', next || location.pathname);
+  if (location.hash !== next) history.pushState(null, '', next || withoutHash());
 }
 
 // Back and Forward open what the hash they land on names (tests run without a window)

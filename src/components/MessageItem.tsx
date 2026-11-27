@@ -411,7 +411,7 @@ function Suggestions({ m }: { m: MessageRecord }) {
 export const MessageItem = memo(function MessageItem({ m, isLast }: { m: MessageRecord; isLast?: boolean }) {
   if (m.compaction) return <CompactionDivider m={m} />;
   return (
-    <div class={cx('py-3', Date.now() - m.createdAt < 4000 && 'rise')}>
+    <div class={cx('py-3', Date.now() - m.createdAt < 4000 && 'rise')} data-message-id={m.id}>
       {m.role === 'user' ? <UserMessage m={m} /> : <AssistantMessage m={m} />}
       {isLast && m.role === 'assistant' && m.status !== 'streaming' && <Suggestions m={m} />}
     </div>

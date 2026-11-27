@@ -6,3 +6,6 @@ dist/
 dist-vault/
 dist-fetch/
 .wrangler
+
+# Performance measurements (scripts/perf): builds and results
+tmp/

@@ -13,7 +13,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
-    "lint:deps": "node scripts/check-deps.mjs"
+    "lint:deps": "node scripts/check-deps.mjs",
+    "perf": "node --no-warnings=ExperimentalWarning scripts/perf/run.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -31,6 +32,7 @@
     "fake-indexeddb": "^6.2.8",
     "jsdom": "^31.0.1",
     "oxlint": "^1.95.0",
+    "playwright": "^1.65.1",
     "tailwindcss": "^4.3.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",

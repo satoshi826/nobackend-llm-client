@@ -56,7 +56,7 @@ export async function storageBreakdown(): Promise<StorageBreakdown> {
   return {
     conversations: await measure(['conversations', 'messages'], 'conversations'),
     ...(await media()),
-    files: await measure(['files', 'fileVersions'], 'files'),
+    files: await measure(['files', 'fileTexts'], 'files'),
     other: (await measure(['settings', 'models', 'usage', 'prompts', 'skills'], 'settings')).bytes
   };
 }

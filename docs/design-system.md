@@ -26,6 +26,7 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 - **A busy control keeps its label and width.** While it works, a spinner takes the place of its icon (or covers the label where there is no icon); the text does not change to "…ing". *Check:* start each slow action and watch the control.
 - **Every interactive element is reachable by keyboard.** Visible `:focus-visible` ring, Tab stays inside an open dialog, Esc closes the topmost one, focus returns to the opener. *Check:* go through the screen with Tab, Enter and Esc.
 - **No browser dialogs.** No `alert()` / `confirm()` / `prompt()`; confirmations are in-app dialogs.
+- **Only what can work is shown.** An action appears only while what it needs is there (a key, a model, its item); an active one stays so it can be turned off. *Why:* a button that ends in an error teaches that buttons may not work. *Check:* every screen with no keys, and after removing an answer's key or source.
 
 ### When UI changes
 

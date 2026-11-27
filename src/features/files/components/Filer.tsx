@@ -1,6 +1,8 @@
-// The file manager in the main area: every file and image as cards or a list. The header holds the search,
-// the filter and sort menus (the sidebar's Files panel is a set of shortcuts to the same filters), the layout
-// and upload; selected items get their actions over the header. Files can also be dropped anywhere on it.
+// The file manager in the main area: every file and image as cards or a list. The header holds the search and
+// upload (selected items get their actions over it); the row under it the count, the filters in effect (the
+// sidebar's Files panel is a set of shortcuts to them), the sort menu and the layout. Files can also be dropped
+// anywhere on it.
+import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { currentText } from '../../../lib/db/files';
 import { getImage } from '../../../lib/db/images';
@@ -196,20 +198,7 @@ export function Filer() {
       <PageHeader>
           <SearchField class="min-w-0 flex-1 md:max-w-xs" placeholder={t('filer.search')} label={t('filer.searchLabel')} value={filerQuery.value} onInput={(v) => (filerQuery.value = v)} />
           <div class="ml-auto flex shrink-0 items-center gap-0.5">
-            <SortMenu prefs={prefs} />
-            {/* On phones the layout is chosen in the sort menu, to leave room for the search */}
-            <span class="hidden sm:block">
-              <Segmented
-                label={t('filer.layout')}
-                items={[
-                  { id: 'grid', label: t('filer.grid'), icon: 'grid', iconOnly: true },
-                  { id: 'list', label: t('filer.list'), icon: 'list', iconOnly: true }
-                ]}
-                value={prefs.layout}
-                onChange={(layout) => void setFilerPrefs({ layout })}
-              />
-            </span>
-            <Button variant="outline" class="ml-1 py-1! text-sm" onClick={() => input.current?.click()} title={t('filer.uploadTitle')} aria-label={t('upload')}>
+            <Button variant="outline" class="py-1! text-sm" onClick={() => input.current?.click()} title={t('filer.uploadTitle')} aria-label={t('upload')}>
               <Icon name="upload" />
               <span class="hidden lg:inline">{t('upload')}</span>
             </Button>
@@ -255,7 +244,19 @@ export function Filer() {
           </div>
         )}
       </PageHeader>
-      <FilterChips count={items?.length ?? null} />
+      <FilterChips count={items?.length ?? null}>
+        {/* How the list is shown: under the header, so the search keeps its room on phones */}
+        <SortMenu prefs={prefs} />
+        <Segmented
+          label={t('filer.layout')}
+          items={[
+            { id: 'grid', label: t('filer.grid'), icon: 'grid', iconOnly: true },
+            { id: 'list', label: t('filer.list'), icon: 'list', iconOnly: true }
+          ]}
+          value={prefs.layout}
+          onChange={(layout) => void setFilerPrefs({ layout })}
+        />
+      </FilterChips>
 
       <div class="scroll-thin min-h-0 flex-1 overflow-y-auto px-3 pb-3 sm:px-4 sm:pb-4 md:pr-7 md:pl-1">
         {!items ? (
@@ -305,7 +306,7 @@ function Choice({ on, icon, onSelect, children }: { on: boolean; icon?: IconName
 
 const MenuLabel = ({ children }: { children: string }) => <div class="px-2.5 pt-1.5 pb-1 text-xs font-medium text-muted">{children}</div>;
 
-/** Sort key and direction; the layout too (on phones the layout switch is only here) */
+/** Sort key and direction */
 function SortMenu({ prefs }: { prefs: FilerPrefs }) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLSpanElement>(null);
@@ -331,26 +332,21 @@ function SortMenu({ prefs }: { prefs: FilerPrefs }) {
           <Choice on={prefs.order === 'desc'} onSelect={() => void setFilerPrefs({ order: 'desc' })}>
             {t('sort.desc')}
           </Choice>
-          <MenuSeparator />
-          <MenuLabel>{t('filer.layout')}</MenuLabel>
-          <Choice on={prefs.layout === 'grid'} icon="grid" onSelect={() => void setFilerPrefs({ layout: 'grid' })}>
-            {t('filer.grid')}
-          </Choice>
-          <Choice on={prefs.layout === 'list'} icon="list" onSelect={() => void setFilerPrefs({ layout: 'list' })}>
-            {t('filer.list')}
-          </Choice>
         </Popover>
       )}
     </span>
   );
 }
 
-/** How many items are shown, and the filters in effect (the header has no title, so they are shown here) */
-function FilterChips({ count }: { count: number | null }) {
+/**
+ * How many items are shown and the filters in effect (the header has no title, so they are shown here), with the
+ * controls for how the list is shown (children) at the right end
+ */
+function FilterChips({ count, children }: { count: number | null; children: ComponentChildren }) {
   const view = filerView.value;
   const conv = filerConversation.value;
   return (
-    <div class="mx-3 flex min-h-11 flex-wrap items-center gap-1.5 py-1.5 sm:mx-4 md:mr-7 md:ml-1">
+    <div class="mx-3 flex min-h-11 flex-wrap items-center gap-1.5 pt-3 pb-3 sm:mx-4 md:mr-7 md:ml-1">
       <span class="px-1 text-xs text-muted tabular-nums">{count === null ? '' : count === 1 ? t('filer.countOne') : t('filer.count', { n: formatNumber(count) })}</span>
       {view !== 'all' && (
         <Chip on class="h-7! pr-2!" aria-label={t('filter.remove', { name: viewLabel(view) })} onClick={() => (filerView.value = 'all')}>
@@ -366,6 +362,7 @@ function FilterChips({ count }: { count: number | null }) {
           <Icon name="x" class="size-3.5 shrink-0 text-muted" />
         </Chip>
       )}
+      <div class="ml-auto flex shrink-0 items-center gap-2">{children}</div>
     </div>
   );
 }

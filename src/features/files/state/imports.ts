@@ -103,7 +103,7 @@ export async function uploadFiles(files: File[], conv: Conversation) {
 }
 
 /** Attach several saved files and go back to the chat */
-export async function useInChat(ids: string[]) {
+export async function attachToChat(ids: string[]) {
   for (const id of ids) await attachExisting(id);
   showChat();
 }

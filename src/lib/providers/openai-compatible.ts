@@ -101,7 +101,7 @@ function limitReasoning(msgs: any[], mode: 'always' | 'tool-turns' | 'never'): a
 export function buildChatBody(cfg: ProviderConfig, preset: ProviderPreset, req: ChatRequest): Record<string, any> {
   const p = req.params ?? {};
   let body: Record<string, any> = {
-    ...(cfg.extraBody ?? {}),
+    ...cfg.extraBody,
     model: req.model,
     messages: limitReasoning(toOpenAIMessages(req.messages), preset.reasoningResend ?? 'always'),
     stream: true,
@@ -125,7 +125,7 @@ export const openAICompatibleAdapter: ProviderAdapter = {
     const url = joinUrl(effectiveBase(cfg), preset.modelsPath ?? 'models');
     let res: Response;
     try {
-      res = await transport.fetch(url, { method: 'GET', headers: { Accept: 'application/json', ...(cfg.extraHeaders ?? {}) } }, auth);
+      res = await transport.fetch(url, { method: 'GET', headers: { Accept: 'application/json', ...cfg.extraHeaders } }, auth);
     } catch (e) {
       if (e instanceof ProviderFailure) throw e;
       throw new ProviderFailure(errorFromFetchFailure(e, preset.corsHint));
@@ -166,7 +166,7 @@ async function* streamChat(
       url,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...(cfg.extraHeaders ?? {}) },
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...cfg.extraHeaders },
         body: JSON.stringify(body),
         signal: req.signal
       },

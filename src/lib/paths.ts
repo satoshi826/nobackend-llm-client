@@ -37,6 +37,7 @@ function pathParts(raw: string): string[] {
     raw
       // One form for the same text (a Mac gives names in NFD), so names a model writes match names from a disk
       .normalize('NFC')
+      // oxlint-disable-next-line no-control-regex -- control characters are what it removes
       .replace(/[\u0000-\u001f\u007f]/g, '')
       .split(/[\\/]/)
       .map((p) => p.trim())

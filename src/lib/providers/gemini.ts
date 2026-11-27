@@ -100,7 +100,7 @@ export const geminiAdapter: ProviderAdapter = {
       const path = (preset.modelsPath ?? 'models?pageSize=200') + (token ? `&pageToken=${encodeURIComponent(token)}` : '');
       let res: Response;
       try {
-        res = await transport.fetch(joinUrl(cfg.baseUrl, path), { method: 'GET', headers: { Accept: 'application/json', ...(cfg.extraHeaders ?? {}) } }, auth);
+        res = await transport.fetch(joinUrl(cfg.baseUrl, path), { method: 'GET', headers: { Accept: 'application/json', ...cfg.extraHeaders } }, auth);
       } catch (e) {
         if (e instanceof ProviderFailure) throw e;
         throw new ProviderFailure(errorFromFetchFailure(e, preset.corsHint));
@@ -124,7 +124,7 @@ export const geminiAdapter: ProviderAdapter = {
         joinUrl(cfg.baseUrl, `models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`),
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...(cfg.extraHeaders ?? {}) },
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...cfg.extraHeaders },
           body: JSON.stringify(buildGeminiBody(req)),
           signal: req.signal
         },

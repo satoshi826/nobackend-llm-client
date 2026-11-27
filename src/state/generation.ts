@@ -207,7 +207,7 @@ export async function editUserMessage(userId: string, newText: string) {
     id: repo.newId(),
     parts: [{ type: 'text', text: newText }],
     createdAt: Date.now(),
-    ...(handler?.edit?.(orig, newText) ?? {})
+    ...handler?.edit?.(orig, newText)
   };
   await putMessage(user, conv);
   messages.value = [...messages.value, user];

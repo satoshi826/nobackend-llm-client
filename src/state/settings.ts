@@ -94,7 +94,7 @@ export const settings = signal<Settings>(DEFAULT_SETTINGS);
 
 /** Stored settings over the defaults (tool permissions merged one by one) */
 export function settingsFrom(stored: Partial<Settings>): Settings {
-  return { ...DEFAULT_SETTINGS, ...stored, toolPermissions: { ...DEFAULT_SETTINGS.toolPermissions, ...(stored.toolPermissions ?? {}) } };
+  return { ...DEFAULT_SETTINGS, ...stored, toolPermissions: { ...DEFAULT_SETTINGS.toolPermissions, ...stored.toolPermissions } };
 }
 
 export async function loadSettings() {

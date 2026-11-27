@@ -129,7 +129,7 @@ export const openrouterPreset: ProviderPreset = {
     if (req.imageOutput) out.modalities = ['image', 'text'];
     // OpenRouter uses the reasoning: { effort } format
     if (out.reasoning_effort) {
-      out.reasoning = { ...(out.reasoning ?? {}), effort: out.reasoning_effort };
+      out.reasoning = { ...out.reasoning, effort: out.reasoning_effort };
       delete out.reasoning_effort;
     }
     return out;

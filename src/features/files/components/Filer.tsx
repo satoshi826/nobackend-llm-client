@@ -37,7 +37,7 @@ import {
   renameItem,
   searchContents,
   setFilerPrefs,
-  useInChat,
+  attachToChat,
   type FilerPrefs,
   type FilerSort,
   type FilerView
@@ -330,7 +330,7 @@ export function Filer() {
             </Button>
             <div class="ml-auto flex items-center gap-1">
               {/* On phones the actions are icons only, so all of them fit */}
-              <Button class="text-xs" disabled={!selectedFiles.length} title={t('useInChatTitle')} aria-label={t('useInChat')} onClick={() => void useInChat(selectedFiles.map((f) => f.id))}>
+              <Button class="text-xs" disabled={!selectedFiles.length} title={t('useInChatTitle')} aria-label={t('useInChat')} onClick={() => void attachToChat(selectedFiles.map((f) => f.id))}>
                 <Icon name="paperclip" class="size-3.5" />
                 <span class="hidden sm:inline">{t('useInChat')}</span>
               </Button>

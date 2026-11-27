@@ -66,7 +66,7 @@ export function parseSuggestions(text: string, count: number): string[] {
     list = text
       .split(/\r?\n/)
       .map((l) => l.replace(/^\s*(?:[-*・•]|\d+[.)．、])\s*/, '').replace(/^["「『]|["」』],?$/g, '').trim())
-      .filter((l) => l && !/^```/.test(l));
+      .filter((l) => l && !l.startsWith('```'));
   }
   const seen = new Set<string>();
   const out: string[] = [];

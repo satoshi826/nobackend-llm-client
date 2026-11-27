@@ -204,7 +204,7 @@ export function cleanFiles(raw: unknown): ExportedFile[] {
     const o = f.origin;
     // Older backups: kind ('document' | 'upload'), url, source ('PDF から抽出')
     const url = o?.kind === 'web' ? o.url : f.url;
-    const origin: Origin = isStr(url) && /^https:\/\//.test(url) ? { kind: 'web', url: url.slice(0, 2000) } : o?.kind === 'upload' || f.kind === 'upload' ? { kind: 'upload' } : { kind: 'made' };
+    const origin: Origin = isStr(url) && url.startsWith('https://') ? { kind: 'web', url: url.slice(0, 2000) } : o?.kind === 'upload' || f.kind === 'upload' ? { kind: 'upload' } : { kind: 'made' };
     out.push({
       id: f.id,
       name,

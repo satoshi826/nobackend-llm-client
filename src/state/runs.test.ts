@@ -4,7 +4,7 @@ import { abortConversation, beginRun, controllers, endRun, isStreaming, stopAll,
 import { currentId } from './conversations';
 
 afterEach(() => {
-  for (const id of [...controllers.keys()]) endRun(id);
+  for (const id of controllers.keys()) endRun(id);
   currentId.value = null;
 });
 

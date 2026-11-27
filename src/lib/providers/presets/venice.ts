@@ -108,7 +108,7 @@ export const venicePreset: ProviderPreset = {
 
   transformRequest(body, req) {
     const opts = (req.providerOptions?.venice ?? {}) as Record<string, unknown>;
-    const vp = { ...(body.venice_parameters ?? {}), ...opts };
+    const vp = { ...body.venice_parameters, ...opts };
     if (vp.enable_web_search && vp.enable_web_search !== 'off') {
       vp.enable_web_citations = vp.enable_web_citations ?? true;
       vp.include_search_results_in_stream = vp.include_search_results_in_stream ?? true;

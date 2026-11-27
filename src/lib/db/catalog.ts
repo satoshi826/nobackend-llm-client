@@ -116,8 +116,9 @@ export function ensureCatalog(): Promise<void> {
 
 /** Forget what was loaded (after an import, a change of the passphrase, or a wipe); temporary entries stay */
 export function resetCatalog() {
-  for (const id of [...files.keys()]) if (!temporary.has(id)) dropFile(id);
-  for (const id of [...images.keys()]) if (!temporary.has(id)) dropImage(id);
+  // Deleting the entry being visited is safe in a Map's iteration
+  for (const id of files.keys()) if (!temporary.has(id)) dropFile(id);
+  for (const id of images.keys()) if (!temporary.has(id)) dropImage(id);
   loading = null;
 }
 

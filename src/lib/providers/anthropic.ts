@@ -115,7 +115,7 @@ export const anthropicAdapter: ProviderAdapter = {
   async listModels(cfg, preset, transport, auth): Promise<ModelInfo[]> {
     let res: Response;
     try {
-      res = await transport.fetch(joinUrl(cfg.baseUrl, preset.modelsPath ?? 'models?limit=100'), { method: 'GET', headers: { Accept: 'application/json', ...(cfg.extraHeaders ?? {}) } }, auth);
+      res = await transport.fetch(joinUrl(cfg.baseUrl, preset.modelsPath ?? 'models?limit=100'), { method: 'GET', headers: { Accept: 'application/json', ...cfg.extraHeaders } }, auth);
     } catch (e) {
       if (e instanceof ProviderFailure) throw e;
       throw new ProviderFailure(errorFromFetchFailure(e, preset.corsHint));
@@ -133,7 +133,7 @@ export const anthropicAdapter: ProviderAdapter = {
         joinUrl(cfg.baseUrl, 'messages'),
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...(cfg.extraHeaders ?? {}) },
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...cfg.extraHeaders },
           body: JSON.stringify(buildAnthropicBody(req)),
           signal: req.signal
         },

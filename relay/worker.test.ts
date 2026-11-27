@@ -18,7 +18,7 @@ describe('fetch relay', () => {
     expect(upstream).not.toHaveBeenCalled();
   });
   it('relays the file without the caller\'s headers, with CORS for the fetch page', async () => {
-    const upstream = vi.fn(async (_u: string, init: RequestInit) => new Response('hello', { headers: { 'Content-Type': 'text/plain', 'Content-Disposition': 'attachment; filename="a.txt"' } }));
+    const upstream = vi.fn(async (_u: string, _init: RequestInit) => new Response('hello', { headers: { 'Content-Type': 'text/plain', 'Content-Disposition': 'attachment; filename="a.txt"' } }));
     vi.stubGlobal('fetch', upstream);
     const res = await call('https://files.example/a.txt');
     expect(await res.text()).toBe('hello');

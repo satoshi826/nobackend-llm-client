@@ -23,6 +23,7 @@ export interface StorageBreakdown {
 /** Rough stored size of a value: binary data as is, one byte per Latin-1 character and two per any other */
 export function approxBytes(v: unknown): number {
   if (v == null) return 0;
+  // oxlint-disable-next-line no-control-regex -- the range starts at U+0000 to cover every one-byte character
   if (typeof v === 'string') return /[^\u0000-\u00ff]/.test(v) ? v.length * 2 : v.length;
   if (typeof v !== 'object') return 8;
   if (v instanceof Blob) return v.size;

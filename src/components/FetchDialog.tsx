@@ -25,7 +25,7 @@ function FetchFrame({ title, src, done }: { title: string; src: string; done(r: 
       const m = e.data as FromFetcher;
       if (m?.type === 'fetch-resize' && typeof m.height === 'number') setHeight(Math.min(800, Math.max(120, m.height + 4)));
       if (m?.type === 'fetch-result') {
-        const { type, ...r } = m;
+        const { type: _type, ...r } = m;
         done(r);
       }
       if (m?.type === 'fetch-close') done(null);

@@ -70,7 +70,7 @@ export function applyEvent(msg: MessageRecord, ev: ProviderEvent, blocks: BlockM
       break;
     }
     case 'vendor-state': {
-      msg.vendorState = { ...(msg.vendorState ?? {}), ...ev.data };
+      msg.vendorState = { ...msg.vendorState, ...ev.data };
       break;
     }
     case 'done': {

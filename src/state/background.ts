@@ -36,7 +36,7 @@ export const GLOW_PRESETS: Record<GlowPreset, { colors: [string, string, string]
 export const GLOW_ORDER: GlowPreset[] = ['moonlight', 'aurora', 'ocean', 'dusk', 'ember', 'forest', 'sakura', 'glacier', 'aurum', 'mono'];
 export const MAX_SPEED = 3;
 
-export const backgroundOf = (): BackgroundSetting => ({ ...DEFAULT_BACKGROUND, ...(settings.value.background ?? {}) });
+export const backgroundOf = (): BackgroundSetting => ({ ...DEFAULT_BACKGROUND, ...settings.value.background });
 
 export function saveBackground(patch: Partial<BackgroundSetting>) {
   return saveSettings({ background: { ...backgroundOf(), ...patch } });

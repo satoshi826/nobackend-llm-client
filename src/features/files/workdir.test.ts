@@ -19,7 +19,7 @@ const conv = (id: string, extra: Partial<Conversation> = {}): Conversation =>
 
 function toolsFor(c: Conversation, history: MessageRecord[] = []) {
   const live = conversations.value.find((x) => x.id === c.id) ?? c;
-  const tools = contributedTools({ conv: live, history, model, messageId: '' }).filter((t) => /_file$/.test(t.name));
+  const tools = contributedTools({ conv: live, history, model, messageId: '' }).filter((t) => t.name.endsWith('_file'));
   const run = async (name: string, raw: unknown) => {
     const t = tools.find((x) => x.name === name);
     if (!t) throw new Error(`no ${name}`);
@@ -118,7 +118,7 @@ describe('moving older data', () => {
     expect(await renumberTakenPaths()).toBe(1);
     const notes = (await listFiles()).map((f) => f.name).filter((n) => /notes/i.test(n));
     expect(notes).toHaveLength(2);
-    expect(notes.filter((n) => / \(2\)\.md$/.test(n))).toHaveLength(1);
+    expect(notes.filter((n) => n.endsWith(' (2).md'))).toHaveLength(1);
   });
 
   it('moves a conversation whose top folder holds other files too', async () => {

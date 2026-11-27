@@ -52,6 +52,7 @@ export function nameFor(url: URL, disposition: string | null, mime: string): str
   } catch {
     name = fromHeader ?? '';
   }
+  // oxlint-disable-next-line no-control-regex -- control characters are what it removes
   name = name.replace(/[\u0000-\u001f\u007f/\\]/g, '').trim();
   // Named after the host when the address has no file name (the host's dots are not an extension)
   const fromHost = !name;

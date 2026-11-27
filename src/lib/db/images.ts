@@ -257,7 +257,7 @@ export async function exportImages(): Promise<ExportedImage[]> {
 export async function importImages(list: ExportedImage[]): Promise<number> {
   let n = 0;
   for (const im of list) {
-    if (!/^image\//.test(im.mime) || (await db().blobs.get(im.id))) continue;
+    if (!im.mime.startsWith('image/') || (await db().blobs.get(im.id))) continue;
     const blob = base64ToBlob(im.data, im.mime);
     const key = currentDataKey();
     const base = { id: im.id, conversationId: im.conversationId, messageId: im.messageId, createdAt: im.createdAt, mime: im.mime, size: blob.size };
@@ -293,7 +293,7 @@ export async function deleteImageRecords(ids: string[]): Promise<void> {
 function cleanImageInfo(raw: any): ImageInfo | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const o = raw.origin ?? raw.source;
-  const origin = o?.kind === 'web' && typeof o.url === 'string' && /^https:\/\//.test(o.url) ? { kind: 'web' as const, url: o.url.slice(0, 2000) } : o?.kind === 'upload' ? { kind: 'upload' as const } : { kind: 'made' as const };
+  const origin = o?.kind === 'web' && typeof o.url === 'string' && o.url.startsWith('https://') ? { kind: 'web' as const, url: o.url.slice(0, 2000) } : o?.kind === 'upload' ? { kind: 'upload' as const } : { kind: 'made' as const };
   const path = typeof raw.path === 'string' ? raw.path : typeof raw.name === 'string' ? raw.name : undefined;
   return path ? { path: cleanFileName(path, 'png'), origin } : undefined;
 }

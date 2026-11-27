@@ -2,6 +2,7 @@
 // Depends on core state; core state never imports this module (it registers itself through extension points).
 import { effect, signal } from '@preact/signals';
 import * as fdb from '../../lib/db/files';
+import { freePath, pathFree, withTakenPaths } from '../../lib/db/paths';
 import { getSetting, newId, setSetting } from '../../lib/db/repo';
 import { getImage, listImages, putImage } from '../../lib/db/images';
 import type { Attachment, Conversation, FileRecord, ImageSource, MessageRecord } from '../../lib/db/schema';
@@ -173,11 +174,19 @@ export async function restoreVersion(id: string, v: number) {
   await fdb.addVersion(f, text, 'user', t('note.restored', { v }));
 }
 
-export async function renameFile(id: string, name: string) {
+/** Rename a file (the name may move it into other folders); false when another file or image has that path */
+export async function renameFile(id: string, name: string): Promise<boolean> {
   const f = await fdb.getFile(id);
-  if (!f) return;
+  if (!f) return false;
   const clean = fdb.cleanFileName(name, fdb.extOf(f.name) || 'md');
-  await fdb.putFile({ ...f, name: clean, mime: fdb.mimeFromName(clean), updatedAt: Date.now() });
+  return withTakenPaths(async (taken) => {
+    if (!pathFree(clean, taken, id)) {
+      showToast(t('rename.taken', { name: clean }), 'error');
+      return false;
+    }
+    await fdb.putFile({ ...f, name: clean, mime: fdb.mimeFromName(clean), updatedAt: Date.now() });
+    return true;
+  });
 }
 
 export async function deleteFiles(ids: string[]) {
@@ -213,14 +222,19 @@ const setPending = (id: string, patch: Partial<PendingAttachment> | null) => {
 /** Files being read from the device (shown as placeholders in the file manager) */
 export const importing = signal<{ id: string; name: string }[]>([]);
 
-/** Read one file from the user's device into the Files tab; returns the record, or null (after a toast) */
-async function importOne(file: File, id: string, temporary: boolean, url?: string, conversationId?: string): Promise<FileRecord | null> {
+/** Read one file from the user's device into the Files tab, in `folder` ('' or 'a/'); returns the record, or null (after a toast) */
+async function importOne(file: File, id: string, temporary: boolean, url?: string, conversationId?: string, folder = ''): Promise<FileRecord | null> {
   try {
     const ex = await extractText(file);
-    const rec = fdb.newFile({ id, name: fdb.cleanFileName(file.name, 'txt'), kind: 'upload', text: ex.text, by: 'upload', source: ex.source, url, conversationId });
-    // A pdf's text is stored as text; keep the original extension visible but treat it as plain text
-    if (rec.mime === 'application/pdf') rec.mime = 'text/plain';
-    await fdb.putFile(rec, temporary);
+    const rec = await withTakenPaths(async (taken) => {
+      // A name already in use gets a number: 'notes (2).md'
+      const name = freePath(fdb.cleanFileName(folder + file.name, 'txt'), taken);
+      const rec = fdb.newFile({ id, name, kind: 'upload', text: ex.text, by: 'upload', source: ex.source, url, conversationId });
+      // A pdf's text is stored as text; keep the original extension visible but treat it as plain text
+      if (rec.mime === 'application/pdf') rec.mime = 'text/plain';
+      await fdb.putFile(rec, temporary);
+      return rec;
+    });
     if (ex.truncated) showToast(t('import.truncated', { name: file.name, n: formatNumber(fdb.MAX_FILE_CHARS) }), 'error');
     return rec;
   } catch (e) {
@@ -234,7 +248,7 @@ const IMAGE_MIME = /^image\/(png|jpeg|webp|gif|avif)$/;
 const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
-async function importImage(file: File, id: string, source: ImageSource, conv?: Conversation): Promise<boolean> {
+async function importImage(file: File, id: string, source: ImageSource, conv?: Conversation, folder = ''): Promise<boolean> {
   if (!IMAGE_MIME.test(file.type)) {
     showToast(t(file.type === 'image/svg+xml' ? 'import.svg' : 'extract.unsupported', { name: file.name }), 'error');
     return false;
@@ -243,7 +257,10 @@ async function importImage(file: File, id: string, source: ImageSource, conv?: C
     showToast(t('extract.tooBig', { max: formatNumber(MAX_IMAGE_BYTES / 1024 / 1024) }), 'error');
     return false;
   }
-  await putImage({ id, mime: file.type, conversationId: conv?.id, info: { name: fdb.cleanFileName(file.name, IMAGE_EXT[file.type]), source } }, file, !!conv?.temporary);
+  await withTakenPaths(async (taken) => {
+    const name = freePath(fdb.cleanFileName(folder + file.name, IMAGE_EXT[file.type]), taken);
+    await putImage({ id, mime: file.type, conversationId: conv?.id, info: { name, source } }, file, !!conv?.temporary);
+  });
   return true;
 }
 

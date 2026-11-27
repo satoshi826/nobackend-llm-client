@@ -43,18 +43,36 @@ export function mimeFromName(name: string): string {
 const MAX_FOLDERS = 7;
 const MAX_PATH = 200;
 
+/** The parts of a raw path: NFC, no control characters, `\\` as `/`, without empty, `.`, `..` and drive-letter parts */
+function pathParts(raw: string): string[] {
+  return (
+    raw
+      // One form for the same text (a Mac gives names in NFD), so names a model writes match names from a disk
+      .normalize('NFC')
+      .replace(/[\u0000-\u001f\u007f]/g, '')
+      .split(/[\\/]/)
+      .map((p) => p.trim())
+      .filter((p) => p && p !== '.' && p !== '..' && !/^[a-z]:$/i.test(p))
+  );
+}
+
+/** Clean a folder path ('Site / css' → 'Site/css/'); '' when nothing is left */
+export function cleanFolderName(raw: string): string {
+  const parts = pathParts(raw)
+    .slice(0, MAX_FOLDERS)
+    .map((p) => p.slice(0, 60));
+  while (parts.length && parts.join('/').length > MAX_PATH - 20) parts.pop();
+  return parts.length ? `${parts.join('/')}/` : '';
+}
+
 /**
  * Clean a file name coming from a model, a disk or a backup. A name is a path: folders separated by `/` (a `\` counts
- * as one), with no empty, `.` or `..` parts and no control characters, at most 7 folders deep and 200 characters long;
- * the last part gets an extension when it has none. There are no folder records: a folder is the shared start of names
+ * as one), in NFC, with no empty, `.` or `..` parts and no control characters, at most 7 folders deep and 200
+ * characters long; the last part gets an extension when it has none. There are no folder records: a folder is the
+ * shared start of names. Paths are unique across files and named images (paths.ts)
  */
 export function cleanFileName(raw: string, fallbackExt = 'md'): string {
-  const parts = raw
-    .replace(/[\u0000-\u001f\u007f]/g, '')
-    .split(/[\\/]/)
-    .map((p) => p.trim())
-    // Empty, `.` and `..` parts go, and so does a drive letter (`C:`)
-    .filter((p) => p && p !== '.' && p !== '..' && !/^[a-z]:$/i.test(p));
+  const parts = pathParts(raw);
   let name = (parts.pop() ?? '').slice(0, 120) || 'untitled';
   if (!extOf(name)) name = `${name}.${fallbackExt}`;
   const folders = parts.slice(0, MAX_FOLDERS).map((p) => p.slice(0, 60));

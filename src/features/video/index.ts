@@ -7,7 +7,7 @@ import type { MessageRecord } from '../../lib/db/schema';
 import type { Part } from '../../lib/providers/types';
 import { registerImageAction } from '../images';
 import { UserVideoRequest, VideoAnswer, VideoBarAbove, VideoModeButton, VideoModelButton } from './components/Hooks';
-import { makeVideoFrom, sendVideoPrompt } from './state';
+import { makeVideoFrom, sendVideoPrompt, videoReady } from './state';
 import { t } from './messages';
 
 registerComposerAddon({
@@ -23,7 +23,14 @@ registerComposerAddon({
 registerModelSlot({ id: 'video', when: (conv) => !!conv.videoMode, Component: VideoModelButton });
 registerAssistantExtra({ id: 'video', Component: VideoAnswer, owns: (m) => !!m.video });
 registerUserMessageExtra(UserVideoRequest);
-registerImageAction({ id: 'make-video', label: () => t('action.makeVideo'), title: () => t('action.makeVideoTitle'), icon: 'video', run: (blobId, name) => makeVideoFrom(blobId, name) });
+registerImageAction({
+  id: 'make-video',
+  label: () => t('action.makeVideo'),
+  title: () => t('action.makeVideoTitle'),
+  icon: 'video',
+  shown: () => videoReady.value,
+  run: (blobId, name) => makeVideoFrom(blobId, name)
+});
 
 // What chat models see for a video answer: a short note instead of the video
 registerMessageTransform((m: MessageRecord, parts: Part[]): Part[] => {

@@ -98,6 +98,8 @@ export interface ImageAction {
   label(): string;
   title(): string;
   icon: IconName;
+  /** Offered only while this holds (e.g. a video provider has a key) */
+  shown(): boolean;
   run(blobId: string, name?: string): void | Promise<void>;
 }
 export const imageActions: ImageAction[] = [];

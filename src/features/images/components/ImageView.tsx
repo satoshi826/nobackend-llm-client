@@ -265,9 +265,9 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
           </Button>
         </div>
       )}
-      {m.status === 'done' && files.length === 1 && imageActions.length > 0 && (
+      {m.status === 'done' && files.length === 1 && imageActions.some((a) => a.shown()) && (
         <div class="flex flex-wrap gap-1.5">
-          {imageActions.map((a) => (
+          {imageActions.filter((a) => a.shown()).map((a) => (
             <Button key={a.id} class="text-xs" variant="outline" disabled={isStreaming.value} title={a.title()} onClick={() => void a.run(files[0].blobId)}>
               <Icon name={a.icon} class="size-3.5" />
               {a.label()}
@@ -409,7 +409,7 @@ export function Lightbox() {
             </Button>
           )}
           {!video &&
-            imageActions.map((a) => (
+            imageActions.filter((a) => a.shown()).map((a) => (
               <Button key={a.id} class="text-xs text-white hover:bg-glass" title={a.title()} onClick={() => void act(async () => a.run(item.blobId, item.name))}>
                 <Icon name={a.icon} class="size-4" />
                 {a.label()}

@@ -7,6 +7,7 @@ import { generateDataKey } from '../../lib/crypto/data';
 import { db, type ImageParams, type MessageRecord } from '../../lib/db/schema';
 import * as repo from '../../lib/db/repo';
 import { getFile, newFile, putFile } from '../../lib/db/files';
+import { onStoreChange } from '../../lib/db/changes';
 import { buildRequestMessages, registerMessageTransform } from '../../lib/chat/request';
 import { imageNote } from './transform';
 
@@ -133,7 +134,12 @@ describe('image storage', () => {
     await putFile(newFile({ id: 'f1', name: 'a.md', kind: 'document', text: 'hi', by: 'model', conversationId: 'c2' }), false);
     await putFile(newFile({ id: 'f2', name: 'b.md', kind: 'document', text: 'other', by: 'user' }), false);
     expect(await repo.countMadeIn('c2')).toBe(2);
+    // Lists of images and files hear about it, whichever code deleted them
+    const heard: string[] = [];
+    const stop = onStoreChange((store) => heard.push(store));
     await repo.deleteConversation('c2', true);
+    stop();
+    expect(heard.sort()).toEqual(['files', 'images']);
     expect(await getImage('d1')).toBeNull();
     expect(await getFile('f1')).toBeUndefined();
     expect(await getFile('f2')).toBeDefined();

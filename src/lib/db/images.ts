@@ -5,6 +5,7 @@ import { db, type BlobRecord, type ImageInfo, type SealedBytes } from './schema'
 import { currentDataKey, DataLockedError } from './sealed';
 import { openBytes, openJSON, sealBytes, sealJSON, type DataKey } from '../crypto/data';
 import { registerDataTable } from './data-tables';
+import { storeChanged } from './changes';
 import { t } from './messages';
 
 const mem = new Map<string, BlobRecord>();
@@ -77,10 +78,11 @@ export async function putImage(meta: ImageMeta, blob: Blob, temporary: boolean, 
   const thumb = await makeThumb(poster ?? blob);
   if (temporary) {
     mem.set(meta.id, { ...base, info, blob, ...(thumb ? { thumb } : {}) });
-    return;
+    return storeChanged('images');
   }
   const key = currentDataKey();
   await db().blobs.put({ ...base, ...(await storedInfo(info, key)), ...(await stored(blob, key)), thumb: thumb ? (key ? await seal(key, thumb) : thumb) : undefined });
+  storeChanged('images');
 }
 
 async function toBlob(rec: BlobRecord, key: DataKey | null = currentDataKey()): Promise<Blob> {
@@ -139,6 +141,7 @@ export async function imageUsage(): Promise<{ count: number; bytes: number }> {
 
 export function forgetTemporaryImages(conversationId: string) {
   for (const [k, r] of mem) if (r.conversationId === conversationId) mem.delete(k);
+  storeChanged('images');
 }
 
 /** Encrypt (to: a key) or decrypt (to: null) every stored image; safe to re-run after an interruption */
@@ -217,6 +220,7 @@ export async function importImages(list: ExportedImage[]): Promise<number> {
     await db().blobs.put({ ...base, ...(await storedInfo(im.info, key)), ...(await stored(blob, key)) });
     n++;
   }
+  if (n) storeChanged('images');
   return n;
 }
 
@@ -231,6 +235,7 @@ export async function getImageMeta(id: string): Promise<{ conversationId?: strin
 export async function deleteImageRecords(ids: string[]): Promise<void> {
   for (const id of ids) mem.delete(id);
   await db().blobs.bulkDelete(ids);
+  storeChanged('images');
 }
 
 registerDataTable<ExportedImage>({
@@ -255,6 +260,9 @@ registerDataTable<ExportedImage>({
   // a temporary chat's go with it
   async onConversationDeleted(id, { temporary, withItems }) {
     if (temporary) forgetTemporaryImages(id);
-    else if (withItems) await db().blobs.where('conversationId').equals(id).delete();
+    else if (withItems) {
+      await db().blobs.where('conversationId').equals(id).delete();
+      storeChanged('images');
+    }
   }
 });

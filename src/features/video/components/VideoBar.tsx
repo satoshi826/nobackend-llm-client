@@ -5,7 +5,7 @@ import * as repo from '../../../lib/db/repo';
 import { putImage } from '../../../lib/db/images';
 import { openSettings } from '../../../state/ui';
 import { Button, Checkbox, Icon, IconButton, Select, Spinner } from '../../../components/ui';
-import { ImageThumb, imagesVersion } from '../../images';
+import { ImageThumb } from '../../images';
 import { barQuote, chooseVideoModel, currentVideoModel, firstFrame, loadVideoModels, modelRef, offeredModels, paramsFromBar, readyVideoProviders, setVideoDefaults, videoModels, videoModelsError, videoReady } from '../state';
 import { videoProviderOf } from '../providers/types';
 import { t, usd } from '../messages';
@@ -58,7 +58,6 @@ export function VideoBar() {
     // Kept in the Files tab like any image brought in
     const id = repo.newId();
     await putImage({ id, mime: file.type, info: { name: file.name, source: { kind: 'upload' } } }, file, false);
-    imagesVersion.value++;
     firstFrame.value = { blobId: id, name: file.name };
   };
   return (

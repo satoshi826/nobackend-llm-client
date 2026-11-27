@@ -6,6 +6,7 @@ import { db, type FileRecord, type FileVersion, type FileVersionInfo, type FileV
 import { currentDataKey, seal, unseal } from './sealed';
 import type { DataKey } from '../crypto/data';
 import { registerDataTable } from './data-tables';
+import { storeChanged } from './changes';
 
 /** Versions kept per file (older ones are dropped) */
 export const MAX_VERSIONS = 30;
@@ -100,6 +101,7 @@ export async function addVersion(f: FileRecord, text: string, by: FileVersion['b
     memTexts.set(textId(f.id, archived.v), archived.text);
     for (const v of dropped) memTexts.delete(textId(f.id, v));
     mem.set(f.id, next);
+    storeChanged('files');
     return next;
   }
   // Encrypt first: a transaction ends as soon as it waits on anything but the database
@@ -110,6 +112,7 @@ export async function addVersion(f: FileRecord, text: string, by: FileVersion['b
     if (dropped.length) await db().fileVersions.bulkDelete(dropped.map((v) => textId(f.id, v)));
     await db().files.put(rec);
   });
+  storeChanged('files');
   return next;
 }
 
@@ -123,11 +126,9 @@ export async function versionText(f: FileRecord, v: number): Promise<string | un
 
 /** Save the record itself (a new file, a rename). New versions go through addVersion */
 export async function putFile(f: FileRecord, temporary = false): Promise<void> {
-  if (temporary || mem.has(f.id)) {
-    mem.set(f.id, f);
-    return;
-  }
-  await db().files.put(await seal('files', f));
+  if (temporary || mem.has(f.id)) mem.set(f.id, f);
+  else await db().files.put(await seal('files', f));
+  storeChanged('files');
 }
 
 /** A stored record in the shape before v9 (every version inside), once opened */
@@ -181,6 +182,7 @@ export async function deleteFiles(ids: string[]): Promise<void> {
     await db().fileVersions.where('fileId').anyOf(ids).delete();
     await db().files.bulkDelete(ids);
   });
+  storeChanged('files');
 }
 
 export function isTemporaryFile(id: string): boolean {
@@ -194,6 +196,7 @@ export function forgetTemporaryFiles(conversationId: string) {
     mem.delete(k);
     for (const t of memTexts.keys()) if (t.startsWith(`${k}:`)) memTexts.delete(t);
   }
+  storeChanged('files');
 }
 
 export async function fileUsage(): Promise<{ count: number; chars: number }> {
@@ -291,6 +294,7 @@ export async function importFiles(files: ExportedFile[]): Promise<number> {
     });
     n++;
   }
+  if (n) storeChanged('files');
   return n;
 }
 

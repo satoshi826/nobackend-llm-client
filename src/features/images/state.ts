@@ -12,7 +12,6 @@ import { vaultTransport as transport } from '../../lib/vault/client';
 import { authFor, keyReady } from '../../state/keys';
 import { defineFeatureSettings, pickLegacy } from '../../state/feature-settings';
 import { openSettings, showToast } from '../../state/ui';
-import { replyImagesVersion } from '../../state/media';
 import { recordUsage } from '../../state/request-helpers';
 import { conversations, currentConv, currentId, messages, persistDraft, putMessage, updateConversation } from '../../state/conversations';
 import { beginRun, endRun } from '../../state/runs';
@@ -117,12 +116,6 @@ export const imageModelsError = signal<string | null>(null);
 /** Style presets per provider (loaded for the current model's provider) */
 const styleLists = signal<Record<string, string[]>>({});
 export const imageStyles = computed(() => styleLists.value[currentImageModel.value?.providerId ?? ''] ?? []);
-/** Bumped whenever images are added or deleted (lists of images reload on it) */
-export const imagesVersion = signal(0);
-// Images stored by chat replies (native image output) refresh the same lists
-effect(() => {
-  if (replyImagesVersion.value) imagesVersion.value = imagesVersion.peek() + 1;
-});
 
 /** Image providers whose key is set (generation needs it, so only their models are offered) */
 export const readyImageProviders = computed(() => imageProviderList().filter((p) => keyReady(p.account)));
@@ -404,7 +397,6 @@ async function storeImages(conv: Conversation, messageId: string, blobs: Blob[])
     await putImage({ id: blobId, conversationId: conv.id, messageId, mime: blob.type || 'image/png' }, blob, !!conv.temporary);
     parts.push({ type: 'file', blobId, name: `image-${i + 1}.${EXT[blob.type] ?? 'png'}`, mimeType: blob.type || 'image/png', ...(await imageSize(blob)) });
   }
-  imagesVersion.value++;
   return parts;
 }
 
@@ -506,7 +498,6 @@ export async function runImageJob(convId: string, userMsgId: string, override: P
  */
 export async function deleteImages(ids: string[]) {
   const gone = new Set(ids);
-  queueMicrotask(() => imagesVersion.value++);
   const byConv = new Map<string, { temporary: boolean; messageIds: Set<string> }>();
   for (const id of ids) {
     const meta = await getImageMeta(id);

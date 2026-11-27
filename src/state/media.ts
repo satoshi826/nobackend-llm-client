@@ -1,13 +1,9 @@
 // Images that come back inside a chat reply (native image output).
 // They are stored like generated images (lib/db/images), so the gallery, backups and deletion handle them.
-import { signal } from '@preact/signals';
 import type { Conversation } from '../lib/db/schema';
 import type { Part } from '../lib/providers/types';
 import { putImage } from '../lib/db/images';
 import * as repo from '../lib/db/repo';
-
-/** Bumped when a reply stored an image (the images feature refreshes its lists) */
-export const replyImagesVersion = signal(0);
 
 const EXT: Record<string, string> = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif' };
 
@@ -36,6 +32,5 @@ export async function saveReplyImage(conv: Conversation, messageId: string, data
   if (!blob.size) return null;
   const blobId = repo.newId();
   await putImage({ id: blobId, conversationId: conv.id, messageId, mime }, blob, !!conv.temporary);
-  replyImagesVersion.value++;
   return { type: 'file', blobId, name: `image-${index}.${EXT[mime] ?? 'png'}`, mimeType: mime, ...(await sizeOf(blob)) };
 }

@@ -2,9 +2,9 @@
 // pull the file manager into the first load (the file manager is loaded when first opened).
 import { useEffect, useMemo } from 'preact/hooks';
 import { conversations } from '../../../state/conversations';
-import { imagesVersion } from '../../images';
+import { filesVersion, imagesVersion } from '../../../state/stored';
 import { toItems, type FilerItem } from '../filer';
-import { fileList, filesVersion, imageList, refreshFiles, refreshImages, type FilerView } from '../state';
+import { fileList, imageList, refreshFiles, refreshImages, type FilerView } from '../state';
 import { getLang } from '../../../lib/i18n';
 import type { IconName } from '../../../components/ui';
 import { t } from '../messages';

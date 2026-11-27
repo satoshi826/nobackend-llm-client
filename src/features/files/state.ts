@@ -1,12 +1,12 @@
 // Files feature: state and actions (Files tab, attachments in the input box, file tools for the model).
 // Depends on core state; core state never imports this module (it registers itself through extension points).
-import { signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import * as fdb from '../../lib/db/files';
 import { getSetting, newId, setSetting } from '../../lib/db/repo';
 import { listImages, putImage } from '../../lib/db/images';
 import type { Attachment, Conversation, FileRecord, ImageSource, MessageRecord } from '../../lib/db/schema';
 import type { ImageMeta } from './filer';
-import { imagesVersion } from '../images';
+import { filesVersion, imagesVersion } from '../../state/stored';
 import { currentConv, showChat, updateConversation } from '../../state/conversations';
 import { defineFeatureSettings, pickLegacy } from '../../state/feature-settings';
 import { mainView, showToast, sidebarOpen, sidebarTab, type MainViewState } from '../../state/ui';
@@ -26,8 +26,6 @@ export const fileSettings = defineFeatureSettings('files', { fileTools: true }, 
 export const ATTACH_INLINE_CHARS = 60_000;
 
 // ---- file list ----
-/** Bumped on every change, so open views reload */
-export const filesVersion = signal(0);
 export const fileList = signal<FileRecord[] | null>(null);
 
 let filesLoading: { v: number; p: Promise<void> } | null = null;
@@ -55,10 +53,15 @@ export function refreshImages(): Promise<void> {
   return p;
 }
 
-function changed() {
-  filesVersion.value++;
-  if (fileList.value) void refreshFiles();
-}
+// Lists already loaded follow every change to the stored files and images (whoever made it)
+effect(() => {
+  void filesVersion.value;
+  if (fileList.peek()) void refreshFiles();
+});
+effect(() => {
+  void imagesVersion.value;
+  if (imageList.peek()) void refreshImages();
+});
 
 export const getFile = fdb.getFile;
 
@@ -133,7 +136,6 @@ export async function saveUserVersion(id: string, text: string) {
   const f = await fdb.getFile(id);
   if (!f) return;
   await fdb.addVersion(f, text, 'user', t('note.userEdit'));
-  changed();
 }
 
 /** Make an old version current again (as a new version, so nothing is lost) */
@@ -142,7 +144,6 @@ export async function restoreVersion(id: string, v: number) {
   const text = f && (await fdb.versionText(f, v));
   if (!f || text === undefined) return;
   await fdb.addVersion(f, text, 'user', t('note.restored', { v }));
-  changed();
 }
 
 export async function renameFile(id: string, name: string) {
@@ -150,7 +151,6 @@ export async function renameFile(id: string, name: string) {
   if (!f) return;
   const clean = fdb.cleanFileName(name, fdb.extOf(f.name) || 'md');
   await fdb.putFile({ ...f, name: clean, mime: fdb.mimeFromName(clean), updatedAt: Date.now() });
-  changed();
 }
 
 export async function deleteFiles(ids: string[]) {
@@ -158,7 +158,6 @@ export async function deleteFiles(ids: string[]) {
   pendingAttachments.value = pendingAttachments.value.filter((a) => !ids.includes(a.fileId));
   const v = mainView.value;
   if (v.kind === 'file' && v.id && ids.includes(v.id)) closeFileView();
-  changed();
 }
 
 export function downloadFile(f: FileRecord, v: { text: string } = f.current) {
@@ -196,7 +195,6 @@ async function importOne(file: File, id: string, temporary: boolean, url?: strin
     if (rec.mime === 'application/pdf') rec.mime = 'text/plain';
     await fdb.putFile(rec, temporary);
     if (ex.truncated) showToast(t('import.truncated', { name: file.name, n: formatNumber(fdb.MAX_FILE_CHARS) }), 'error');
-    changed();
     return rec;
   } catch (e) {
     showToast((e as Error).message, 'error');
@@ -219,7 +217,6 @@ async function importImage(file: File, id: string, source: ImageSource, conv?: C
     return false;
   }
   await putImage({ id, mime: file.type, conversationId: conv?.id, info: { name: fdb.cleanFileName(file.name, IMAGE_EXT[file.type]), source } }, file, !!conv?.temporary);
-  imagesVersion.value++;
   return true;
 }
 
@@ -330,7 +327,6 @@ registerToolProvider({
         const saved = r && (await saveFetched(r, conv));
         if (saved?.kind === 'file') {
           scope.add(saved.file.id);
-          changed();
         }
         return saved;
       },
@@ -338,7 +334,6 @@ registerToolProvider({
         const f = fdb.newFile({ id: newId(), name, kind: 'document', text, by: 'model', conversationId: conv.id });
         await fdb.putFile(f, !!conv.temporary);
         scope.add(f.id);
-        changed();
         return f;
       },
       get: async (id) => (scope.has(id) ? fdb.getFile(id) : undefined),
@@ -346,7 +341,6 @@ registerToolProvider({
         const f = await fdb.getFile(id);
         if (!f || !scope.has(id)) throw new Error(t('tool.notFound'));
         const next = await fdb.addVersion(f, text, 'model', note);
-        changed();
         return next;
       }
     });

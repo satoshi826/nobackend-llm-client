@@ -20,7 +20,6 @@ import { beginRun, endRun } from '../../state/runs';
 import { cancelSuggestions } from '../../state/suggestions';
 import { resetProviderBalanceBaseline } from '../../state/balance';
 import { registerUserRequestHandler } from '../../state/tool-registry';
-import { imagesVersion } from '../images';
 import { veniceVideoProvider } from './providers/venice';
 import { openrouterVideoProvider } from './providers/openrouter';
 import { geminiVideoProvider } from './providers/gemini';
@@ -366,7 +365,6 @@ async function storeVideo(conv: Conversation, messageId: string, video: Blob) {
   const { poster, width, height } = await posterOf(blob);
   const blobId = repo.newId();
   await putImage({ id: blobId, conversationId: conv.id, messageId, mime: blob.type }, blob, !!conv.temporary, poster ?? undefined);
-  imagesVersion.value++;
   return { type: 'file' as const, blobId, name: 'video.mp4', mimeType: blob.type, ...(width ? { width, height } : {}) };
 }
 

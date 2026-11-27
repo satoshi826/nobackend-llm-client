@@ -1,5 +1,5 @@
 // Images: thumbnails in answers and the full-size viewer (with upscale / edit / background removal).
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { useDialog } from '../../../components/dialog';
 import type { ImageParams, MessageRecord } from '../../../lib/db/schema';
 import type { Part } from '../../../lib/providers/types';
@@ -8,7 +8,7 @@ import { currentId, openConversation } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
 import { IdleButton } from '../../../components/IdleButton';
 import { modal, showToast } from '../../../state/ui';
-import { Button, Disclosure, Icon, Shimmer, Spinner, cx, IconButton, type IconName } from '../../../components/ui';
+import { Button, Disclosure, Icon, ScrollArea, Shimmer, Spinner, cx, IconButton, type IconName } from '../../../components/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { copyText } from '../../../components/clipboard';
 import {
@@ -131,16 +131,22 @@ export function useBlobUrl(blobId: string | undefined, size: 'full' | 'thumb' = 
   return url;
 }
 
-/** Whether the element is on screen or about to be (for loading only what can be seen) */
+/**
+ * Whether the element is within a screen or two of what can be seen in its scrolling area: true as it comes near,
+ * false again once it is far, so a long list holds only the images around the view (an image let go goes back to the
+ * URLs kept unused, so scrolling back a little is instant). The margin is wide, so a scroll back and forth does not
+ * load and let go of the same images over and over
+ */
 function useNearScreen(ref: { current: Element | null }): boolean {
+  const area = useContext(ScrollArea);
   const [near, setNear] = useState(false);
   useEffect(() => {
     const el = ref.current;
-    if (!el || near) return;
-    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && setNear(true), { rootMargin: '400px' });
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => setNear(entries[entries.length - 1].isIntersecting), { root: area?.current ?? null, rootMargin: '1500px 0px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [near]);
+  }, [area]);
   return near;
 }
 
@@ -151,18 +157,19 @@ function useNearScreen(ref: { current: Element | null }): boolean {
  */
 export function ImageThumb({ blobId, alt, onOpen, full, class: className }: { blobId: string; alt: string; onOpen(): void; full?: boolean; class?: string }) {
   const ref = useRef<HTMLButtonElement>(null);
-  const url = useImageUrl(blobId, full ? 'full' : 'thumb', useNearScreen(ref));
+  const near = useNearScreen(ref);
+  const url = useImageUrl(blobId, full ? 'full' : 'thumb', near);
   return (
     <button ref={ref} type="button" class={cx('group relative overflow-hidden rounded-lg bg-glass-strong', className)} onClick={onOpen} aria-label={t('thumb.open', { alt })}>
       {url ? (
         <img src={url} alt={alt} class={cx('h-full w-full transition group-hover:scale-[1.02]', full ? 'object-contain' : 'object-cover')} decoding="async" />
       ) : url === null ? (
         <span class="grid h-full w-full place-items-center text-xs text-faint">{t('thumb.failed')}</span>
-      ) : (
+      ) : near ? (
         <span class="grid h-full w-full place-items-center">
           <Spinner class="size-4 text-faint" />
         </span>
-      )}
+      ) : null}
     </button>
   );
 }

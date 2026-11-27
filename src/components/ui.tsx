@@ -1,4 +1,5 @@
 import type { ComponentChildren, ButtonHTMLAttributes, InputHTMLAttributes, RefObject, SelectHTMLAttributes, TextareaHTMLAttributes } from 'preact';
+import { createContext } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { useDialog } from './dialog';
 import { t } from './messages';
@@ -353,6 +354,12 @@ export function useBatches(total: number, batch: number, root: RefObject<HTMLEle
 export function MoreMark({ batches }: { batches: { mark: RefObject<HTMLDivElement | null>; more: boolean } }) {
   return batches.more ? <div ref={batches.mark} class="h-px" /> : null;
 }
+
+/**
+ * The scrolling area around (a list, the conversation): what is drawn inside measures "near the screen" against it,
+ * since a margin around the window does not reach past the edges of a scrolling area
+ */
+export const ScrollArea = createContext<RefObject<HTMLElement | null> | null>(null);
 
 type Box = { x: number; y: number; w: number; h: number };
 

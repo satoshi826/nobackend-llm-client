@@ -12,7 +12,7 @@ import { askConfirm } from '../../../components/ConfirmDialog';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { FilesHeader } from './FilesHeader';
 import { openConversation } from '../../../state/conversations';
-import { Button, Checkbox, EmptyState, Icon, IconButton, Modal, MoreMark, Segmented, Spinner, TextField, cx, useBatches, useDebounced, type IconName } from '../../../components/ui';
+import { Button, Checkbox, EmptyState, Icon, IconButton, Modal, MoreMark, ScrollArea, Segmented, Spinner, TextField, cx, useBatches, useDebounced, type IconName } from '../../../components/ui';
 import { allFolders, filterItems, foldersIn, NATURAL_ORDER, previewText, sortItems, type FilerItem, type FolderItem } from '../filer';
 import {
   chatInFolder,
@@ -412,6 +412,7 @@ export function Filer() {
       {/* Room at the top for a card that lifts on hover (the scroll area clips it otherwise) */}
       {/* .selecting shows every entry's check (entries are not drawn again for it) */}
       <div ref={scrollArea} class={cx('scroll-thin min-h-0 flex-1 overflow-y-auto px-3 pt-1 pb-3 sm:px-4 sm:pb-4 md:pr-7 md:pl-1', selecting && 'selecting')}>
+        <ScrollArea.Provider value={scrollArea}>
         {!items ? (
           <p class="flex items-center gap-2 text-sm text-muted">
             <Spinner class="size-4" />
@@ -452,6 +453,7 @@ export function Filer() {
           <ListView folders={folders} items={shown} prefs={prefs} picked={picked} all={picked.size > 0 && picked.size === keys.length} onAll={toggleAll} api={api} />
         )}
         <MoreMark batches={batches} />
+        </ScrollArea.Provider>
       </div>
 
       {dialog?.kind === 'move' && (

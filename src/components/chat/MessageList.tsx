@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { currentPath } from '../../state/conversations';
 import { suggestingFor } from '../../state/suggestions';
 import { MessageItem } from '../MessageItem';
+import { ScrollArea } from '../ui';
 
 /** Messages rendered at first, and added each time the top is reached */
 const PAGE = 20;
@@ -73,12 +74,14 @@ export function MessageList() {
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
       }}
     >
+      <ScrollArea.Provider value={scroller}>
       <div class="mx-auto max-w-3xl px-4" style={{ paddingTop: 'calc(var(--chat-top, 0px) + 1rem)', paddingBottom: 'calc(var(--chat-bottom, 0px) + 1rem)' }}>
         <div ref={top} aria-hidden="true" />
         {path.slice(from).map((m, i, shown) => (
           <MessageItem key={m.id} m={m} isLast={i === shown.length - 1} />
         ))}
       </div>
+      </ScrollArea.Provider>
     </div>
   );
 }

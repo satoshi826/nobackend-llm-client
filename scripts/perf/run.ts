@@ -9,7 +9,7 @@
 //
 // Needs the mock server for the provider the perf build adds (started here when it is not running).
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { Probe, type Metrics } from './measure.ts';
@@ -50,7 +50,13 @@ function build(ref: string, name: string): string {
     cwd = join(TMP, 'src', name);
     rmSync(cwd, { recursive: true, force: true });
     git('worktree', 'add', '--force', '--detach', cwd, ref);
-    symlinkSync(join(ROOT, 'node_modules'), join(cwd, 'node_modules'));
+    // The checkout's packages when the version uses the same ones; else its own (a version on other dependencies)
+    const lock = (dir: string) => readFileSync(join(dir, 'package-lock.json'), 'utf8');
+    if (lock(cwd) === lock(ROOT)) symlinkSync(join(ROOT, 'node_modules'), join(cwd, 'node_modules'));
+    else {
+      console.error(`Installing the packages of ${name}…`);
+      execFileSync('npm', ['ci', '--no-audit', '--no-fund', '--loglevel', 'error'], { cwd, stdio: 'inherit' });
+    }
   }
   console.error(`Building ${name} (${ref === 'working' ? 'working tree' : git('rev-parse', '--short', ref)})…`);
   execFileSync('npx', ['vite', 'build', '--outDir', out, '--emptyOutDir', '--logLevel', 'error'], { cwd, env, stdio: 'inherit' });

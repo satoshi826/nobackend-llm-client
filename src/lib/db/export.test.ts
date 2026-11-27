@@ -80,11 +80,18 @@ describe('validate (backup files)', () => {
     expect(validate(file({ messages: [msg({ image: { params: { op: 'nope' } } })] })).messages[0].image).toBeUndefined();
   });
 
+  it('keeps a conversation\'s working folder, cleaned', () => {
+    const kept = (workDir: unknown) => validate(file({ conversations: [{ ...conv(), workDir }] })).conversations[0].workDir;
+    expect(kept('todo / ../app')).toBe('todo/app/');
+    expect(kept('..')).toBeUndefined();
+    expect(kept(3)).toBeUndefined();
+  });
+
   it('cleans attachments and drops broken ones', () => {
     const [m] = validate(
-      file({ messages: [msg({ attachments: [{ fileId: 'f', name: 'n'.repeat(200), text: 'abc' }, { fileId: 'g', name: 'x' }, null] })] })
+      file({ messages: [msg({ attachments: [{ fileId: 'f', name: 'n'.repeat(300), version: 2, text: 'abc' }, { fileId: 'g', name: 'x' }, null] })] })
     ).messages;
-    expect(m.attachments).toEqual([{ fileId: 'f', name: 'n'.repeat(120), mime: 'text/plain', version: 1, text: 'abc', totalChars: 3 }]);
+    expect(m.attachments).toEqual([{ fileId: 'f', name: 'n'.repeat(200), mime: 'text/plain', text: 'abc', totalChars: 3 }]);
     expect(validate(file({ messages: [msg({ attachments: [{ fileId: 'g' }] })] })).messages[0].attachments).toBeUndefined();
   });
 

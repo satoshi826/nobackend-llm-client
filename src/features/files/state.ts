@@ -3,7 +3,7 @@
 import { effect, signal } from '@preact/signals';
 import * as fdb from '../../lib/db/files';
 import { moveFolder, moveIntoWorkDirs, renumberTakenPaths, withTakenPaths } from '../../lib/db/paths';
-import { atPath } from '../../lib/db/catalog';
+import { atPath, catalogSpace } from '../../lib/db/catalog';
 import { baseName, cleanFileName, cleanFolderName, extOf, folderNameFor, folderOf, freeFolder, freePath, isInside, mimeFromName, pathFree, pathKey } from '../../lib/paths';
 import { getSetting, newId, setSetting } from '../../lib/db/repo';
 import { getImage, listImages, putImage, renameImages } from '../../lib/db/images';
@@ -282,12 +282,18 @@ export function openFolder(folder: string | null) {
   openFiler('all', null, folder);
 }
 
+/** Show what a hash names (a reload, Back, a link), and write the hash back in its own form (starting clears it) */
+function restoreFiler(view: FilerView, conversationId: string | null, folder: string | null) {
+  showFiler(view, conversationId, folder);
+  setHash(filerHash());
+}
+
 registerRoute({
-  pattern: /^#\/files(?:\?(type|chat)=([^&]*))?$/,
+  pattern: /^#\/files\/?(?:\?(type|chat)=([^&]*))?$/,
   open: (m) => {
-    if (m[1] === 'type' && FILER_VIEWS.includes(m[2] as FilerView)) showFiler(m[2] as FilerView, null, null);
-    else if (m[1] === 'chat') showFiler('all', decodeURIComponent(m[2]), null);
-    else showFiler('all', null, null);
+    if (m[1] === 'type' && FILER_VIEWS.includes(m[2] as FilerView)) restoreFiler(m[2] as FilerView, null, null);
+    else if (m[1] === 'chat') restoreFiler('all', decodeURIComponent(m[2]), null);
+    else restoreFiler('all', null, null);
   }
 });
 registerRoute({
@@ -297,14 +303,22 @@ registerRoute({
     try {
       folder = m[1].split('/').map(decodeURIComponent).join('/');
     } catch {
-      return showFiler('all', null, null);
+      return restoreFiler('all', null, null);
     }
-    showFiler('all', null, cleanFolderName(folder) || null);
+    restoreFiler('all', null, cleanFolderName(folder) || null);
   }
 });
 
-/** Folders made with "New folder" that nothing was put in yet: shown while they stay empty, until the app is opened again */
+/** Folders made with "New folder" that nothing was put in yet (until the app is opened again) */
 export const newFolders = signal<string[]>([]);
+
+// A new folder that something was put in is a folder like any other: it is listed from what it holds
+effect(() => {
+  void fileList.value;
+  void imageList.value;
+  const keep = newFolders.peek().filter((p) => !catalogSpace.holds(pathKey(p)));
+  if (keep.length !== newFolders.peek().length) newFolders.value = keep;
+});
 
 /** New folders under `from` now live under `to` ('' drops them) */
 function moveNewFolders(from: string, to: string | null) {
@@ -418,7 +432,7 @@ export const fileReturnsToChat = () => returnTo.kind === 'chat';
 
 export function closeFileView() {
   if (returnTo.kind === 'chat') showChat();
-  else showFiler();
+  else openFiler();
 }
 
 registerRoute({
@@ -429,6 +443,7 @@ registerRoute({
     sidebarTab.value = 'files';
     mainView.value = { kind: 'file', id: m[1] };
     sidebarOpen.value = false;
+    setHash(m[0]);
   }
 });
 

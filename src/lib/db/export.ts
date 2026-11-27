@@ -5,6 +5,7 @@ import { seal, unseal } from './sealed';
 import { dataTables } from './data-tables';
 import type { Attachment } from './schema';
 import { t } from './messages';
+import { cleanFolderName } from '../paths';
 
 const openAll = <T extends object>(rows: T[]) => Promise.all(rows.map((r) => unseal(r)));
 
@@ -155,7 +156,7 @@ function cleanAttachments(x: unknown): Attachment[] | undefined {
   if (!Array.isArray(x)) return undefined;
   const out = x
     .filter((a: any) => a && isStr(a.fileId) && isStr(a.name) && isStr(a.text))
-    .map((a: any) => ({ fileId: a.fileId, name: a.name.slice(0, 120), mime: isStr(a.mime) ? a.mime : 'text/plain', version: Number(a.version) || 1, text: a.text, totalChars: Number(a.totalChars) || a.text.length }));
+    .map((a: any) => ({ fileId: a.fileId, name: a.name.slice(0, 200), mime: isStr(a.mime) ? a.mime : 'text/plain', text: a.text, totalChars: Number(a.totalChars) || a.text.length }));
   return out.length ? out : undefined;
 }
 
@@ -181,7 +182,8 @@ export function validate(raw: unknown): ExportFile {
     systemPrompt: isStr(c.systemPrompt) ? c.systemPrompt : '',
     webSearch: c.webSearch === 'auto' || c.webSearch === 'on' ? c.webSearch : 'off',
     pinned: c.pinned ? 1 : 0,
-    tags: Array.isArray(c.tags) ? c.tags.filter(isStr) : []
+    tags: Array.isArray(c.tags) ? c.tags.filter(isStr) : [],
+    ...(isStr(c.workDir) && cleanFolderName(c.workDir) ? { workDir: cleanFolderName(c.workDir) } : {})
   } as Conversation));
   const convIds = new Set(conversations.map((c) => c.id));
   const messages = f.messages

@@ -28,6 +28,7 @@ import {
   loadFilerPrefs,
   moveItems,
   newFolders,
+  dropNewFolders,
   openFile,
   openFolder,
   renameFolder,
@@ -196,7 +197,8 @@ export function Filer() {
     if ([...picked].some((k) => !shown.has(k))) setPicked(new Set([...picked].filter((k) => shown.has(k))));
   }, [keys]);
 
-  const folderOfKey = (k: string) => folders.find((f) => folderKey(f) === k);
+  // A folder from its key, whether it is listed or open (the open folder's menu uses the same actions)
+  const folderOfKey = (k: string) => (k.startsWith('d:') ? { path: k.slice(2), name: baseName(k.slice(2, -1)) } : undefined);
   const itemOfKey = (k: string) => list.find((i) => i.key === k);
   const selected = list.filter((i) => picked.has(i.key));
   const selectedFiles = selected.filter((i): i is Extract<FilerItem, { type: 'file' }> => i.type === 'file');
@@ -237,7 +239,6 @@ export function Filer() {
     const inside = [...entryKeys.map(itemOfKey).filter((i) => !!i), ...(all ?? []).filter((i) => fs.some((f) => isInside(i.name, f.path)))];
     const fileIds = [...new Set(inside.filter((i) => i.type === 'file').map((i) => i.id))];
     const imageIds = [...new Set(inside.filter((i) => i.type === 'image').map((i) => i.id))];
-    newFolders.value = newFolders.value.filter((p) => !fs.some((f) => isInside(p, f.path)));
     if (!fileIds.length && !fs.length) {
       if (imageIds.length) await confirmAndDelete(imageIds);
     } else {
@@ -255,6 +256,7 @@ export function Filer() {
       if (fileIds.length) await deleteFiles(fileIds);
       if (imageIds.length) await deleteImages(imageIds);
     }
+    dropNewFolders(fs.map((f) => f.path));
     setPicked(new Set());
     if (folder && fs.some((f) => isInside(folder, f.path))) openFolder(folderOf(folder.slice(0, -1)) || null);
   };

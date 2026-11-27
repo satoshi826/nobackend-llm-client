@@ -67,10 +67,12 @@ export const isDraft = computed(() => currentId.value === null);
 /** The displayed conversation (including a draft; always present) */
 export const currentConv = computed<Conversation>(() => (currentId.value ? conversations.value.find((c) => c.id === currentId.value) : undefined) ?? draft.value);
 
+/** The open conversation's messages by id */
+export const messagesById = computed(() => new Map(messages.value.map((m) => [m.id, m])));
+
 export const currentPath = computed<MessageRecord[]>(() => {
   if (isDraft.value) return [];
-  const byId = new Map(messages.value.map((m) => [m.id, m]));
-  return pathToLeaf(byId, currentConv.value.currentLeafId);
+  return pathToLeaf(messagesById.value, currentConv.value.currentLeafId);
 });
 
 function sortConversations(list: Conversation[]): Conversation[] {

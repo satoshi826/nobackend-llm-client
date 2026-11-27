@@ -3,7 +3,7 @@ import { useState } from 'preact/hooks';
 import { computed, useComputed } from '@preact/signals';
 import type { MessageRecord } from '../lib/db/schema';
 import type { Part } from '../lib/providers/types';
-import { messages } from '../state/conversations';
+import { messages, messagesById } from '../state/conversations';
 import { editUserMessage, regenerate, switchSibling } from '../state/generation';
 import { requestHandlerFor } from '../state/tool-registry';
 import { isStreaming } from '../state/runs';
@@ -244,9 +244,12 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
   // A feature answers this message itself (e.g. images): no waiting text, no "another model"
   const owned = assistantExtras.some((x) => x.owns?.(m));
   // Its request runs again only when the feature can run it now (e.g. its provider still has a key)
-  const request = messages.value.find((x) => x.id === m.parentId);
-  const handler = requestHandlerFor(request);
-  const rerunnable = !handler || handler.ready(request!);
+  // (computed: the message list changes on every streaming frame, the answer is the same)
+  const rerunnable = useComputed(() => {
+    const request = m.parentId ? messagesById.value.get(m.parentId) : undefined;
+    const handler = requestHandlerFor(request);
+    return !handler || handler.ready(request!);
+  }).value;
   // The developer button: shows the requests recorded for this reply in this session
   const [reqOpen, setReqOpen] = useState(false);
   const showReq = settings.value.developerMode && sentRequestsOf(m.id).length > 0;

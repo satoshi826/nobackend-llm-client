@@ -2,7 +2,7 @@
 // and read files the user attached. Everything stays in the browser; nothing is sent anywhere.
 // Pure definitions: storage and access rules come in through FileToolDeps.
 import type { FileRecord } from '../../lib/db/schema';
-import { cleanFileName, currentText, currentVersion, folderOf, MAX_FILE_CHARS } from '../../lib/db/files';
+import { cleanFileName, currentText, folderOf, MAX_FILE_CHARS } from '../../lib/db/files';
 import type { Tool } from '../../lib/tools/types';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
 import { formatNumber } from '../../lib/i18n';
@@ -33,8 +33,8 @@ export interface FileToolDeps {
   create(path: string, text: string, folder?: string): Promise<{ file: FileRecord; replaced: boolean }>;
   /** A file the model may read (in the working folder, or attached), by id or by path; undefined otherwise */
   get(ref: string): Promise<FileRecord | undefined>;
-  /** Save a new text; throws for a file the model may only read */
-  update(id: string, text: string, note?: string): Promise<FileRecord>;
+  /** Save a new text (append: the file's previous text stays as it was); throws for a file the model may only read */
+  update(id: string, text: string, append?: boolean): Promise<FileRecord>;
   /** Fetch an address through the fetch page (the user is asked there). null when declined or failed */
   fetch(url: string, signal: AbortSignal): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null>;
   /** How the model sees a file's path: relative to the working folder (whole for a file outside it) */
@@ -45,11 +45,10 @@ export interface FileToolDeps {
 export interface FileToolDetails {
   fileId: string;
   name: string;
-  version: number;
   chars: number;
 }
 
-const details = (f: FileRecord): FileToolDetails => ({ fileId: f.id, name: f.name, version: currentVersion(f).v, chars: f.size });
+const details = (f: FileRecord): FileToolDetails => ({ fileId: f.id, name: f.name, chars: f.size });
 const str = (r: Record<string, unknown>, k: string) => (typeof r[k] === 'string' ? (r[k] as string) : '');
 const obj = (raw: unknown) => (raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {});
 
@@ -79,7 +78,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       properties: {
         name: {
           type: 'string',
-          description: `Path of the file inside the working folder, with an extension, e.g. "report.md" or "css/style.css" (a leading "/" also means the working folder). ${hasFolder ? 'Writing to a path the folder already has replaces that file\'s text (as a new version); to change part of a file use edit_file.' : ''}`.trim()
+          description: `Path of the file inside the working folder, with an extension, e.g. "report.md" or "css/style.css" (a leading "/" also means the working folder). ${hasFolder ? 'Writing to a path the folder already has replaces that file\'s text; to change part of a file use edit_file.' : ''}`.trim()
         },
         content: { type: 'string', description: 'The text of the file, or its first part when you will continue with append_file.' },
         ...(hasFolder ? {} : { folder: { type: 'string', description: 'Name of the working folder this first file makes, where every later file of this conversation goes: a few lowercase words joined by hyphens that say what it holds, e.g. "todo-app" or "market-report".' } })
@@ -101,7 +100,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const { file: f, replaced } = await deps.create(i.name, i.content, i.folder);
       return {
         content: replaced
-          ? `Replaced the text of ${shown(f)} (id: ${f.id}, now version ${currentVersion(f).v}, ${f.size} chars).`
+          ? `Replaced the text of ${shown(f)} (id: ${f.id}, ${f.size} chars).`
           : `Created ${shown(f)} (id: ${f.id}, ${f.size} chars) in the working folder ${JSON.stringify(folderOf(f.name))}. The user sees it as a file card and can open it from the Files tab.`,
         details: details(f)
       };
@@ -135,29 +134,28 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const f = await mustGet(deps, i.file_id);
       const next = currentText(f) + i.content;
       if (next.length > MAX_FILE_CHARS) throw new Error(t('tool.fileTooBig'));
-      const u = await deps.update(f.id, next, t('note.appended'));
-      return { content: `Appended ${i.content.length} chars to ${shown(u)} (now version ${currentVersion(u).v}, ${u.size} chars).`, details: details(u) };
+      const u = await deps.update(f.id, next, true);
+      return { content: `Appended ${i.content.length} chars to ${shown(u)} (now ${u.size} chars).`, details: details(u) };
     }
   };
 
-  const edit: Tool<{ file_id: string; content?: string; find?: string; replace?: string; note?: string }> = {
+  const edit: Tool<{ file_id: string; content?: string; find?: string; replace?: string }> = {
     name: EDIT_FILE,
     label: t('tool.edit'),
     description:
-      'Change a file in the working folder; the old text is kept as an earlier version. Use one of two ways per call. (1) Replace one passage: set "find" to text copied exactly from the current file (same spaces, line breaks and punctuation, without the <file> tag or any notes around it; it must occur exactly once, so include a few surrounding words if needed) and "replace" to the new text (empty deletes the passage). (2) Rewrite the file: set "content" to the whole new text. If you have not read the current text, call read_file first. Never write placeholders such as "..." for unchanged parts.',
+      'Change a file in the working folder (the user can undo the last change). Use one of two ways per call. (1) Replace one passage: set "find" to text copied exactly from the current file (same spaces, line breaks and punctuation, without the <file> tag or any notes around it; it must occur exactly once, so include a few surrounding words if needed) and "replace" to the new text (empty deletes the passage). (2) Rewrite the file: set "content" to the whole new text. If you have not read the current text, call read_file first. Never write placeholders such as "..." for unchanged parts.',
     parameters: {
       type: 'object',
       properties: {
         file_id: { type: 'string', description: "The file's id, or its path in the working folder (e.g. \"js/app.js\"): from the files list in the system prompt, the result of create_file or fetch_file, or an attached <file> tag." },
         content: { type: 'string', description: 'Optional. The whole new text of the file (replaces everything). Do not combine with find / replace.' },
         find: { type: 'string', description: 'Optional. A passage copied exactly from the current text that occurs exactly once.' },
-        replace: { type: 'string', description: 'The text that replaces "find" (required with find; empty deletes it).' },
-        note: { type: 'string', description: 'Optional. A few words on what changed, shown in the version history.' }
+        replace: { type: 'string', description: 'The text that replaces "find" (required with find; empty deletes it).' }
       },
       required: ['file_id']
     },
     risk: 'write',
-    summarize: (i) => i.note || i.file_id,
+    summarize: (i) => i.file_id,
     prepare(raw) {
       const r = obj(raw);
       const file_id = str(r, 'file_id').trim();
@@ -166,7 +164,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const hasFind = typeof r.find === 'string' && (r.find as string).length > 0;
       if (hasContent === hasFind) throw new Error(t('tool.contentOrFind'));
       if (hasFind && typeof r.replace !== 'string') throw new Error(t('tool.missingReplace'));
-      const out = { file_id, ...(hasContent ? { content: r.content as string } : { find: r.find as string, replace: r.replace as string }), ...(str(r, 'note') ? { note: str(r, 'note').slice(0, 200) } : {}) };
+      const out = { file_id, ...(hasContent ? { content: r.content as string } : { find: r.find as string, replace: r.replace as string }) };
       checkSize('content' in out ? out.content : out.replace);
       return out;
     },
@@ -182,8 +180,8 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
         next = cur.slice(0, at) + i.replace! + cur.slice(at + i.find!.length);
       }
       if (next.length > MAX_FILE_CHARS) throw new Error(t('tool.fileTooBig'));
-      const u = await deps.update(f.id, next, i.note ?? t('note.edited'));
-      return { content: `Saved ${shown(u)} as version ${currentVersion(u).v} (${u.size} chars).`, details: details(u) };
+      const u = await deps.update(f.id, next);
+      return { content: `Saved ${shown(u)} (${u.size} chars).`, details: details(u) };
     }
   };
 
@@ -214,7 +212,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const end = Math.min(text.length, i.offset + READ_CHUNK);
       const more = end < text.length ? `\n[characters ${i.offset}-${end} of ${text.length}; continue with offset=${end}]` : `\n[end of file; ${text.length} chars]`;
       // Text the user brought in or fetched from the web is marked as data; documents written here are not
-      const block = fileBlock({ name: deps.pathOf(f), id: f.id, version: currentVersion(f).v, text: text.slice(i.offset, end), outside: f.kind === 'upload' || !!f.url });
+      const block = fileBlock({ name: deps.pathOf(f), id: f.id, text: text.slice(i.offset, end), outside: f.kind === 'upload' || !!f.url });
       return { content: block + more, details: details(f) };
     }
   };

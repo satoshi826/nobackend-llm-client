@@ -468,7 +468,6 @@ function Card({ it, picked, selecting, onToggle, onOpen }: { it: FilerItem; pick
           </span>
           <span class="mt-0.5 block truncate text-xs text-muted tabular-nums">
             {sizeLabel(it)} · {formatDate(it.updatedAt)}
-            {it.type === 'file' && it.file.history.length ? ` · ${t('version', { v: it.file.current.v })}` : ''}
           </span>
         </span>
       </button>

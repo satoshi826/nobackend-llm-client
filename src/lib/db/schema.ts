@@ -137,38 +137,33 @@ export interface Attachment {
   fileId: string;
   name: string;
   mime: string;
-  version: number;
   text: string;
   /** Length of the whole file; larger than text.length when only the beginning is sent */
   totalChars: number;
 }
 
-/** One saved state of a file */
+/** A file's text as saved at one time */
 export interface FileVersion {
-  v: number;
   at: number;
   text: string;
-  /** Who made this version */
+  /** Who saved it */
   by: 'model' | 'user' | 'upload';
-  /** Short note, e.g. "appended" or the model's change summary */
-  note?: string;
 }
 
-/** What is known about a version without its text */
+/** When and by whom a text was saved, without the text */
 export type FileVersionInfo = Omit<FileVersion, 'text'>;
 
-/** The text of an earlier version of a file, kept apart so lists and edits never load or rewrite the history */
+/** A file's text before its last change (one per file), kept apart so lists and edits never load it */
 export interface FileVersionText {
-  /** `${fileId}:${v}` */
+  /** The file's id */
   id: string;
   fileId: string;
-  v: number;
   text: string;
 }
 
 /**
  * A text file: documents the model wrote (kind 'document') and files the user brought in (kind 'upload').
- * Images stay in the blobs table. name and versions are encrypted with a passphrase.
+ * Images stay in the blobs table. name and texts are encrypted with a passphrase.
  */
 export interface FileRecord {
   id: string;
@@ -179,16 +174,16 @@ export interface FileRecord {
   conversationId?: string;
   createdAt: number;
   updatedAt: number;
-  /** Characters in the latest version */
+  /** Characters in the current text */
   size: number;
   /** For uploads: where the text came from (e.g. "PDF から抽出") */
   source?: string;
   /** The web address it was fetched from (on the user's request) */
   url?: string;
-  /** The current version, with its text */
+  /** The current text */
   current: FileVersion;
-  /** Earlier versions without their text, oldest first (texts: FileVersionText). Beyond a limit the oldest are dropped */
-  history: FileVersionInfo[];
+  /** The text before the last change, for undo (its text: FileVersionText) */
+  previous?: FileVersionInfo;
 }
 
 /** Skill (SKILL.md-compatible work instructions) */

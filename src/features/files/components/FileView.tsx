@@ -1,8 +1,8 @@
-// A file in the main area: read, edit, go through versions, download, print (to PDF), use in a chat
+// A file in the main area: read, edit, undo the last change, download, print (to PDF), use in a chat
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { currentVersion, extOf, versionsOf, versionText } from '../../../lib/db/files';
-import type { FileRecord, FileVersion } from '../../../lib/db/schema';
+import { extOf } from '../../../lib/db/files';
+import type { FileRecord } from '../../../lib/db/schema';
 import { conversations, openConversation, showChat } from '../../../state/conversations';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
@@ -11,13 +11,13 @@ import { copyText } from '../../../components/clipboard';
 import { Markdown } from '../../../components/Markdown';
 import { useDialog } from '../../../components/dialog';
 import { PageHeader } from '../../../components/PageHeader';
-import { Badge, Button, Icon, IconButton, Segmented, Select, Spinner, TextField } from '../../../components/ui';
+import { Badge, Button, Icon, IconButton, Segmented, Spinner, TextField } from '../../../components/ui';
 import { SandboxFrame, svgPage } from '../../../components/SandboxFrame';
 import type { SandboxPage } from '../../../lib/sandbox/client';
 import { settings } from '../../../state/settings';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
-import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, getFile, pageOf, renameFile, restoreVersion, saveUserVersion } from '../state';
+import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, getFile, pageOf, renameFile, saveUserText, undoLastChange } from '../state';
 import { FileIcon, formatChars, PathName, typeLabel } from './common';
 import { formatDateTime, formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
@@ -27,7 +27,6 @@ const byLabel = (by: string) => (BY_KEYS[by] ? t(BY_KEYS[by]) : by);
 
 export function FileView({ id = '' }: { id?: string }) {
   const [f, setF] = useState<FileRecord | null | undefined>(undefined);
-  const [viewV, setViewV] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [renaming, setRenaming] = useState(false);
@@ -37,22 +36,9 @@ export function FileView({ id = '' }: { id?: string }) {
     void getFile(id).then((x) => setF(x ?? null));
   }, [id, filesVersion.value]);
   useEffect(() => {
-    setViewV(null);
     setEditing(false);
     setRenaming(false);
   }, [id]);
-  // An earlier version's text is read only when it is chosen (it is not part of the file record)
-  const [older, setOlder] = useState<FileVersion | null>(null);
-  useEffect(() => {
-    setOlder(null);
-    const meta = f && viewV !== null ? f.history.find((h) => h.v === viewV) : undefined;
-    if (!f || !meta) return;
-    let alive = true;
-    void versionText(f, meta.v).then((text) => alive && text !== undefined && setOlder({ ...meta, text }));
-    return () => {
-      alive = false;
-    };
-  }, [f, viewV]);
 
   if (f === undefined)
     return (
@@ -73,9 +59,7 @@ export function FileView({ id = '' }: { id?: string }) {
       </main>
     );
 
-  const latest = currentVersion(f);
-  const shown = older ?? latest;
-  const isOld = shown.v !== latest.v;
+  const shown = f.current;
   const conv = f.conversationId ? conversations.value.find((c) => c.id === f.conversationId) : undefined;
   const ext = extOf(f.name);
 
@@ -150,22 +134,18 @@ export function FileView({ id = '' }: { id?: string }) {
         <Badge>{typeLabel(f)}</Badge>
         <span class="hidden text-xs text-muted tabular-nums sm:inline">{formatChars(shown.text.length)}</span>
         <div class="ml-auto flex flex-wrap items-center gap-0.5">
-          {f.history.length > 0 && (
-            <label class="flex items-center gap-1 text-xs text-muted">
-              <Icon name="history" class="size-3.5" />
-              <Select compact
-                value={String(viewV ?? latest.v)}
-                aria-label={t('file.versionLabel')}
-                onChange={(e) => setViewV(Number((e.target as HTMLSelectElement).value))}
-              >
-                {versionsOf(f).reverse().map((v) => (
-                  <option key={v.v} value={v.v}>
-                    {v.v === latest.v ? t('file.versionLatest', { v: v.v }) : t('version', { v: v.v })} · {formatDateTime(v.at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {byLabel(v.by)}
-                    {v.note ? ` · ${v.note}` : ''}
-                  </option>
-                ))}
-              </Select>
-            </label>
+          {f.previous && !editing && (
+            <Button
+              class="text-sm"
+              title={t('file.undoTitle', { by: byLabel(f.previous.by), at: formatDateTime(f.previous.at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })}
+              onClick={async () => {
+                await undoLastChange(f.id);
+                showToast(t('file.undone'));
+              }}
+            >
+              <Icon name="history" />
+              <span class="hidden sm:inline">{t('file.undo')}</span>
+            </Button>
           )}
           <Button
             class="text-sm"
@@ -211,27 +191,6 @@ export function FileView({ id = '' }: { id?: string }) {
           </a>
         </p>
       )}
-      {isOld && !editing && (
-        <div class="flex flex-wrap items-center gap-2 mx-2 mt-2 rounded-2xl border border-warn/40 bg-warn-soft px-4 py-2 sm:mx-3 md:ml-0 md:mr-3 text-sm text-warn">
-          {t('file.oldVersion', { v: shown.v, latest: latest.v })}
-          <Button
-            variant="outline"
-            class="py-1! text-xs"
-            onClick={async () => {
-              await restoreVersion(f.id, shown.v);
-              setViewV(null);
-              showToast(t('file.restored', { v: shown.v }));
-            }}
-          >
-            <Icon name="history" class="size-3.5" />
-            {t('file.restore')}
-          </Button>
-          <Button class="text-xs" onClick={() => setViewV(null)}>
-            <Icon name="chevron-right" class="size-3.5" />
-            {t('file.showLatest')}
-          </Button>
-        </div>
-      )}
       {f.source?.startsWith('PDF') && <p class="border-b border-line px-4 py-1.5 text-xs text-muted">{t('file.pdfNote')}</p>}
       {editing ? (
         <div class="flex min-h-0 flex-1 flex-col gap-2 p-3">
@@ -247,11 +206,10 @@ export function FileView({ id = '' }: { id?: string }) {
             </Button>
             <Button
               variant="primary"
-              disabled={draft === latest.text}
+              disabled={draft === shown.text}
               onClick={async () => {
-                await saveUserVersion(f.id, draft);
+                await saveUserText(f.id, draft);
                 setEditing(false);
-                setViewV(null);
                 showToast(t('file.savedNew'));
               }}
             >

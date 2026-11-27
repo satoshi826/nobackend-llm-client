@@ -35,13 +35,10 @@ registerToolView({
   icon: 'file',
   summary: (p) => {
     const d = p.uiDetails as { name?: string } | undefined;
-    const i = (p.input ?? {}) as { name?: string; file_id?: string; note?: string };
+    const i = (p.input ?? {}) as { name?: string; file_id?: string };
     return d?.name ?? i.name ?? i.file_id ?? '';
   },
-  doneStatus: (p) => {
-    const d = p.uiDetails as { version?: number } | undefined;
-    return p.name === 'read_file' ? t('tool.readDone') : d?.version ? t('version', { v: d.version }) : undefined;
-  },
+  doneStatus: (p) => (p.name === 'read_file' ? t('tool.readDone') : undefined),
   Detail: FileToolDetail
 });
 registerUserMessageExtra(UserAttachments);

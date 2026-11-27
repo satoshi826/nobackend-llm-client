@@ -1,15 +1,14 @@
 // File storage: documents written by the model and files the user uploaded (text only).
-// A file record holds the current version; earlier versions' texts live in their own table (fileVersions), so
-// listing files or saving a new version never loads or rewrites the history.
+// A file keeps its current text and the text before its last change (for undo), nothing older. The record holds the
+// current text; the previous one lives in its own table (fileVersions, one row per file), so listing files never
+// loads it.
 // Files of temporary chats stay in memory. With a passphrase, names and contents are encrypted (sealed.ts).
-import { db, type FileRecord, type FileVersion, type FileVersionInfo, type FileVersionText } from './schema';
+import { db, type FileRecord, type FileVersion, type FileVersionInfo } from './schema';
 import { currentDataKey, seal, unseal } from './sealed';
 import type { DataKey } from '../crypto/data';
 import { registerDataTable } from './data-tables';
 import { storeChanged } from './changes';
 
-/** Versions kept per file (older ones are dropped) */
-export const MAX_VERSIONS = 30;
 /** Upper bound for one file's text */
 export const MAX_FILE_CHARS = 2_000_000;
 
@@ -86,13 +85,9 @@ export const baseName = (path: string): string => path.slice(path.lastIndexOf('/
 /** The folders of a path, with the closing `/` ('' at the top) */
 export const folderOf = (path: string): string => path.slice(0, path.lastIndexOf('/') + 1);
 
-export const currentVersion = (f: FileRecord): FileVersion => f.current;
 export const currentText = (f: FileRecord): string => f.current.text;
-/** Every version without its text, oldest first */
-export const versionsOf = (f: FileRecord): FileVersionInfo[] => [...f.history, info(f.current)];
 
 const info = ({ text: _t, ...rest }: FileVersion): FileVersionInfo => rest;
-const textId = (fileId: string, v: number) => `${fileId}:${v}`;
 
 /** A new file record (not saved) */
 export function newFile(o: { id: string; name: string; kind: FileRecord['kind']; text: string; by: FileVersion['by']; conversationId?: string; source?: string; url?: string; mime?: string }): FileRecord {
@@ -108,87 +103,106 @@ export function newFile(o: { id: string; name: string; kind: FileRecord['kind'];
     size: o.text.length,
     ...(o.source ? { source: o.source } : {}),
     ...(o.url ? { url: o.url } : {}),
-    current: { v: 1, at: now, text: o.text, by: o.by },
-    history: []
+    current: { at: now, text: o.text, by: o.by }
   };
 }
 
 /**
- * The record with a new current version (pure). archived: the version it replaces, whose text must be kept apart;
- * dropped: versions beyond MAX_VERSIONS whose texts can go
+ * The record with a new current text (pure). The text it replaces becomes the previous one (returned, to keep
+ * apart), unless keepPrevious: then the previous text stays as it was (appending to a file being written, a page
+ * saving its data)
  */
-export function withVersion(f: FileRecord, text: string, by: FileVersion['by'], note?: string): { next: FileRecord; archived: FileVersion; dropped: number[] } {
+export function withText(f: FileRecord, text: string, by: FileVersion['by'], keepPrevious = false): { next: FileRecord; previousText?: string } {
   const now = Date.now();
-  const history = [...f.history, info(f.current)];
-  const dropped = history.splice(0, Math.max(0, history.length - (MAX_VERSIONS - 1))).map((x) => x.v);
-  const next: FileRecord = { ...f, current: { v: f.current.v + 1, at: now, text, by, ...(note ? { note } : {}) }, history, size: text.length, updatedAt: now };
-  return { next, archived: f.current, dropped };
+  const next: FileRecord = { ...f, current: { at: now, text, by }, size: text.length, updatedAt: now };
+  if (keepPrevious) return { next };
+  return { next: { ...next, previous: info(f.current) }, previousText: f.current.text };
 }
 
-/** Earlier versions' texts of temporary files */
-const memTexts = new Map<string, string>();
+/** Previous texts of temporary files, by file id */
+const memPrevious = new Map<string, string>();
 
-/** Save a new current version: the replaced one's text goes to fileVersions, versions beyond the limit are dropped */
-export async function addVersion(f: FileRecord, text: string, by: FileVersion['by'], note?: string): Promise<FileRecord> {
-  const { next, archived, dropped } = withVersion(f, text, by, note);
-  if (mem.has(f.id)) {
-    memTexts.set(textId(f.id, archived.v), archived.text);
-    for (const v of dropped) memTexts.delete(textId(f.id, v));
-    mem.set(f.id, next);
+/** Save the record with its previous text (when it changed), in one transaction */
+async function save(next: FileRecord, previousText?: string): Promise<FileRecord> {
+  if (mem.has(next.id)) {
+    if (previousText !== undefined) memPrevious.set(next.id, previousText);
+    mem.set(next.id, next);
     storeChanged('files');
     return next;
   }
   // Encrypt first: a transaction ends as soon as it waits on anything but the database
-  const textRec = await seal('fileVersions', { id: textId(f.id, archived.v), fileId: f.id, v: archived.v, text: archived.text });
+  const textRec = previousText === undefined ? null : await seal('fileVersions', { id: next.id, fileId: next.id, text: previousText });
   const rec = await seal('files', next);
   await db().transaction('rw', db().files, db().fileVersions, async () => {
-    await db().fileVersions.put(textRec);
-    if (dropped.length) await db().fileVersions.bulkDelete(dropped.map((v) => textId(f.id, v)));
+    if (textRec) await db().fileVersions.put(textRec);
     await db().files.put(rec);
   });
   storeChanged('files');
   return next;
 }
 
-/** The text of one version (the current one is in the record; earlier ones are read on demand) */
-export async function versionText(f: FileRecord, v: number): Promise<string | undefined> {
-  if (v === f.current.v) return f.current.text;
-  if (mem.has(f.id)) return memTexts.get(textId(f.id, v));
-  const r = await db().fileVersions.get(textId(f.id, v));
+/** Save a new current text; the one it replaces becomes the previous text, unless keepPrevious */
+export async function setText(f: FileRecord, text: string, by: FileVersion['by'], keepPrevious = false): Promise<FileRecord> {
+  const { next, previousText } = withText(f, text, by, keepPrevious);
+  return save(next, previousText);
+}
+
+/** The text before the last change, if the file has one */
+export async function previousText(f: FileRecord): Promise<string | undefined> {
+  if (!f.previous) return undefined;
+  if (mem.has(f.id)) return memPrevious.get(f.id);
+  const r = await db().fileVersions.get(f.id);
   return r ? (await unseal(r)).text : undefined;
 }
 
-/** Save the record itself (a new file, a rename). New versions go through addVersion */
+/** Undo the last change: the previous text becomes current, and the current one previous (so undo again redoes) */
+export async function swapPrevious(f: FileRecord): Promise<FileRecord> {
+  const before = await previousText(f);
+  if (before === undefined || !f.previous) return f;
+  const now = Date.now();
+  return save({ ...f, current: { ...f.previous, text: before }, previous: info(f.current), size: before.length, updatedAt: now }, f.current.text);
+}
+
+/** Save the record itself (a new file, a rename). Text changes go through setText */
 export async function putFile(f: FileRecord, temporary = false): Promise<void> {
   if (temporary || mem.has(f.id)) mem.set(f.id, f);
   else await db().files.put(await seal('files', f));
   storeChanged('files');
 }
 
-/** A stored record in the shape before v9 (every version inside), once opened */
-type LegacyFile = Omit<FileRecord, 'current' | 'history'> & { versions: FileVersion[] };
-const isLegacy = (r: unknown): r is LegacyFile => Array.isArray((r as LegacyFile).versions);
+// Records from before: every version inside (before v9), or the current one with a list of earlier ones whose texts
+// were rows '<id>:<v>' (v9). Both keep only the newest two
+type OldVersion = FileVersion & { v?: number; note?: string };
+type WithVersions = Omit<FileRecord, 'current' | 'previous'> & { versions: OldVersion[] };
+type WithHistory = Omit<FileRecord, 'current' | 'previous'> & { current: OldVersion; history: (FileVersionInfo & { v: number })[] };
+const plainVersion = (x: OldVersion): FileVersion => ({ at: x.at, text: x.text, by: x.by });
 
-function splitLegacy(r: LegacyFile): { record: FileRecord; texts: FileVersionText[] } {
+/** A record and its previous text from a list of versions, oldest first (a backup, or a record from before v9) */
+function fromVersions(r: WithVersions): { record: FileRecord; previousText?: string } {
   const { versions, ...rest } = r;
-  const all = versions.slice(-MAX_VERSIONS);
-  const current = all[all.length - 1];
-  const earlier = all.slice(0, -1);
-  return {
-    record: { ...rest, current, history: earlier.map(info) },
-    texts: earlier.map((x) => ({ id: textId(r.id, x.v), fileId: r.id, v: x.v, text: x.text }))
-  };
+  const current = versions[versions.length - 1];
+  const before = versions.length > 1 ? versions[versions.length - 2] : undefined;
+  return { record: { ...rest, current: plainVersion(current), ...(before ? { previous: info(plainVersion(before)) } : {}) }, ...(before ? { previousText: before.text } : {}) };
 }
 
-/** Open a stored record; one still in the old shape is converted and written back in the new one (under `key`) */
+/** Open a stored record; one in an older shape is converted and written back in this one (under `key`) */
 async function open(raw: FileRecord, key: DataKey | null = currentDataKey()): Promise<FileRecord> {
-  const r = await unseal(raw, key);
-  if (!isLegacy(r)) return r;
-  const { record, texts } = splitLegacy(r);
-  const sealed = await Promise.all(texts.map((x) => seal('fileVersions', x, key)));
+  const r = (await unseal(raw, key)) as FileRecord | WithVersions | WithHistory;
+  let converted: { record: FileRecord; previousText?: string };
+  if ('versions' in r && Array.isArray(r.versions)) converted = fromVersions(r);
+  else if ('history' in r && Array.isArray(r.history)) {
+    const { history, current, ...rest } = r;
+    const last = history[history.length - 1];
+    const row = last && (await db().fileVersions.get(`${r.id}:${last.v}`));
+    const text = row ? (await unseal(row, key)).text : undefined;
+    converted = { record: { ...rest, current: plainVersion(current), ...(text !== undefined ? { previous: { at: last.at, by: last.by } } : {}) }, previousText: text };
+  } else return r as FileRecord;
+  const { record, previousText } = converted;
+  const textRec = previousText === undefined ? null : await seal('fileVersions', { id: record.id, fileId: record.id, text: previousText }, key);
   const rec = await seal('files', record, key);
   await db().transaction('rw', db().files, db().fileVersions, async () => {
-    if (sealed.length) await db().fileVersions.bulkPut(sealed);
+    await db().fileVersions.where('fileId').equals(record.id).delete();
+    if (textRec) await db().fileVersions.put(textRec);
     await db().files.put(rec);
   });
   return record;
@@ -217,7 +231,7 @@ export async function listFiles(): Promise<FileRecord[]> {
 export async function deleteFiles(ids: string[]): Promise<void> {
   for (const id of ids) {
     mem.delete(id);
-    for (const k of memTexts.keys()) if (k.startsWith(`${id}:`)) memTexts.delete(k);
+    memPrevious.delete(id);
   }
   await db().transaction('rw', db().files, db().fileVersions, async () => {
     await db().fileVersions.where('fileId').anyOf(ids).delete();
@@ -235,7 +249,7 @@ export function forgetTemporaryFiles(conversationId: string) {
   for (const [k, f] of mem) {
     if (f.conversationId !== conversationId) continue;
     mem.delete(k);
-    for (const t of memTexts.keys()) if (t.startsWith(`${k}:`)) memTexts.delete(t);
+    memPrevious.delete(k);
   }
   storeChanged('files');
 }
@@ -250,7 +264,7 @@ export async function fileUsage(): Promise<{ count: number; chars: number }> {
   return { count, chars };
 }
 
-/** Encrypt (to: a key) or decrypt (to: null) every file and version text; old-shape records are converted on the way */
+/** Encrypt (to: a key) or decrypt (to: null) every file and previous text; old-shape records are converted on the way */
 async function resealFiles(from: DataKey | null, to: DataKey | null, onProgress?: (done: number, total: number) => void): Promise<void> {
   const rows = await db().files.toArray();
   let done = 0;
@@ -268,24 +282,20 @@ async function resealFiles(from: DataKey | null, to: DataKey | null, onProgress?
   }
 }
 
-// ---- backup (every version, in the shape older backups use too) ----
-export type ExportedFile = Omit<FileRecord, 'current' | 'history'> & { versions: FileVersion[] };
+// ---- backup: the previous and current texts as a list of versions, the shape older backups use too ----
+export type ExportedFile = Omit<FileRecord, 'current' | 'previous'> & { versions: (FileVersion & { v: number })[] };
 
 export async function exportFiles(): Promise<ExportedFile[]> {
   const out: ExportedFile[] = [];
   for (const raw of await db().files.toArray()) {
     const f = await open(raw);
-    const earlier: FileVersion[] = [];
-    for (const h of f.history) {
-      const text = await versionText(f, h.v);
-      if (text !== undefined) earlier.push({ ...h, text });
-    }
-    const { current, history: _h, ...rest } = f;
-    out.push({ ...rest, versions: [...earlier, current] });
+    const before = await previousText(f);
+    const { current, previous, ...rest } = f;
+    out.push({ ...rest, versions: [...(previous && before !== undefined ? [{ ...previous, text: before, v: 1 }] : []), { ...current, v: previous && before !== undefined ? 2 : 1 }] });
   }
   return out;
 }
-/** Keep only well-formed file records */
+/** Keep only well-formed file records (with their newest two versions) */
 export function cleanFiles(raw: unknown): ExportedFile[] {
   if (!Array.isArray(raw)) return [];
   const isStr = (x: unknown): x is string => typeof x === 'string';
@@ -298,10 +308,9 @@ export function cleanFiles(raw: unknown): ExportedFile[] {
         v: v.v,
         at: Number.isFinite(v.at) ? v.at : Date.now(),
         text: v.text.slice(0, MAX_FILE_CHARS),
-        by: v.by === 'user' || v.by === 'upload' ? v.by : 'model',
-        ...(isStr(v.note) ? { note: v.note.slice(0, 200) } : {})
+        by: v.by === 'user' || v.by === 'upload' ? v.by : 'model'
       }))
-      .slice(-MAX_VERSIONS);
+      .slice(-2);
     if (!versions.length) continue;
     const name = cleanFileName(f.name);
     out.push({
@@ -326,11 +335,11 @@ export async function importFiles(files: ExportedFile[]): Promise<number> {
   let n = 0;
   for (const f of files) {
     if (await db().files.get(f.id)) continue;
-    const { record, texts } = splitLegacy(f);
-    const sealed = await Promise.all(texts.map((x) => seal('fileVersions', x)));
+    const { record, previousText } = fromVersions(f);
+    const textRec = previousText === undefined ? null : await seal('fileVersions', { id: record.id, fileId: record.id, text: previousText });
     const rec = await seal('files', record);
     await db().transaction('rw', db().files, db().fileVersions, async () => {
-      if (sealed.length) await db().fileVersions.bulkPut(sealed);
+      if (textRec) await db().fileVersions.put(textRec);
       await db().files.put(rec);
     });
     n++;

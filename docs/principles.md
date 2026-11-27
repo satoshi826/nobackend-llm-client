@@ -31,6 +31,7 @@ Threats the design holds against, and the rule that holds each one.
 - **Everything stays in this browser.** Conversations, files, images, settings and the usage log live in IndexedDB of this origin; nothing is sent anywhere except the requests the user makes to providers and services they enabled.
 - **Temporary chats are never written** (not to the database, not to the usage log).
 - **Deleting a conversation keeps what was made in it unless the user chooses otherwise.** Its images, videos and files (made or brought in there) stay in the Files tab, unless the user ticks the box in the delete confirmation that deletes them too (unticked by default); a temporary chat's always go with it.
+- **A file keeps its current text and the one before its last change, nothing older.** Undo swaps the two; appending to a file leaves the earlier text as it was. *Why:* a model that edits a file dozens of times would otherwise pile up full copies of it.
 - **A path names one thing in the whole app.** Files and named images (uploaded or fetched) share one set of paths: folders separated by `/`, compared in NFC with case folded, and no path is another one's folder. A name already in use gets a number when the user brings something in, and is refused when they rename. *Why:* pages and tools find files by path, and a folder must stay one folder on a disk or in a zip.
 - **Backups never contain keys or the data key.** They can be encrypted with a separate password.
 - **The background picture is stored unencrypted** (downscaled, with the settings) and is included in backups.

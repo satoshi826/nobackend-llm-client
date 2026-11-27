@@ -191,18 +191,15 @@ registerRoute({
 });
 
 // ---- editing by the user ----
-export async function saveUserVersion(id: string, text: string) {
+export async function saveUserText(id: string, text: string) {
   const f = await fdb.getFile(id);
-  if (!f) return;
-  await fdb.addVersion(f, text, 'user', t('note.userEdit'));
+  if (f) await fdb.setText(f, text, 'user');
 }
 
-/** Make an old version current again (as a new version, so nothing is lost) */
-export async function restoreVersion(id: string, v: number) {
+/** Go back to the text before the last change (again: forward to it) */
+export async function undoLastChange(id: string) {
   const f = await fdb.getFile(id);
-  const text = f && (await fdb.versionText(f, v));
-  if (!f || text === undefined) return;
-  await fdb.addVersion(f, text, 'user', t('note.restored', { v }));
+  if (f) await fdb.swapPrevious(f);
 }
 
 /** Rename a file (the name may move it into other folders); false when another file or image has that path */
@@ -364,8 +361,8 @@ export async function takeAttachments(): Promise<Attachment[]> {
   for (const a of ready) {
     const f = await fdb.getFile(a.fileId);
     if (!f) continue;
-    const v = fdb.currentVersion(f);
-    out.push({ fileId: f.id, name: f.name, mime: f.mime, version: v.v, text: v.text.slice(0, ATTACH_INLINE_CHARS), totalChars: v.text.length });
+    const text = fdb.currentText(f);
+    out.push({ fileId: f.id, name: f.name, mime: f.mime, text: text.slice(0, ATTACH_INLINE_CHARS), totalChars: text.length });
   }
   return out;
 }
@@ -430,9 +427,9 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
           const full = d + path;
           const key = pathKey(full);
           const same = taken.find((o) => pathKey(o.path) === key);
-          // One file per path: writing to a path the folder has makes a new version of that file
+          // One file per path: writing to a path the folder has replaces that file's text
           const file = same && (await fdb.getFile(same.id));
-          if (file) return { file: await fdb.addVersion(file, text, 'model'), replaced: true };
+          if (file) return { file: await fdb.setText(file, text, 'model'), replaced: true };
           if (!pathFree(full, taken)) throw new Error(t('tool.pathTaken', { name: path }));
           const f = fdb.newFile({ id: newId(), name: full, kind: 'document', text, by: 'model', conversationId: conv.id });
           await fdb.putFile(f, !!conv.temporary);
@@ -440,12 +437,12 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
         });
       },
       get: (ref) => readableFile(conv.id, history, ref),
-      async update(id, text, note) {
+      async update(id, text, append) {
         const f = await fdb.getFile(id);
         if (!f) throw new Error(t('tool.notFound'));
         // A file attached from outside the folder is only read: a change goes into a new file in the folder
         if (!dir() || !isInside(f.name, dir())) throw new Error(t('tool.readOnly', { name: f.name }));
-        return fdb.addVersion(f, text, 'model', note);
+        return fdb.setText(f, text, 'model', append);
       },
       pathOf: (f) => relativeTo(dir(), f.name)
     },

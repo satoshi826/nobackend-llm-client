@@ -50,7 +50,7 @@ export function FileToolDetail({ p }: { p: ToolPart }) {
         <span class="min-w-0 flex-1">
           <span class="block truncate text-sm font-medium text-ink-strong">{d.name}</span>
           <span class="block text-xs text-muted">
-            {t('version', { v: d.version })} · {formatChars(d.chars)}
+            {formatChars(d.chars)}
           </span>
         </span>
         <span class="shrink-0 text-xs text-accent-text">{t('open')}</span>

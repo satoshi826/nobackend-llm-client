@@ -33,6 +33,8 @@ export interface Tool<I = any> {
   description: string;
   parameters: Record<string, unknown>;
   risk: ToolRisk;
+  /** What happens until the user chooses in settings ('ask' when not given); the settings page shows the same */
+  defaultPermission?: Permission;
   /** Always ask the user, whatever the settings or "always allow" say (e.g. saving a skill) */
   alwaysAsk?: boolean;
   /** "Always allow" is chosen only in settings, not with one press on the approval card (e.g. fetch_url) */

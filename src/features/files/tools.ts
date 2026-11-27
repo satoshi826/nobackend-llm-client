@@ -21,10 +21,14 @@ export const MOVE_FILE = 'move_file';
 export const DELETE_FILE = 'delete_file';
 export const FETCH_FILE = 'fetch_file';
 export const PREVIEW_PAGE = 'preview_page';
-/** The file tools offered now (their permission is set together in settings) */
-export const FILE_TOOLS = [LIST_FILES, SEARCH_FILES, READ_FILE, WRITE_FILE, EDIT_FILE, APPEND_FILE, MOVE_FILE, DELETE_FILE, PREVIEW_PAGE, FETCH_FILE];
+/**
+ * The tools that work on files, set together in settings and allowed until the user chooses otherwise (delete_file
+ * asks every time anyway; fetch_file is confirmed in the fetch page)
+ */
+export const FILE_TOOLS = [LIST_FILES, SEARCH_FILES, READ_FILE, WRITE_FILE, EDIT_FILE, APPEND_FILE, MOVE_FILE, DELETE_FILE, FETCH_FILE];
+export const FILE_TOOLS_DEFAULT = 'allow' as const;
 /** Every name a file tool had, so the cards of older answers still show (create_file is now write_file) */
-export const FILE_TOOL_NAMES = [...FILE_TOOLS, 'create_file'];
+export const FILE_TOOL_NAMES = [...FILE_TOOLS, PREVIEW_PAGE, 'create_file'];
 
 const LABEL_KEYS = {
   [LIST_FILES]: 'tool.list',
@@ -160,6 +164,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     description: 'List the files in the working folder whose path matches a glob pattern, with their sizes. "**" matches across folders, "*" within one, e.g. "**/*.js" or "css/*". Images are listed too, but cannot be read.',
     parameters: { type: 'object', properties: { pattern: { type: 'string', description: 'Optional. A glob pattern for paths; default "**" (every file).' } } },
     risk: 'read',
+    defaultPermission: FILE_TOOLS_DEFAULT,
     summarize: (i) => i.pattern,
     prepare: (raw) => ({ pattern: str(obj(raw), 'pattern').trim().replace(/^\/+/, '') || '**' }),
     async execute(i) {
@@ -186,6 +191,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       required: ['pattern']
     },
     risk: 'read',
+    defaultPermission: FILE_TOOLS_DEFAULT,
     summarize: (i) => i.pattern,
     prepare(raw) {
       const r = obj(raw);
@@ -222,6 +228,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       required: ['file_id']
     },
     risk: 'read',
+    defaultPermission: FILE_TOOLS_DEFAULT,
     summarize: (i) => (i.offset > 1 ? `${i.file_id}:${i.offset}` : i.file_id),
     prepare(raw) {
       const r = obj(raw);
@@ -261,6 +268,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       required: hasFolder ? ['name', 'content'] : ['name', 'content', 'folder']
     },
     risk: 'write',
+    defaultPermission: FILE_TOOLS_DEFAULT,
     summarize: (i) => i.name,
     prepare(raw) {
       const r = obj(raw);
@@ -302,6 +310,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       required: ['file_id', 'old_string', 'new_string']
     },
     risk: 'write',
+    defaultPermission: FILE_TOOLS_DEFAULT,
     summarize: (i) => i.file_id,
     prepare(raw) {
       const r = obj(raw);
@@ -344,6 +353,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       required: ['file_id', 'content']
     },
     risk: 'write',
+    defaultPermission: FILE_TOOLS_DEFAULT,
     summarize: (i) => i.file_id,
     prepare(raw) {
       const r = obj(raw);
@@ -370,6 +380,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       required: ['file_id', 'to']
     },
     risk: 'write',
+    defaultPermission: FILE_TOOLS_DEFAULT,
     summarize: (i) => `${i.file_id} → ${i.to}`,
     prepare(raw) {
       const r = obj(raw);
@@ -391,6 +402,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     description: 'Delete a file in the working folder. The user is asked every time, and it cannot be undone, so delete only what is no longer needed (a leftover, a file the user asked to remove).',
     parameters: { type: 'object', properties: { file_id: FILE_ID }, required: ['file_id'] },
     risk: 'write',
+    defaultPermission: FILE_TOOLS_DEFAULT,
     // Gone for good: asked every time, whatever the settings say
     alwaysAsk: true,
     summarize: (i) => i.file_id,
@@ -448,6 +460,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       required: ['url']
     },
     risk: 'network',
+    defaultPermission: FILE_TOOLS_DEFAULT,
     confirmsItself: true,
     summarize: (i) => i.url,
     prepare(raw) {

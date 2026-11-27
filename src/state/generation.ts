@@ -142,7 +142,7 @@ async function generateReply(convId: string, parentUserId: string) {
       dynamicTools: (turn) => contributedDynamicTools(toolCtx, turn),
       toolContext: { transport, authFor },
       permissionFor: (tool) => {
-        const set = settings.value.toolPermissions[tool.name] ?? 'ask';
+        const set = settings.value.toolPermissions[tool.name] ?? tool.defaultPermission ?? 'ask';
         return tool.alwaysAsk ? 'ask' : tool.confirmsItself ? (set === 'deny' ? 'deny' : 'allow') : set;
       },
       requestApproval: waitForApproval,

@@ -21,7 +21,9 @@ export function fileBlock(f: { name: string; id: string; text: string; outside: 
 export function withAttachments(text: string, atts: Attachment[]): string {
   const blocks = atts.map((a) => {
     const partial = a.text.length < a.totalChars;
-    const note = partial ? `\n[Only the first ${a.text.length} of ${a.totalChars} characters are included. Use read_file with file_id="${a.fileId}" and offset=${a.text.length} to read more.]` : '';
+    // Cut after a whole line (takeAttachments): read_file goes on from the next line
+    const next = a.text.split('\n').length;
+    const note = partial ? `\n[Only the first ${a.text.length} of ${a.totalChars} characters (${next - 1} lines) are included. Use read_file with file_id="${a.fileId}" and offset=${next} to read on.]` : '';
     return fileBlock({ name: a.name, id: a.fileId, text: a.text, outside: true }) + note;
   });
   return [...blocks, text].filter(Boolean).join('\n\n');

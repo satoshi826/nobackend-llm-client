@@ -242,9 +242,11 @@ describe('attachments in requests', () => {
   it('puts attached files before the text and notes partial files', () => {
     const t = withAttachments('summarize', [
       { fileId: 'f1', name: 'a.txt', mime: 'text/plain', text: 'hello', totalChars: 5 },
-      { fileId: 'f2', name: 'b.pdf', mime: 'text/plain', text: 'abc', totalChars: 10 }
+      { fileId: 'f2', name: 'b.pdf', mime: 'text/plain', text: 'line 1\nline 2\n', totalChars: 40 }
     ]);
     expect(t.indexOf('hello')).toBeLessThan(t.indexOf('summarize'));
+    // Cut after whole lines: read_file goes on from the next line
+    expect(t).toContain('(2 lines)');
     expect(t).toContain('offset=3');
     expect(t).not.toContain('f1">\nhello\n</file>\n[Only');
   });

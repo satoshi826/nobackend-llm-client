@@ -321,6 +321,16 @@ describe('tool execution loop', () => {
     const tools = out.parts.filter((p) => p.type === 'tool') as any[];
     expect(tools[tools.length - 1].error).toContain('繰り返され');
   });
+
+  it('counts the same call again after a change, since reading or trying it again is then progress', async () => {
+    const save: Tool<{ q: string }> = { ...echo, name: 'save', label: 'save', risk: 'write' };
+    const saveCall = [{ choices: [{ delta: { tool_calls: [{ index: 0, id: 'c-s', function: { name: 'save', arguments: '{"q":"x"}' } }] }, finish_reason: 'tool_calls' }] }];
+    // check, save, check, save, check: the third check is not a repeat
+    const { out } = await run([toolCall('同じ'), saveCall, toolCall('同じ'), saveCall, toolCall('同じ'), answer('ok')], { tools: [echo, save] });
+    const tools = out.parts.filter((p) => p.type === 'tool') as any[];
+    expect(tools).toHaveLength(5);
+    expect(tools.every((p) => p.state === 'output-available')).toBe(true);
+  });
 });
 
 import { makeFetchUrlTool, webSearchTool } from '../../features/web/tools';

@@ -84,6 +84,8 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
   // A provider may pause a long server-side turn (pause_turn); it is continued a few times at most
   let pauses = 0;
   let steps = maxSteps;
+  // The same call made three times stops the turn (it is going in circles); a change made in between starts the count
+  // again, since reading or trying the same thing after a change is progress
   const callCounts = new Map<string, number>();
   const base = fitToContext(
     buildRequestMessages(o.history, o.systemPrompt, { resendReasoning: o.resendReasoning, providerId: o.provider.id, model: o.model }),
@@ -249,6 +251,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
         call.uiDetails = r.details;
         call.state = r.isError ? 'output-error' : 'output-available';
         if (r.isError) call.error = r.content;
+        else if (tool.risk === 'write') callCounts.clear();
         for (const s of r.sources ?? []) {
           if (!msg.parts.some((p) => p.type === 'source' && p.url === s.url)) msg.parts.push({ type: 'source', url: s.url, title: s.title, snippet: s.snippet });
         }

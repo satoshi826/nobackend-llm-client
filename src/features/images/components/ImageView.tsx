@@ -6,6 +6,7 @@ import type { Part } from '../../../lib/providers/types';
 import { baseName } from '../../../lib/paths';
 import { currentId, openConversation } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
+import { IdleButton } from '../../../components/IdleButton';
 import { modal, showToast } from '../../../state/ui';
 import { Button, Disclosure, Icon, Shimmer, Spinner, cx, IconButton, type IconName } from '../../../components/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
@@ -261,40 +262,40 @@ function ImageAnswerBody({ m }: { m: MessageRecord }) {
         <div class="flex flex-wrap gap-1.5">
           {/* Same picture again needs a seed (some providers take none) */}
           {img.seed !== undefined && (
-            <Button class="text-xs" disabled={isStreaming.value} onClick={() => void regenerateImage(m.id, 'same')} title={t('regen.sameTitle')}>
+            <IdleButton class="text-xs" onClick={() => void regenerateImage(m.id, 'same')} title={t('regen.sameTitle')}>
               <Icon name="refresh" class="size-3.5" />
               {t('regen.same')}
-            </Button>
+            </IdleButton>
           )}
-          <Button class="text-xs" disabled={isStreaming.value} onClick={() => void regenerateImage(m.id, 'new')} title={t('regen.newTitle')}>
+          <IdleButton class="text-xs" onClick={() => void regenerateImage(m.id, 'new')} title={t('regen.newTitle')}>
             <Icon name="sparkle" class="size-3.5" />
             {t('regen.new')}
-          </Button>
+          </IdleButton>
         </div>
       )}
       {m.status === 'done' && files.length === 1 && imageActions.some((a) => a.shown()) && (
         <div class="flex flex-wrap gap-1.5">
           {imageActions.filter((a) => a.shown()).map((a) => (
-            <Button key={a.id} class="text-xs" variant="outline" disabled={isStreaming.value} title={a.title()} onClick={() => void a.run(files[0].blobId)}>
+            <IdleButton key={a.id} class="text-xs" variant="outline" title={a.title()} onClick={() => void a.run(files[0].blobId)}>
               <Icon name={a.icon} class="size-3.5" />
               {a.label()}
-            </Button>
+            </IdleButton>
           ))}
         </div>
       )}
       {img.suggestion && m.status === 'error' && rerun && (
         <div class="flex flex-wrap gap-1.5">
           {img.suggestion.prompt && (
-            <Button class="text-xs" variant="outline" disabled={isStreaming.value} onClick={() => void retryWithSuggestion(m.id, 'prompt')} title={img.suggestion.prompt}>
+            <IdleButton class="text-xs" variant="outline" onClick={() => void retryWithSuggestion(m.id, 'prompt')} title={img.suggestion.prompt}>
               <Icon name="wand" class="size-3.5" />
               {t('retry.prompt')}
-            </Button>
+            </IdleButton>
           )}
           {img.suggestion.model && (
-            <Button class="text-xs" variant="outline" disabled={isStreaming.value} onClick={() => void retryWithSuggestion(m.id, 'model')}>
+            <IdleButton class="text-xs" variant="outline" onClick={() => void retryWithSuggestion(m.id, 'model')}>
               <Icon name="swap" class="size-3.5" />
               {t('retry.model', { model: img.suggestion.model })}
-            </Button>
+            </IdleButton>
           )}
         </div>
       )}

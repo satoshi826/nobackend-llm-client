@@ -6,7 +6,7 @@ import type { Part } from '../lib/providers/types';
 import { messages, messagesById, writingOf } from '../state/conversations';
 import { editUserMessage, regenerate, switchSibling } from '../state/generation';
 import { requestHandlerFor } from '../state/tool-registry';
-import { isStreaming } from '../state/runs';
+import { IdleButton, IdleIconButton } from './IdleButton';
 import { suggestingFor } from '../state/suggestions';
 import { modelOf } from '../state/models';
 import { settings } from '../state/settings';
@@ -51,15 +51,15 @@ function SiblingNav({ m }: { m: MessageRecord }) {
   const [i, n] = pos.split(' ').map(Number);
   return (
     <div class="flex items-center text-xs text-muted">
-      <IconButton label={t('msg.prevVersion')} disabled={i <= 0 || isStreaming.value} onClick={() => switchSibling(m.id, -1)}>
+      <IdleIconButton label={t('msg.prevVersion')} disabled={i <= 0} onClick={() => switchSibling(m.id, -1)}>
         <Icon name="chevron-left" class="size-3.5" />
-      </IconButton>
+      </IdleIconButton>
       <span class="tabular-nums">
         {i + 1}/{n}
       </span>
-      <IconButton label={t('msg.nextVersion')} disabled={i >= n - 1 || isStreaming.value} onClick={() => switchSibling(m.id, 1)}>
+      <IdleIconButton label={t('msg.nextVersion')} disabled={i >= n - 1} onClick={() => switchSibling(m.id, 1)}>
         <Icon name="chevron-right" class="size-3.5" />
-      </IconButton>
+      </IdleIconButton>
     </div>
   );
 }
@@ -158,9 +158,9 @@ function UserMessage({ m }: { m: MessageRecord }) {
           <Button variant="outline" onClick={() => setEditing(false)}>
             {t('msg.cancel')}
           </Button>
-          <Button
+          <IdleButton
             variant="primary"
-            disabled={!draft.trim() || isStreaming.value}
+            disabled={!draft.trim()}
             onClick={() => {
               setEditing(false);
               void editUserMessage(m.id, draft);
@@ -168,7 +168,7 @@ function UserMessage({ m }: { m: MessageRecord }) {
           >
             <Icon name="send" />
             {t('msg.send')}
-          </Button>
+          </IdleButton>
         </div>
       </div>
     );
@@ -187,16 +187,15 @@ function UserMessage({ m }: { m: MessageRecord }) {
           </IconButton>
         )}
         {editable && (
-          <IconButton
+          <IdleIconButton
             label={t('msg.edit')}
-            disabled={isStreaming.value}
             onClick={() => {
               setDraft(textOf(m));
               setEditing(true);
             }}
           >
             <Icon name="edit" class="size-3.5" />
-          </IconButton>
+          </IdleIconButton>
         )}
       </div>
     </div>
@@ -295,18 +294,17 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
           )}
           {/* One regenerate control: the arrow reruns with the same model, the chevron picks another model */}
           {rerunnable && <span class="inline-flex items-center rounded-[10px] transition hover:bg-glass">
-            <IconButton label={t('msg.regenerate')} disabled={isStreaming.value} onClick={() => regenerate(m.id)} class="group/re">
+            <IdleIconButton label={t('msg.regenerate')} onClick={() => regenerate(m.id)} class="group/re">
               <Icon name="refresh" class="size-3.5 transition-transform duration-500 group-hover/re:rotate-180" />
-            </IconButton>
+            </IdleIconButton>
             {!owned && (
-              <IconButton
+              <IdleIconButton
                 label={t('msg.regenerateOther')}
-                disabled={isStreaming.value}
                 class="-ml-1 px-1!"
                 onClick={() => openModelPicker({ kind: 'regenerate', assistantId: m.id })}
               >
                 <Icon name="chevron-down" class="size-3" />
-              </IconButton>
+              </IdleIconButton>
             )}
           </span>}
           {showReq && (

@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { Conversation, MessageRecord } from '../../../lib/db/schema';
 import { formatNumber } from '../../../lib/i18n';
-import { isStreaming } from '../../../state/runs';
-import { Button, Chip, Icon, Shimmer, Spinner } from '../../../components/ui';
+import { IdleButton } from '../../../components/IdleButton';
+import { Chip, Icon, Shimmer, Spinner } from '../../../components/ui';
 import { currentVideoModel, offeredModels, privacyLabelOf, resumeVideoJob, runVideoJob, setVideoMode, videoModelOf, videoProgress, videoProviderReady, videoReady } from '../state';
 import { videoProviderOf } from '../providers/types';
 import { useBlobUrl } from '../../images';
@@ -115,10 +115,10 @@ function VideoAnswerBody({ m }: { m: MessageRecord }) {
         <div class="space-y-1.5">
           {m.status === 'aborted' && <p class="text-sm text-muted">{t('answer.stopped')}</p>}
           {rerun && (
-            <Button class="text-xs" disabled={isStreaming.value} onClick={() => void resumeVideoJob(m.id)}>
+            <IdleButton class="text-xs" onClick={() => void resumeVideoJob(m.id)}>
               <Icon name="refresh" class="size-3.5" />
               {t('answer.waitAgain')}
-            </Button>
+            </IdleButton>
           )}
         </div>
       )}
@@ -154,15 +154,15 @@ function VideoAnswerBody({ m }: { m: MessageRecord }) {
       )}
       {(m.status === 'done' || m.status === 'error') && m.parentId && rerun && (
         <div class="flex flex-wrap gap-1.5">
-          <Button class="text-xs" disabled={isStreaming.value} onClick={() => void runVideoJob(m.conversationId, m.parentId!)}>
+          <IdleButton class="text-xs" onClick={() => void runVideoJob(m.conversationId, m.parentId!)}>
             <Icon name="sparkle" class="size-3.5" />
             {t('answer.again')}
-          </Button>
+          </IdleButton>
           {m.status === 'error' && v.suggestedModel && (
-            <Button class="text-xs" variant="outline" disabled={isStreaming.value} onClick={() => void runVideoJob(m.conversationId, m.parentId!, { model: v.suggestedModel })}>
+            <IdleButton class="text-xs" variant="outline" onClick={() => void runVideoJob(m.conversationId, m.parentId!, { model: v.suggestedModel })}>
               <Icon name="swap" class="size-3.5" />
               {t('answer.tryModel', { model: v.suggestedModel })}
-            </Button>
+            </IdleButton>
           )}
         </div>
       )}

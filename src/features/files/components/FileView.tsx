@@ -6,7 +6,7 @@ import type { FileRecord } from '../../../lib/db/schema';
 import { conversations, openConversation, showChat } from '../../../state/conversations';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { filesVersion, imagesVersion } from '../../../state/stored';
+import { filesVersion } from '../../../state/stored';
 import { copyText } from '../../../components/clipboard';
 import { Markdown } from '../../../components/Markdown';
 import { useDialog } from '../../../components/dialog';
@@ -17,7 +17,7 @@ import type { SandboxPage } from '../../../lib/sandbox/client';
 import { settings } from '../../../state/settings';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
-import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, getFile, pageOf, renameFile, saveUserText, undoLastChange } from '../state';
+import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, fileList, getFile, imageList, pageOf, refreshFiles, refreshImages, renameFile, saveUserText, siteSignature, undoLastChange } from '../state';
 import { FileIcon, formatChars, PathName, typeLabel } from './common';
 import { formatDateTime, formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
@@ -277,18 +277,24 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
   const [run, setRun] = useState(0);
   const [full, setFull] = useState(false);
   const page = svg ? svgPage(text) : text;
-  // The other files of its site, for references by relative path; loaded again when stored files or images change
+  // The files of its site, for references by relative path, and its localStorage. Loaded again when the site's files
+  // or images change, but not when the page itself saved its localStorage (it already has that)
   const [files, setFiles] = useState<SandboxPage | undefined>(undefined);
-  const fv = filesVersion.value;
-  const iv = imagesVersion.value;
   useEffect(() => {
-    if (svg) return;
+    void refreshFiles();
+    void refreshImages();
+  }, []);
+  // Waits for both lists, so the page is not shown once before they arrive and again after
+  const ready = !!fileList.value && !!imageList.value;
+  const signature = siteSignature(file);
+  useEffect(() => {
+    if (svg || !ready) return;
     let alive = true;
     void pageOf(file).then((x) => alive && setFiles(x));
     return () => {
       alive = false;
     };
-  }, [file.id, file.name, file.conversationId, fv, iv, svg]);
+  }, [file.id, file.name, signature, svg, ready]);
   return (
     <div class="space-y-2">
       <div class="flex flex-wrap items-center gap-2">

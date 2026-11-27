@@ -20,7 +20,7 @@ import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
 import { fetchFromWeb } from '../../state/fetch-page';
 import type { Fetched } from '../../lib/fetcher/protocol';
-import type { SandboxPage } from '../../lib/sandbox/client';
+import { cleanStorage, type SandboxPage } from '../../lib/sandbox/client';
 
 /** Let chat models write and read files (create_file / append_file / edit_file / read_file) */
 export const fileSettings = defineFeatureSettings('files', { fileTools: true }, (old) => pickLegacy(old, { fileTools: true }));
@@ -94,7 +94,59 @@ export async function pageOf(page: FileRecord): Promise<SandboxPage> {
     const blob = await getImage(im.id).catch(() => null);
     if (blob) out[im.info!.name.slice(site.length)] = blob;
   }
-  return { path: page.name.slice(site.length), files: out };
+  const storagePath = `${site}${STORAGE_FILE}`;
+  const stored = files.find((f) => pathKey(f.name) === pathKey(storagePath));
+  return { path: page.name.slice(site.length), files: out, storage: { items: storageItems(stored), save: (items) => void saveStorage(storagePath, items, page) } };
+}
+
+/** The file a site's pages keep their localStorage in, at the site's top */
+export const STORAGE_FILE = 'localStorage.json';
+
+/** A storage file's items; anything else than an object of strings (a broken edit, say) counts as empty */
+function storageItems(f: FileRecord | undefined): Record<string, string> {
+  try {
+    return (f && cleanStorage(JSON.parse(fdb.currentText(f)))) || {};
+  } catch {
+    return {};
+  }
+}
+
+/** The texts the app itself last wrote to each storage file (by path key): the page that wrote one needs no reload */
+const ownStorageWrites = new Map<string, string>();
+
+/** Keep a page's localStorage in its site's storage file (made on the first write; it keeps no previous text) */
+async function saveStorage(path: string, items: Record<string, string>, page: FileRecord) {
+  const text = JSON.stringify(items, null, 2);
+  ownStorageWrites.set(pathKey(path), text);
+  await withTakenPaths(async (taken) => {
+    const same = taken.find((o) => pathKey(o.path) === pathKey(path));
+    const f = same && (await fdb.getFile(same.id));
+    if (f) {
+      if (fdb.currentText(f) !== text) await fdb.setText(f, text, 'user', true);
+    } else if (pathFree(path, taken)) {
+      await fdb.putFile(fdb.newFile({ id: newId(), name: path, kind: 'document', text, by: 'user', conversationId: page.conversationId }), fdb.isTemporaryFile(page.id));
+    }
+  });
+}
+
+/**
+ * What a page's preview depends on, as a short text: the site's files and images as they are now, but not the
+ * storage file when it holds what the page itself wrote. The preview loads again only when this changes
+ */
+export function siteSignature(page: FileRecord): string {
+  const files = fileList.value ?? [];
+  const images = (imageList.value ?? []).filter((im) => im.info?.name);
+  const site = siteOf(page.name, [...files.map((f) => f.name), ...images.map((im) => im.info!.name)]);
+  if (!site) return '';
+  const storageKey = pathKey(`${site}${STORAGE_FILE}`);
+  const parts: string[] = [site];
+  for (const f of files) {
+    if (!isInside(f.name, site)) continue;
+    const own = pathKey(f.name) === storageKey && ownStorageWrites.get(storageKey) === fdb.currentText(f);
+    parts.push(own ? 'storage' : `${f.id}:${f.name}:${f.updatedAt}`);
+  }
+  for (const im of images) if (isInside(im.info!.name, site)) parts.push(`${im.id}:${im.info!.name}`);
+  return parts.sort().join('|');
 }
 
 // Lists already loaded follow every change to the stored files and images (whoever made it)

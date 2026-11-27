@@ -34,17 +34,34 @@ function connect(frame: HTMLIFrameElement, signal?: AbortSignal): Promise<Messag
   });
 }
 
-/** A page of a project: its own path ('site/index.html') and the project files it may use, by path ('site/css/a.css') */
+/** A page of a site: its own path in the site ('index.html') and the site's files it may use, by path ('css/a.css') */
 export interface SandboxPage {
   path: string;
   /** Text, or a Blob (images, media) */
   files: Record<string, string | Blob>;
+  /** Its localStorage: the items it starts with, and where its changes go (checked: STORAGE_LIMIT) */
+  storage?: { items: Record<string, string>; save(items: Record<string, string>): void };
+}
+
+/** Characters a page may keep in its localStorage (keys and values together), as browsers allow about 5 MB */
+export const STORAGE_LIMIT = 5_000_000;
+
+/** A page's localStorage items as it sent them: strings only and within STORAGE_LIMIT, else null */
+export function cleanStorage(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  let chars = 0;
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v !== 'string') return null;
+    chars += k.length + v.length;
+    if (chars > STORAGE_LIMIT) return null;
+  }
+  return raw as Record<string, string>;
 }
 
 /**
  * Show html in a sandbox frame (call when the frame is created) and keep checking that the page answers; onStuck runs
- * when it stops answering, so the caller can remove the frame. With page, the html's references to the project's files
- * use those files (sandbox/rewrite.js). Returns a cleanup function
+ * when it stops answering, so the caller can remove the frame. With page, the html's references to the site's files
+ * use those files (sandbox/rewrite.js), and its localStorage is the page's own. Returns a cleanup function
  */
 export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: () => void, page?: SandboxPage): () => void {
   const ctrl = new AbortController();
@@ -54,10 +71,16 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
     let last = Date.now();
     let n = 0;
     port.onmessage = (e) => {
-      if ((e.data as { type?: string })?.type === 'pong') last = Date.now();
+      const d = e.data as { type?: string; items?: unknown };
+      if (d?.type === 'pong') last = Date.now();
+      else if (d?.type === 'storage' && page?.storage) {
+        // What the shown page sent: kept only in the shape storage has
+        const items = cleanStorage(d.items);
+        if (items) page.storage.save(items);
+      }
     };
-    // With page: path and files (Blobs go across without copying their bytes)
-    port.postMessage({ type: 'render', html, ...page });
+    // With page: path and files (Blobs go across without copying their bytes), and the localStorage it starts with
+    port.postMessage({ type: 'render', html, ...(page ? { path: page.path, files: page.files, storage: page.storage?.items } : {}) });
     timer = setInterval(() => {
       if (Date.now() - last <= STUCK_MS) return port.postMessage({ type: 'ping', n: ++n });
       clearInterval(timer);

@@ -36,17 +36,20 @@ function cspMetaPlugin(policies: Record<string, string>): Plugin {
 }
 
 /**
- * The sandbox page (sandbox/sandbox.html → /sandbox/), with its CSP and sandbox/rewrite.js put in (into its inline
- * script: the page has no origin to load scripts from); served by the dev server too
+ * The sandbox page (sandbox/sandbox.html → /sandbox/), with its CSP and sandbox/rewrite.js and storage.js put in
+ * (into its inline script: the page has no origin to load scripts from); served by the dev server too
  */
 function sandboxPagePlugin(base: string): Plugin {
-  const page = () => {
-    const rewrite = readFileSync(resolve(__dirname, 'sandbox/rewrite.js'), 'utf8');
-    if (/<\/script/i.test(rewrite)) throw new Error('sandbox/rewrite.js must not contain a closing script tag');
-    return readFileSync(resolve(__dirname, 'sandbox/sandbox.html'), 'utf8')
-      .replace('<!--CSP-->', cspMetaTag(sandboxCsp(false)))
-      .replace('/*REWRITE*/', () => rewrite);
+  const part = (name: string) => {
+    const js = readFileSync(resolve(__dirname, `sandbox/${name}`), 'utf8');
+    if (/<\/script/i.test(js)) throw new Error(`sandbox/${name} must not contain a closing script tag`);
+    return js;
   };
+  const page = () =>
+    readFileSync(resolve(__dirname, 'sandbox/sandbox.html'), 'utf8')
+      .replace('<!--CSP-->', cspMetaTag(sandboxCsp(false)))
+      .replace('/*REWRITE*/', () => part('rewrite.js'))
+      .replace('/*STORAGE*/', () => part('storage.js'));
   return {
     name: 'sandbox-page',
     configureServer(server) {

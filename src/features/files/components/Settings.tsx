@@ -7,7 +7,7 @@ import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 
 export function FilesSettings() {
-  const [usage, setUsage] = useState<{ count: number; chars: number } | null>(null);
+  const [usage, setUsage] = useState<{ count: number; bytes: number } | null>(null);
   useEffect(() => {
     void fileUsage().then(setUsage);
   }, []);

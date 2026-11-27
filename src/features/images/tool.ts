@@ -12,7 +12,8 @@ export interface ImageToolInput {
 }
 
 export interface ImageToolRun {
-  (input: ImageToolInput, signal: AbortSignal): Promise<{ blobIds: string[]; model: string; blurred: boolean; request?: Record<string, unknown> }>;
+  /** names: what they were saved as; inWorkDir: in the conversation's working folder (else at the top of the Files tab) */
+  (input: ImageToolInput, signal: AbortSignal): Promise<{ blobIds: string[]; names: string[]; inWorkDir: boolean; model: string; blurred: boolean; request?: Record<string, unknown> }>;
 }
 
 export function makeImageTool(run: ImageToolRun): Tool<ImageToolInput> {
@@ -46,7 +47,9 @@ export function makeImageTool(run: ImageToolRun): Tool<ImageToolInput> {
       const r = await run(input, ctx.signal);
       return {
         // For the model only: English, like the descriptions
-        content: `Created ${r.blobIds.length} image(s) with ${r.model}; they are shown to the user.${r.blurred ? ' The provider blurred them (safe mode).' : ''} You cannot see them, so do not describe them as if you could.`,
+        content: `Created ${r.blobIds.length} image(s) with ${r.model}; they are shown to the user.${r.blurred ? ' The provider blurred them (safe mode).' : ''} You cannot see them, so do not describe them as if you could. ${
+          r.inWorkDir ? `Saved in the working folder as ${r.names.map((n) => JSON.stringify(n)).join(', ')}: pages there can load them by that path.` : `Saved in the Files tab as ${r.names.map((n) => JSON.stringify(n)).join(', ')}.`
+        }`,
         // request: what was sent and what it cost (shown in full on the card)
         details: { blobIds: r.blobIds, model: r.model, blurred: r.blurred, request: r.request }
       };

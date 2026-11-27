@@ -4,11 +4,12 @@ import { useDialog } from '../../../components/dialog';
 import type { ImageParams, MessageRecord } from '../../../lib/db/schema';
 import type { Part } from '../../../lib/providers/types';
 import { getImage, getImageThumb } from '../../../lib/db/images';
+import { catalogImage } from '../../../lib/db/catalog';
 import { baseName } from '../../../lib/paths';
 import { conversations, currentId, messages, openConversation, startNewChat } from '../../../state/conversations';
 import { isStreaming } from '../../../state/runs';
 import { modal, showToast } from '../../../state/ui';
-import { Button, Disclosure, Icon, Shimmer, Spinner, cx, IconButton } from '../../../components/ui';
+import { Button, Disclosure, Icon, Shimmer, Spinner, cx, IconButton, type IconName } from '../../../components/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { copyText } from '../../../components/clipboard';
 import {
@@ -323,21 +324,160 @@ function step(d: number) {
   if (cur) lightbox.value = { ...cur, index: (cur.index + d + cur.items.length) % cur.items.length };
 }
 
-/** Full-size viewer with download, prompt copy, upscale, background removal and edit */
+/** Something a full-size view offers for an image or a video. text: a short label shown beside the icon (else icon only) */
+export interface ViewerTool {
+  id: string;
+  icon: IconName;
+  label: string;
+  text?: string;
+  title?: string;
+  /** What running it costs (an estimate, or unknown), for menus that show no title */
+  cost?: string;
+  /** It makes a new image or video from this one (an edit, an upscale, a video), in a chat */
+  makesNew?: boolean;
+  run(): void;
+  pressed?: boolean;
+  disabled?: boolean;
+}
+
+/** What a full-size view of an image or a video shows and offers (the lightbox, and the Files tab's page draw it each their way) */
+export interface Viewer {
+  url: string | null | undefined;
+  video: boolean;
+  /** Its bytes are not stored in this browser (a backup restored without images) */
+  missing: boolean;
+  promptText: string;
+  tools: ViewerTool[];
+  /** The edit prompt is open */
+  editing: boolean;
+  submitEdit(prompt: string): void;
+}
+
+/**
+ * The full-size view's state and tools for one item. leave: the view closes because an action goes on in a chat;
+ * deleted: the item was deleted; fromGallery: offer to open the chat it was made in
+ */
+export function useImageViewer(item: LightboxItem | undefined, o: { leave(): void; deleted(): void; fromGallery?: boolean }): Viewer {
+  const imageUrl = useImageUrl(item?.video ? undefined : item?.blobId);
+  const videoUrl = useBlobUrl(item?.video ? item.blobId : undefined);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => setEditing(false), [item?.blobId]);
+  const url = item?.video ? videoUrl : imageUrl;
+  const video = !!item?.video;
+  const missing = url === null;
+  const msg = item && messages.value.find((m) => m.id === item.messageId);
+  const source = msg ? messages.value.find((m) => m.id === msg.parentId) : undefined;
+  const promptText = msg?.image?.params.prompt || source?.imageRequest?.prompt || '';
+  if (!item) return { url, video, missing, promptText, tools: [], editing: false, submitEdit: () => {} };
+  // Edits run on the provider that made the image when it offers them, else on another one with a key
+  const from = { providerId: msg?.meta?.providerId, model: msg?.meta?.model };
+  const upscaler = video || missing ? undefined : editTargetFor('upscale', from)?.provider;
+  const bgRemover = video || missing ? undefined : editTargetFor('remove-bg', from)?.provider;
+  const editor = video || missing ? undefined : editTargetFor('edit', from);
+  const editorName = editor && (editor.model ? (imageModelOf(editor.provider.id, editor.model)?.name ?? editor.model) : editor.provider.label);
+  const chat = item.conversationId;
+  const inThisChat = !!chat && currentId.value === chat;
+  // Saved images outlive their conversation, and brought-in images have none: those are edited in a new chat
+  const chatExists = inThisChat || (!!chat && conversations.value.some((c) => c.id === chat));
+  const act = async (fn: () => Promise<void>) => {
+    if (!inThisChat) {
+      if (chat && chatExists) await openConversation(chat);
+      else startNewChat();
+    }
+    o.leave();
+    modal.value = null;
+    await fn();
+  };
+  const download = () => {
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    // Named as it is saved in the Files tab
+    const path = item.name ?? catalogImage(item.blobId)?.path;
+    const file = msg?.parts.find((p): p is FilePart => p.type === 'file' && p.blobId === item.blobId);
+    a.download = path ? baseName(path) : file?.name ?? (video ? `video-${item.blobId.slice(0, 8)}.mp4` : `image-${item.blobId.slice(0, 8)}.png`);
+    a.click();
+  };
+  const busy = isStreaming.value;
+  const tools: ViewerTool[] = [
+    ...(url ? [{ id: 'download', icon: 'download' as const, label: t('lb.download'), run: download }] : []),
+    ...(promptText ? [{ id: 'copy', icon: 'copy' as const, label: t('lb.copyPrompt'), run: () => void copyText(promptText, t('lb.copied')) }] : []),
+    ...(upscaler
+      ? ([2, 4] as const).map((scale) => ({
+          id: `upscale-${scale}`,
+          icon: 'expand' as const,
+          label: `${scale}×`,
+          text: `${scale}×`,
+          title: t('lb.upscaleTitle', { scale, cost: costText({ op: 'upscale', providerId: upscaler.id, scale }) }),
+          cost: costText({ op: 'upscale', providerId: upscaler.id, scale }),
+          makesNew: true,
+          disabled: busy,
+          run: () => void act(() => imageAction('upscale', item.blobId, { scale, from }))
+        }))
+      : []),
+    ...(bgRemover
+      ? [{ id: 'remove-bg', icon: 'scissors' as const, label: t('lb.removeBg'), text: t('lb.removeBg'), title: t('lb.removeBgTitle', { cost: costText({ op: 'remove-bg', providerId: bgRemover.id }) }), cost: costText({ op: 'remove-bg', providerId: bgRemover.id }), makesNew: true, disabled: busy, run: () => void act(() => imageAction('remove-bg', item.blobId, { from })) }]
+      : []),
+    ...(!video && !missing
+      ? imageActions.filter((a) => a.shown()).map((a) => ({ id: a.id, icon: a.icon, label: a.label(), text: a.label(), title: a.title(), makesNew: true, run: () => void act(async () => a.run(item.blobId, item.name)) }))
+      : []),
+    ...(editor
+      ? [{ id: 'edit', icon: 'wand' as const, label: t('lb.edit'), text: t('lb.edit'), title: t('lb.editTitle', { model: editorName!, cost: costText({ op: 'edit', providerId: editor.provider.id, model: editor.model }) }), cost: costText({ op: 'edit', providerId: editor.provider.id, model: editor.model }), makesNew: true, disabled: busy, pressed: editing, run: () => setEditing(!editing) }]
+      : []),
+    {
+      id: 'delete',
+      icon: 'trash',
+      label: t(video ? 'lb.deleteVideo' : 'lb.delete'),
+      run: async () => {
+        if (await confirmAndDelete([item.blobId])) o.deleted();
+      }
+    },
+    ...(o.fromGallery && chat && !inThisChat && chatExists
+      ? [
+          {
+            id: 'open-chat',
+            icon: 'chat' as const,
+            label: t('lb.openChat'),
+            text: t('lb.openChat'),
+            run: () => {
+              o.leave();
+              modal.value = null;
+              void openConversation(chat);
+            }
+          }
+        ]
+      : [])
+  ];
+  return { url, video, missing, promptText, tools, editing, submitEdit: (prompt) => void act(() => imageAction('edit', item.blobId, { prompt, from })) };
+}
+
+/** The image or video itself, as large as the space allows */
+export function ViewerStage({ viewer, class: cls }: { viewer: Viewer; class?: string }) {
+  if (viewer.missing) return <p class={cx('text-sm', cls)}>{t('thumb.failed')}</p>;
+  if (!viewer.url) return <Spinner class="size-6" />;
+  if (viewer.video) return <video key={viewer.url} src={viewer.url} controls autoPlay playsInline class="max-h-full max-w-full" />;
+  return <img src={viewer.url} alt={viewer.promptText || t('lb.alt')} class="max-h-full max-w-full object-contain" />;
+}
+
+/** Full-size viewer over the app (images in chats) */
 export function Lightbox() {
   const lb = lightbox.value;
   const item = lb?.items[lb.index];
-  const imageUrl = useImageUrl(item?.video ? undefined : item?.blobId);
-  const videoUrl = useBlobUrl(item?.video ? item.blobId : undefined);
-  const url = item?.video ? videoUrl : imageUrl;
-  const [editing, setEditing] = useState(false);
+  const close = () => (lightbox.value = null);
+  const viewer = useImageViewer(item, {
+    leave: close,
+    deleted: () => {
+      const cur = lightbox.value;
+      if (!cur || !item) return;
+      const items = cur.items.filter((x) => x.blobId !== item.blobId);
+      lightbox.value = items.length ? { ...cur, items, index: Math.min(cur.index, items.length - 1) } : null;
+    },
+    fromGallery: lb?.fromGallery
+  });
   const [prompt, setPrompt] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
-  useDialog(rootRef, { onClose: () => (lightbox.value = null), active: !!lb });
-  useEffect(() => {
-    setEditing(false);
-    setPrompt('');
-  }, [item?.blobId]);
+  useDialog(rootRef, { onClose: close, active: !!lb });
+  useEffect(() => setPrompt(''), [item?.blobId]);
   useEffect(() => {
     // Arrow keys switch images (not while typing). Esc and focus are handled by useDialog
     const onKey = (e: KeyboardEvent) => {
@@ -349,40 +489,7 @@ export function Lightbox() {
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
   if (!lb || !item) return null;
-  const video = !!item.video;
-  const msg = messages.value.find((m) => m.id === item.messageId);
-  const source = msg ? messages.value.find((m) => m.id === msg.parentId) : undefined;
-  const promptText = msg?.image?.params.prompt || source?.imageRequest?.prompt || '';
-  // Edits run on the provider that made the image when it offers them, else on another one with a key
-  const from = { providerId: msg?.meta?.providerId, model: msg?.meta?.model };
-  // Bytes not stored in this browser (e.g. a backup restored without images): nothing to download or work on
-  const missing = url === null;
-  const upscaler = video || missing ? undefined : editTargetFor('upscale', from)?.provider;
-  const bgRemover = video || missing ? undefined : editTargetFor('remove-bg', from)?.provider;
-  const editor = video || missing ? undefined : editTargetFor('edit', from);
-  const editorName = editor && (editor.model ? (imageModelOf(editor.provider.id, editor.model)?.name ?? editor.model) : editor.provider.label);
-  const chat = item.conversationId;
-  const inThisChat = !!chat && currentId.value === chat;
-  // Saved images outlive their conversation, and brought-in images have none: those are edited in a new chat
-  const chatExists = inThisChat || (!!chat && conversations.value.some((c) => c.id === chat));
-  const close = () => (lightbox.value = null);
-  const act = async (fn: () => Promise<void>) => {
-    if (!inThisChat) {
-      if (chat && chatExists) await openConversation(chat);
-      else startNewChat();
-    }
-    close();
-    modal.value = null;
-    await fn();
-  };
-  const download = () => {
-    if (!url) return;
-    const a = document.createElement('a');
-    a.href = url;
-    const file = msg?.parts.find((p): p is FilePart => p.type === 'file' && p.blobId === item.blobId);
-    a.download = item.name ? baseName(item.name) : file?.name ?? (video ? `video-${item.blobId.slice(0, 8)}.mp4` : `image-${item.blobId.slice(0, 8)}.png`);
-    a.click();
-  };
+  const { editing, promptText } = viewer;
   return (
     <div ref={rootRef} class="fixed inset-0 z-[70] flex flex-col bg-black/90 text-white" role="dialog" aria-modal="true" aria-label={t('lb.label')} onClick={(e) => e.target === e.currentTarget && close()}>
       <div class="flex items-center gap-1 p-2">
@@ -390,71 +497,17 @@ export function Lightbox() {
           {lb.index + 1} / {lb.items.length}
         </span>
         <div class="ml-auto flex flex-wrap items-center gap-1">
-          {url && (
-            <IconButton class="text-white hover:bg-glass" onClick={download} label={t('lb.download')}>
-              <Icon name="download" />
-            </IconButton>
-          )}
-          {promptText && (
-            <IconButton
-              class="text-white hover:bg-glass"
-              label={t('lb.copyPrompt')}
-              onClick={() => void copyText(promptText, t('lb.copied'))}
-            >
-              <Icon name="copy" />
-            </IconButton>
-          )}
-          {upscaler &&
-            ([2, 4] as const).map((scale) => (
-              <Button key={scale} class="text-xs text-white hover:bg-glass" disabled={isStreaming.value} title={t('lb.upscaleTitle', { scale, cost: costText({ op: 'upscale', providerId: upscaler.id, scale }) })} onClick={() => void act(() => imageAction('upscale', item.blobId, { scale, from }))}>
-                <Icon name="expand" class="size-4" />
-                {scale}×
+          {viewer.tools.map((x) =>
+            x.text ? (
+              <Button key={x.id} class={cx('text-xs text-white hover:bg-glass', x.pressed && 'bg-glass-strong')} disabled={x.disabled} aria-pressed={x.pressed} title={x.title} onClick={x.run}>
+                <Icon name={x.icon} class="size-4" />
+                {x.text}
               </Button>
-            ))}
-          {bgRemover && (
-            <Button class="text-xs text-white hover:bg-glass" disabled={isStreaming.value} title={t('lb.removeBgTitle', { cost: costText({ op: 'remove-bg', providerId: bgRemover.id }) })} onClick={() => void act(() => imageAction('remove-bg', item.blobId, { from }))}>
-              <Icon name="scissors" class="size-4" />
-              {t('lb.removeBg')}
-            </Button>
-          )}
-          {!video &&
-            !missing &&
-            imageActions.filter((a) => a.shown()).map((a) => (
-              <Button key={a.id} class="text-xs text-white hover:bg-glass" title={a.title()} onClick={() => void act(async () => a.run(item.blobId, item.name))}>
-                <Icon name={a.icon} class="size-4" />
-                {a.label()}
-              </Button>
-            ))}
-          {editor && (
-            <Button class={cx('text-xs text-white hover:bg-glass', editing && 'bg-glass-strong')} disabled={isStreaming.value} aria-pressed={editing} title={t('lb.editTitle', { model: editorName!, cost: costText({ op: 'edit', providerId: editor.provider.id, model: editor.model }) })} onClick={() => setEditing(!editing)}>
-              <Icon name="wand" class="size-4" />
-              {t('lb.edit')}
-            </Button>
-          )}
-          <IconButton
-            class="text-white hover:bg-glass"
-            label={t(video ? 'lb.deleteVideo' : 'lb.delete')}
-            onClick={async () => {
-              const cur = lightbox.value;
-              if (!cur || !(await confirmAndDelete([item.blobId]))) return;
-              const items = cur.items.filter((x) => x.blobId !== item.blobId);
-              lightbox.value = items.length ? { ...cur, items, index: Math.min(cur.index, items.length - 1) } : null;
-            }}
-          >
-            <Icon name="trash" />
-          </IconButton>
-          {lb.fromGallery && chat && !inThisChat && chatExists && (
-            <Button
-              class="text-xs text-white hover:bg-glass"
-              onClick={() => {
-                close();
-                modal.value = null;
-                void openConversation(chat);
-              }}
-            >
-              <Icon name="chat" class="size-3.5" />
-              {t('lb.openChat')}
-            </Button>
+            ) : (
+              <IconButton key={x.id} class="text-white hover:bg-glass" label={x.label} onClick={x.run}>
+                <Icon name={x.icon} />
+              </IconButton>
+            )
           )}
           <IconButton class="text-white hover:bg-glass" onClick={close} label={t('lb.close')} data-dialog-close>
             <Icon name="x" />
@@ -466,7 +519,7 @@ export function Lightbox() {
           class="mx-auto flex w-full max-w-2xl gap-2 px-3 pb-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (prompt.trim()) void act(() => imageAction('edit', item.blobId, { prompt, from }));
+            if (prompt.trim()) viewer.submitEdit(prompt);
           }}
         >
           <input
@@ -483,15 +536,7 @@ export function Lightbox() {
         </form>
       )}
       <div class="relative flex min-h-0 flex-1 items-center justify-center p-2" onClick={(e) => e.target === e.currentTarget && close()}>
-        {missing ? (
-          <p class="text-sm text-white/70">{t('thumb.failed')}</p>
-        ) : !url ? (
-          <Spinner class="size-6" />
-        ) : video ? (
-          <video key={url} src={url} controls autoPlay playsInline class="max-h-full max-w-full" />
-        ) : (
-          <img src={url} alt={promptText || t('lb.alt')} class="max-h-full max-w-full object-contain" />
-        )}
+        <ViewerStage viewer={viewer} class="text-white/70" />
         {lb.items.length > 1 && (
           <>
             <button type="button" class="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-glass p-2 hover:bg-glass-strong" onClick={() => step(-1)} aria-label={t('lb.prev')} title={t('lb.prev')}>

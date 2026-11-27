@@ -3,7 +3,7 @@
 // (for undo), nothing older. Lists and path checks read the catalog (catalog.ts), which these writers keep up to date;
 // a text is read only when it is needed. Files of temporary chats stay in memory. With a passphrase, names, origins,
 // previews and texts are encrypted (sealed.ts).
-import { db, PREVIEW_CHARS, type FileRecord, type Origin, type SavedBy, type TextStamp } from './schema';
+import { db, PREVIEW_CHARS, textBytes, type FileRecord, type Origin, type SavedBy, type TextStamp } from './schema';
 import { seal, unseal } from './sealed';
 import type { DataKey } from '../crypto/data';
 import { registerDataTable } from './data-tables';
@@ -31,7 +31,7 @@ export function newFile(o: { id: string; name: string; origin: Origin; text: str
     ...(o.conversationId ? { conversationId: o.conversationId } : {}),
     createdAt: now,
     updatedAt: now,
-    size: o.text.length,
+    bytes: textBytes(o.text),
     preview: o.text.slice(0, PREVIEW_CHARS),
     current: { at: now, by: o.by }
   };
@@ -110,20 +110,10 @@ export async function setText(id: string, text: string, by: SavedBy, keepPreviou
   const f = catalogFile(id);
   if (!f) throw new Error(`No file ${id}`);
   const stamp: TextStamp = { at: now, by };
-  const next: FileRecord = { ...f, current: stamp, size: text.length, preview: text.slice(0, PREVIEW_CHARS), updatedAt: now, ...(keepPrevious ? {} : { previous: f.current }) };
+  const next: FileRecord = { ...f, current: stamp, bytes: textBytes(text), preview: text.slice(0, PREVIEW_CHARS), updatedAt: now, ...(keepPrevious ? {} : { previous: f.current }) };
   const texts: Partial<Record<Which, string>> = { current: text };
   if (!keepPrevious) texts.previous = await readText(id);
   return write(next, texts, isTemporary(id));
-}
-
-/** Undo the last change: the previous text becomes current, and the current one previous (so undo again redoes) */
-export async function swapPrevious(id: string): Promise<FileRecord | undefined> {
-  await ensureCatalog();
-  const f = catalogFile(id);
-  if (!f?.previous) return f;
-  const [current, previous] = await Promise.all([readText(id), readText(id, 'previous')]);
-  const next: FileRecord = { ...f, current: f.previous, previous: f.current, size: previous.length, preview: previous.slice(0, PREVIEW_CHARS), updatedAt: Date.now() };
-  return write(next, { current: previous, previous: current }, isTemporary(id));
 }
 
 export async function deleteFiles(ids: string[]): Promise<void> {
@@ -153,9 +143,9 @@ export function forgetTemporaryFiles(conversationId: string) {
   storeChanged('files');
 }
 
-export async function fileUsage(): Promise<{ count: number; chars: number }> {
+export async function fileUsage(): Promise<{ count: number; bytes: number }> {
   const files = (await listFiles()).filter((f) => !isTemporary(f.id));
-  return { count: files.length, chars: files.reduce((n, f) => n + f.size, 0) };
+  return { count: files.length, bytes: files.reduce((n, f) => n + f.bytes, 0) };
 }
 
 /** Encrypt (to: a key) or decrypt (to: null) every file record and text */
@@ -185,13 +175,13 @@ export interface ExportedVersion {
   by: SavedBy;
   text: string;
 }
-export type ExportedFile = Omit<FileRecord, 'current' | 'previous' | 'preview' | 'size'> & { versions: ExportedVersion[] };
+export type ExportedFile = Omit<FileRecord, 'current' | 'previous' | 'preview' | 'bytes'> & { versions: ExportedVersion[] };
 
 export async function exportFiles(): Promise<ExportedFile[]> {
   const out: ExportedFile[] = [];
   for (const f of await listFiles()) {
     if (isTemporary(f.id)) continue;
-    const { current, previous, preview: _p, size: _s, ...rest } = f;
+    const { current, previous, preview: _p, bytes: _b, ...rest } = f;
     const [text, before] = await Promise.all([readText(f.id), previous ? readText(f.id, 'previous') : Promise.resolve(undefined)]);
     out.push({ ...rest, versions: [...(previous && before !== undefined ? [{ ...previous, text: before, v: 1 }] : []), { ...current, text, v: previous ? 2 : 1 }] });
   }
@@ -240,7 +230,7 @@ export async function importFiles(files: ExportedFile[]): Promise<number> {
     const before = versions.length > 1 ? versions[versions.length - 2] : undefined;
     const record: FileRecord = {
       ...rest,
-      size: current.text.length,
+      bytes: textBytes(current.text),
       preview: current.text.slice(0, PREVIEW_CHARS),
       current: { at: current.at, by: current.by },
       ...(before ? { previous: { at: before.at, by: before.by } } : {})

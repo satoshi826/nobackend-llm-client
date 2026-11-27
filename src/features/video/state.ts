@@ -7,6 +7,7 @@ import { computed, effect, signal } from '@preact/signals';
 import * as repo from '../../lib/db/repo';
 import type { Conversation, MessageRecord, VideoParams } from '../../lib/db/schema';
 import { getImage, putImage } from '../../lib/db/images';
+import { baseName } from '../../lib/paths';
 import { providerConfigOf } from '../../lib/keys/accounts';
 import { plainTransport } from '../../lib/providers/transport';
 import { vaultTransport as transport } from '../../lib/vault/client';
@@ -364,8 +365,9 @@ async function storeVideo(conv: Conversation, messageId: string, video: Blob) {
   const blob = video.type.startsWith('video/') ? video : new Blob([video], { type: 'video/mp4' });
   const { poster, width, height } = await posterOf(blob);
   const blobId = repo.newId();
-  await putImage({ id: blobId, conversationId: conv.id, messageId, mime: blob.type }, blob, !!conv.temporary, poster ?? undefined);
-  return { type: 'file' as const, blobId, name: 'video.mp4', mimeType: blob.type, ...(width ? { width, height } : {}) };
+  // In the chat's working folder (the top without one), named by the time it is saved
+  const path = await putImage({ id: blobId, conversationId: conv.id, messageId, mime: blob.type, folder: conv.workDir }, blob, !!conv.temporary, poster ?? undefined);
+  return { type: 'file' as const, blobId, name: baseName(path), mimeType: blob.type, ...(width ? { width, height } : {}) };
 }
 
 // After a reload (or unlocking), go on waiting for the jobs that were running

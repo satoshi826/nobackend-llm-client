@@ -1,27 +1,13 @@
-// Changes to paths in storage: one at a time against the catalog's index, so two saves started together never take
-// the same path; moving a folder with what it holds; numbering paths two things share; and (development only, goes
-// before the first release) giving conversations from before working folders one.
+// Changes to paths in storage (one at a time: catalog.ts withTakenPaths): moving a folder with what it holds; numbering
+// paths two things share; and (development only, goes before the first release) giving conversations from before
+// working folders one.
 import { db, type BlobRecord, type Conversation, type FileRecord } from './schema';
 import { seal } from './sealed';
 import { storeChanged } from './changes';
-import { allFiles, allImages, catalogFile, catalogSpace, ensureCatalog, isTemporary, putFile as catalogPutFile, putImage as catalogPutImage, imageEntry, infoOf } from './catalog';
+import { allFiles, allImages, catalogFile, catalogSpace, isTemporary, putFile as catalogPutFile, putImage as catalogPutImage, imageEntry, infoOf, withTakenPaths } from './catalog';
 import { putFile, getFile } from './files';
 import { renameImages, renamedImageRecord } from './images';
 import { folderNameFor, freeFolder, freePath, isInside, pathFree, pathKey, type PathSpace } from '../paths';
-
-let queue: Promise<unknown> = Promise.resolve();
-/**
- * Run `fn` with the paths in use, one call at a time, so two saves started together cannot take the same path. `fn`
- * should save what it names, and read the records it changes, before it returns
- */
-export function withTakenPaths<T>(fn: (space: PathSpace) => Promise<T>): Promise<T> {
-  const run = queue.then(async () => {
-    await ensureCatalog();
-    return fn(catalogSpace);
-  });
-  queue = run.catch(() => undefined);
-  return run;
-}
 
 /**
  * Give everything inside folder `from` ('a/b/') the folder `to` instead ('c/'): its files and images with a path,
@@ -65,7 +51,7 @@ export async function moveFolder(from: string, to: string): Promise<boolean> {
     if (imageRecs.length) await db().blobs.bulkPut(imageRecs);
   });
   for (const f of storedFiles) catalogPutFile(f);
-  for (const im of imageRecs) catalogPutImage(imageEntry(im, await infoOf(im)));
+  for (const im of imageRecs) catalogPutImage(imageEntry(im, (await infoOf(im))!));
   await renameImages(memImages);
   storeChanged('files');
   storeChanged('images');

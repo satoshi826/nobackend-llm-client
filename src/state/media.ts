@@ -3,9 +3,9 @@
 import type { Conversation } from '../lib/db/schema';
 import type { Part } from '../lib/providers/types';
 import { putImage } from '../lib/db/images';
+import { baseName } from '../lib/paths';
 import * as repo from '../lib/db/repo';
 
-const EXT: Record<string, string> = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif' };
 
 function decodeBase64(data: string): Uint8Array<ArrayBuffer> {
   const bin = atob(data.replace(/^data:[^,]*,/, ''));
@@ -26,11 +26,12 @@ async function sizeOf(blob: Blob): Promise<{ width?: number; height?: number }> 
 }
 
 /** Store one image from a reply (base64 or a data: URL) and return the file part for the message */
-export async function saveReplyImage(conv: Conversation, messageId: string, data: string, mimeType: string, index: number): Promise<Extract<Part, { type: 'file' }> | null> {
+export async function saveReplyImage(conv: Conversation, messageId: string, data: string, mimeType: string): Promise<Extract<Part, { type: 'file' }> | null> {
   const mime = /^image\/(png|jpeg|webp|gif)$/.test(mimeType) ? mimeType : 'image/png';
   const blob = new Blob([decodeBase64(data)], { type: mime });
   if (!blob.size) return null;
   const blobId = repo.newId();
-  await putImage({ id: blobId, conversationId: conv.id, messageId, mime }, blob, !!conv.temporary);
-  return { type: 'file', blobId, name: `image-${index}.${EXT[mime] ?? 'png'}`, mimeType: mime, ...(await sizeOf(blob)) };
+  // In the chat's working folder (the top without one), named by the time it is saved
+  const path = await putImage({ id: blobId, conversationId: conv.id, messageId, mime, folder: conv.workDir }, blob, !!conv.temporary);
+  return { type: 'file', blobId, name: baseName(path), mimeType: mime, ...(await sizeOf(blob)) };
 }

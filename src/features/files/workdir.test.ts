@@ -102,7 +102,7 @@ describe('moving older data', () => {
     await make({ id: 'c', name: 'counter.html', origin: { kind: 'made' }, text: '<p>', by: 'model', conversationId: 'loose' });
     await make({ id: 'j', name: 'js/app.js', origin: { kind: 'made' }, text: '1', by: 'model', conversationId: 'loose' });
     // An image attached in the chat stays where the user put it
-    await putImage({ id: 'img', mime: 'image/png', conversationId: 'loose', info: { path: 'cat.png', origin: { kind: 'upload' } } }, new Blob(['x'], { type: 'image/png' }), false);
+    await putImage({ id: 'img', mime: 'image/png', conversationId: 'loose', origin: { kind: 'upload' }, name: 'cat.png' }, new Blob(['x'], { type: 'image/png' }), false);
     await make({ id: 'n1', name: 'Notes.md', origin: { kind: 'upload' }, text: '1', by: 'upload' });
     await make({ id: 'n2', name: 'notes.md', origin: { kind: 'upload' }, text: '2', by: 'upload' });
     const moved = await moveIntoWorkDirs([site, loose]);

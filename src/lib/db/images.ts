@@ -2,11 +2,11 @@
 // Images of temporary chats stay in memory only. With a passphrase (a data key is set) the bytes, the thumbnail and
 // an image's path and origin are encrypted with the same data key as conversations. What lists show comes from the
 // catalog (catalog.ts), which these writers keep up to date.
-import { db, type BlobRecord, type ImageInfo, type SealedBytes } from './schema';
+import { db, type BlobRecord, type ImageInfo, type Origin, type SealedBytes } from './schema';
 import { currentDataKey, DataLockedError } from './sealed';
 import { openBytes, sealBytes, sealJSON, type DataKey } from '../crypto/data';
-import { allImages, dropImage, ensureCatalog, imageEntry, infoOf, putImage as catalogPut, resetCatalog, type ImageEntry } from './catalog';
-import { cleanFileName } from '../paths';
+import { allImages, dropImage, ensureCatalog, imageEntry, infoOf, putImage as catalogPut, resetCatalog, withTakenPaths, type ImageEntry } from './catalog';
+import { cleanFileName, extOfMime, freePath, timeName } from '../paths';
 import { registerDataTable } from './data-tables';
 import { storeChanged } from './changes';
 import { t } from './messages';
@@ -19,13 +19,23 @@ export interface ImageMeta {
   /** Made in a chat: the conversation and message it belongs to */
   conversationId?: string;
   messageId?: string;
-  /** Its path and origin (an image made in a chat has none) */
-  info?: ImageInfo;
+  /** Where it came from (default: made in a chat) */
+  origin?: Origin;
+  /** The folder it goes in ('a/'; default: the top) */
+  folder?: string;
+  /** Its file name, when it has one (brought in); else it is named by the time it is saved: '20261127-160816.webp' */
+  name?: string;
 }
 
-async function storedInfo(info: ImageInfo | undefined, key: DataKey | null): Promise<Pick<BlobRecord, 'info' | 'infoEnc'>> {
-  if (!info) return {};
+async function storedInfo(info: ImageInfo, key: DataKey | null): Promise<Pick<BlobRecord, 'info' | 'infoEnc'>> {
   return key ? { infoEnc: await sealJSON(key, info) } : { info };
+}
+
+/** A stored image's info (every image has one once the catalog has loaded: convert.ts) */
+async function infoOfStored(rec: BlobRecord): Promise<ImageInfo> {
+  const info = await infoOf(rec);
+  if (!info) throw new Error(`Image ${rec.id} has no path`);
+  return info;
 }
 
 
@@ -66,18 +76,22 @@ async function makeThumb(blob: Blob): Promise<Blob | null> {
  * Save an image or a video (encrypted when a data key is set). poster: a frame to make the thumbnail from (videos;
  * an image is its own)
  */
-export async function putImage(meta: ImageMeta, blob: Blob, temporary: boolean, poster?: Blob): Promise<void> {
-  await ensureCatalog();
-  const { info, ...rest } = meta;
-  const base = { ...rest, createdAt: Date.now(), size: blob.size };
+export async function putImage(meta: ImageMeta, blob: Blob, temporary: boolean, poster?: Blob): Promise<string> {
+  const base = { id: meta.id, mime: meta.mime, conversationId: meta.conversationId, messageId: meta.messageId, createdAt: Date.now(), size: blob.size };
   const thumb = await makeThumb(poster ?? blob);
-  if (temporary) mem.set(meta.id, { ...base, info, blob, ...(thumb ? { thumb } : {}) });
-  else {
-    const key = currentDataKey();
-    await db().blobs.put({ ...base, ...(await storedInfo(info, key)), ...(await stored(blob, key)), thumb: thumb ? (key ? await seal(key, thumb) : thumb) : undefined });
-  }
-  catalogPut(imageEntry(base, info), temporary);
-  storeChanged('images');
+  const key = currentDataKey();
+  const bytes = temporary ? { blob } : await stored(blob, key);
+  const sealedThumb = thumb && !temporary && key ? await seal(key, thumb) : thumb;
+  // The path is chosen and saved in one turn of the queue, so two images saved in the same second get two names
+  return withTakenPaths(async (space) => {
+    const want = (meta.folder ?? '') + (meta.name ?? timeName(base.createdAt, extOfMime(meta.mime)));
+    const info: ImageInfo = { path: freePath(cleanFileName(want, extOfMime(meta.mime)), space), origin: meta.origin ?? { kind: 'made' } };
+    if (temporary) mem.set(meta.id, { ...base, info, ...bytes, ...(thumb ? { thumb } : {}) });
+    else await db().blobs.put({ ...base, ...(await storedInfo(info, key)), ...bytes, thumb: sealedThumb ?? undefined });
+    catalogPut(imageEntry(base, info), temporary);
+    storeChanged('images');
+    return info.path;
+  });
 }
 
 async function toBlob(rec: BlobRecord, key: DataKey | null = currentDataKey()): Promise<Blob> {
@@ -115,23 +129,23 @@ export async function getImageThumb(id: string): Promise<Blob | null> {
 
 /**
  * A stored image record with a new path (encrypted like the rest of its info), for the caller to put in a transaction
- * of its own; an image made in a chat gets its first path this way. Undefined for a temporary image
+ * of its own. Undefined for a temporary image
  */
 export async function renamedImageRecord(id: string, rename: (path: string) => string): Promise<BlobRecord | undefined> {
   const rec = await db().blobs.get(id);
   if (!rec) return undefined;
-  const info: ImageInfo = (await infoOf(rec)) ?? { origin: { kind: 'made' } };
+  const info = await infoOfStored(rec);
   const { info: _i, infoEnc: _e, ...rest } = rec;
-  return { ...rest, ...(await storedInfo({ ...info, path: rename(info.path ?? '') }, currentDataKey())) };
+  return { ...rest, ...(await storedInfo({ ...info, path: rename(info.path) }, currentDataKey())) };
 }
 
-/** Give images new paths (stored or temporary); an image made in a chat gets its first one this way */
+/** Give images new paths (stored or temporary) */
 export async function renameImages(changes: { id: string; path: string }[]): Promise<void> {
   await ensureCatalog();
   const recs: BlobRecord[] = [];
   for (const c of changes) {
     const m = mem.get(c.id);
-    if (m) mem.set(c.id, { ...m, info: { ...(m.info ?? { origin: { kind: 'made' as const } }), path: c.path } });
+    if (m) mem.set(c.id, { ...m, info: { ...m.info!, path: c.path } });
     else {
       const r = await renamedImageRecord(c.id, () => c.path);
       if (r) recs.push(r);
@@ -141,8 +155,8 @@ export async function renameImages(changes: { id: string; path: string }[]): Pro
   for (const c of changes) {
     const m = mem.get(c.id);
     const r = recs.find((x) => x.id === c.id);
-    if (m) catalogPut(imageEntry(m, m.info), true);
-    else if (r) catalogPut(imageEntry(r, await infoOf(r)));
+    if (m) catalogPut(imageEntry(m, m.info!), true);
+    else if (r) catalogPut(imageEntry(r, await infoOfStored(r)));
   }
   if (changes.length) storeChanged('images');
 }
@@ -187,7 +201,8 @@ export async function resealImages(from: DataKey | null, to: DataKey | null, onP
       const old = rec.thumb instanceof Blob ? rec.thumb : rec.thumb && from ? await open(from, rec.thumb, 'image/webp') : null;
       const thumb = old ?? (rec.mime.startsWith('video/') ? null : await makeThumb(blob));
       const { blob: _b, enc: _e, thumb: _t, info: _i, infoEnc: _ie, ...meta } = rec;
-      await db().blobs.put({ ...meta, ...(await storedInfo(info, to)), ...(await stored(blob, to)), thumb: thumb ? (to ? await seal(to, thumb) : thumb) : undefined });
+      // An image still without info (made before images had paths) gets one when the catalog loads: convert.ts
+      await db().blobs.put({ ...meta, ...(info ? await storedInfo(info, to) : {}), ...(await stored(blob, to)), thumb: thumb ? (to ? await seal(to, thumb) : thumb) : undefined });
     }
     onProgress?.(++done, ids.length);
   }
@@ -246,7 +261,8 @@ export async function importImages(list: ExportedImage[]): Promise<number> {
     const blob = base64ToBlob(im.data, im.mime);
     const key = currentDataKey();
     const base = { id: im.id, conversationId: im.conversationId, messageId: im.messageId, createdAt: im.createdAt, mime: im.mime, size: blob.size };
-    await db().blobs.put({ ...base, ...(await storedInfo(im.info, key)), ...(await stored(blob, key)) });
+    // One from a backup made before images had paths comes without; it gets one when the catalog loads: convert.ts
+    await db().blobs.put({ ...base, ...(im.info ? await storedInfo(im.info, key) : {}), ...(await stored(blob, key)) });
     n++;
   }
   if (n) {
@@ -279,7 +295,7 @@ function cleanImageInfo(raw: any): ImageInfo | undefined {
   const o = raw.origin ?? raw.source;
   const origin = o?.kind === 'web' && typeof o.url === 'string' && /^https:\/\//.test(o.url) ? { kind: 'web' as const, url: o.url.slice(0, 2000) } : o?.kind === 'upload' ? { kind: 'upload' as const } : { kind: 'made' as const };
   const path = typeof raw.path === 'string' ? raw.path : typeof raw.name === 'string' ? raw.name : undefined;
-  return { ...(path ? { path: cleanFileName(path, 'png') } : {}), origin };
+  return path ? { path: cleanFileName(path, 'png'), origin } : undefined;
 }
 
 registerDataTable<ExportedImage>({

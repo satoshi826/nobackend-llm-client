@@ -1,29 +1,25 @@
 // A file in the main area: read, edit, undo the last change, download, print (to PDF), use in a chat
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { extOf } from '../../../lib/paths';
+import { baseName, extOf, folderOf } from '../../../lib/paths';
 import type { FileRecord } from '../../../lib/db/schema';
-import { conversations, openConversation, showChat } from '../../../state/conversations';
+import { showChat } from '../../../state/conversations';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { filesVersion } from '../../../state/stored';
 import { copyText } from '../../../components/clipboard';
 import { Markdown } from '../../../components/Markdown';
 import { useDialog } from '../../../components/dialog';
-import { PageHeader } from '../../../components/PageHeader';
+import { FilesHeader } from './FilesHeader';
 import { Badge, Button, Icon, IconButton, Modal, Segmented, Spinner, TextField, cx } from '../../../components/ui';
 import { SandboxFrame, svgPage } from '../../../components/SandboxFrame';
 import { isProblem, type PageLog, type SandboxPage } from '../../../lib/sandbox/client';
 import { settings } from '../../../state/settings';
-import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
 import { parseDelimited } from '../csv';
-import { attachExisting, closeFileView, fileReturnsToChat, openFiler, deleteFiles, downloadFile, fileList, getFile, imageList, pageOf, readText, refreshFiles, refreshImages, renameFile, saveUserText, siteSignature, undoLastChange } from '../state';
-import { FileIcon, formatChars, PathName, typeLabel } from './common';
-import { formatDateTime, formatNumber } from '../../../lib/i18n';
+import { attachExisting, closeFileView, fileReturnsToChat, openFolder, deleteFiles, downloadFile, fileList, getFile, imageList, pageOf, readText, refreshFiles, refreshImages, renameFile, saveUserText, siteSignature } from '../state';
+import { ActionMenu, FileIcon, FolderCrumbs, SourceChat, SubBar, typeLabel } from './common';
+import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
-
-const BY_KEYS: Record<string, 'by.model' | 'by.user' | 'by.upload'> = { model: 'by.model', user: 'by.user', upload: 'by.upload' };
-const byLabel = (by: string) => (BY_KEYS[by] ? t(BY_KEYS[by]) : by);
 
 export function FileView({ id = '' }: { id?: string }) {
   const [f, setF] = useState<FileRecord | null | undefined>(undefined);
@@ -71,7 +67,6 @@ export function FileView({ id = '' }: { id?: string }) {
     );
 
   const shown = text!;
-  const conv = f.conversationId ? conversations.value.find((c) => c.id === f.conversationId) : undefined;
   const ext = extOf(f.name);
 
   const print = () => {
@@ -94,105 +89,110 @@ export function FileView({ id = '' }: { id?: string }) {
 
   return (
     <main class="flex min-w-0 flex-1 flex-col">
-      <PageHeader wrap>
-        {fileReturnsToChat() ? (
-          <IconButton label={t('file.backToChat')} onClick={closeFileView}>
-            <Icon name="chevron-left" />
-          </IconButton>
-        ) : (
+      <FilesHeader
+        title={
+          <div class="flex min-w-0 flex-1 items-center px-1">
+            <FolderCrumbs folder={folderOf(f.name)} />
+          </div>
+        }
+        searchIn={folderOf(f.name)}
+        onSearch={() => openFolder(folderOf(f.name) || null)}
+      />
+      <SubBar
+        start={
           <>
-            <button type="button" class="rounded-lg px-2 py-1 text-sm text-muted hover:bg-glass-strong hover:text-ink-strong" onClick={() => openFiler()}>
-              {t('files')}
-            </button>
-            <Icon name="chevron-right" class="size-3.5 shrink-0 text-faint" />
-          </>
-        )}
-        {renaming ? (
-          <form
-            class="min-w-0 flex-1"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setRenaming(false);
-              if (name.trim() && name.trim() !== f.name) void renameFile(f.id, name.trim());
-            }}
-          >
-            <TextField compact
-              class="w-full"
-              value={name}
-              autoFocus
-              aria-label={t('file.name')}
-              onInput={(e) => setName((e.target as HTMLInputElement).value)}
-              onBlur={() => setRenaming(false)}
-              onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
-            />
-          </form>
-        ) : (
-          <button
-            type="button"
-            class="flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left hover:bg-glass-strong"
-            title={t('file.rename')}
-            onClick={() => {
-              setName(f.name);
-              setRenaming(true);
-            }}
-          >
-            <FileIcon f={f} class="size-4 shrink-0 text-muted" />
-            <span class="truncate text-sm font-medium text-ink-strong">
-              <PathName name={f.name} />
-            </span>
-          </button>
-        )}
-        <Badge>{typeLabel(f)}</Badge>
-        <span class="hidden text-xs text-muted tabular-nums sm:inline">{formatChars(shown.text.length)}</span>
-        <div class="ml-auto flex flex-wrap items-center gap-0.5">
-          {f.previous && !editing && (
+            {/* The same order as on an image's page: edit, (use), download, delete, the rest in the menu */}
+            {!editing && (
+              <Button
+                class="text-sm"
+                title={t('file.editTitle')}
+                onClick={() => {
+                  setDraft(shown.text);
+                  setEditing(true);
+                }}
+              >
+                <Icon name="edit" />
+                <span class="hidden sm:inline">{t('file.edit')}</span>
+              </Button>
+            )}
             <Button
               class="text-sm"
-              title={t('file.undoTitle', { by: byLabel(f.previous.by), at: formatDateTime(f.previous.at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })}
-              onClick={async () => {
-                await undoLastChange(f.id);
-                showToast(t('file.undone'));
-              }}
-            >
-              <Icon name="history" />
-              <span class="hidden sm:inline">{t('file.undo')}</span>
-            </Button>
-          )}
-          <Button
-            class="text-sm"
-            title={t('useInChatTitle')}
-            onClick={() => {
-              void attachExisting(f.id);
-              showChat();
-            }}
-          >
-            <Icon name="paperclip" />
-            <span class="hidden sm:inline">{t('useInChat')}</span>
-          </Button>
-          {!editing && (
-            <Button
-              class="text-sm"
-              title={t('file.editTitle')}
+              title={t('useInChatTitle')}
               onClick={() => {
-                setDraft(shown.text);
-                setEditing(true);
+                void attachExisting(f.id);
+                showChat();
               }}
             >
-              <Icon name="edit" />
-              <span class="hidden sm:inline">{t('file.edit')}</span>
+              <Icon name="paperclip" />
+              <span class="hidden sm:inline">{t('useInChat')}</span>
             </Button>
-          )}
-          <MoreMenu
-            onCopy={() => void copyText(shown.text, t('file.copied'))}
-            onDownload={() => void downloadFile(f, shown.text)}
-            onPrint={print}
-            source={conv ? { title: conv.title, open: () => void openConversation(conv.id) } : null}
-            onDelete={async () => {
-              if (await askConfirm({ title: t('file.deleteTitle'), message: t('file.deleteMessage', { name: f.name }), confirmLabel: t('delete'), danger: true })) await deleteFiles([f.id]);
-            }}
-          />
-        </div>
-      </PageHeader>
+            <IconButton label={t('download')} onClick={() => void downloadFile(f, shown.text)}>
+              <Icon name="download" />
+            </IconButton>
+            <IconButton
+              variant="remove"
+              label={t('file.deleteTitle')}
+              onClick={async () => {
+                if (await askConfirm({ title: t('file.deleteTitle'), message: t('file.deleteMessage', { name: f.name }), confirmLabel: t('delete'), danger: true })) await deleteFiles([f.id]);
+              }}
+            >
+              <Icon name="trash" />
+            </IconButton>
+            <ActionMenu
+              start
+              actions={[
+                { icon: 'copy', label: t('file.copyTitle'), run: () => void copyText(shown.text, t('file.copied')) },
+                { icon: 'printer', label: t('file.print'), run: print }
+              ]}
+            />
+          </>
+        }
+        center={
+          <>
+            {renaming ? (
+              <form
+                class="min-w-0 flex-1"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setRenaming(false);
+                  if (name.trim() && name.trim() !== baseName(f.name)) void renameFile(f.id, folderOf(f.name) + name.trim());
+                }}
+              >
+                <TextField compact
+                  class="w-full"
+                  value={name}
+                  autoFocus
+                  aria-label={t('file.name')}
+                  onInput={(e) => setName((e.target as HTMLInputElement).value)}
+                  onBlur={() => setRenaming(false)}
+                  onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
+                />
+              </form>
+            ) : (
+              <button
+                type="button"
+                class="flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left hover:bg-glass-strong"
+                title={t('file.rename')}
+                onClick={() => {
+                  setName(baseName(f.name));
+                  setRenaming(true);
+                }}
+              >
+                <FileIcon f={f} class="size-4 shrink-0 text-muted" />
+                <span class="truncate text-sm font-medium text-ink-strong">{baseName(f.name)}</span>
+              </button>
+            )}
+            <Badge>{typeLabel(f)}</Badge>
+            <SourceChat conversationId={f.conversationId} />
+          </>
+        }
+        end={
+          // Back to where it was opened from: the chat, or the Files tab
+          <IconButton label={fileReturnsToChat() ? t('file.backToChat') : t('file.close')} onClick={closeFileView}>
+            <Icon name="x" class="size-5" />
+          </IconButton>
+        }
+      />
       {f.origin.kind === 'web' && (
         <p class="mx-3 mt-2 flex min-w-0 items-center gap-1.5 text-xs text-muted md:ml-1">
           <Icon name="link" class="size-3.5 shrink-0" />
@@ -336,7 +336,6 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
           value={view}
           onChange={setView}
         />
-        {view === 'preview' && <span class="min-w-0 flex-1 text-xs text-muted">{t('file.sandboxNote')}</span>}
         {view === 'preview' && (
           <div class="ml-auto flex items-center gap-0.5">
             {log.entries.length > 0 && (
@@ -414,31 +413,3 @@ function FullPage({ html, page, onClose }: { html: string; page?: SandboxPage; o
 }
 
 /** The less frequent actions of a file, with delete set apart at the end */
-function MoreMenu({ onCopy, onDownload, onPrint, source, onDelete }: { onCopy(): void; onDownload(): void; onPrint(): void; source: { title: string; open(): void } | null; onDelete(): void }) {
-  const [open, setOpen] = useState(false);
-  const anchor = useRef<HTMLSpanElement>(null);
-  const item = (icon: Parameters<typeof Icon>[0]['name'], run: () => void) => ({ icon: <Icon name={icon} class="mt-0.5 size-4 shrink-0 text-muted" />, onSelect: () => (setOpen(false), run()) });
-  return (
-    <span ref={anchor}>
-      <IconButton label={t('file.more')} aria-haspopup="menu" aria-expanded={open} class={open ? 'bg-glass-strong' : undefined} onClick={() => setOpen(!open)}>
-        <Icon name="more" />
-      </IconButton>
-      {open && (
-        <Popover anchor={anchor.current} onClose={() => setOpen(false)} placement="bottom-end" label={t('file.more')} class="w-60">
-          <MenuItem {...item('copy', onCopy)}>{t('file.copyTitle')}</MenuItem>
-          <MenuItem {...item('download', onDownload)}>{t('download')}</MenuItem>
-          <MenuItem {...item('printer', onPrint)}>{t('file.print')}</MenuItem>
-          {source && (
-            <MenuItem {...item('chat', source.open)}>
-              <span class="block truncate">{t('file.openSourceTitle', { title: source.title })}</span>
-            </MenuItem>
-          )}
-          <MenuSeparator />
-          <MenuItem icon={<Icon name="trash" class="mt-0.5 size-4 shrink-0" />} class="text-danger! hover:bg-danger-soft! focus-visible:bg-danger-soft!" onSelect={() => (setOpen(false), onDelete())}>
-            {t('file.deleteTitle')}
-          </MenuItem>
-        </Popover>
-      )}
-    </span>
-  );
-}

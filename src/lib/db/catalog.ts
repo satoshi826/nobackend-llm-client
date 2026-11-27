@@ -17,8 +17,8 @@ export interface ImageEntry {
   /** Made in a chat: the conversation and message it belongs to */
   conversationId?: string;
   messageId?: string;
-  /** Its path, when it has one (brought in, or moved into a folder) */
-  path?: string;
+  /** Its path (named by the time it was saved when it came with no name) */
+  path: string;
   origin: Origin;
 }
 
@@ -30,7 +30,7 @@ export async function infoOf(rec: BlobRecord, key: DataKey | null = currentDataK
   return openJSON<ImageInfo>(key, rec.infoEnc);
 }
 
-export function imageEntry(rec: Omit<BlobRecord, 'info' | 'infoEnc'>, info: ImageInfo | undefined): ImageEntry {
+export function imageEntry(rec: Omit<BlobRecord, 'info' | 'infoEnc'>, info: ImageInfo): ImageEntry {
   return {
     id: rec.id,
     mime: rec.mime,
@@ -38,8 +38,8 @@ export function imageEntry(rec: Omit<BlobRecord, 'info' | 'infoEnc'>, info: Imag
     createdAt: rec.createdAt,
     ...(rec.conversationId ? { conversationId: rec.conversationId } : {}),
     ...(rec.messageId ? { messageId: rec.messageId } : {}),
-    ...(info?.path ? { path: info.path } : {}),
-    origin: info?.origin ?? { kind: 'made' }
+    path: info.path,
+    origin: info.origin
   };
 }
 
@@ -55,6 +55,20 @@ const pathOfId = new Map<string, string>();
 const temporary = new Set<string>();
 
 let loading: Promise<void> | null = null;
+
+let queue: Promise<unknown> = Promise.resolve();
+/**
+ * Run `fn` with the paths in use, one call at a time, so two saves started together cannot take the same path. `fn`
+ * should save what it names, and read the records it changes, before it returns
+ */
+export function withTakenPaths<T>(fn: (space: PathSpace) => Promise<T>): Promise<T> {
+  const run = queue.then(async () => {
+    await ensureCatalog();
+    return fn(catalogSpace);
+  });
+  queue = run.catch(() => undefined);
+  return run;
+}
 
 function index(id: string, path: string | undefined) {
   const old = pathOfId.get(id);
@@ -84,9 +98,10 @@ async function load() {
   const opened = await Promise.all(fileRows.map((r) => unseal(r)));
   for (const f of opened) putFile(isOldFile(f) ? await convertFile(f) : f);
   const infos = await Promise.all(imageRows.map((r) => infoOf(r)));
+  // One by one, so an image given a path takes it before the next one looks for a free one
   for (const [i, r] of imageRows.entries()) {
     const info = infos[i];
-    putImage(imageEntry(r, info && isOldImageInfo(info) ? await convertImageInfo(r, info) : info));
+    putImage(imageEntry(r, isOldImageInfo(info) ? await convertImageInfo(r, info, catalogSpace) : info!));
   }
 }
 

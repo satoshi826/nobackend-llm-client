@@ -1,36 +1,36 @@
 // Files inside the chat: the card under a file tool call, and the files attached to a user message
 import { useEffect, useState } from 'preact/hooks';
-import type { MessageRecord } from '../../../lib/db/schema';
+import type { FileRecord, MessageRecord } from '../../../lib/db/schema';
 import type { Part } from '../../../lib/providers/types';
 import { Icon } from '../../../components/ui';
 import { getFile, openFile } from '../state';
 import { filesVersion } from '../../../state/stored';
 import type { FileToolDetails } from '../tools';
-import { formatChars } from './common';
+import { formatBytes } from './common';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
 
-/** Whether a file is still in the Files tab (checked by id, again after any change; true until known) */
-function useFileExists(id: string): boolean {
-  const [exists, setExists] = useState(true);
+/** A file as it is now in the Files tab (looked up again after any change): null once deleted, undefined until known */
+function useFile(id: string): FileRecord | null | undefined {
+  const [file, setFile] = useState<FileRecord | null | undefined>(undefined);
   const v = filesVersion.value;
   useEffect(() => {
     let alive = true;
-    void getFile(id).then((f) => alive && setExists(!!f), () => {});
+    void getFile(id).then((f) => alive && setFile(f ?? null), () => {});
     return () => {
       alive = false;
     };
   }, [id, v]);
-  return exists;
+  return file;
 }
 
 export function FileToolDetail({ p }: { p: ToolPart }) {
   const d = p.uiDetails as FileToolDetails | undefined;
-  const exists = useFileExists(d?.fileId ?? '');
+  const file = useFile(d?.fileId ?? '');
   if (!d?.fileId || p.name === 'read_file') return null;
-  if (!exists)
+  if (file === null)
     return (
       <div class="flex items-center gap-2 border-t border-line px-3 py-2 text-sm text-muted">
         <Icon name="file" class="size-5 shrink-0" />
@@ -48,9 +48,7 @@ export function FileToolDetail({ p }: { p: ToolPart }) {
         <Icon name="file" class="size-5 shrink-0 text-accent-text" />
         <span class="min-w-0 flex-1">
           <span class="block truncate text-sm font-medium text-ink-strong">{d.name}</span>
-          <span class="block text-xs text-muted">
-            {formatChars(d.chars)}
-          </span>
+          {file && <span class="block text-xs text-muted">{formatBytes(file.bytes)}</span>}
         </span>
         <span class="shrink-0 text-xs text-accent-text">{t('open')}</span>
       </button>
@@ -71,13 +69,14 @@ export function UserAttachments({ m }: { m: MessageRecord }) {
 
 /** A file sent with a message: opens it, or says it was deleted (what was sent stays in the message) */
 function AttachmentChip({ a }: { a: NonNullable<MessageRecord['attachments']>[number] }) {
-  const exists = useFileExists(a.fileId);
+  const file = useFile(a.fileId);
+  const exists = file !== null;
   const title = a.text.length < a.totalChars ? t('msg.partial', { sent: formatNumber(a.text.length), total: formatNumber(a.totalChars) }) : t('msg.sent');
   const inner = (
     <>
       <Icon name="paperclip" class="size-3" />
       <span class="truncate">{a.name}</span>
-      <span class="tabular-nums opacity-70">{exists ? formatChars(a.totalChars) : t('msg.fileDeleted')}</span>
+      <span class="tabular-nums opacity-70">{file ? formatBytes(file.bytes) : exists ? '' : t('msg.fileDeleted')}</span>
     </>
   );
   if (!exists) return <span class="inline-flex max-w-full items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs text-muted" title={title}>{inner}</span>;

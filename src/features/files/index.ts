@@ -20,6 +20,7 @@ registerSidebarTab({ id: 'files', label: () => t('files'), icon: 'files', Panel:
 // The file manager and the file screen load their code when first opened
 registerMainView({ kind: 'files', Component: lazyComponent(() => import('./components/Filer').then((m) => m.Filer)) });
 registerMainView({ kind: 'file', Component: lazyComponent(() => import('./components/FileView').then((m) => m.FileView)) });
+registerMainView({ kind: 'image', Component: lazyComponent(() => import('./components/ImagePage').then((m) => m.ImagePage)) });
 registerComposerAddon({
   id: 'files',
   placement: 'inside',

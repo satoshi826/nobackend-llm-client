@@ -9,17 +9,16 @@ const file = (id: string, name: string, kind: 'document' | 'upload', text: strin
   ...newFile({ id, name, origin: kind === 'upload' ? { kind: 'upload' } : { kind: 'made' }, text, by: kind === 'upload' ? 'upload' : 'model', conversationId }),
   updatedAt
 });
-const img = (id: string, createdAt: number, conversationId: string, size = 2048): ImageEntry => ({ id, conversationId, messageId: 'm', createdAt, mime: 'image/png', size, origin: { kind: 'made' } });
+const img = (id: string, path: string, createdAt: number, conversationId: string, size = 2048): ImageEntry => ({ id, path, conversationId, messageId: 'm', createdAt, mime: 'image/png', size, origin: { kind: 'made' } });
 
 const items = toItems(
   [file('a', 'report.md', 'document', '# Market\nApples are up', now - day, 'c1'), file('b', 'scores.csv', 'upload', 'name,score\nsato,80', now - 10 * day), file('c', 'notes.txt', 'document', 'zzz', now - 2 * day, 'c2')],
-  [img('i1', now - 3 * day, 'c1'), img('i2', now - 20 * day, 'c2', 10)],
-  (id) => ({ c1: 'Fruit', c2: 'Misc' })[id]
+  [img('i1', 'fruit-20261127-160816.png', now - 3 * day, 'c1'), img('i2', 'misc.png', now - 20 * day, 'c2', 10)]
 );
 
 describe('file manager items', () => {
-  it('names images after their conversation', () => {
-    expect(items.find((i) => i.id === 'i1')!.name).toMatch(/^Fruit \d{8}-\d{6}\.png$/);
+  it('lists an image by its path', () => {
+    expect(items.find((i) => i.id === 'i1')!.name).toBe('fruit-20261127-160816.png');
   });
   it('filters by view, conversation and query (contents too)', () => {
     const f = (o: Partial<Parameters<typeof filterItems>[1]>) => filterItems(items, { view: 'all', conversationId: null, query: '', ...o }).map((i) => i.id);
@@ -35,12 +34,12 @@ describe('file manager items', () => {
     expect(sortItems(items, 'updated').map((i) => i.id)).toEqual(['a', 'c', 'i1', 'b', 'i2']);
     expect(sortItems(items, 'name')[0].id).toBe('i1');
     expect(sortItems(items, 'type').map((i) => i.ext)).toEqual(['csv', 'md', 'png', 'png', 'txt']);
-    // Files (characters) before images (bytes), each largest first
-    expect(sortItems(items, 'size').map((i) => i.id)).toEqual(['a', 'b', 'c', 'i1', 'i2']);
+    // Files and images by one measure, bytes, largest first
+    expect(sortItems(items, 'size').map((i) => i.id)).toEqual(['i1', 'a', 'b', 'i2', 'c']);
   });
   it('sorts either way', () => {
     expect(sortItems(items, 'updated', 'asc').map((i) => i.id)).toEqual(['i2', 'b', 'i1', 'c', 'a']);
-    expect(sortItems(items, 'size', 'asc').map((i) => i.id)).toEqual(['c', 'b', 'a', 'i2', 'i1']);
+    expect(sortItems(items, 'size', 'asc').map((i) => i.id)).toEqual(['c', 'i2', 'b', 'a', 'i1']);
   });
   it('groups items by conversation, most recent first', () => {
     expect(conversationsWithItems(items)).toEqual([

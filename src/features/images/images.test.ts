@@ -1,8 +1,9 @@
 import 'fake-indexeddb/auto';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildGenerateBody, mapImageModel, sizeFor, veniceEditCost, veniceImageProvider } from './providers/venice';
 import { getImage, imageUsage, listImages, putImage, resealImages, exportImages, importImages } from '../../lib/db/images';
 import { setDataKey } from '../../lib/db/sealed';
+import { resetCatalog } from '../../lib/db/catalog';
 import { generateDataKey } from '../../lib/crypto/data';
 import { db, type ImageParams, type MessageRecord } from '../../lib/db/schema';
 import * as repo from '../../lib/db/repo';
@@ -108,11 +109,31 @@ describe('image storage', () => {
     setDataKey(null);
     expect((await db().blobs.get('i1'))?.blob).toBeDefined();
   });
+  it('names an image that comes with no name by the second it is saved, in the folder given', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 27, 16, 8, 16));
+    try {
+      const made = (id: string) => putImage({ id, mime: 'image/webp', folder: 'site/' }, new Blob([id], { type: 'image/webp' }), false);
+      // Two in the same second: the second is numbered
+      expect([await made('g1'), await made('g2')]).toEqual(['site/20261127-160816.webp', 'site/20261127-160816 (2).webp']);
+      expect((await listImages()).find((i) => i.id === 'g1')?.path).toBe('site/20261127-160816.webp');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('gives an image stored without a path (made before images had one) its time name as the data loads', async () => {
+    const at = new Date(2026, 0, 2, 3, 4, 5).getTime();
+    await db().blobs.put({ id: 'old', mime: 'image/png', createdAt: at, size: 1, blob: new Blob(['x'], { type: 'image/png' }) });
+    resetCatalog();
+    expect((await listImages()).find((i) => i.id === 'old')?.path).toBe('20260102-030405.png');
+    // Written back, so it keeps that name
+    expect((await db().blobs.get('old'))?.info?.path).toBe('20260102-030405.png');
+  });
   it('keeps a brought-in image\'s name and origin, encrypted with a passphrase', async () => {
     const key = await generateDataKey();
     setDataKey(key);
     const info = { path: 'cat.png', origin: { kind: 'web' as const, url: 'https://upload.example/cat.png' } };
-    await putImage({ id: 'w1', mime: 'image/png', info }, new Blob(['png'], { type: 'image/png' }), false);
+    await putImage({ id: 'w1', mime: 'image/png', origin: info.origin, name: info.path }, new Blob(['png'], { type: 'image/png' }), false);
     const raw = await db().blobs.get('w1');
     expect(raw?.info).toBeUndefined();
     expect(raw?.infoEnc).toBeDefined();
@@ -182,10 +203,12 @@ describe('images in conversations', () => {
   });
 
   it('generate_image tool validates input', async () => {
-    const tool = makeImageTool(async (input) => ({ blobIds: ['b1'], model: 'Flux', blurred: false, ...(input as object) }) as never);
+    const tool = makeImageTool(async (input) => ({ blobIds: ['b1'], names: ['20261127-160816.webp'], inWorkDir: true, model: 'Flux', blurred: false, ...(input as object) }) as never);
     expect(() => tool.prepare({})).toThrow();
     expect(tool.prepare({ prompt: ' a cat ', aspect_ratio: '5:7' })).toEqual({ prompt: 'a cat' });
     const r = await tool.execute({ prompt: 'a cat' }, { signal: new AbortController().signal } as never);
     expect(r.details).toMatchObject({ blobIds: ['b1'] });
+    // The model learns where it went, to use it from a page in the working folder
+    expect(r.content).toContain('Saved in the working folder as "20261127-160816.webp"');
   });
 });

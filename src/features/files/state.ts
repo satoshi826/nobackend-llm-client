@@ -2,8 +2,8 @@
 // Depends on core state; core state never imports this module (it registers itself through extension points).
 import { effect, signal } from '@preact/signals';
 import * as fdb from '../../lib/db/files';
-import { moveFolder, moveIntoWorkDirs, renumberTakenPaths, withTakenPaths } from '../../lib/db/paths';
-import { atPath, catalogSpace } from '../../lib/db/catalog';
+import { moveFolder, moveIntoWorkDirs, renumberTakenPaths } from '../../lib/db/paths';
+import { atPath, catalogImage, catalogSpace, ensureCatalog, isTemporary, withTakenPaths } from '../../lib/db/catalog';
 import { baseName, cleanFileName, cleanFolderName, extOf, folderNameFor, folderOf, freeFolder, freePath, isInside, mimeFromName, pathFree, pathKey } from '../../lib/paths';
 import { getSetting, newId, setSetting } from '../../lib/db/repo';
 import { getImage, listImages, putImage, renameImages } from '../../lib/db/images';
@@ -80,7 +80,7 @@ export const fileUsage = fdb.fileUsage;
 const PAGE_TEXT_LIMIT = 5_000_000;
 
 /** Every path in use (files and images), for working out sites */
-const allPaths = () => [...(fileList.value ?? []).map((f) => f.name), ...(imageList.value ?? []).flatMap((im) => (im.path ? [im.path] : []))];
+const allPaths = () => [...(fileList.value ?? []).map((f) => f.name), ...(imageList.value ?? []).map((im) => im.path)];
 
 /**
  * A page's site: the nearest folder at or above it that has an index.html, else its own folder; '' for a page at
@@ -126,7 +126,7 @@ function parseStorage(text: string): Record<string, string> {
  */
 export async function pageOf(page: FileRecord, within?: string): Promise<SandboxPage> {
   const [files, images] = await Promise.all([fdb.listFiles(), listImages()]);
-  const site = siteOf(page.name, [...files.map((f) => f.name), ...images.flatMap((im) => (im.path ? [im.path] : []))]);
+  const site = siteOf(page.name, [...files.map((f) => f.name), ...images.map((im) => im.path)]);
   const out: Record<string, string | Blob> = {};
   if (!site) return { path: page.name, files: out };
   const allowed = (path: string) => isInside(path, site) && (within === undefined || isInside(path, within));
@@ -140,7 +140,7 @@ export async function pageOf(page: FileRecord, within?: string): Promise<Sandbox
     out[f.name.slice(site.length)] = text;
   }
   for (const im of images) {
-    if (!im.path || !allowed(im.path)) continue;
+    if (!allowed(im.path)) continue;
     const blob = await getImage(im.id).catch(() => null);
     if (blob) out[im.path.slice(site.length)] = blob;
   }
@@ -201,7 +201,7 @@ export function siteSignature(page: FileRecord): string {
     if (pathKey(f.name) !== storageKey) parts.push(`${f.id}:${f.name}:${f.updatedAt}`);
     else if (!storageState(f.name).stamps.has(f.updatedAt)) parts.push(`storage:${f.updatedAt}`);
   }
-  for (const im of imageList.value ?? []) if (im.path && isInside(im.path, site)) parts.push(`${im.id}:${im.path}`);
+  for (const im of imageList.value ?? []) if (isInside(im.path, site)) parts.push(`${im.id}:${im.path}`);
   return parts.sort().join('|');
 }
 
@@ -415,12 +415,13 @@ export async function chatInFolder(folder: string) {
   showChat();
 }
 
-/** Where "back" goes from a file: the screen it was opened from */
+/** Where "back" goes from a file's or an image's page: the screen it was opened from */
 let returnTo: MainViewState = { kind: 'files' };
+const PAGES = ['file', 'image'];
 
 export async function openFile(id: string) {
   const cur = mainView.value;
-  if (cur.kind !== 'file') returnTo = cur.kind === 'chat' ? { kind: 'chat' } : { kind: 'files' };
+  if (!PAGES.includes(cur.kind)) returnTo = cur.kind === 'chat' ? { kind: 'chat' } : { kind: 'files' };
   mainView.value = { kind: 'file', id };
   sidebarOpen.value = false;
   // Its own place in the history, so Back leads to the folder it was opened from
@@ -429,6 +430,38 @@ export async function openFile(id: string) {
 }
 
 export const fileReturnsToChat = () => returnTo.kind === 'chat';
+
+/** The images an image's page steps through (as the list it was opened from showed them); empty: the images of its folder */
+export const imageSiblings = signal<string[]>([]);
+
+/** Show an image or a video on its own page, from the Files tab (siblings: the images listed with it, in order) */
+export function openImage(id: string, siblings: string[] = []) {
+  const cur = mainView.value;
+  if (!PAGES.includes(cur.kind)) returnTo = cur.kind === 'chat' ? { kind: 'chat' } : { kind: 'files' };
+  const stepping = cur.kind === 'image';
+  imageSiblings.value = siblings;
+  mainView.value = { kind: 'image', id };
+  sidebarOpen.value = false;
+  // Its own place in the history, so Back leads to the folder it was opened from (one of a temporary chat has none);
+  // stepping to the next image takes the same place, so Back does not walk through every image seen
+  if (isTemporary(id)) setHash('');
+  else if (stepping) setHash(`#/i/${id}`);
+  else pushHash(`#/i/${id}`);
+}
+
+registerRoute({
+  pattern: /^#\/i\/([\w-]+)$/,
+  open: async (m) => {
+    await ensureCatalog();
+    if (!catalogImage(m[1])) return;
+    returnTo = { kind: 'files' };
+    imageSiblings.value = [];
+    sidebarTab.value = 'files';
+    mainView.value = { kind: 'image', id: m[1] };
+    sidebarOpen.value = false;
+    setHash(m[0]);
+  }
+});
 
 export function closeFileView() {
   if (returnTo.kind === 'chat') showChat();
@@ -450,11 +483,6 @@ registerRoute({
 // ---- editing by the user ----
 export async function saveUserText(id: string, text: string) {
   await fdb.setText(id, text, 'user');
-}
-
-/** Go back to the text before the last change (again: forward to it) */
-export async function undoLastChange(id: string) {
-  await fdb.swapPrevious(id);
 }
 
 /** Rename a file (the name may move it into other folders); false when another file or image has that path */
@@ -503,7 +531,9 @@ export async function downloadImage(id: string, name: string) {
 export interface PendingAttachment {
   fileId: string;
   name: string;
-  chars?: number;
+  bytes?: number;
+  /** Longer than is sent whole (the rest is read with read_file) */
+  long?: boolean;
   reading?: boolean;
 }
 
@@ -538,7 +568,6 @@ async function importOne(file: File, id: string, temporary: boolean, url?: strin
 
 /** Images kept as they are; SVG is refused, since it can carry scripts */
 const IMAGE_MIME = /^image\/(png|jpeg|webp|gif|avif)$/;
-const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 async function importImage(file: File, id: string, origin: Origin, conv?: Conversation, folder = ''): Promise<string | null> {
@@ -550,11 +579,7 @@ async function importImage(file: File, id: string, origin: Origin, conv?: Conver
     showToast(t('extract.tooBig', { max: formatNumber(MAX_IMAGE_BYTES / 1024 / 1024) }), 'error');
     return null;
   }
-  return withTakenPaths(async (space) => {
-    const path = freePath(cleanFileName(folder + file.name, IMAGE_EXT[file.type]), space);
-    await putImage({ id, mime: file.type, conversationId: conv?.id, info: { path, origin } }, file, !!conv?.temporary);
-    return path;
-  });
+  return putImage({ id, mime: file.type, conversationId: conv?.id, origin, folder, name: file.name }, file, !!conv?.temporary);
 }
 
 // ---- fetching from the web (through the fetch page: state/fetch-page.ts) ----
@@ -586,6 +611,11 @@ export async function importFromDevice(files: File[], folder = '') {
   if (n) showToast(n === 1 ? t('import.doneOne') : t('import.done', { n: formatNumber(n) }));
 }
 
+/** An attachment's size as the input box shows it: bytes, and whether only its beginning goes with the message (counted in characters) */
+async function sizeOf(f: FileRecord): Promise<Pick<PendingAttachment, 'bytes' | 'long'>> {
+  return { bytes: f.bytes, long: (await fdb.readText(f.id)).length > ATTACH_INLINE_CHARS };
+}
+
 /** Read files from the user's device, keep them in the Files tab, and attach them to the next message */
 export async function uploadFiles(files: File[], conv: Conversation) {
   await Promise.all(
@@ -593,7 +623,7 @@ export async function uploadFiles(files: File[], conv: Conversation) {
       const id = newId();
       pendingAttachments.value = [...pendingAttachments.value, { fileId: id, name: file.name, reading: true }];
       const rec = await importOne(file, id, !!conv.temporary);
-      if (rec) setPending(id, { reading: false, chars: rec.size });
+      if (rec) setPending(id, { reading: false, ...(await sizeOf(rec)) });
       else setPending(id, null);
     })
   );
@@ -612,7 +642,7 @@ export async function attachExisting(id: string) {
   if (conv.imageMode || conv.videoMode) await updateConversation({ imageMode: false, videoMode: false });
   if (pendingAttachments.value.some((a) => a.fileId === id)) return;
   const f = await fdb.getFile(id);
-  if (f) pendingAttachments.value = [...pendingAttachments.value, { fileId: f.id, name: f.name, chars: f.size }];
+  if (f) pendingAttachments.value = [...pendingAttachments.value, { fileId: f.id, name: f.name, ...(await sizeOf(f)) }];
 }
 
 export function detach(id: string) {
@@ -742,7 +772,7 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
         });
       },
       get: (ref) => readableFile(conv.id, history, ref),
-      text: (f) => fdb.readText(f.id),
+      text: (f, previous) => fdb.readText(f.id, previous ? 'previous' : 'current'),
       async update(id, text, append) {
         return fdb.setText((await inFolder(id)).id, text, 'model', append);
       },
@@ -751,8 +781,8 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
         if (!d) return [];
         const [files, images] = await Promise.all([fdb.listFiles(), listImages()]);
         return [
-          ...files.filter((f) => isInside(f.name, d)).map((f) => ({ path: f.name.slice(d.length), kind: 'file' as const, size: f.size })),
-          ...images.flatMap((im) => (im.path && isInside(im.path, d) ? [{ path: im.path.slice(d.length), kind: 'image' as const, size: im.size }] : []))
+          ...files.filter((f) => isInside(f.name, d)).map((f) => ({ path: f.name.slice(d.length), kind: 'file' as const, bytes: f.bytes })),
+          ...images.filter((im) => isInside(im.path, d)).map((im) => ({ path: im.path.slice(d.length), kind: 'image' as const, bytes: im.size }))
         ];
       },
       search: (pattern, ignoreCase, only) => searchFolder(dir(), pattern, ignoreCase, only),
@@ -795,7 +825,7 @@ registerToolProvider({
     const dir = workDirOf(conv.id);
     if (!fileSettings.value.value.fileTools || !dir) return undefined;
     // The list is loaded with the conversation (below); while it loads, only the folder is named
-    const files = fileList.value?.filter((f) => isInside(f.name, dir)).map((f) => ({ id: f.id, path: f.name.slice(dir.length), size: f.size })) ?? null;
+    const files = fileList.value?.filter((f) => isInside(f.name, dir)).map((f) => ({ id: f.id, path: f.name.slice(dir.length), bytes: f.bytes })) ?? null;
     return filesNote(dir, files, NOTE_FILES);
   }
 });

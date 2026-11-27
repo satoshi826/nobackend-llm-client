@@ -6,6 +6,7 @@ import * as repo from '../../lib/db/repo';
 import type { Conversation, ImageParams, ImageResult, MessageRecord } from '../../lib/db/schema';
 import type { Part } from '../../lib/providers/types';
 import { deleteImageRecords, getImage, getImageMeta, putImage } from '../../lib/db/images';
+import { baseName } from '../../lib/paths';
 import { providerConfigOf } from '../../lib/keys/accounts';
 import { plainTransport } from '../../lib/providers/transport';
 import { vaultTransport as transport } from '../../lib/vault/client';
@@ -387,15 +388,15 @@ async function imageSize(blob: Blob): Promise<{ width?: number; height?: number 
   }
 }
 
-const EXT: Record<string, string> = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg' };
 
 /** Store images for a message and return file parts */
 async function storeImages(conv: Conversation, messageId: string, blobs: Blob[]): Promise<Extract<Part, { type: 'file' }>[]> {
   const parts: Extract<Part, { type: 'file' }>[] = [];
-  for (const [i, blob] of blobs.entries()) {
+  for (const blob of blobs) {
     const blobId = repo.newId();
-    await putImage({ id: blobId, conversationId: conv.id, messageId, mime: blob.type || 'image/png' }, blob, !!conv.temporary);
-    parts.push({ type: 'file', blobId, name: `image-${i + 1}.${EXT[blob.type] ?? 'png'}`, mimeType: blob.type || 'image/png', ...(await imageSize(blob)) });
+    // In the chat's working folder (the top without one), named by the time it is saved
+    const path = await putImage({ id: blobId, conversationId: conv.id, messageId, mime: blob.type || 'image/png', folder: conv.workDir }, blob, !!conv.temporary);
+    parts.push({ type: 'file', blobId, name: baseName(path), mimeType: blob.type || 'image/png', ...(await imageSize(blob)) });
   }
   return parts;
 }
@@ -558,6 +559,8 @@ async function runImageTool(conv: Conversation, messageId: string, input: ImageT
   const cost = recordImageUsage(conv, p, r.images.length, r.costUsd);
   return {
     blobIds: parts.map((x) => x.blobId),
+    names: parts.map((x) => x.name),
+    inWorkDir: !!conv.workDir,
     model: model?.name ?? p.model,
     blurred: !!r.blurred,
     request: { provider: imageProviderOf(p.providerId)?.label ?? p.providerId, prompt: p.prompt, negativePrompt: p.negativePrompt, aspectRatio: p.aspectRatio, resolution: p.resolution, size: p.size, costUsd: cost, costEstimated: r.costUsd === undefined }

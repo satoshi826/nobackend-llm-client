@@ -17,7 +17,7 @@ import { currentImageModel, imageReady, sendImagePrompt } from './state';
 import { GENERATE_IMAGE } from './tool';
 import { imageCount, t } from './messages';
 
-export { ImageThumb, confirmAndDelete, useBlobUrl } from './components/ImageView';
+export { ImageThumb, ViewerStage, confirmAndDelete, useBlobUrl, useImageViewer, type Viewer, type ViewerTool } from './components/ImageView';
 export { deleteImages, lightbox, registerImageAction, type ImageAction, type LightboxItem } from './state';
 
 registerComposerAddon({

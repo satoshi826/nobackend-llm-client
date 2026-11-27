@@ -169,8 +169,8 @@ export interface FileRecord {
   conversationId?: string;
   createdAt: number;
   updatedAt: number;
-  /** Characters in the current text */
-  size: number;
+  /** The current text's size in UTF-8 bytes (what it takes on a disk; images count theirs the same way) */
+  bytes: number;
   /** The current text's first characters, for cards and lists */
   preview: string;
   current: TextStamp;
@@ -180,6 +180,9 @@ export interface FileRecord {
 
 /** Characters of a file's text kept in its record, for cards and lists */
 export const PREVIEW_CHARS = 300;
+
+/** A text's size in UTF-8 bytes */
+export const textBytes = (text: string): number => new TextEncoder().encode(text).length;
 
 /** A file's text: its current one, and the one before its last change. Encrypted with a passphrase */
 export interface FileText {
@@ -236,12 +239,9 @@ export interface SealedBytes {
   data: Blob;
 }
 
-/**
- * An image's path and origin. Brought-in images have both; one made in a chat has none until it is moved into a
- * folder (then it has a path, and origin 'made')
- */
+/** An image's path (named by the time it was saved when it came with no name) and where it came from */
 export interface ImageInfo {
-  path?: string;
+  path: string;
   origin: Origin;
 }
 

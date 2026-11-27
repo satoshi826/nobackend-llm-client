@@ -5,7 +5,6 @@ import { conversations } from '../../../state/conversations';
 import { filesVersion, imagesVersion } from '../../../state/stored';
 import { toItems, type FilerItem } from '../filer';
 import { fileList, imageList, refreshFiles, refreshImages, type FilerView } from '../state';
-import { getLang } from '../../../lib/i18n';
 import type { IconName } from '../../../components/ui';
 import { t } from '../messages';
 
@@ -26,5 +25,5 @@ export function useFilerItems(): FilerItem[] | null {
   }, [imagesVersion.value]);
   const files = fileList.value;
   const images = imageList.value;
-  return useMemo(() => (files && images ? toItems(files, images, convTitle) : null), [files, images, conversations.value, getLang()]);
+  return useMemo(() => (files && images ? toItems(files, images) : null), [files, images]);
 }

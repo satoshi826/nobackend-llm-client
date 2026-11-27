@@ -4,7 +4,7 @@ import type { Conversation, FileRecord } from '../../../lib/db/schema';
 import { Button, EmptyState, Icon, Modal, SearchField, Spinner, cx } from '../../../components/ui';
 import { MenuItem, Popover } from '../../../components/menu';
 import { ATTACH_INLINE_CHARS, attachExisting, detach, fileList, openFolder, pendingAttachments, refreshFiles, uploadFiles } from '../state';
-import { formatChars, formatDate, FileIcon, typeLabel } from './common';
+import { formatBytes, formatDate, FileIcon, typeLabel } from './common';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 
@@ -107,7 +107,7 @@ function FilePicker({ onClose }: { onClose(): void }) {
                 <FileIcon f={f} class="size-4 shrink-0 text-muted" />
                 <span class="min-w-0 flex-1 truncate">{f.name}</span>
                 <span class="shrink-0 text-xs text-muted tabular-nums">
-                  {typeLabel(f)} · {formatChars(f.size)} · {formatDate(f.updatedAt)}
+                  {typeLabel(f)} · {formatBytes(f.bytes)} · {formatDate(f.updatedAt)}
                 </span>
               </button>
             </li>
@@ -141,11 +141,11 @@ export function AttachmentChips({ conv }: { conv: Conversation }) {
         <span
           key={a.fileId}
           class="inline-flex max-w-full items-center gap-1 rounded-full border border-line bg-glass-strong py-0.5 pr-1 pl-2 text-xs text-ink"
-          title={a.chars && a.chars > ATTACH_INLINE_CHARS ? t('attach.long', { n: formatNumber(ATTACH_INLINE_CHARS) }) : undefined}
+          title={a.long ? t('attach.long', { n: formatNumber(ATTACH_INLINE_CHARS) }) : undefined}
         >
           {a.reading ? <Spinner class="size-3" /> : <Icon name="paperclip" class="size-3" />}
           <span class="truncate">{a.name}</span>
-          {a.chars !== undefined && <span class="text-muted tabular-nums">{formatChars(a.chars)}</span>}
+          {a.bytes !== undefined && <span class="text-muted tabular-nums">{formatBytes(a.bytes)}</span>}
           <button type="button" aria-label={t('attach.remove', { name: a.name })} title={t('attach.remove', { name: a.name })} class="rounded-full p-0.5 hover:bg-glass-strong" onClick={() => detach(a.fileId)}>
             <Icon name="x" class="size-3" />
           </button>

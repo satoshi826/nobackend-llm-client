@@ -79,6 +79,18 @@ export const pathKey = (path: string): string => path.normalize('NFC').toLowerCa
 /** Whether a path lies inside a folder ('a/b/'; '' holds everything) */
 export const isInside = (path: string, folder: string): boolean => pathKey(path).startsWith(pathKey(folder));
 
+const MEDIA_EXT: Record<string, string> = { 'image/png': 'png', 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/avif': 'avif', 'video/mp4': 'mp4', 'video/webm': 'webm' };
+
+/** The extension for an image's or a video's type */
+export const extOfMime = (mime: string): string => MEDIA_EXT[mime] ?? (mime.startsWith('video/') ? 'mp4' : 'png');
+
+/** A name from a local time, to the second, for what is made with no name of its own: '20261127-160816.webp' */
+export function timeName(at: number, ext: string): string {
+  const d = new Date(at);
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}.${ext}`;
+}
+
 /** A folder named by a local date: '2026-11-27/' */
 export function dateFolder(at: number): string {
   const d = new Date(at);

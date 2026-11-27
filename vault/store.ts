@@ -165,6 +165,14 @@ export async function allStatus(): Promise<{ keys: Record<string, KeyStatus>; va
 }
 
 // ---- Saving and deleting keys ----
+/**
+ * Ask the browser to keep this page's storage when it clears data on its own (low on space; Safari clears sites not
+ * opened for 7 days). Asked when a key is saved: the user has just pressed save, and now there is something to lose
+ */
+function keepStorage() {
+  void globalThis.navigator?.storage?.persist?.().catch(() => undefined);
+}
+
 export async function saveKey(id: string, key: string): Promise<Result> {
   const account = accountById(id);
   if (!account) return { ok: false, message: t('common.unsupportedProvider') };
@@ -185,6 +193,7 @@ export async function saveKey(id: string, key: string): Promise<Result> {
   } else {
     await putRec({ ...base, key: k });
   }
+  keepStorage();
   changed();
   return { ok: true, message: passphrase !== null ? t('store.savedEncrypted') : t('store.saved') };
 }

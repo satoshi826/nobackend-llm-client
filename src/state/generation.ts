@@ -118,7 +118,6 @@ async function generateReply(convId: string, parentUserId: string) {
   // The provider's own web search, when the web feature chose that route
   const nativeSearch = contributedBuiltinWebSearch(toolCtx);
   const providerOptions = providerOptionsFor(cfg.id, 'chat', nativeSearch);
-  let imageCount = 0;
   try {
     let headerBalance = false;
     const final = await runAssistant({
@@ -133,7 +132,7 @@ async function generateReply(convId: string, parentUserId: string) {
       providerOptions,
       webSearch: nativeSearch === 'off' ? undefined : nativeSearch,
       imageOutput: !!model?.capabilities.imageOutput,
-      saveImage: (data, mimeType) => saveReplyImage(conv, draft.id, data, mimeType, ++imageCount),
+      saveImage: (data, mimeType) => saveReplyImage(conv, draft.id, data, mimeType),
       contextLength: model?.contextLength,
       maxOutputTokens: model?.maxOutputTokens,
       resendReasoning: settings.value.resendReasoning,

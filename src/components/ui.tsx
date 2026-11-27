@@ -9,7 +9,7 @@ export function cx(...xs: (string | false | null | undefined)[]): string {
 
 export type IconName =
   | 'menu' | 'plus' | 'settings' | 'send' | 'stop' | 'copy' | 'refresh' | 'edit' | 'trash' | 'pin' | 'chevron-left'
-  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star' | 'image' | 'expand' | 'wand' | 'scissors' | 'paperclip' | 'file' | 'files' | 'chat' | 'printer' | 'history' | 'grid' | 'list' | 'clock' | 'filter' | 'sort' | 'more' | 'link' | 'eye-off' | 'palette' | 'chart' | 'info' | 'code' | 'video' | 'play' | 'folder';
+  | 'chevron-right' | 'chevron-down' | 'x' | 'globe' | 'lock' | 'eye' | 'brain' | 'wrench' | 'ghost' | 'shield' | 'check' | 'search' | 'sparkle' | 'compress' | 'swap' | 'sliders' | 'key' | 'download' | 'upload' | 'book' | 'star' | 'image' | 'expand' | 'wand' | 'scissors' | 'paperclip' | 'file' | 'files' | 'chat' | 'printer' | 'history' | 'grid' | 'list' | 'clock' | 'filter' | 'sort' | 'more' | 'link' | 'eye-off' | 'palette' | 'chart' | 'info' | 'code' | 'video' | 'play' | 'folder' | 'folder-plus';
 
 const PATHS: Record<IconName, string> = {
   menu: 'M4 6h16M4 12h16M4 18h16',
@@ -58,6 +58,7 @@ const PATHS: Record<IconName, string> = {
   file: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6',
   files: 'M8 3h7l4 4v11H8zM15 3v4h4M5 7v14h11',
   folder: 'M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z',
+  'folder-plus': 'M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM12 10v6M9 13h6',
   chat: 'M4 5h16v11H9l-5 4V5Z',
   printer: 'M7 9V3h10v6M7 17H4v-7h16v7h-3M7 14h10v7H7z',
   history: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 8v4l3 2',
@@ -465,11 +466,12 @@ export function Select({ compact, class: className, children, ...rest }: SelectH
 }
 
 /** Search box: a field with the search icon; `label` is its accessible name */
-export function SearchField({ value, onInput, placeholder, label, class: className }: { value: string; onInput(v: string): void; placeholder: string; label: string; class?: string }) {
+/** autoFocus: only where opening the field is the user's own step toward typing (a search opened from its icon) */
+export function SearchField({ value, onInput, placeholder, label, autoFocus, class: className }: { value: string; onInput(v: string): void; placeholder: string; label: string; autoFocus?: boolean; class?: string }) {
   return (
     <label class={cx(FIELD, 'flex items-center gap-2 px-2.5 py-1.5 text-sm focus-within:border-line-strong', className)}>
       <Icon name="search" class="size-3.5 shrink-0 text-faint" />
-      <input class="w-full min-w-0 bg-transparent outline-none placeholder:text-faint" placeholder={placeholder} value={value} onInput={(e) => onInput((e.target as HTMLInputElement).value)} aria-label={label} />
+      <input class="w-full min-w-0 bg-transparent outline-none placeholder:text-faint" placeholder={placeholder} value={value} onInput={(e) => onInput((e.target as HTMLInputElement).value)} aria-label={label} autoFocus={autoFocus} />
     </label>
   );
 }

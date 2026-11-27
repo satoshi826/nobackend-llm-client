@@ -11,6 +11,7 @@ import { getPreset } from '../../lib/providers/registry';
 import { accountById } from '../../lib/keys/accounts';
 import { FETCH_ROUTES } from '../../lib/fetcher/config';
 import { askConfirm } from '../ConfirmDialog';
+import { safariClearsData } from '../device';
 
 import { Button, Icon, Spinner, TextField, Checkbox } from '../ui';
 import { Section } from '../settings-ui';
@@ -95,6 +96,7 @@ export function PrivacyTab() {
               {t('privacy.usage', { used: formatNumber(usage.used / 1024 / 1024, ONE_DECIMAL), quota: formatNumber(usage.quota / 1024 / 1024 / 1024, ONE_DECIMAL) })} ·{' '}
               {usage.persisted ? t('privacy.persisted') : t('privacy.notPersisted')}
             </p>
+            {safariClearsData && <p class="text-xs text-warn">{t('privacy.iosHomeScreen')}</p>}
             {!usage.persisted && (
               <Button
                 variant="outline"

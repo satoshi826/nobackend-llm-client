@@ -172,12 +172,12 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
         await inFolder(id);
         await deleteFiles([id]);
       },
-      async inspect(f, waitMs, script, signal) {
+      async inspect(f, o, signal) {
         // Only what lies in the working folder, even when the page's site reaches above it
         const page = await pageOf(f, dir());
         const items = page.storage?.items() ?? {};
         // Its data as the user's preview has it, but what it stores while being tried is not kept
-        return inspectPage(await fdb.readText(f.id), { ...page, storage: { items: () => items, save: () => {} } }, { waitMs, script, signal });
+        return inspectPage(await fdb.readText(f.id), { ...page, storage: { items: () => items, save: () => {} } }, { ...o, signal });
       },
       pathOf: (f) => relativeTo(dir(), f.name),
       syntax: (path, text) => syntaxProblem(path, text, parseInSandbox)

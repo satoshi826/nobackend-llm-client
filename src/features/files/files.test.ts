@@ -50,10 +50,22 @@ function memDeps(scope = new Set<string>()) {
     // As the sandbox would find it: a .js file whose text has "oops" fails at its first line
     syntax: async (path, text) => (path.endsWith('.js') && text.includes('oops') ? { line: 1, col: 5, message: "Unexpected identifier 'oops'" } : undefined),
     // As the sandbox would report a page that throws while it starts
-    inspect: async (_f, _wait, script) => ({
+    inspect: async (_f, { script, layout }) => ({
       logs: [{ level: 'exception', text: 'ReferenceError: x is not defined (js/app.js:3)' }],
       text: 'Count 0',
-      ...(script ? { scriptResult: '1' } : {})
+      ...(script ? { scriptResult: '1' } : {}),
+      ...(layout
+        ? {
+            layout: {
+              page: { width: 1024, height: 1200 },
+              boxes: [
+                { name: 'button#add', label: '+1', x: 16, y: 80, width: 28, height: 21 },
+                { name: 'img', label: 'assets/hero.png', x: 0, y: 900, width: 64, height: 64, hidden: 'outside' as const }
+              ],
+              more: 3
+            }
+          }
+        : {})
     }),
     list: async () => [...files.values()].filter((f) => scope.has(f.id)).map((f) => ({ path: f.name, kind: 'file' as const, bytes: f.bytes })),
     // As the sandbox worker does it (state/workdir.ts)
@@ -255,7 +267,17 @@ describe('file tools', () => {
     expect(r.content).toContain('Text on the page:\nCount 0');
     expect((r.details as { problems: number }).problems).toBe(1);
     await expect(run(deps, 'preview_page', { file_id: 'notes.md' })).rejects.toThrow(/html/);
-    expect(tool(deps, 'preview_page').prepare({ file_id: 'a.html', wait_ms: 99_999 })).toEqual({ file_id: 'a.html', wait_ms: 10_000 });
+    expect(tool(deps, 'preview_page').prepare({ file_id: 'a.html', wait_ms: 99_999 })).toEqual({ file_id: 'a.html', wait_ms: 10_000, include_text: true, layout: false });
+  });
+  it('tries a page without its text, or with where its key elements are', async () => {
+    const { deps } = memDeps();
+    await run(deps, 'write_file', { name: 'index.html', content: '<p>Count 0</p>' });
+    const quiet = await run(deps, 'preview_page', { file_id: 'index.html', include_text: false });
+    expect(quiet.content).not.toContain('Count 0');
+    expect(quiet.content).toContain('ReferenceError');
+    const laid = await run(deps, 'preview_page', { file_id: 'index.html', layout: true, include_text: false });
+    expect(laid.content).toContain('Layout in the 1024×768 view (page 1024×1200;');
+    expect(laid.content).toContain('button#add "+1" at 16,80 28×21\nimg "assets/hero.png" at 0,900 64×64 (outside the view)\n[3 more not listed]');
   });
   it('turns globs into path patterns', () => {
     const m = (glob: string, path: string) => new RegExp(globSource(glob), 'i').test(path);

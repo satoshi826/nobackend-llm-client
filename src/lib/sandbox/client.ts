@@ -180,21 +180,92 @@ export interface PageInspection {
   scriptError?: string;
   /** The page stopped answering (an endless loop, say) */
   stuck?: boolean;
+  /** Where its key elements are, when asked for */
+  layout?: PageLayout;
 }
 /** Characters of a tried page's text given back */
 export const INSPECT_TEXT = 4000;
 
+/** The size of a tried page's view: a desktop window */
+export const INSPECT_VIEW = { width: 1024, height: 768 };
+
+/** Where a tried page's key elements are, in CSS pixels of its view (scrolled to the top) */
+export interface PageLayout {
+  /** The whole page, scrolled or not */
+  page: { width: number; height: number };
+  boxes: LayoutBox[];
+  /** Key elements past LAYOUT_BOXES, not listed */
+  more: number;
+}
+export interface LayoutBox {
+  /** The element's tag, with its id ('button#start') */
+  name: string;
+  /** Its text, alt text or image file, shortened; a canvas's drawing size */
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Not drawn (display, visibility, opacity, no size), or drawn outside the view */
+  hidden?: 'hidden' | 'outside';
+}
+/** Key elements listed at most */
+const LAYOUT_BOXES = 30;
+
+/**
+ * Run on a tried page: its key elements (headings, buttons, form fields, images, canvases, those with an id), in
+ * document order, with their boxes
+ */
+const LAYOUT_CODE = `const all = [...document.querySelectorAll('[id], h1, h2, h3, h4, h5, h6, button, input, select, textarea, img, canvas, video, svg')].filter((el) => !el.closest('svg') || el.tagName.toLowerCase() === 'svg');
+const short = (s) => { s = String(s || '').replace(/\\s+/g, ' ').trim(); return s.length > 40 ? s.slice(0, 40) + '…' : s; };
+const boxes = all.slice(0, ${LAYOUT_BOXES}).map((el) => {
+  const r = el.getBoundingClientRect();
+  const cs = getComputedStyle(el);
+  const tag = el.tagName.toLowerCase();
+  const label = tag === 'img' ? el.getAttribute('alt') || el.getAttribute('src') : tag === 'canvas' ? el.width + '×' + el.height + ' px drawing' : tag === 'input' || tag === 'select' || tag === 'textarea' ? el.getAttribute('placeholder') || el.value || el.type : el.innerText || el.getAttribute('aria-label');
+  const hidden = !r.width || !r.height || cs.visibility !== 'visible' || Number(cs.opacity) === 0 ? 'hidden' : r.right <= 0 || r.bottom <= 0 || r.left >= innerWidth || r.top >= innerHeight ? 'outside' : undefined;
+  return { name: tag + (el.id ? '#' + el.id : ''), label: short(label), x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height), hidden };
+});
+const root = document.scrollingElement || document.documentElement;
+return { page: { width: root.scrollWidth, height: root.scrollHeight }, boxes, more: Math.max(0, all.length - boxes.length) };`;
+
+/** A layout as the page sent it, in its own shape only (the page may have changed anything it runs with) */
+function cleanLayout(raw: string | undefined): PageLayout | undefined {
+  try {
+    const v = JSON.parse(raw ?? '') as { page?: { width?: unknown; height?: unknown }; boxes?: unknown; more?: unknown };
+    const num = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : 0);
+    const str = (x: unknown) => (typeof x === 'string' ? x.slice(0, 60) : '');
+    const boxes = (Array.isArray(v.boxes) ? v.boxes.slice(0, LAYOUT_BOXES) : []).map((b: Record<string, unknown>): LayoutBox => ({
+      name: str(b?.name),
+      label: str(b?.label),
+      x: num(b?.x),
+      y: num(b?.y),
+      width: num(b?.width),
+      height: num(b?.height),
+      ...(b?.hidden === 'hidden' || b?.hidden === 'outside' ? { hidden: b.hidden } : {})
+    }));
+    return { page: { width: num(v.page?.width), height: num(v.page?.height) }, boxes, more: num(v.more) };
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Show a page in a hidden sandbox frame (its localStorage only in memory, nothing saved), wait `waitMs`, run `script`
- * on it if given, and read back its log and the text it shows. The frame is removed afterwards
+ * on it if given, and read back its log, the text it shows and, with layout, where its key elements are. The frame is
+ * removed afterwards
  */
-export async function inspectPage(html: string, page: SandboxPage | undefined, { waitMs, script, signal }: { waitMs: number; script?: string; signal?: AbortSignal }): Promise<PageInspection> {
+export async function inspectPage(
+  html: string,
+  page: SandboxPage | undefined,
+  { waitMs, script, layout, signal }: { waitMs: number; script?: string; layout?: boolean; signal?: AbortSignal }
+): Promise<PageInspection> {
   const f = document.createElement('iframe');
   f.setAttribute('sandbox', SANDBOX_FLAGS);
   f.setAttribute('aria-hidden', 'true');
   f.tabIndex = -1;
   // Laid out at a desktop size, out of sight: what the page shows depends on its size
-  f.style.cssText = 'position:fixed;left:-10000px;top:0;width:1024px;height:768px;border:0;visibility:hidden';
+  f.style.cssText = `position:fixed;left:-10000px;top:0;width:${INSPECT_VIEW.width}px;height:${INSPECT_VIEW.height}px;border:0;visibility:hidden`;
   const giveUp = new AbortController();
   const ports = connect(f, giveUp.signal);
   f.src = SANDBOX_URL;
@@ -231,9 +302,10 @@ export async function inspectPage(html: string, page: SandboxPage | undefined, {
     if (script) await sleep(300);
     const shown = await evalIn('return document.body ? document.body.innerText : ""', 2000);
     if (shown === null) return { logs, text: '', stuck: true, scriptResult: ran?.result, scriptError: ran?.error };
+    const boxes = layout ? await evalIn(LAYOUT_CODE, 2000) : undefined;
     // The last logs go out at most 0.2 s after they happen
     await sleep(250);
-    return { logs, text: (shown.result ?? '').slice(0, INSPECT_TEXT), scriptResult: ran?.result, scriptError: ran?.error };
+    return { logs, text: (shown.result ?? '').slice(0, INSPECT_TEXT), scriptResult: ran?.result, scriptError: ran?.error, ...(boxes ? { layout: cleanLayout(boxes.result) } : {}) };
   } finally {
     f.remove();
   }

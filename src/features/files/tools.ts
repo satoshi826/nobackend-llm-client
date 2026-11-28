@@ -5,7 +5,7 @@ import type { FileRecord } from '../../lib/db/schema';
 import { MAX_FILE_CHARS } from '../../lib/db/files';
 import { cleanFileName } from '../../lib/paths';
 import type { Tool } from '../../lib/tools/types';
-import { isProblem, type PageInspection } from '../../lib/sandbox/client';
+import { INSPECT_VIEW, isProblem, type PageInspection, type PageLayout } from '../../lib/sandbox/client';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
 import { formatNumber, TranslatedError } from '../../lib/i18n';
 import { t } from './messages';
@@ -94,7 +94,7 @@ export interface FileToolDeps {
   /** Delete a file in the working folder */
   remove(id: string): Promise<void>;
   /** Open a page of the working folder out of sight and read back what happened on it (nothing it stores is kept) */
-  inspect(f: FileRecord, waitMs: number, script: string | undefined, signal: AbortSignal): Promise<PageInspection>;
+  inspect(f: FileRecord, o: { waitMs: number; script?: string; layout?: boolean }, signal: AbortSignal): Promise<PageInspection>;
   /** Fetch an address through the fetch page (the user is asked there). null when declined or failed */
   fetch(url: string, signal: AbortSignal): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null>;
   /** How the model sees a file's path: relative to the working folder (whole for a file outside it) */
@@ -446,17 +446,21 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     }
   };
 
-  const preview: Tool<{ file_id: string; wait_ms: number; script?: string }> = {
+  const preview: Tool<{ file_id: string; wait_ms: number; script?: string; include_text: boolean; layout: boolean }> = {
     name: PREVIEW_PAGE,
     label: t('tool.preview'),
-    description:
-      'Open an .html page of the working folder as the user would see it (in the sandbox, with the files of its site and its localStorage; nothing it stores is kept), and get back its console output, its errors (exceptions, files that did not load, anything the sandbox blocked) and the text it shows. Optionally run a short script on it first (click a button, fill a field) and get what the script returns. Use it after writing or changing a page, and fix what it reports before telling the user the page works.',
+    description: `Open an .html page of the working folder as the user would see it (in the sandbox, in a ${INSPECT_VIEW.width}×${INSPECT_VIEW.height} view, with the files of its site and its localStorage; nothing it stores is kept), and get back its console output, its errors (exceptions, files that did not load, anything the sandbox blocked) and the text it shows. Optionally run a short script on it first (click a button, fill a field) and get what the script returns. Use it after writing or changing a page, and fix what it reports before telling the user the page works. Set include_text=false when you only need the errors or the script's result, and layout=true to check where things are drawn.`,
     parameters: {
       type: 'object',
       properties: {
         file_id: FILE_ID,
         wait_ms: { type: 'number', description: 'Optional. How long to let the page run before reading it, in ms; default 1500, at most 10000.' },
-        script: { type: 'string', description: 'Optional. JavaScript run on the page after the wait, as the body of an async function: e.g. "document.querySelector(\'#add\').click(); return document.querySelectorAll(\'li\').length;"' }
+        script: { type: 'string', description: 'Optional. JavaScript run on the page after the wait, as the body of an async function: e.g. "document.querySelector(\'#add\').click(); return document.querySelectorAll(\'li\').length;"' },
+        include_text: { type: 'boolean', description: 'Optional. false to leave out the text the page shows (errors and the script\'s result still come); default true.' },
+        layout: {
+          type: 'boolean',
+          description: 'Optional. true to also get the position and size of up to 30 key elements (headings, buttons, form fields, images, canvases, elements with an id), and which are hidden or outside the view.'
+        }
       },
       required: ['file_id']
     },
@@ -465,17 +469,18 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     prepare(raw) {
       const r = obj(raw);
       const script = str(r, 'script').trim();
-      return { file_id: requireId(r), wait_ms: Math.min(10_000, int(r.wait_ms, 0) ?? 1500), ...(script ? { script } : {}) };
+      return { file_id: requireId(r), wait_ms: Math.min(10_000, int(r.wait_ms, 0) ?? 1500), ...(script ? { script } : {}), include_text: r.include_text !== false, layout: r.layout === true };
     },
     async execute(i, ctx) {
       const f = await mustGet(deps, i.file_id);
       if (!/\.html?$/i.test(f.name)) throw new TranslatedError(() => t('tool.notPage'));
-      const r = await deps.inspect(f, i.wait_ms, i.script, ctx.signal);
+      const r = await deps.inspect(f, { waitMs: i.wait_ms, script: i.script, layout: i.layout }, ctx.signal);
       const out = [`Opened ${shown(f)} for ${i.wait_ms} ms.`];
       if (r.stuck) out.push('The page stopped answering (an endless loop?), and was closed.');
       out.push(r.logs.length ? `Console and errors (${r.logs.length}):\n${r.logs.map((l) => `[${l.level}] ${l.text}`).join('\n')}` : 'No console output and no errors.');
       if (i.script) out.push(r.scriptError ? `The script threw: ${r.scriptError}` : `The script returned: ${r.scriptResult ?? 'undefined'}`);
-      if (!r.stuck) out.push(r.text.trim() ? `Text on the page:\n${r.text}` : 'The page shows no text.');
+      if (!r.stuck && i.include_text) out.push(r.text.trim() ? `Text on the page:\n${r.text}` : 'The page shows no text.');
+      if (!r.stuck && i.layout) out.push(r.layout ? layoutText(r.layout) : 'The layout could not be read.');
       return { content: out.join('\n\n'), details: { ...details(f), problems: r.logs.filter(isProblem).length } };
     }
   };
@@ -509,6 +514,14 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
 
   return hasFolder ? [list, search, read, write, edit, append, move, del, preview, fetchFile] : [write, fetchFile];
 }
+/** A tried page's key elements for the model, one a line: 'button#start "Start" at 412,300 200×48' */
+export function layoutText(l: PageLayout): string {
+  const lines = l.boxes.map((b) => `${b.name}${b.label ? ` ${JSON.stringify(b.label)}` : ''} at ${b.x},${b.y} ${b.width}×${b.height}${b.hidden ? (b.hidden === 'hidden' ? ' (hidden)' : ' (outside the view)') : ''}`);
+  const more = l.more ? `\n[${l.more} more not listed]` : '';
+  const head = `Layout in the ${INSPECT_VIEW.width}×${INSPECT_VIEW.height} view (page ${l.page.width}×${l.page.height}; x,y of the top left and width×height in CSS px, at the top of the page):`;
+  return lines.length ? `${head}\n${lines.join('\n')}${more}` : 'The page has no key elements (headings, buttons, form fields, images, canvases, elements with an id).';
+}
+
 /** System prompt note on the working folder and the files in it (paths relative to it), at most `max` of them */
 export function filesNote(folder: string, files: { id: string; path: string; bytes: number }[] | null, max = Infinity): string {
   // Names come from users, models and other sites: quoted, so a name reads as data and never as part of these instructions

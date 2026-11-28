@@ -16,5 +16,5 @@
     "types": ["vite/client", "node"],
     "paths": { "react": ["./node_modules/preact/compat/"], "react-dom": ["./node_modules/preact/compat/"] }
   },
-  "include": ["src", "vault", "fetch", "vite.config.ts", "vite.vault.config.ts", "vite.fetch.config.ts", "csp.config.ts"]
+  "include": ["src", "vault", "fetch", "vite.config.ts", "vite.vault.config.ts", "vite.fetch.config.ts", "vite.page.ts", "csp.config.ts"]
 }

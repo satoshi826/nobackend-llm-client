@@ -1,34 +1,5 @@
-// Build config for the key vault. Outputs to dist-vault/, assuming it is hosted on a separate site (separate origin) from the app.
-//   VITE_APP_ORIGIN : origin(s) of the app allowed to embed the vault (comma-separated). e.g. https://app.example.com
-// Also generates the vault's _headers (CSP).
-import { defineConfig, loadEnv, type Plugin } from 'vite';
-import { resolve } from 'node:path';
-import { cspMetaTag, vaultHeadersFile, vaultPagePolicy } from './csp.config';
+// Build config for the key vault, assuming it is hosted on a separate site (separate origin) from the app (vite.page.ts).
+import { separatePage } from './vite.page';
+import { vaultHeadersFile, vaultPagePolicy } from './csp.config';
 
-function vaultHeaders(env: Record<string, string | undefined>): Plugin {
-  return {
-    name: 'vault-headers',
-    generateBundle() {
-      this.emitFile({ type: 'asset', fileName: '_headers', source: vaultHeadersFile(env) });
-    },
-    // The same CSP in the HTML, for hosts that do not send _headers
-    transformIndexHtml: { order: 'post', handler: (html) => html.replace('<head>', `<head>\n    ${cspMetaTag(vaultPagePolicy(env))}`) }
-  };
-}
-
-export default defineConfig(({ mode }) => {
-  const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env };
-  return {
-    root: resolve(__dirname, 'vault'),
-    publicDir: false,
-    envDir: process.cwd(),
-    plugins: [vaultHeaders(env)],
-    build: {
-      outDir: resolve(__dirname, 'dist-vault'),
-      emptyOutDir: true,
-      target: 'es2022',
-      modulePreload: { polyfill: false }
-    },
-    server: { port: 5175, strictPort: true }
-  };
-});
+export default separatePage('vault', 5175, { policy: vaultPagePolicy, headersFile: vaultHeadersFile });

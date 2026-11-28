@@ -1,6 +1,7 @@
-// Zip files without compression (backups with images and videos, whose bytes are compressed already). The entries'
-// bytes are never copied: a zip is a Blob made of its headers and the entries' own Blobs, and reading one hands out
-// slices of the file. ZIP64 records are written only when a zip needs them (65,535 entries or more, or past 4 GiB)
+// Zip files. Writing stores the entries without compression (backups with images and videos, whose bytes are
+// compressed already): a zip is a Blob made of its headers and the entries' own Blobs. Reading hands out slices of the
+// file for stored entries, and inflates deflated ones (zips made by other tools, such as a skill's) only when one is
+// opened. ZIP64 records are written only when a zip needs them (65,535 entries or more, or past 4 GiB)
 const MAX16 = 0xffff;
 const MAX32 = 0xffffffff;
 const LOCAL = 0x04034b50;
@@ -11,7 +12,7 @@ const LOCATOR64 = 0x07064b50;
 /** Bytes read at a time to work out a checksum */
 const READ_SIZE = 1 << 22;
 
-/** The file is not a zip this app can read (damaged, or its entries are compressed) */
+/** The file is not a zip this app can read (damaged, or compressed other than by deflate) */
 export class ZipError extends Error {}
 
 export interface ZipEntry {
@@ -131,8 +132,16 @@ export async function isZip(file: Blob): Promise<boolean> {
 
 const view = async (file: Blob, start: number, end: number) => new DataView(await file.slice(start, end).arrayBuffer());
 
-/** The entries of a zip whose entries are stored (not compressed), by name: slices of the file, read only when used */
-export async function unzip(file: Blob): Promise<Map<string, Blob>> {
+/** An entry of a zip being read: its name, its size once opened, and its bytes */
+export interface ZipItem {
+  name: string;
+  /** The size the zip gives for the opened bytes (an entry that inflates past it fails to open) */
+  size: number;
+  open(): Promise<Blob>;
+}
+
+/** The entries of a zip, in its order, without reading their bytes */
+export async function listZip(file: Blob): Promise<ZipItem[]> {
   // The end record is in the last 22 bytes, unless a comment (up to 64 KiB) follows it
   const tailStart = Math.max(0, file.size - 22 - MAX16 - 20);
   const tail = await view(file, tailStart, file.size);
@@ -152,40 +161,70 @@ export async function unzip(file: Blob): Promise<Map<string, Blob>> {
   }
   const cd = await view(file, cdStart, cdStart + cdSize);
   const dec = new TextDecoder();
-  const found: { name: string; offset: number; size: number }[] = [];
+  const out: ZipItem[] = [];
   let p = 0;
   for (let i = 0; i < count; i++) {
     if (p + 46 > cd.byteLength || cd.getUint32(p, true) !== CENTRAL) throw new ZipError('damaged central directory');
-    if (cd.getUint16(p + 10, true) !== 0) throw new ZipError('compressed entry');
+    const method = cd.getUint16(p + 10, true);
+    if (method !== 0 && method !== 8) throw new ZipError('compressed entry');
     const nameLen = cd.getUint16(p + 28, true);
     const extraLen = cd.getUint16(p + 30, true);
     const commentLen = cd.getUint16(p + 32, true);
-    let size = cd.getUint32(p + 20, true);
+    let packed = cd.getUint32(p + 20, true);
+    let size = cd.getUint32(p + 24, true);
     let offset = cd.getUint32(p + 42, true);
     // A ZIP64 extra field holds, in this order, the values that did not fit: original size, stored size, offset
     for (let e = p + 46 + nameLen; e + 4 <= p + 46 + nameLen + extraLen; e += 4 + cd.getUint16(e + 2, true)) {
       if (cd.getUint16(e, true) !== 1) continue;
       let q = e + 4;
-      if (cd.getUint32(p + 24, true) === MAX32) q += 8;
       if (size === MAX32) {
         size = Number(cd.getBigUint64(q, true));
         q += 8;
       }
+      if (packed === MAX32) {
+        packed = Number(cd.getBigUint64(q, true));
+        q += 8;
+      }
       if (offset === MAX32) offset = Number(cd.getBigUint64(q, true));
     }
-    found.push({ name: dec.decode(new Uint8Array(cd.buffer, p + 46, nameLen)), offset, size });
+    const name = dec.decode(new Uint8Array(cd.buffer, p + 46, nameLen));
+    out.push({ name, size, open: () => openEntry(file, offset, packed, size, method === 8) });
     p += 46 + nameLen + extraLen + commentLen;
   }
-  // The bytes start after each entry's local header, whose name and extra field may differ in length from the central record's
-  return new Map(
-    await Promise.all(
-      found.map(async ({ name, offset, size }) => {
-        const h = await view(file, offset, offset + 30);
-        if (h.byteLength < 30 || h.getUint32(0, true) !== LOCAL) throw new ZipError('damaged entry');
-        const start = offset + 30 + h.getUint16(26, true) + h.getUint16(28, true);
-        if (start + size > file.size) throw new ZipError('cut off');
-        return [name, file.slice(start, start + size)] as const;
-      })
-    )
-  );
+  return out;
+}
+
+/** An entry's bytes: they start after its local header, whose name and extra field may differ in length from the central record's */
+async function openEntry(file: Blob, offset: number, packed: number, size: number, deflated: boolean): Promise<Blob> {
+  const h = await view(file, offset, offset + 30);
+  if (h.byteLength < 30 || h.getUint32(0, true) !== LOCAL) throw new ZipError('damaged entry');
+  const start = offset + 30 + h.getUint16(26, true) + h.getUint16(28, true);
+  if (start + packed > file.size) throw new ZipError('cut off');
+  const raw = file.slice(start, start + packed);
+  if (!deflated) return raw;
+  const parts: Uint8Array[] = [];
+  let got = 0;
+  try {
+    const reader = raw.stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      got += value.length;
+      // An entry that says it is small and inflates to much more (a zip bomb) stops here
+      if (got > size) {
+        await reader.cancel();
+        throw new ZipError('larger than it says');
+      }
+      parts.push(value);
+    }
+  } catch (e) {
+    throw e instanceof ZipError ? e : new ZipError('damaged entry');
+  }
+  if (got !== size) throw new ZipError('damaged entry');
+  return new Blob(parts as BlobPart[]);
+}
+
+/** Every entry of a zip, by name: slices of the file for stored entries (read only when used), inflated ones in memory */
+export async function unzip(file: Blob): Promise<Map<string, Blob>> {
+  return new Map(await Promise.all((await listZip(file)).map(async (e) => [e.name, await e.open()] as const)));
 }

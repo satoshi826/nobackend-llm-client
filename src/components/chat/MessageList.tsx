@@ -29,13 +29,15 @@ export function MessageList() {
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [path.length, lastLen]);
-  // Content can grow after rendering (images loading, code highlighting): keep following the bottom
+  // Content can grow after rendering (images loading, code highlighting): keep following the bottom. Not while a
+  // message is edited in the list: its box grows where it is, and following the bottom pushed it under the header
   useEffect(() => {
     const el = scroller.current;
     const inner = el?.firstElementChild;
     if (!el || !inner) return;
     const ro = new ResizeObserver(() => {
-      if (stick.current) el.scrollTop = el.scrollHeight;
+      const editing = document.activeElement instanceof HTMLTextAreaElement && el.contains(document.activeElement);
+      if (stick.current && !editing) el.scrollTop = el.scrollHeight;
     });
     ro.observe(inner);
     return () => ro.disconnect();

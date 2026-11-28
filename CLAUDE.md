@@ -11,6 +11,7 @@
 - `npm test`, `npm run typecheck`, `npm run lint` (oxlint, `.oxlintrc.json`), `npm run lint:deps` — all must pass.
 - `npm run dev` (http://localhost:5173); `npm run mock` plus the `VITE_*_BASE_URL` variables in the README to run without real providers.
 - `npm run perf` compares the UI performance of two versions ([scripts/perf/README.md](scripts/perf/README.md)).
+- `npm run e2e` runs the end-to-end flows on the production build with the mock provider, with no CSP violation or console error allowed (`scripts/e2e/`; `-- --flows chat,lock` for some).
 
 ## Docs
 

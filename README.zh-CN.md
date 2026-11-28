@@ -35,6 +35,7 @@
 ```bash
 npm install
 npm test          # 单元测试（Vitest）
+npm run e2e       # 用生产构建和模拟服务器做端到端测试（首次需 npx playwright install chromium）
 npm run dev       # http://localhost:5173
 ```
 

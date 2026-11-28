@@ -1,5 +1,5 @@
 # Checks every push and pull request the way a deploy does (npm run build: types, lint, layers, tests, the app),
-# and builds the separately deployed key vault and fetch page
+# builds the separately deployed key vault and fetch page, and runs the end-to-end flows on a production build
 name: CI
 on:
   push:
@@ -19,3 +19,14 @@ jobs:
       - run: npm run build
       - run: npm run build:vault
       - run: npm run build:fetch
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e

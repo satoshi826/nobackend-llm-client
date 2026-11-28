@@ -35,6 +35,7 @@ The UI is available in Japanese, English and Simplified Chinese (automatic, or c
 ```bash
 npm install
 npm test          # unit tests (Vitest)
+npm run e2e       # end-to-end tests on the production build with the mock (first: npx playwright install chromium)
 npm run dev       # http://localhost:5173
 ```
 

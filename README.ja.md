@@ -35,6 +35,7 @@
 ```bash
 npm install
 npm test          # 単体テスト（Vitest）
+npm run e2e       # 本番ビルドとモックでの E2E テスト（初回は npx playwright install chromium）
 npm run dev       # http://localhost:5173
 ```
 

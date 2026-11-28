@@ -46,7 +46,7 @@ describe('Venice image API', () => {
 
   it('sends width/height or aspect ratio depending on the model', () => {
     const w = buildGenerateBody(params({ aspectRatio: '16:9', seed: 5, negativePrompt: ' blur ', style: 'Anime' }), widthModel);
-    expect(w).toMatchObject({ model: 'flux', prompt: 'a cat', variants: 2, format: 'webp', safe_mode: true, seed: 5, negative_prompt: 'blur', style_preset: 'Anime', width: 1024, height: 576 });
+    expect(w).toMatchObject({ model: 'flux', prompt: 'a cat', variants: 2, format: 'webp', safe_mode: true, seed: 5, negative_prompt: 'blur', style_preset: 'Anime', width: 1024, height: 576, hide_watermark: true });
     expect(w).not.toHaveProperty('aspect_ratio');
     const a = buildGenerateBody(params({ model: 'qwen', aspectRatio: '16:9', resolution: '2K' }), aspectModel);
     expect(a).toMatchObject({ aspect_ratio: '16:9', resolution: '2K' });

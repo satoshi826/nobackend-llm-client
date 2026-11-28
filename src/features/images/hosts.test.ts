@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapDeepInfraImageModel, mapNanoImageModel, mapTogetherImageModel, sizeFor, sniffMime } from './providers/hosts';
+import { mapDeepInfraImageModel, mapNanoImageModel, mapTogetherImageModel, nanogptImageProvider, sizeFor, sniffMime } from './providers/hosts';
 import { generationCost } from './providers/common';
 import type { ImageParams } from '../../lib/db/schema';
 
@@ -33,6 +33,19 @@ describe('open-model hosts: images', () => {
     expect(m('nano-banana-edit', true).edits).toBe('only');
     expect(m('qwen-image-2.1/edit', true).edits).toBe('only');
     expect(m('flux-dev', false).edits).toBeUndefined();
+  });
+  it('send a seed to the NanoGPT models that list one', async () => {
+    const nano = (supported_parameters: Record<string, unknown>) => mapNanoImageModel({ id: 'm', architecture: { input_modalities: ['text'] }, supported_parameters: { resolutions: ['1024x1024'], ...supported_parameters } })!;
+    const bodies: any[] = [];
+    const transport = {
+      async fetch(_url: string, init: RequestInit) {
+        bodies.push(JSON.parse(String(init.body)));
+        return new Response(JSON.stringify({ data: [{ b64_json: 'iVBORw0KGgo=' }] }), { status: 200 });
+      }
+    };
+    const ctx = { config: { baseUrl: 'https://nano.example/api/v1' } as any, auth: undefined, transport };
+    for (const seed of [true, { type: 'integer', default: -1 }, undefined]) await nanogptImageProvider.generate(params({ seed: 7 }), nano(seed === undefined ? {} : { seed }), ctx);
+    expect(bodies.map((b) => b.seed)).toEqual([7, 7, undefined]);
   });
   it('read DeepInfra text-to-image models and their price per image', () => {
     const m = mapDeepInfraImageModel({ id: 'PrunaAI/p-image', metadata: { tags: ['image-gen'], pricing: { per_image_unit: 0.005 } } })!;

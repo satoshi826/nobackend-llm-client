@@ -10,7 +10,7 @@ import type { AuthRef, ProviderConfig, Transport } from '../../../lib/providers/
 import { blobToDataUrl } from '../../../lib/db/images';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import type { ImageProvider } from './types';
-import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, fetchModelList, imageCount, jsonPost, promptStyleOf, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, fetchModelList, hasOption, imageCount, jsonPost, promptStyleOf, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const num = (x: unknown): number | undefined => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
@@ -69,7 +69,8 @@ export function mapNanoImageModel(raw: any, providerId = 'nanogpt'): ImageModelI
     maxImages: num(raw?.supported_parameters?.max_images),
     // image_to_image: takes an image to edit; models named "…edit" only edit
     ...(raw?.capabilities?.image_to_image ? { edits: /(^|[/-])edit/i.test(id) ? ('only' as const) : ('also' as const) } : {}),
-    options: { seed: false, negativePrompt: false, styles: false, enhance: false }
+    // A seed where the model lists one (negative_prompt is listed too, but the API reference does not document it)
+    options: { seed: !!raw?.supported_parameters?.seed, negativePrompt: false, styles: false, enhance: false }
   };
 }
 
@@ -80,7 +81,13 @@ export const nanogptImageProvider: ImageProvider = {
   listModels: (cfg, transport) => fetchModelList(transport, joinUrl(cfg.baseUrl, 'image-models'), undefined, (r) => mapNanoImageModel(r, cfg.id)),
   generate(p, m, c) {
     const size = sizeOf(m, p)?.id;
-    return generateImages(c.config, c.transport, c.auth, { model: p.model, prompt: p.prompt, n: imageCount(p, m), ...(size ? { size } : {}), response_format: 'b64_json' }, c.signal);
+    return generateImages(
+      c.config,
+      c.transport,
+      c.auth,
+      { model: p.model, prompt: p.prompt, n: imageCount(p, m), ...(size ? { size } : {}), ...(p.seed !== undefined && hasOption(m, 'seed') ? { seed: p.seed } : {}), response_format: 'b64_json' },
+      c.signal
+    );
   },
   // The image goes as imageDataUrl (a data: URL, up to 4 MB)
   async edit(source, p, c) {

@@ -66,7 +66,9 @@ export function buildGenerateBody(p: ImageParams, m: ImageModelInfo | undefined)
     format: p.format,
     safe_mode: p.safeMode,
     return_binary: false,
-    embed_exif_metadata: false
+    embed_exif_metadata: false,
+    // Venice may still keep the watermark on some images (its API reference)
+    hide_watermark: true
   };
   if (p.negativePrompt?.trim()) body.negative_prompt = p.negativePrompt.trim();
   if (p.style) body.style_preset = p.style;

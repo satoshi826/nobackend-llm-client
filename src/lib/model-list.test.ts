@@ -28,6 +28,10 @@ describe('model list', () => {
     expect(ids(arrangeModels(list, { query: '', filters: ['private', 'reasoning'], sort: 'name' }))).toEqual(['alpha']);
     expect(ids(arrangeModels(list, { query: 'BET', filters: ['private'], sort: 'name' }))).toEqual(['beta']);
   });
+  it('newest first; models without a date last, by name', () => {
+    const dated = [m('old', { releasedAt: 1_000 }), m('undated-b'), m('new', { releasedAt: 3_000 }), m('undated-a'), m('mid', { releasedAt: 2_000 })];
+    expect(ids(arrangeModels(dated, { query: '', filters: [], sort: 'newest' }))).toEqual(['new', 'mid', 'old', 'undated-a', 'undated-b']);
+  });
   it('free matches zero-priced models', () => {
     expect(list.filter((x) => matchesFilter(x, 'free')).map((x) => x.id)).toEqual(['gamma']);
   });

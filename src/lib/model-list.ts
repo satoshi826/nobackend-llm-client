@@ -1,7 +1,7 @@
 // Filtering and sorting the model list (used by the model picker)
 import type { ModelInfo } from './providers/types';
 
-export type ModelSort = 'recommended' | 'name' | 'price' | 'context';
+export type ModelSort = 'recommended' | 'name' | 'newest' | 'price' | 'context';
 export type ModelFilter = 'private' | 'reasoning' | 'vision' | 'webSearch' | 'free';
 
 export const FILTER_ORDER: ModelFilter[] = ['private', 'reasoning', 'vision', 'webSearch', 'free'];
@@ -50,6 +50,8 @@ export function compareModels(sort: ModelSort): (a: ModelInfo, b: ModelInfo) => 
         byName(a, b);
     case 'name':
       return byName;
+    case 'newest':
+      return (a, b) => nullsLast(a.releasedAt, b.releasedAt, -1) || byName(a, b);
     case 'price':
       return (a, b) => nullsLast(priceOf(a), priceOf(b), 1) || byName(a, b);
     case 'context':

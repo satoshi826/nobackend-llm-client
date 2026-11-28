@@ -71,14 +71,18 @@ async function tinyImage(i: number): Promise<Blob> {
   return canvas.convertToBlob({ type: 'image/png' });
 }
 
-/** A model as aggregators list them: varied names, prices, context lengths and capabilities */
+/** A model as aggregators list them: varied names, descriptions, dates, prices, context lengths and capabilities */
 const model = (i: number): Omit<ModelInfo, 'source'> & { source: 'fetched' } => ({
   providerId: PERF_PROVIDER,
   id: `vendor-${i % 23}/model-${i}`,
   name: `Vendor ${i % 23}: Model ${i} ${['Instruct', 'Chat', 'Coder', 'Vision', 'Mini'][i % 5]}`,
+  description:
+    i % 6 === 5 ? undefined : `Model ${i} from vendor ${i % 23} is tuned for ${['chat', 'code', 'long documents', 'images', 'agents'][i % 5]}. It follows instructions closely, calls tools and answers in many languages.`,
+  releasedAt: i % 8 === 7 ? undefined : Date.UTC(2026, 10, 27) - i * 86_400_000,
+  knowledgeCutoff: i % 4 === 0 ? Date.UTC(2025, 5, 30) : undefined,
   contextLength: [8192, 32768, 131072, 1_000_000][i % 4],
   capabilities: { tools: i % 2 === 0, vision: i % 3 === 0, reasoning: i % 4 === 0, webSearch: i % 7 === 0, imageOutput: i % 11 === 0 },
-  pricing: { inputPerMTok: (i % 9) * 0.15, outputPerMTok: (i % 9) * 0.6, currency: 'USD' },
+  pricing: { inputPerMTok: (i % 9) * 0.15, outputPerMTok: (i % 9) * 0.6, currency: 'USD', ...(i % 10 === 1 ? { saleEndsAt: Date.UTC(2026, 10, 30, 16) } : {}) },
   privacy: (['private', 'anonymized', 'unknown'] as const)[i % 3],
   tags: i % 13 === 0 ? ['free'] : [],
   source: 'fetched'

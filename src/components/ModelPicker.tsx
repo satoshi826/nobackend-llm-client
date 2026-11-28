@@ -13,7 +13,7 @@ import { arrangeModels, FILTER_ORDER, matchesFilter, type ModelFilter, type Mode
 import { PRESETS } from '../lib/providers/registry';
 import { Badge, Button, Chevron, Collapse, EmptyState, Icon, Modal, MoreMark, ScrollArea, SearchField, Select, Spinner, cx, formatCtx, useBatches } from './ui';
 import { t } from './messages';
-import { formatUsd } from '../lib/i18n';
+import { formatDate, formatDateTime, formatUsd } from '../lib/i18n';
 
 /** A list price per million tokens ('—' when the model has none) */
 const price = (n?: number) => (n === undefined ? '—' : formatUsd(n));
@@ -39,82 +39,121 @@ function PrivacyBadge({ m }: { m: ModelInfo }) {
   return <Badge title={t('picker.byProviderTitle')}>{t('picker.byProvider')}</Badge>;
 }
 
+const SALE_END: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+const CUTOFF: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', timeZone: 'UTC' };
+
 /** One model; drawn again only when what it shows changes (a search adds and removes rows, it does not redraw them) */
 const ModelRow = memo(function ModelRow({ m, selected, fav, onPick, showProvider }: { m: ModelInfo; selected: boolean; fav: boolean; onPick(m: ModelInfo): void; showProvider?: boolean }) {
+  const [open, setOpen] = useState(false);
+  // "— / —" alone says nothing, so the price shows only when one is known
+  const priced = m.pricing?.inputPerMTok !== undefined || m.pricing?.outputPerMTok !== undefined;
+  const details = !!(m.description || m.knowledgeCutoff);
   return (
-    // The bookmark star has a column of its own, the row's full height, beside the button that picks: a tap that misses
-    // the star by a little bookmarks nothing rather than picking the model and closing the list
-    <li class={cx('flex rounded-lg', selected ? 'bg-glass-strong' : 'hover:bg-glass')}>
-      <button type="button" onClick={() => onPick(m)} class="min-w-0 flex-1 rounded-l-lg py-2.5 pr-1 pl-3 text-left" aria-pressed={selected}>
-        {/* The name has the whole width and wraps rather than being cut (names often differ at the end); the price is under it */}
-        <div class="flex items-start gap-2">
-          <span class="min-w-0 text-sm leading-5 font-medium [overflow-wrap:anywhere]">{m.name}</span>
-          {showProvider && <span class="shrink-0 text-xs leading-5 text-muted">{providerById(m.providerId)?.name}</span>}
-          {selected && <Icon name="check" class="mt-0.5 size-4 shrink-0 text-ink-strong" />}
-        </div>
-        {/* A line of its own only when a price is known ("— / —" alone says nothing) */}
-        {(m.pricing?.inputPerMTok !== undefined || m.pricing?.outputPerMTok !== undefined) && (
-          <span
-            class="mt-0.5 block w-fit text-xs text-muted tabular-nums"
-            data-tip={m.pricing?.listedAt ? `${t('picker.priceTitle')}
+    <li class={cx('rounded-lg', selected ? 'bg-glass-strong' : 'hover:bg-glass')}>
+      {/* The bookmark star has a column of its own beside the button that picks: a tap that misses the star by a little
+          bookmarks nothing rather than picking the model and closing the list. The details toggle sits under the star */}
+      <div class="flex">
+        <button type="button" onClick={() => onPick(m)} class="min-w-0 flex-1 rounded-l-lg py-2.5 pr-1 pl-3 text-left" aria-pressed={selected}>
+          {/* The name has the whole width and wraps rather than being cut (names often differ at the end); the price is under it */}
+          <div class="flex items-start gap-2">
+            <span class="min-w-0 text-sm leading-5 font-medium [overflow-wrap:anywhere]">{m.name}</span>
+            {showProvider && <span class="shrink-0 text-xs leading-5 text-muted">{providerById(m.providerId)?.name}</span>}
+            {selected && <Icon name="check" class="mt-0.5 size-4 shrink-0 text-ink-strong" />}
+          </div>
+          {(priced || m.releasedAt) && (
+            <div class="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted tabular-nums">
+              {priced && (
+                <span
+                  data-tip={m.pricing?.listedAt ? `${t('picker.priceTitle')}
 ${t('picker.priceListed', { date: m.pricing.listedAt })}` : t('picker.priceTitle')}
+                >
+                  {m.pricing?.listedAt && '≈ '}
+                  {price(m.pricing?.inputPerMTok)} / {price(m.pricing?.outputPerMTok)}
+                </span>
+              )}
+              {m.pricing?.saleEndsAt && (
+                <span class="text-warn" data-tip={t('picker.saleTitle')}>
+                  {t('picker.saleUntil', { date: formatDateTime(m.pricing.saleEndsAt, SALE_END) })}
+                </span>
+              )}
+              {m.releasedAt && <span data-tip={t('picker.releasedTitle')}>{t('picker.released', { date: formatDate(m.releasedAt) })}</span>}
+            </div>
+          )}
+          <div class="mt-1 flex flex-wrap items-center gap-1">
+            <PrivacyBadge m={m} />
+            {m.contextLength ? <Badge>{formatCtx(m.contextLength)}</Badge> : null}
+            {m.capabilities.reasoning && (
+              <Badge tone="sky">
+                <Icon name="brain" class="size-3" />
+                {t('picker.reasoning')}
+              </Badge>
+            )}
+            {m.capabilities.vision && (
+              <Badge>
+                <Icon name="eye" class="size-3" />
+                {t('picker.vision')}
+              </Badge>
+            )}
+            {m.capabilities.imageOutput && (
+              <Badge>
+                <Icon name="image" class="size-3" />
+                {t('picker.imageOutput')}
+              </Badge>
+            )}
+            {m.capabilities.webSearch && (
+              <Badge>
+                <Icon name="globe" class="size-3" />
+                {t('picker.search')}
+              </Badge>
+            )}
+            {m.tags?.includes('most_uncensored') && <Badge>{t('picker.uncensored')}</Badge>}
+            {m.tags?.includes('default') && <Badge>{t('picker.default')}</Badge>}
+            {m.tags?.includes('free') && (
+              <Badge title={t('picker.freeTitle')}>
+                {t('picker.free')}
+              </Badge>
+            )}
+            {m.deprecated && <Badge tone="amber">{t('picker.deprecated')}</Badge>}
+          </div>
+        </button>
+        <div class="flex w-11 shrink-0 flex-col">
+          <button
+            type="button"
+            class={cx('flex flex-1 justify-center rounded-tr-lg pt-2.5 hover:text-ink-strong', !details && 'rounded-br-lg', fav ? 'text-ink-strong' : 'text-faint')}
+            aria-pressed={fav}
+            aria-label={fav ? t('picker.unbookmarkNamed', { name: m.name }) : t('picker.bookmarkNamed', { name: m.name })}
+            data-tip={fav ? t('picker.unbookmark') : t('picker.bookmarkTitle')}
+            onClick={() => void toggleFavorite(m.providerId, m.id)}
           >
-            {m.pricing?.listedAt && '≈ '}
-            {price(m.pricing?.inputPerMTok)} / {price(m.pricing?.outputPerMTok)}
-          </span>
-        )}
-        <div class="mt-1 flex flex-wrap items-center gap-1">
-          <PrivacyBadge m={m} />
-          {m.contextLength ? <Badge>{formatCtx(m.contextLength)}</Badge> : null}
-          {m.capabilities.reasoning && (
-            <Badge tone="sky">
-              <Icon name="brain" class="size-3" />
-              {t('picker.reasoning')}
-            </Badge>
+            <Icon name="star" filled={fav} class="size-4" />
+          </button>
+          {details && (
+            <button
+              type="button"
+              class="group flex flex-1 items-end justify-center rounded-br-lg pb-3"
+              aria-expanded={open}
+              aria-label={t('picker.detailsNamed', { name: m.name })}
+              data-tip={t('picker.details')}
+              onClick={() => setOpen(!open)}
+            >
+              <Chevron open={open} class="group-hover:text-ink-strong" />
+            </button>
           )}
-          {m.capabilities.vision && (
-            <Badge>
-              <Icon name="eye" class="size-3" />
-              {t('picker.vision')}
-            </Badge>
-          )}
-          {m.capabilities.imageOutput && (
-            <Badge>
-              <Icon name="image" class="size-3" />
-              {t('picker.imageOutput')}
-            </Badge>
-          )}
-          {m.capabilities.webSearch && (
-            <Badge>
-              <Icon name="globe" class="size-3" />
-              {t('picker.search')}
-            </Badge>
-          )}
-          {m.tags?.includes('most_uncensored') && <Badge>{t('picker.uncensored')}</Badge>}
-          {m.tags?.includes('default') && <Badge>{t('picker.default')}</Badge>}
-          {m.tags?.includes('free') && (
-            <Badge title={t('picker.freeTitle')}>
-              {t('picker.free')}
-            </Badge>
-          )}
-          {m.deprecated && <Badge tone="amber">{t('picker.deprecated')}</Badge>}
         </div>
-      </button>
-      <button
-        type="button"
-        class={cx('flex w-11 shrink-0 justify-center rounded-r-lg pt-2.5 hover:text-ink-strong', fav ? 'text-ink-strong' : 'text-faint')}
-        aria-pressed={fav}
-        aria-label={fav ? t('picker.unbookmarkNamed', { name: m.name }) : t('picker.bookmarkNamed', { name: m.name })}
-        data-tip={fav ? t('picker.unbookmark') : t('picker.bookmarkTitle')}
-        onClick={() => void toggleFavorite(m.providerId, m.id)}
-      >
-        <Icon name="star" filled={fav} class="size-4" />
-      </button>
+      </div>
+      {details && (
+        <Collapse open={open}>
+          <div class="space-y-1 px-3 pb-3 text-xs leading-5 text-muted">
+            {m.description && <p class="whitespace-pre-line [overflow-wrap:anywhere]">{m.description}</p>}
+            {m.knowledgeCutoff && <p>{t('picker.knowledgeCutoff', { date: formatDate(m.knowledgeCutoff, CUTOFF) })}</p>}
+          </div>
+        </Collapse>
+      )}
     </li>
   );
 });
 
-const SORTS: ModelSort[] = ['recommended', 'name', 'price', 'context'];
+const SORTS: ModelSort[] = ['recommended', 'newest', 'name', 'price', 'context'];
 
 function filterTitle(f: ModelFilter): string | undefined {
   if (f === 'private') return t('picker.filterPrivateTitle');

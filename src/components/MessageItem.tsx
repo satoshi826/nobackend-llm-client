@@ -153,6 +153,7 @@ function UserMessage({ m }: { m: MessageRecord }) {
         <TextArea
           autoFocus
           class="w-full"
+          aria-label={t('msg.editLabel')}
           rows={Math.min(12, draft.split('\n').length + 1)}
           value={draft}
           onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)}

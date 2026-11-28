@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { OUTSIDE_CONTENT_NOTE, contributedBuiltinWebSearch, contributedSystemNotes, contributedTools, registerToolProvider, systemPromptFor, toolGroups } from './tool-registry';
 import { setChatOptions, moveChatOptions, chatOptionsOf } from './chat-options';
 import type { Tool } from '../lib/tools/types';
@@ -15,6 +15,14 @@ describe('system prompt', () => {
     expect(withTools.endsWith(OUTSIDE_CONTENT_NOTE)).toBe(true);
     const attached = [{ attachments: [{ fileId: 'f' }] }] as unknown as MessageRecord[];
     expect(systemPromptFor({ conv, messageId: 'm', model: model({}), history: attached })).toContain(OUTSIDE_CONTENT_NOTE);
+  });
+  it('gives them today’s date on this device, the same in every language', () => {
+    vi.useFakeTimers({ now: new Date(2026, 10, 28, 23, 59) });
+    try {
+      expect(systemPromptFor({ conv, messageId: 'm', model: model({ webSearch: true }), history: [] })).toBe(`Be brief.\n\nToday's date: 2026-11-28 (Saturday).\n\n${OUTSIDE_CONTENT_NOTE}`);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('leaves it out of a plain chat with no tools, search or files', () => {
     expect(systemPromptFor({ conv, messageId: 'm', model: model({}), history: [] })).toBe('Be brief.');

@@ -257,7 +257,7 @@ const backup: Flow = {
 
 const files: Flow = {
   name: 'files',
-  label: 'a model writes an HTML page with a tool → open it from the Files tab → its script runs in the sandbox',
+  label: 'a model writes an HTML page with a tool → open it from the Files tab → its script runs in the sandbox → a script with a syntax error is told, and its fix shows the changed line → an image is saved at the path the model gives',
   async run({ page, url, a11y }) {
     await page.goto(url);
     await addVenice(page);
@@ -276,6 +276,21 @@ const files: Flow = {
     await preview.getByRole('button', { name: '+1' }).click();
     await preview.getByText('2', { exact: true }).waitFor();
     await a11y('file view');
+    // Back in the chat, a script with a syntax error: the write tells where; the fix shows the changed line and no error
+    await page.getByRole('tab', { name: 'Chats' }).click();
+    await send(page, 'スクリプトを書いて');
+    await page.getByText('Syntax error at score.js:3:10').waitFor();
+    await settled(page);
+    await send(page, 'スクリプトを直して');
+    const fixed = page.locator('[data-message-id]').last();
+    await fixed.getByText(/\+\s+3\s+score\+\+;/).waitFor();
+    await settled(page);
+    if ((await fixed.textContent())?.includes('Syntax error')) throw new Error('The fixed script is still told as broken');
+    // An image the model names goes into the working folder at that path
+    await send(page, '絵を描いて');
+    await page.getByRole('button', { name: 'Run', exact: true }).click();
+    await page.getByText(/Saved in the working folder as "assets\/cat\.(png|webp|jpg)"/).waitFor();
+    await settled(page);
   }
 };
 

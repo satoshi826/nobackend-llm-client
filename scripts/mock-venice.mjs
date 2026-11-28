@@ -639,13 +639,13 @@ const server = http.createServer(async (req, res) => {
         body: update ? '# 手順\n1. 要点を 3 行で書く\n2. 決定事項を箇条書き\n3. 宿題を担当者つきで書く' : '# 手順\n1. 要点を書く\n2. 決定事項を箇条書き'
       });
     }
-    // generate_image tool: "絵を描いて" asks for an image, then the answer acknowledges it
+    // generate_image tool: "絵を描いて" asks for an image at a path, then the answer acknowledges it with the result
     if (toolNames.includes('generate_image') && lastMsg?.role === 'user' && userText.includes('絵を描いて')) {
       await send({ content: '描いてみます。' });
-      return finishTools('generate_image', { prompt: 'a cute cat sitting by the window, watercolor', aspect_ratio: '4:3' });
+      return finishTools('generate_image', { prompt: 'a cute cat sitting by the window, watercolor', aspect_ratio: '4:3', path: 'assets/cat.png' });
     }
     if (lastMsg?.role === 'tool' && lastCallName === 'generate_image') {
-      const ans = '窓辺の猫の絵を描きました。';
+      const ans = `窓辺の猫の絵を描きました。\n\n${String(lastMsg.content ?? '')}`;
       return finishText(ans, { prompt_tokens: 200, completion_tokens: ans.length });
     }
     // File tools: "レポートにまとめて" creates a Markdown file, "追記して" appends to the file listed in the
@@ -685,6 +685,19 @@ const server = http.createServer(async (req, res) => {
     if (toolNames.includes('read_file') && lastMsg?.role === 'user' && userText.includes('全部読んで') && fileInSys) {
       await send({ content: 'ファイルを読みます。' });
       return finishTools('read_file', { file_id: fileInSys });
+    }
+    // A script with a syntax error, then its fix: the answer shows the whole result (the error, the changed lines)
+    if (toolNames.includes('write_file') && lastMsg?.role === 'user' && userText.includes('スクリプトを書いて')) {
+      await send({ content: 'スクリプトを書きます。' });
+      return finishTools('write_file', { name: 'score.js', content: 'let score = 0;\nfunction add() {\n  score +;\n}\n' });
+    }
+    if (toolNames.includes('edit_file') && lastMsg?.role === 'user' && userText.includes('スクリプトを直して')) {
+      await send({ content: 'スクリプトを直します。' });
+      return finishTools('edit_file', { file_id: 'score.js', old_string: '  score +;', new_string: '  score++;' });
+    }
+    if (lastMsg?.role === 'tool' && /スクリプトを(書いて|直して)/.test(userText)) {
+      const ans = `結果:\n\n\`\`\`\n${String(lastMsg.content ?? '')}\n\`\`\``;
+      return finishText(ans, { prompt_tokens: 300, completion_tokens: ans.length }, COST);
     }
     if (lastMsg?.role === 'tool' && ['write_file', 'append_file', 'edit_file', 'read_file'].includes(lastCallName)) {
       const ans = lastCallName === 'read_file' ? `読みました（${String(lastMsg.content ?? '').length} 文字）。` : `ファイルに保存しました。${String(lastMsg.content ?? '').slice(0, 60)}`;

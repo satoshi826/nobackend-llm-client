@@ -8,7 +8,8 @@
   { type: 'connect' } and a MessagePort, and everything after goes over that port, which the HTML shown here cannot
   reach (so a page that replaced this one cannot talk to the app):
     { type: 'render', html, path?, files?, storage?, api? }
-                                           replace this page with the html (its scripts run under the same CSP); with
+                                           replace this page with the html (its scripts run under the same CSP; in the
+                                           mode its doctype asks for, standards without one: pageToWrite); with
                                            files ({ path: text or Blob } of its site) and path (the page's own), its
                                            references to those files use them (sandbox/rewrite.js); with storage
                                            ({ key: value }) its localStorage starts with those items, and its changes
@@ -327,7 +328,8 @@
           else if (d.type === 'render' && typeof d.html === 'string') {
             noPeers();
             const names = new Map();
-            const html = d.files && typeof d.files === 'object' && typeof d.path === 'string' ? rewritePage(d.html, d.path, d.files, names) : d.html;
+            const page = pageToWrite(d.html);
+            const html = d.files && typeof d.files === 'object' && typeof d.path === 'string' ? rewritePage(page, d.path, d.files, names) : page;
             const kept = d.storage && typeof d.storage === 'object' ? d.storage : null;
             installStorage(makeStorage(kept, kept && keepStorage), makeStorage());
             const api = Array.isArray(d.api) ? d.api.filter((n) => typeof n === 'string') : [];
@@ -335,8 +337,7 @@
             document.open();
             watchPage(names);
             if (api.includes('fetch')) watchImages();
-            // DNS prefetch hints could carry data in host names: asked off again for the new page
-            document.write('<meta http-equiv="x-dns-prefetch-control" content="off">' + html);
+            document.write(html);
             document.close();
           }
         }

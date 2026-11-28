@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-// The file as the build puts it into the sandbox page's script: a plain script that declares rewritePage
+// The file as the build puts it into the sandbox page's script: a plain script that declares pageToWrite and rewritePage
 import source from '../../../sandbox/rewrite.js?raw';
 
 type Files = Record<string, string | Blob>;
-const rewritePage = new Function(`${source}\nreturn rewritePage;`)() as (html: string, path: string, files: Files) => string;
+const { pageToWrite, rewritePage } = new Function(`${source}\nreturn { pageToWrite, rewritePage };`)() as {
+  pageToWrite: (html: string) => string;
+  rewritePage: (html: string, path: string, files: Files) => string;
+};
 
 // URL.createObjectURL gives blob:1, blob:2, ... and keeps each Blob to read back
 let blobs: Blob[] = [];
@@ -128,5 +131,58 @@ describe('rewritePage paths', () => {
   it('finds a site file whatever the case of the reference, as the app compares paths', () => {
     const html = rewritePage('<img id="a" src="IMG/Logo.PNG">', 'index.html', { 'img/logo.png': 'x' });
     expect(attr(html, '#a', 'src')).toMatch(/^blob:/);
+  });
+});
+
+describe('pageToWrite', () => {
+  const NO_PREFETCH = '<meta http-equiv="x-dns-prefetch-control" content="off">';
+  const parse = (html: string) => new DOMParser().parseFromString(html, 'text/html');
+  /** The first element of the written page's head, and its mode */
+  const written = (html: string) => {
+    const doc = parse(pageToWrite(html));
+    return { mode: doc.compatMode, first: doc.head.firstElementChild?.outerHTML };
+  };
+
+  it.each([
+    ['a lowercase doctype', '<!doctype html><html><head><script>x()</script></head><body></body></html>', '<!doctype html>'],
+    ['an uppercase doctype', '<!DOCTYPE HTML>\n<html lang="ja"><head><link rel="stylesheet" href="a.css"></head></html>', '<!DOCTYPE HTML>'],
+    ['whitespace and comments before it', ' \n<!-- a --><!---->\n<!-- b --!><!DOCTYPE html><style>p{}</style>', ' \n<!-- a --><!---->\n<!-- b --!><!DOCTYPE html>'],
+    ['an XML declaration before it', '<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html><head><title>t</title></head></html>', '<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">'],
+    ['a BOM before it (dropped)', '\uFEFF<!doctype html><p>a', '<!doctype html>']
+  ])('keeps the page doctype first, then asks DNS prefetch off: %s', (_, html, head) => {
+    expect(pageToWrite(html).startsWith(head + NO_PREFETCH)).toBe(true);
+    expect(written(html)).toEqual({ mode: 'CSS1Compat', first: NO_PREFETCH });
+  });
+
+  it.each([
+    ['a page with no doctype', '<html><head><script>x()</script></head><body><p>a</p></body></html>'],
+    ['a page with no html or head', '<title>t</title><script>x()</script><p>a'],
+    ['a fragment', '<div><table><tr><td><img src="a.png"></td></tr></table></div>'],
+    ['an SVG', '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>'],
+    ['text before a doctype, as a browser would ignore it', '\u00A0<!doctype html><p>a'],
+    ['an empty page', '']
+  ])('gives a page with no doctype first <!doctype html>: %s', (_, html) => {
+    expect(pageToWrite(html)).toBe('<!doctype html>' + NO_PREFETCH + html);
+    expect(written(html)).toEqual({ mode: 'CSS1Compat', first: NO_PREFETCH });
+  });
+
+  it('keeps an old doctype that asks for quirks mode', () => {
+    const doctype = '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">';
+    expect(pageToWrite(doctype + '<p>a')).toBe(doctype + NO_PREFETCH + '<p>a');
+  });
+
+  it('keeps the attributes of the page html element', () => {
+    expect(parse(pageToWrite('<!doctype html><html lang="ja" class="dark"><body></body></html>')).documentElement.outerHTML).toMatch(/^<html lang="ja" class="dark">/);
+  });
+
+  it('keeps the doctype and the meta first when the page is rewritten too', () => {
+    const doc = parse(rewritePage(pageToWrite('<script src="a.js"></script>'), 'index.html', { 'a.js': 'x()' }));
+    expect(doc.compatMode).toBe('CSS1Compat');
+    expect(doc.head.firstElementChild!.outerHTML).toBe(NO_PREFETCH);
+    expect(doc.querySelector('script')!.getAttribute('src')).toMatch(/^blob:/);
+  });
+
+  it('stops at a comment that does not end, as a browser would read the rest as the comment', () => {
+    expect(pageToWrite('<!-- open <!doctype html>')).toBe('<!doctype html>' + NO_PREFETCH + '<!-- open <!doctype html>');
   });
 });

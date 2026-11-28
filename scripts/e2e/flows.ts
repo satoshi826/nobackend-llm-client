@@ -257,11 +257,11 @@ const backup: Flow = {
 
 const files: Flow = {
   name: 'files',
-  label: 'a model writes an HTML page with a tool → open it from the Files tab → its script runs in the sandbox → a script with a syntax error is told, and its fix shows the changed line → an image is saved at the path the model gives',
+  label: 'a model writes an HTML page and its script with a tool → open the page from the Files tab → it is shown in standards mode, and the script it loads by a relative path runs, logs, and keeps its count in localStorage.json for the next showing → a script with a syntax error is told, and its fix shows the changed line → an image is saved at the path the model gives',
   async run({ page, url, a11y }) {
     await page.goto(url);
     await addVenice(page);
-    // The mock answers this with write_file: a counter page
+    // The mock answers this with write_file twice: a counter's script, then the page that loads it
     await send(page, 'ページを作って');
     await page.getByText('counter-page/counter.html').first().waitFor();
     await settled(page);
@@ -275,7 +275,17 @@ const files: Flow = {
     await preview.getByRole('button', { name: '+1' }).click();
     await preview.getByRole('button', { name: '+1' }).click();
     await preview.getByText('2', { exact: true }).waitFor();
+    const frame = (await page.locator('iframe[src*="/sandbox/"]').elementHandle())!;
+    const mode = await (await frame.contentFrame())!.evaluate(() => document.compatMode);
+    if (mode !== 'CSS1Compat') throw new Error(`The page is shown in ${mode}, not in the standards mode its doctype asks for`);
+    await page.getByRole('button', { name: 'Log: 1' }).waitFor();
     await a11y('file view');
+    // Shown again, the page starts from the count it kept, which is in its folder as localStorage.json
+    await page.getByRole('button', { name: 'Reload the page' }).click();
+    await until('the page shown again', () => frame.evaluate((f) => !f.isConnected));
+    await preview.getByText('2', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('main').getByText('localStorage.json').waitFor();
     // Back in the chat, a script with a syntax error: the write tells where; the fix shows the changed line and no error
     await page.getByRole('tab', { name: 'Chats' }).click();
     await send(page, 'スクリプトを書いて');

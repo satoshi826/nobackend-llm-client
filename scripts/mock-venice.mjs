@@ -653,7 +653,8 @@ const server = http.createServer(async (req, res) => {
     const fileInSys = /\(id: ([\w-]+),/.exec(String(sys ?? ''))?.[1];
     // write_file asks for the working folder's name while the conversation has none
     const newFolder = (folder) => (body.tools.find((t) => t.function?.name === 'write_file')?.function.parameters?.properties?.folder ? { folder } : {});
-    // Sandbox: "計算して" runs JavaScript, "ページを作って" creates an HTML file
+    // Sandbox: "計算して" runs JavaScript, "ページを作って" creates a counter page in two files: its script (which keeps
+    // the count in localStorage and logs), then the HTML that loads it by a relative path
     if (toolNames.includes('run_javascript') && lastMsg?.role === 'user' && userText.includes('計算して')) {
       await send({ content: '計算します。' });
       return finishTools('run_javascript', { code: "const xs = [3, 1, 4, 1, 5, 9, 2, 6];\nconst sum = xs.reduce((a, b) => a + b, 0);\nconsole.log('sum', sum);\nreturn { mean: sum / xs.length, max: Math.max(...xs) };" });
@@ -661,9 +662,15 @@ const server = http.createServer(async (req, res) => {
     if (toolNames.includes('write_file') && lastMsg?.role === 'user' && userText.includes('ページを作って')) {
       await send({ content: 'ページを作ります。' });
       return finishTools('write_file', {
-        name: 'counter.html',
+        name: 'counter.js',
         ...newFolder('counter-page'),
-        content: '<!doctype html>\n<html><body style="font:16px sans-serif;padding:16px">\n<h1>Counter</h1>\n<button id="b">+1</button> <span id="n">0</span>\n<script>let c = 0; document.getElementById(\'b\').onclick = () => { document.getElementById(\'n\').textContent = ++c; };</script>\n</body></html>\n'
+        content: "const n = document.getElementById('n');\nlet c = Number(localStorage.getItem('count') || 0);\nn.textContent = c;\ndocument.getElementById('b').onclick = () => {\n  n.textContent = ++c;\n  localStorage.setItem('count', String(c));\n};\nconsole.log('Counter ready in ' + document.compatMode);\n"
+      });
+    }
+    if (lastMsg?.role === 'tool' && msgs.at(-2)?.tool_calls?.[0]?.function?.arguments?.includes('"counter.js"')) {
+      return finishTools('write_file', {
+        name: 'counter.html',
+        content: '<!doctype html>\n<html><body style="font:16px sans-serif;padding:16px">\n<h1>Counter</h1>\n<button id="b">+1</button> <span id="n">0</span>\n<script src="counter.js"></script>\n</body></html>\n'
       });
     }
     if (toolNames.includes('write_file') && lastMsg?.role === 'user' && userText.includes('レポートにまとめて')) {

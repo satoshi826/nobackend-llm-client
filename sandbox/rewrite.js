@@ -1,7 +1,8 @@
-// Rewrites an HTML page of a project so that the project files it uses (stylesheets, scripts, ES modules, images,
-// media) come from what the app passed in, not from the network, which the sandbox's CSP blocks. The build puts this
-// file into the sandbox page's own script (vite.config.ts), so it uses only what that page has: DOMParser, Blob,
-// URL.createObjectURL. It must not contain a closing script tag.
+// Prepares an HTML page for the sandbox to write in place of its own, and rewrites a page of a project so that the
+// project files it uses (stylesheets, scripts, ES modules, images, media) come from what the app passed in, not from the
+// network, which the sandbox's CSP blocks. The build puts this file into the sandbox page's own script (vite.config.ts),
+// so it uses only what that page has: DOMParser, Blob, URL.createObjectURL. It must not contain a closing script tag.
+//   pageToWrite(html): the html with its doctype first, then a meta that asks DNS prefetch off.
 //   rewritePage(html, path, files, names): path is the page's own project path ('site/index.html'); files maps project
 //   paths (no leading slash, e.g. 'site/css/style.css') to text or a Blob. Returns the html to write. names (a Map,
 //   optional) gets each blob: URL made, with the path it stands for, so messages about it can name the file.
@@ -47,6 +48,24 @@ const IMPORT = /(\b(?:import|export)\b[\w\s{},*$]*?\bfrom\s*|\bimport\s*\(\s*|\b
 const CSS_REF = /@import\s+(?:url\(\s*(['"]?)([^'")]*)\1\s*\)|(['"])([^'"]*)\3)\s*;|url\(\s*(['"]?)([^'")]*)\5\s*\)/g;
 // The URL of each srcset candidate: at the start or after a comma and a space (a data: URL has commas of its own)
 const SRCSET_URL = /(^\s*|,\s+)(\S+?)(?=,?(?:\s|$))/g;
+
+/**
+ * The html as the sandbox writes it. Its doctype stays first, so the page gets the mode its doctype asks for, as when its
+ * file is opened (an old doctype may ask for quirks mode); one without a doctype gets `<!doctype html>`, since a page
+ * or a fragment written today expects standards mode. Before a doctype a browser skips only whitespace, comments and
+ * <?xml ...?>, and a BOM when it reads the file. DNS prefetch hints could carry data in host names: asked off for the
+ * page before anything of it
+ */
+function pageToWrite(html) {
+  html = html.replace(/^\uFEFF/, '');
+  const lead = /[\t\n\f\r ]+|<!--(?:-?>|[\s\S]*?--!?>)|<\?[^>]*>/y;
+  let at = 0;
+  while (lead.test(html)) at = lead.lastIndex;
+  const doctype = /<!doctype[^>]*>/iy;
+  doctype.lastIndex = at;
+  const end = doctype.test(html) ? doctype.lastIndex : 0;
+  return (end ? html.slice(0, end) : '<!doctype html>') + '<meta http-equiv="x-dns-prefetch-control" content="off">' + html.slice(end);
+}
 
 const decode = (s) => {
   try {

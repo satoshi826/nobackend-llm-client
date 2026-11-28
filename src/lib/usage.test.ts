@@ -19,6 +19,14 @@ describe('usage', () => {
     expect(estimateCost({ inputTokens: 1 }, undefined)).toBeUndefined();
   });
 
+  it('summarizes all of a very long record list (no spread of it into one call)', () => {
+    const now = new Date(2026, 10, 25, 12).getTime();
+    const records = Array.from({ length: 300_000 }, (_, i) => rec({ at: now - (i % 30) * DAY, providerId: 'venice', model: 'a', inputTokens: 1 }));
+    const s = summarizeUsage(records, null, now);
+    expect(s.total.requests).toBe(300_000);
+    expect(s.byDay).toHaveLength(30);
+  });
+
   it('summarizes by day (including empty days), provider and model', () => {
     const now = new Date(2026, 10, 25, 12).getTime();
     const since = new Date(2026, 10, 23).getTime();

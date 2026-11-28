@@ -115,7 +115,8 @@ export function summarizeUsage(records: UsageRecord[], since: number | null, now
     add(mod.get(k)!.totals, r);
   }
   // List the days in the period, including days without records (for very long periods, only the range that has records)
-  const start = since ?? (list.length ? Math.min(...list.map((r) => r.at)) : now);
+  // A loop, not Math.min(...): spreading a very long list overflows the call stack
+  const start = since ?? list.reduce((min, r) => Math.min(min, r.at), now);
   const byDay: UsageSummary['byDay'] = [];
   const cur = new Date(start);
   cur.setHours(0, 0, 0, 0);

@@ -315,14 +315,14 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
   const read: Tool<{ file_id: string; offset: number; limit: number; previous: boolean }> = {
     name: READ_FILE,
     label: t('tool.read'),
-    description: `Read a file in the working folder, or one attached to the conversation, with line numbers: up to ${READ_LINES} lines or ${READ_CHUNK} characters per call; a note at the end gives the line to continue from. Read a file before editing it unless you have seen its current text. previous=true reads its text from before the last write_file or edit_file (append_file keeps that text as it was); write it back with write_file to undo a change that went wrong.`,
+    description: `Read a file in the working folder, or one attached to the conversation, with line numbers: up to ${READ_LINES} lines or ${READ_CHUNK} characters per call; a note at the end gives the line to continue from. previous=true reads its text from before the last write_file or edit_file (append_file keeps that text); write it back with write_file to undo a change that went wrong.`,
     parameters: {
       type: 'object',
       properties: {
         file_id: FILE_ID,
         offset: { type: 'number', description: 'Optional. The line to start from, 1-based; default 1.' },
         limit: { type: 'number', description: `Optional. How many lines; default ${READ_LINES}.` },
-        previous: { type: 'boolean', description: 'Optional. true to read the text from before the last change instead of the current one.' }
+        previous: { type: 'boolean', description: 'Optional. true for the text from before the last change.' }
       },
       required: ['file_id']
     },
@@ -364,7 +364,7 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
     name: WRITE_FILE,
     label: t('tool.create'),
     description:
-      `Write a text file in this conversation's working folder${hasFolder ? '' : ' (the first file makes the folder)'}: a new file, or the whole new text of one it has. The user sees it in the Files tab. Use it when the user asks for a document or a deliverable (a report, notes, a translation, a table, code), or when the answer is too long for a chat message; answer short questions in the chat. To change part of a file use edit_file; for a long document, write the first part here and continue with append_file. Write Markdown (.md) unless another format fits better (.csv, .json, .py, ...). An .html or .svg file opens as a page in a sandbox with no network: it loads the files of its site by relative path (CSS, JavaScript modules, images), but not CDN scripts, web fonts or other web addresses. Its site is the nearest folder above it with an index.html, else its own folder, so put index.html at the top of a multi-file page. Its localStorage is kept in localStorage.json at the top of its site (a JSON object of strings you can read and edit); sessionStorage lasts while it is shown; IndexedDB and cookies are not available. The result gives the first syntax error in a .js, .mjs or .json file or in an .html page's inline scripts. Afterwards tell the user briefly what the file contains instead of repeating its text.`,
+      `Write a text file in this conversation's working folder${hasFolder ? '' : ' (the first file makes the folder)'}: a new file, or the whole new text of one it has. Use it for a document or deliverable the user asks for (a report, notes, a translation, a table, code) or an answer too long for a chat message; answer short questions in the chat. To change part of a file use edit_file; write a long document in parts with append_file. Write Markdown (.md) unless another format fits better. An .html or .svg file opens as a page in a sandbox with no network: it loads the files of its site by relative path (CSS, JavaScript modules, images), not CDN scripts, web fonts or other addresses. Its site is the nearest folder above it with an index.html, else its own folder, so put index.html at the top of a multi-file page. Its localStorage is kept in localStorage.json at the top of its site (a JSON object of strings you can read and edit); sessionStorage lasts while it is shown; IndexedDB and cookies are not available. The result gives the first syntax error in a .js, .mjs or .json file or an .html page's inline scripts. Afterwards tell the user briefly what the file holds instead of repeating it.`,
     parameters: {
       type: 'object',
       properties: {
@@ -402,7 +402,7 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
     name: EDIT_FILE,
     label: t('tool.edit'),
     description:
-      'Replace text in a file in the working folder. old_string must be copied exactly from the current text (same spaces, indentation and line breaks, without line numbers or the <file> tag) and occur exactly once, so include a few surrounding lines if needed; or set replace_all to change every occurrence. Read the file first if you have not seen its current text. The result shows the changed lines with 3 lines around each: check them there (a leftover line, a change in the wrong place) instead of reading the file again. To rewrite a whole file, use write_file.',
+      'Replace text in a file in the working folder. old_string must be copied exactly from the current text (same spaces, indentation and line breaks, without line numbers or the <file> tag) and occur once, so include surrounding lines if needed; or set replace_all to change every occurrence. Read the file first unless you have seen its current text. The result shows the changed lines in context: check them there instead of reading the file again. To rewrite a whole file, use write_file.',
     parameters: {
       type: 'object',
       properties: {
@@ -554,15 +554,15 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
   const preview: Tool<{ file_id: string; wait_ms: number; script?: string; include_text: boolean; layout: boolean; fresh_storage: boolean }> = {
     name: PREVIEW_PAGE,
     label: t('tool.preview'),
-    description: `Open an .html page of the working folder as the user would see it (in the sandbox, in a ${INSPECT_VIEW.width}×${INSPECT_VIEW.height} view, with the files of its site; it starts from the folder's localStorage.json, or with an empty localStorage when fresh_storage=true, and nothing it stores is saved either way), and get back its console output, its errors (exceptions, files that did not load, anything the sandbox blocked) and the text it shows. Optionally run a short script on it first (click a button, fill a field) and get what the script returns. Use it after writing or changing a page, and fix what it reports before telling the user the page works. Set include_text=false when you only need the errors or the script's result, and layout=true to check where things are drawn.`,
+    description: `Open an .html page of the working folder as the user would see it (in the sandbox, in a ${INSPECT_VIEW.width}×${INSPECT_VIEW.height} view, with the files of its site, starting from the folder's localStorage.json; nothing it stores is saved), and get back its console output, its errors (exceptions, files that did not load, anything the sandbox blocked) and the text it shows. Optionally run a short script on it first (click a button, fill a field) and get what it returns. Use it after writing or changing a page, and fix what it reports before telling the user the page works.`,
     parameters: {
       type: 'object',
       properties: {
         file_id: FILE_ID,
         wait_ms: { type: 'number', description: 'Optional. How long to let the page run before reading it, in ms; default 1500, at most 10000.' },
         script: { type: 'string', description: 'Optional. JavaScript run on the page after the wait, as the body of an async function: e.g. "document.querySelector(\'#add\').click(); return document.querySelectorAll(\'li\').length;"' },
-        include_text: { type: 'boolean', description: 'Optional. false to leave out the text the page shows (errors and the script\'s result still come); default true.' },
-        fresh_storage: { type: 'boolean', description: 'Optional. true to start the page with an empty localStorage instead of localStorage.json (a first visit); nothing is saved either way.' },
+        include_text: { type: 'boolean', description: "Optional. false to leave out the page's text (errors and the script's result still come)." },
+        fresh_storage: { type: 'boolean', description: 'Optional. true to start with an empty localStorage, as on a first visit.' },
         layout: {
           type: 'boolean',
           description: 'Optional. true to also get the position and size of up to 30 key elements (headings, buttons, form fields, images, canvases, elements with an id), and which are hidden or outside the view.'

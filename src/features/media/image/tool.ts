@@ -75,7 +75,7 @@ export function makeImageTool(run: ImageToolRun, model?: ImageToolModel): Tool<I
         path: {
           type: 'string',
           description:
-            'Optional. Where to save it in the working folder, e.g. "assets/hero.png", when a page there will load it by that path; default a name from the time. The extension follows the image\'s type, and a path already taken gets a number. The result gives the path it was saved at. Without a working folder, it is saved in the Files tab; move it in with move_file and its id when a page needs it.'
+            'Optional. Where to save it in the working folder, e.g. "assets/hero.png", when a page there will load it; default a name from the time. The extension follows the image\'s type, and a path already taken gets a number. Without a working folder it is saved in the Files tab; move it in with move_file and its id when a page needs it.'
         }
       },
       required: ['prompt']

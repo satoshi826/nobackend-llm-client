@@ -13,7 +13,7 @@ export function makeSkillTool(list: Pick<Skill, 'name' | 'body'>[]): Tool<{ name
   return {
     name: LOAD_SKILL,
     label: t('tool.load'),
-    description: 'Load the full instructions of a skill listed under "Skills" in the system prompt. Call it before starting a task that matches the skill, then follow the loaded instructions.',
+    description: 'Load the full instructions of a skill listed under "Skills" in the system prompt.',
     parameters: {
       type: 'object',
       properties: { name: { type: 'string', enum: names, description: 'The skill name exactly as listed.' } },

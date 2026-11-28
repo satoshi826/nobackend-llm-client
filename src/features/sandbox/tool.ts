@@ -29,7 +29,7 @@ export function makeRunJavaScriptTool(readFile: FileReader): Tool<RunInput> {
       type: 'object',
       properties: {
         code: { type: 'string', description: 'The JavaScript to run, as the body of an async function (end with `return value` to get a result back).' },
-        file_ids: { type: 'array', items: { type: 'string' }, description: 'Optional. Paths or ids of files of the conversation to read as `files`.' },
+        file_ids: { type: 'array', items: { type: 'string' }, description: 'Optional. Paths or ids of files of the conversation to read as `files`, at most 10.' },
         dom: { type: 'boolean', description: 'Optional. true to have DOMParser and document (for parsing HTML); default false.' }
       },
       required: ['code']

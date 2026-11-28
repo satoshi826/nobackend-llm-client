@@ -165,7 +165,11 @@ class VaultConnection {
           start: (controller) => {
             p.controller = controller;
           },
-          cancel: () => this.send({ type: 'abort', id: m.id })
+          // The reader stopped: what the vault sends until it stops too is dropped (a closed stream takes no more)
+          cancel: () => {
+            this.pending.delete(m.id);
+            this.send({ type: 'abort', id: m.id });
+          }
         });
         const noBody = m.status === 204 || m.status === 304;
         p.resolve(new Response(noBody ? null : stream, { status: m.status, statusText: m.statusText, headers: m.headers }));
@@ -175,11 +179,7 @@ class VaultConnection {
         p.controller?.enqueue(m.chunk);
         break;
       case 'end':
-        try {
-          p.controller?.close();
-        } catch {
-          /* already closed */
-        }
+        p.controller?.close();
         this.pending.delete(m.id);
         break;
       case 'error': {

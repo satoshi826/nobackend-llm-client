@@ -132,6 +132,36 @@ describe('sending a request through the key vault', () => {
     expect(err.name).toBe('AbortError');
   });
 
+  it('drops what the vault still sends after the reader stopped reading, and tells the vault to stop', async () => {
+    let more!: () => void;
+    const seen: ToVault[] = [];
+    answer = (m, v) => {
+      seen.push(m);
+      if (m.type !== 'fetch') return;
+      v.send({ type: 'head', id: m.id, status: 200, statusText: 'OK', headers: [] });
+      v.send({ type: 'chunk', id: m.id, chunk: enc('a') });
+      more = () => {
+        v.send({ type: 'chunk', id: m.id, chunk: enc('b') });
+        v.send({ type: 'end', id: m.id });
+      };
+    };
+    const errors: unknown[] = [];
+    const onError = (e: unknown) => errors.push(e);
+    process.on('uncaughtException', onError);
+    try {
+      const { vault } = await load();
+      const reader = (await vault.fetch('venice', URL_, { method: 'POST', body: '{}' })).body!.getReader();
+      expect(new TextDecoder().decode((await reader.read()).value)).toBe('a');
+      await reader.cancel();
+      more();
+      await new Promise((r) => setTimeout(r, 10));
+      expect(errors).toEqual([]);
+      expect(seen.map((m) => m.type)).toEqual(['fetch', 'abort']);
+    } finally {
+      process.off('uncaughtException', onError);
+    }
+  });
+
   it('sends nothing for a request already stopped, a method other than GET / POST, or a body that is not text', async () => {
     const seen: ToVault[] = [];
     answer = (m) => void seen.push(m);

@@ -1,7 +1,8 @@
 import Dexie, { type Table } from 'dexie';
 import type { ChatMessage, ModelInfo } from '../providers/types';
 import type { UsageRecord } from '../usage';
-import { bytesFromBase64, sealedFromBase64, type Sealed } from '../crypto/data';
+import { sealedFromBase64, type Sealed } from '../crypto/data';
+import { fromBase64 } from '../base64';
 
 export interface Conversation {
   id: string;
@@ -332,9 +333,9 @@ export class AppDB extends Dexie {
         .toCollection()
         .modify((r: { infoEnc?: unknown; enc?: { iv: unknown }; thumb?: unknown }) => {
           if (isOld(r.infoEnc)) r.infoEnc = sealedFromBase64(r.infoEnc);
-          if (typeof r.enc?.iv === 'string') r.enc.iv = bytesFromBase64(r.enc.iv);
+          if (typeof r.enc?.iv === 'string') r.enc.iv = fromBase64(r.enc.iv);
           const thumb = r.thumb as { iv?: unknown } | undefined;
-          if (thumb && !(thumb instanceof Blob) && typeof thumb.iv === 'string') thumb.iv = bytesFromBase64(thumb.iv);
+          if (thumb && !(thumb instanceof Blob) && typeof thumb.iv === 'string') thumb.iv = fromBase64(thumb.iv);
         });
     });
     this.version(8)

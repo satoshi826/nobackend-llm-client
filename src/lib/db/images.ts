@@ -10,6 +10,7 @@ import { cleanFileName, extOfMime, freePath, timeName } from '../paths';
 import type { DataTable } from './data-tables';
 import { storeChanged } from './changes';
 import { t } from './messages';
+import { fromBase64, toBase64 } from '../base64';
 
 const mem = new Map<string, BlobRecord>();
 
@@ -221,28 +222,11 @@ export interface ExportedImage {
   data: string;
 }
 
-function toBase64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-
 /** Bytes as base64, and as a data: URL (how APIs take an input image) */
-export async function blobToBase64(b: Blob): Promise<string> {
-  const bytes = new Uint8Array(await b.arrayBuffer());
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
+export const blobToBase64 = async (b: Blob): Promise<string> => toBase64(await b.arrayBuffer());
 export const blobToDataUrl = async (b: Blob) => `data:${b.type || 'image/png'};base64,${await blobToBase64(b)}`;
 
-export function base64ToBlob(data: string, mime: string): Blob {
-  const bin = atob(data);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return new Blob([out], { type: mime });
-}
+export const base64ToBlob = (data: string, mime: string): Blob => new Blob([fromBase64(data)], { type: mime });
 
 export async function exportImages(): Promise<ExportedImage[]> {
   const out: ExportedImage[] = [];

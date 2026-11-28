@@ -9,6 +9,8 @@
 // There is no server, so the WebAuthn signature is not checked (nobody holds the challenge). Security rests on
 // the PRF output alone: without the authenticator (and its user verification) the stored record is useless.
 
+import { fromBase64, toBase64 } from '../src/lib/base64';
+
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 const INFO = enc.encode('nbl-vault/passkey-unlock/1');
@@ -18,23 +20,10 @@ export interface SealedPassphrase {
   ct: string;
 }
 
-export function b64(buf: ArrayBuffer | Uint8Array): string {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  let s = '';
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s);
-}
-
-export function unb64(s: string): Uint8Array<ArrayBuffer> {
-  const bin = atob(s);
-  const out = new Uint8Array(new ArrayBuffer(bin.length));
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
 
 /** base64url without padding (how WebAuthn names credential ids, e.g. in evalByCredential) */
-export const b64url = (buf: ArrayBuffer | Uint8Array) => b64(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-export const unb64url = (s: string) => unb64(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4));
+export const b64url = (buf: ArrayBuffer | Uint8Array) => toBase64(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+export const unb64url = (s: string) => fromBase64(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4));
 
 export const randomBytes = (n: number) => crypto.getRandomValues(new Uint8Array(new ArrayBuffer(n)));
 
@@ -48,11 +37,11 @@ async function keyFromPrf(prf: ArrayBuffer | Uint8Array): Promise<CryptoKey> {
 export async function sealWithPrf(prf: ArrayBuffer | Uint8Array, passphrase: string): Promise<SealedPassphrase> {
   const iv = randomBytes(12);
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await keyFromPrf(prf), enc.encode(passphrase));
-  return { iv: b64(iv), ct: b64(ct) };
+  return { iv: toBase64(iv), ct: toBase64(ct) };
 }
 
 /** Throws when the PRF output does not belong to this record */
 export async function openWithPrf(prf: ArrayBuffer | Uint8Array, sealed: SealedPassphrase): Promise<string> {
-  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(sealed.iv) }, await keyFromPrf(prf), unb64(sealed.ct));
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(sealed.iv) }, await keyFromPrf(prf), fromBase64(sealed.ct));
   return dec.decode(pt);
 }

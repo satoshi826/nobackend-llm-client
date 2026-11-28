@@ -10,7 +10,8 @@ import { ACCOUNT_IDS, accountById, type KeyStatus, type VaultState } from '../sr
 import { failureOf, sendOrFail } from '../src/lib/providers/errors';
 import { formatList, formatNumber } from '../src/lib/i18n';
 import { t } from './messages';
-import { b64, b64url, openWithPrf, randomBytes, sealWithPrf, unb64, unb64url, type SealedPassphrase } from './passkey';
+import { b64url, openWithPrf, randomBytes, sealWithPrf, unb64url, type SealedPassphrase } from './passkey';
+import { fromBase64, toBase64 } from '../src/lib/base64';
 
 // ---- Storage (IndexedDB) ----
 interface SecretRec {
@@ -365,8 +366,8 @@ type PrfResult = { ok: true; credentialId: string; output: ArrayBuffer } | { ok:
 async function prfOf(list: { credentialId: string; salt: string }[]): Promise<PrfResult> {
   const prf =
     list.length === 1
-      ? { eval: { first: unb64(list[0].salt) } }
-      : { evalByCredential: Object.fromEntries(list.map((c) => [c.credentialId, { first: unb64(c.salt) }])) };
+      ? { eval: { first: fromBase64(list[0].salt) } }
+      : { evalByCredential: Object.fromEntries(list.map((c) => [c.credentialId, { first: fromBase64(c.salt) }])) };
   let cred: PublicKeyCredential | null;
   try {
     cred = (await navigator.credentials.get({
@@ -422,12 +423,12 @@ export async function addPasskey(): Promise<Result> {
   // Some authenticators give the PRF output only when the passkey is used, not when it is made: ask once more
   let output = ext.results?.first;
   if (!output) {
-    const r = await prfOf([{ credentialId, salt: b64(salt) }]);
+    const r = await prfOf([{ credentialId, salt: toBase64(salt) }]);
     if (!r.ok) return { ok: false, message: r.message };
     output = r.output;
   }
   const meta = await getMeta();
-  await putRec({ id: PASSKEY_PREFIX + credentialId, credentialId, salt: b64(salt), ...(await sealWithPrf(output, pass)), pid: meta?.pid ?? 'legacy', createdAt: Date.now() });
+  await putRec({ id: PASSKEY_PREFIX + credentialId, credentialId, salt: toBase64(salt), ...(await sealWithPrf(output, pass)), pid: meta?.pid ?? 'legacy', createdAt: Date.now() });
   changed();
   return { ok: true, message: t('passkey.added') };
 }

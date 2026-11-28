@@ -5,14 +5,7 @@ import type { Part } from '../lib/providers/types';
 import { putImage } from '../lib/db/images';
 import { baseName } from '../lib/paths';
 import * as repo from '../lib/db/repo';
-
-
-function decodeBase64(data: string): Uint8Array<ArrayBuffer> {
-  const bin = atob(data.replace(/^data:[^,]*,/, ''));
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
+import { fromBase64 } from '../lib/base64';
 
 async function sizeOf(blob: Blob): Promise<{ width?: number; height?: number }> {
   try {
@@ -28,7 +21,7 @@ async function sizeOf(blob: Blob): Promise<{ width?: number; height?: number }> 
 /** Store one image from a reply (base64 or a data: URL) and return the file part for the message */
 export async function saveReplyImage(conv: Conversation, messageId: string, data: string, mimeType: string): Promise<Extract<Part, { type: 'file' }> | null> {
   const mime = /^image\/(png|jpeg|webp|gif)$/.test(mimeType) ? mimeType : 'image/png';
-  const blob = new Blob([decodeBase64(data)], { type: mime });
+  const blob = new Blob([fromBase64(data.replace(/^data:[^,]*,/, ''))], { type: mime });
   if (!blob.size) return null;
   const blobId = repo.newId();
   // In the chat's working folder (the top without one), named by the time it is saved

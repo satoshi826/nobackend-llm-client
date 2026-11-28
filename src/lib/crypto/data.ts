@@ -1,6 +1,7 @@
 // Encryption of stored data such as conversations (data key: random AES-GCM-256).
 // The data key itself is stored wrapped with the passphrase (encrypted by the key vault) and kept in memory only while unlocked.
 import { t } from './messages';
+import { fromBase64, toBase64 } from '../base64';
 
 /**
  * Encrypted data as stored: the 12-byte IV, then the ciphertext. Bytes, not text: IndexedDB stores them as they are,
@@ -9,19 +10,6 @@ import { t } from './messages';
 export type Sealed = Uint8Array<ArrayBuffer>;
 const IV_BYTES = 12;
 
-function b64(buf: ArrayBuffer | Uint8Array): string {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-
-function unb64(s: string): Uint8Array<ArrayBuffer> {
-  const bin = atob(s);
-  const out = new Uint8Array(new ArrayBuffer(bin.length));
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
 
 export interface DataKey {
   /** Kept in memory while unlocked so it can be rewrapped (passphrase change) */
@@ -30,11 +18,11 @@ export interface DataKey {
 }
 
 export async function generateDataKey(): Promise<DataKey> {
-  return importDataKey(b64(crypto.getRandomValues(new Uint8Array(32))));
+  return importDataKey(toBase64(crypto.getRandomValues(new Uint8Array(32))));
 }
 
 export async function importDataKey(raw: string): Promise<DataKey> {
-  const bytes = unb64(raw);
+  const bytes = fromBase64(raw);
   if (bytes.length !== 32) throw new Error(t('dataKey.invalid'));
   return { raw, key: await crypto.subtle.importKey('raw', bytes, 'AES-GCM', false, ['encrypt', 'decrypt']) };
 }
@@ -71,11 +59,10 @@ export async function openBytes(k: DataKey, s: { iv: Uint8Array<ArrayBuffer>; da
  * stored as bytes, with the IV and the ciphertext in base64
  */
 export function sealedFromBase64(old: { iv: string; ct: string }): Sealed {
-  const iv = unb64(old.iv);
-  const ct = unb64(old.ct);
+  const iv = fromBase64(old.iv);
+  const ct = fromBase64(old.ct);
   const out = new Uint8Array(new ArrayBuffer(iv.length + ct.length));
   out.set(iv);
   out.set(ct, iv.length);
   return out;
 }
-export const bytesFromBase64 = (s: string): Uint8Array<ArrayBuffer> => unb64(s);

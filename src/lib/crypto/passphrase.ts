@@ -2,6 +2,7 @@
 // Goal: avoid plaintext exposure on disk, in backups, or when someone else gets hold of the device.
 // Note: while unlocked the plaintext is in memory, so this is no defence against XSS.
 import { t } from './messages';
+import { fromBase64, toBase64 } from '../base64';
 
 export interface EncryptedBlob {
   v: 1;
@@ -21,19 +22,6 @@ export const MIN_PASSPHRASE_LENGTH = 8;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-function b64(buf: ArrayBuffer | Uint8Array): string {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  let s = '';
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s);
-}
-
-function unb64(s: string): Uint8Array<ArrayBuffer> {
-  const bin = atob(s);
-  const out = new Uint8Array(new ArrayBuffer(bin.length));
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
 
 async function deriveKey(passphrase: string, salt: Uint8Array<ArrayBuffer>, iterations: number): Promise<CryptoKey> {
   const base = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
@@ -46,7 +34,7 @@ export async function encryptSecret(plain: string, passphrase: string, iteration
   const iv = crypto.getRandomValues(new Uint8Array(new ArrayBuffer(12)));
   const key = await deriveKey(passphrase, salt, iterations);
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plain));
-  return { v: 1, kdf: 'PBKDF2-SHA256', iter: iterations, salt: b64(salt), iv: b64(iv), ct: b64(ct) };
+  return { v: 1, kdf: 'PBKDF2-SHA256', iter: iterations, salt: toBase64(salt), iv: toBase64(iv), ct: toBase64(ct) };
 }
 
 export class WrongPassphraseError extends Error {
@@ -61,9 +49,9 @@ export class UnsupportedBlobError extends Error {}
 export async function decryptSecret(blob: EncryptedBlob, passphrase: string): Promise<string> {
   if (blob?.v !== 1 || blob.kdf !== 'PBKDF2-SHA256') throw new UnsupportedBlobError(t('passphrase.unsupported'));
   if (!Number.isSafeInteger(blob.iter) || blob.iter < MIN_ITERATIONS || blob.iter > MAX_ITERATIONS) throw new UnsupportedBlobError(t('passphrase.iterations'));
-  const key = await deriveKey(passphrase, unb64(blob.salt), blob.iter);
+  const key = await deriveKey(passphrase, fromBase64(blob.salt), blob.iter);
   try {
-    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(blob.iv) }, key, unb64(blob.ct));
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(blob.iv) }, key, fromBase64(blob.ct));
     return dec.decode(pt);
   } catch {
     throw new WrongPassphraseError();

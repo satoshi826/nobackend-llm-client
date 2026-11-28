@@ -147,7 +147,7 @@ export function Checkbox({
           type="checkbox"
           class={cx(
             'peer absolute inset-0 m-0 cursor-[inherit] appearance-none border transition duration-200 checked:border-accent checked:bg-accent',
-            round ? 'rounded-full border-white/70 bg-black/35 backdrop-blur-sm' : 'rounded-[5px] border-line-strong bg-sunken hover:border-ink/50'
+            round ? 'rounded-full border-white/70 bg-black/45' : 'rounded-[5px] border-line-strong bg-sunken hover:border-ink/50'
           )}
           checked={checked}
           disabled={disabled}

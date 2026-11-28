@@ -165,10 +165,6 @@ export function ImageThumb({ blobId, alt, onOpen, full, class: className }: { bl
         <img src={url} alt={alt} class={cx('h-full w-full transition group-hover:scale-[1.02]', full ? 'object-contain' : 'object-cover')} decoding="async" />
       ) : url === null ? (
         <span class="grid h-full w-full place-items-center text-xs text-faint">{t('thumb.failed')}</span>
-      ) : near ? (
-        <span class="grid h-full w-full place-items-center">
-          <Spinner class="size-4 text-faint" />
-        </span>
       ) : null}
     </button>
   );

@@ -605,7 +605,7 @@ const Card = memo(function Card({ it, picked, api }: { it: FilerItem; picked: bo
             <ImageThumb blobId={it.id} alt={it.name} class="aspect-[4/3] w-full rounded-none!" onOpen={() => (press.consume() ? undefined : api.selecting() ? api.toggle(it.key, false) : api.open(it.key))} />
             {it.video && (
               <span class="pointer-events-none absolute inset-0 grid place-items-center">
-                <span class="grid size-10 place-items-center rounded-full bg-black/50 text-white backdrop-blur-sm">
+                <span class="grid size-10 place-items-center rounded-full bg-black/60 text-white">
                   <Icon name="play" class="size-4" />
                 </span>
               </span>
@@ -623,7 +623,7 @@ const Card = memo(function Card({ it, picked, api }: { it: FilerItem; picked: bo
             </pre>
           </button>
         )}
-        <span class="pointer-events-none absolute top-2 right-2 rounded-md bg-black/45 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white uppercase backdrop-blur-sm">{it.ext || 'txt'}</span>
+        <span class="pointer-events-none absolute top-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white uppercase">{it.ext || 'txt'}</span>
       </div>
       <div class="flex min-w-0 flex-1 items-start">
         <button type="button" class="flex min-w-0 flex-1 items-start gap-2 py-2 pl-2.5 text-left" onClick={click}>

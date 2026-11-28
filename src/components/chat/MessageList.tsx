@@ -7,8 +7,8 @@ import { suggestingFor } from '../../state/suggestions';
 import { MessageItem } from '../MessageItem';
 import { ScrollArea } from '../ui';
 
-/** Messages rendered at first, and added each time the top is reached */
-const PAGE = 20;
+/** Messages rendered at first, and added each time the top comes near: a few screens of usual answers (a page that does not fill the screen loads the next at once) */
+const PAGE = 8;
 
 export function MessageList() {
   const path = currentPath.value;

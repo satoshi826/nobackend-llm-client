@@ -18,28 +18,36 @@ What the security design protects, and where it stops: [docs/security.md](docs/s
 ## Features
 
 - **Providers**: Venice, OpenRouter, Anthropic, Google Gemini, OpenAI, DeepSeek, Groq, NanoGPT, DeepInfra, Cerebras, Novita, Chutes, Together, plus OpenAI-compatible endpoints added at build time (e.g. Ollama). No provider is privileged; you choose which to use on first launch.
-- **Model list**: bookmarks (starred models across providers), sort (recommended / name / price / context length) and filter (private / reasoning / vision / search / free), with pricing and capabilities shown.
-- **Chat**: streaming, visible reasoning, Markdown and code highlighting, a conversation tree (regenerate, edit, regenerate with another model), and temporary chats that are never saved (toggle in the chat header before the first message).
-- **Sandbox**: HTML and SVG files open as a page, html / svg / js code blocks get a Run button, and chat models can run JavaScript (`run_javascript`, asks first) for exact calculations. All of it runs in an isolated frame with no access to the app, whose requests are blocked (peer connections, WebRTC, only in browsers that enforce it: not Chrome).
-- **Files**: ask for a report, notes or a translation and the model saves it as a file (Markdown, CSV, …) in the Files tab, writing long documents in parts; each file keeps the text before its last change, so one step can be undone. A chat's files go in its working folder, made with its first file and named by the model; the model reads and writes only there (and files attached to the chat), with tools shaped like a coding agent's (list by pattern, search lines, read with line numbers, write, edit, append, move, and delete, which asks you every time), and it can open a page it made to see its errors and what it shows, and fix them (preview_page); the preview shows the same errors to you, and "Chat in this folder" in the Files tab starts a new chat on a folder that already exists. A file name may include folders (`site/css/style.css`), and an HTML page previews with the files of its site it refers to (CSS, JavaScript modules, images; the site is the nearest folder above it with an index.html), still without network, and keeps its localStorage in localStorage.json in the site (delete it to reset the page's data). The Files tab is a file manager, by folder, by type or by chat (new folders, renaming, moving by menu or by dragging onto a folder, deleting a folder with what it holds, a menu on every item and a right click, cards or list, sorting, search inside files, views by type and by conversation, multi-select, drag-and-drop upload). Attach text files, CSV, code or PDFs (text is extracted in the browser) from your device or from saved files. View, edit, download or print to PDF.
-- **Image generation** (Venice, OpenAI, Gemini, OpenRouter, NanoGPT, DeepInfra, Together; editing from instructions on Gemini, NanoGPT, OpenAI, OpenRouter and Venice; upscale and background removal on Venice): image mode in the input box (model, aspect ratio, resolution, 1–4 images, style, negative prompt, seed), "same settings again" / "similar image", upscale, edit, background removal, a gallery, and an optional tool so chat models can create images. Images are stored locally (encrypted with a passphrase).
+- **Model list**: bookmarks (starred models across providers), sort (recommended / newest / name / price / context length) and filter (private / reasoning / images / search / free), with pricing, capabilities, release date and the end of a sale price shown, and each model's details (knowledge cutoff, the provider's description).
+- **Chat**: streaming, visible reasoning, Markdown and code highlighting, a conversation tree (regenerate, edit, regenerate with another model), and temporary chats that are never saved (toggle in the chat header before the first message). A failed answer says what went wrong and what to do, with a button where the app can do it (open connections and keys, add credit, compact the conversation, regenerate, regenerate with another model).
+- **Sandbox**: HTML and SVG files open as a page, html / svg / js code blocks get a Run button, and chat models can run JavaScript (`run_javascript`, asks first) for exact calculations. All of it runs in an isolated frame with no access to the app and no network (peer connections (WebRTC) are blocked only in browsers that enforce it, not in Chrome).
+- **Files**: ask for a report, notes or a translation and the model saves it as a file (Markdown, CSV, …) in the Files tab, writing long documents in parts; each file keeps the text before its last change, so one step can be undone. A chat's files go in its working folder, made with its first file and named by the model; the model reads and writes only there (and files attached to the chat), with tools shaped like a coding agent's (list by pattern, search lines, read with line numbers, write, edit, append, move, and delete, which asks you every time), and it can open a page it made to see its errors and what it shows, and fix them (preview_page); the preview shows the same errors to you, and "Chat in this folder" in the Files tab starts a new chat on a folder that already exists. A file name may include folders (`site/css/style.css`), and an HTML page previews with the files of its site it refers to (CSS, JavaScript modules, images; the site is the nearest folder above it with an index.html), still without network, and keeps its localStorage in localStorage.json in the site (delete it to reset the page's data). The Files tab is a file manager, by folder, by type or by chat (new folders, renaming, moving by menu or by dragging onto a folder, deleting a folder with what it holds, a menu on every item and a right click, cards or list, sorting, search inside files, views by type and by conversation, multi-select, drag-and-drop upload). Attach text files, CSV, code or PDFs (text is extracted in the browser) from your device or from saved files, or drop or paste them into the input box. View, edit, download or print to PDF.
+- **Image generation** (Venice, OpenAI, Gemini, OpenRouter, NanoGPT, DeepInfra, Together; editing from instructions on Gemini, NanoGPT, OpenAI, OpenRouter and Venice; upscale and background removal on Venice): image mode in the input box, shown once one of them has a key (model, aspect ratio, resolution, 1–4 images, style, negative prompt, seed), "Again with the same seed", and in the image viewer: edit, upscale, background removal and "Make a video". For models prompted with Danbooru tags (anime models): tag suggestions while you type (from a tag list bundled with the app), the model family's recommended quality tags and negative prompt, "To tags" (the chat model rewrites a prompt as tags), and the model's prompt length limit. An optional tool lets chat models create images. Images are stored locally (encrypted with a passphrase) and listed with the videos in the Files tab ("Images & videos").
 - **Video generation** (Venice, OpenRouter, Gemini): video mode in the input box, shown once one of them has a key (model, length, resolution, aspect ratio, sound, and a first frame to start from an image; "Make a video" on any image), with the price before sending. A job keeps running at the provider for minutes: waiting goes on after a reload (Venice, OpenRouter) and can be stopped and started again. Videos are stored with the images.
 - **Reply suggestions**: short follow-ups under the latest reply; tap one to put it in the input box. Count, how many recent exchanges to use, and the model are configurable.
 - **Web**: search with the provider's built-in search (Anthropic, Gemini, Groq, OpenRouter, Venice) or the Tavily tool; models read pages (HTML, text, PDF) with `fetch_url`, where a separate call takes out only what was asked before the model sees it (like Claude Code's WebFetch); and bring files in with `fetch_file`. Every fetch is confirmed in the fetch page, which can remember sites you allow.
 - **Skills**: SKILL.md-compatible instruction files. The model loads a skill's body only when it needs it, or you can attach one with `/name`. Ask it to "turn this into a skill" and it drafts one, which is saved after you approve it.
 - **Long conversations**: compaction (manual or automatic), prompt caching, and a context-length safeguard.
 - **Usage**: cost and tokens over time, by model, provider, use and conversation, recorded only in this browser. The balance of DeepSeek, NanoGPT, OpenRouter (the key's limit left) and Venice.
-- **Data**: full-text search, backup/import (JSON, or zip with images and videos; optionally password-encrypted), image deletion, wipe everything, PWA, dark mode, mobile layout.
-- **For developers**: each reply can show the requests (JSON) sent to the provider (Settings → About → "Show the requests sent").
+- **Data**: full-text search, backup/import (JSON, or zip with images and videos; optionally password-encrypted), storage use and its breakdown, a request for persistent storage, wipe everything. Conversations restored from a backup can be read before any key is entered; a key is asked for only when you send. One tab uses the data at a time: another tab waits until you choose to use the app there.
+- **App**: a PWA that starts offline after one visit, a dark theme, a mobile layout, and an update check that tells you before a new version applies (on reload).
+- **For developers**: each reply can show the requests (JSON) sent to the provider (Settings → About → "Show the requests sent"), and Settings → About copies diagnostics for a bug report (no keys, conversation text, file names or URLs).
 
 ## Quick start
 
 ```bash
 npm install
-npm test          # unit tests (Vitest)
-npm run e2e       # end-to-end tests on the production build with the mock (first: npx playwright install chromium)
-npm run dev       # http://localhost:5173
+npm run dev         # http://localhost:5173
+npm test            # unit tests (Vitest)
+npm run typecheck   # TypeScript
+npm run lint        # oxlint
+npm run lint:deps   # imports between layers point one way (docs/principles.md §5)
+npm run e2e         # user flows on the production build with the mock (first: npx playwright install chromium)
+npm run perf        # compares the UI performance of two versions (scripts/perf/README.md)
+npm run tags:update # rebuilds the bundled Danbooru tag list from the archive's newest list (by hand, not in the build)
 ```
+
+`npm run e2e` fails on any CSP violation, console error or request to an origin other than the app's and the mock's, and on new serious accessibility findings (axe-core, WCAG 2.1 AA). `npm run e2e -- --flows chat,lock` runs some of the flows.
 
 ### Try it without real APIs (mock server)
 
@@ -52,14 +60,14 @@ VITE_JINA_BASE_URL=http://localhost:8787/jina \
 npm run dev
 ```
 
-**Mock keys**: Venice `mock-key`, Anthropic `mock-ant`, Tavily `tvly-mock`. Gemini (`mock-gem`), OpenRouter (`mock-or`; model list, balance, images and videos only) and OpenAI (`mock-oai`) are used with `VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`, `VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1` and `VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1`. The mock also serves Venice image models and generates PNGs, and answers video jobs of all three (after a few asks) with a short clip; an image prompt containing `違反` returns a content-policy rejection with a suggestion, one containing `ぼかし` a blurred result, and asking a chat model "絵を描いて" (with the image tool on) calls `generate_image`.
+**Mock keys**: Venice `mock-key`, Anthropic `mock-ant`, Tavily `tvly-mock`. Gemini (`mock-gem`), OpenRouter (`mock-or`; model list, balance, images and videos only) and OpenAI (`mock-oai`) are used with `VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`, `VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1` and `VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1`. The mock also serves the image models of Venice, OpenAI, Gemini and OpenRouter and generates PNGs, answers "To tags" with tags, and answers video jobs of all three video APIs (after a few asks) with a short clip; an image or video prompt containing `違反` is rejected for content policy (Venice with a suggested prompt), an image prompt containing `ぼかし` gives a blurred result, and asking a chat model "絵を描いて" (with the image tool on) calls `generate_image`.
 
 **Keywords** in a message change the mock's behaviour:
 
 - General: `思考` / `think`, `コード`, `長文`, `エラー`, `残高`, `画像`, `xss`, `盗用`.
 - Failures (Venice, Anthropic, Gemini and OpenAI mocks, each in its API's own shape): `#err:auth`, `#err:balance`, `#err:rate`, `#err:model`, `#err:context`, `#err:policy`, `#err:overloaded`, `#err:server`, `#err:timeout`, `#err:network` (the connection is dropped), `#err:stream` (an error after the answer started).
 - Tool-based web search: `検索`, `読んで` (after a search). Reading a page directly: `ページを読んで`.
-- Built-in search (the Anthropic and Gemini mocks): `検索` / `天気`.
+- Built-in search (the Anthropic and Gemini mocks): `検索` / `天気`; with `一時停止` too, the Anthropic mock pauses the turn after the search (`pause_turn`).
 - Skills: `スキル` loads the first skill.
 - Skill creator: `作って` / `直して` calls `save_skill` in a skill-creator conversation.
 - Files: `レポートにまとめて` calls `write_file`; with a file in the conversation, `追記して` / `結論を直して` / `全部読んで` call `append_file` / `edit_file` / `read_file`.
@@ -69,7 +77,7 @@ npm run dev
 
 ```bash
 npm run build
-node scripts/serve-with-headers.mjs dist 4173   # applies dist/_headers
+npm run preview:csp                              # serves dist/ on :4173 with dist/_headers applied
 npx wrangler dev --local                         # or: Cloudflare's local runtime
 ```
 
@@ -200,10 +208,11 @@ There's no storage mode to choose.
 
 - **Without a passphrase**, keys and conversations are stored as-is.
 - **With a passphrase**:
-  - API keys, conversations, files, images, saved prompts and skills are encrypted (not the fetch page's Jina Reader key and sites not asked about).
+  - API keys, conversations, files, images, videos, saved prompts, skills and the settings that hold your own text (default instructions, image options) are encrypted (not the fetch page's Jina Reader key and sites not asked about).
   - The app is hidden behind a lock screen until you unlock it.
   - Each tab and each reload must be unlocked again.
   - You can lock with the sidebar button, or set an idle auto-lock.
+  - You can also register a passkey (fingerprint, face or the device's PIN) to unlock with, where the browser supports it; the passphrase still works. Changing or removing the passphrase removes the passkeys.
 - **Setup**: right after you save your first key, the app offers to set one (you can skip). You can also set, change or remove it under Settings → Connections and keys. Changing or removing it requires the current passphrase.
 - **If you forget it**, nothing can be recovered. The lock screen can only wipe everything so you can start over.
 - **Backups are plain JSON (zip with images and videos) unless you set a password when exporting** (on by default once a passphrase is set). Store plain backups carefully.
@@ -228,4 +237,4 @@ Always use **spend-limited keys**. If a key ever leaks, the damage stops at the 
 
 ## License
 
-MIT ([LICENSE](LICENSE)). A build also writes `licenses.md` with the licenses of the packages it bundles (Dexie, pdf.js, DOMPurify, highlight.js, marked, Preact and others) and serves it next to the app, with the font's license (Inter, SIL OFL) as `licenses-fonts.txt`.
+MIT ([LICENSE](LICENSE)). A build also writes `licenses.md` with the licenses of the packages it bundles (Dexie, pdf.js, DOMPurify, highlight.js, marked, Preact and others) and serves it next to the app, with the font's license (Inter, SIL OFL) as `licenses-fonts.txt`. The Danbooru tag list is built from DraconicDragon/dbr-e621-lists-archive (Unlicense).

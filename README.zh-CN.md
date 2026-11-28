@@ -18,28 +18,36 @@
 ## 功能
 
 - **提供商**: Venice、OpenRouter、Anthropic、Google Gemini、OpenAI、DeepSeek、Groq、NanoGPT、DeepInfra、Cerebras、Novita、Chutes、Together，以及在构建时添加的 OpenAI 兼容端点（如 Ollama）。没有哪个提供商被特殊对待，首次启动时由你选择使用哪个。
-- **模型列表**: 书签（跨提供方标星的模型）、排序（推荐 / 名称 / 价格 / 上下文长度）和筛选（private / 推理 / 图像 / 搜索 / 免费），并显示价格和能力。
-- **聊天**: 流式输出、显示推理过程、Markdown 和代码高亮、对话树（重新生成、编辑、换模型重新生成），以及从不保存的临时对话（在发送第一条消息前，于聊天顶部切换）。
+- **模型列表**: 书签（跨提供方标星的模型）、排序（推荐 / 最新 / 名称 / 价格 / 上下文长度）和筛选（private / 思考 / 图像 / 搜索 / 免费），并显示价格、能力、发布日期和特价的结束时间，以及每个模型的详情（知识截止时间、提供方的说明）。
+- **聊天**: 流式输出、显示推理过程、Markdown 和代码高亮、对话树（重新生成、编辑、换模型重新生成），以及从不保存的临时对话（在发送第一条消息前，于聊天顶部切换）。回答失败时会说明发生了什么、该怎么做，应用能做的操作以按钮给出（打开连接与密钥、充值、压缩对话、重新生成、用其他模型重新生成）。
 - **沙箱**: HTML 和 SVG 文件以页面形式显示，html / svg / js 代码块带有“运行”按钮，聊天模型可以运行 JavaScript 做精确计算（`run_javascript`，运行前确认）。这些都在无法访问应用、并阻止网络请求的隔离框架中运行（WebRTC 连接只在会阻止它的浏览器中被阻止，Chrome 不会）。
-- **文件**: 让模型"整理成报告"，它会把文档（Markdown、CSV 等）保存到"文件"标签页；长文档分段写入；每个文件保留上次修改之前的内容，可以撤销最后一次修改。对话的文件放在工作文件夹中（随第一个文件创建，由模型命名），模型只能读写其中的文件（以及附加到对话的文件），所用工具与编程智能体相同（按模式列出、搜索行、带行号读取、写入、替换、追加、移动和删除；删除每次都会询问），还能打开自己制作的页面查看错误和显示的内容并加以修正（preview_page），这些错误也会在预览上方显示数量，点击即可查看列表；在"文件"标签页中选择"在此文件夹中对话"，即可用已有的文件夹开始新对话。文件名可以包含文件夹（`site/css/style.css`），HTML 页面预览时可以加载同一站点（页面上方最近的含 index.html 的文件夹）中的文件（CSS、JavaScript 模块、图像），仍不连接网络；页面的 localStorage 保存在站点的 localStorage.json 中，重新打开后仍在（删除该文件即可重置页面数据）。"文件"标签页是一个文件管理器（按文件夹、类型或对话浏览，新建文件夹、重命名、通过菜单或拖到文件夹上移动、连同内容删除文件夹、每个项目的菜单和右键，卡片/列表视图、排序、按内容搜索、按类型和对话浏览、多选、拖放导入）。可以从设备或已保存的文件中附加文本、CSV、代码或 PDF（在浏览器内提取文字）。支持查看、编辑、下载和打印（保存为 PDF）。
-- **图像生成**（Venice、OpenAI、Gemini、OpenRouter、NanoGPT、DeepInfra、Together；按指令编辑支持 Gemini、NanoGPT、OpenAI、OpenRouter、Venice；放大和去除背景仅限 Venice）: 输入框的图像模式（模型、宽高比、分辨率、1–4 张、风格、反向提示词、种子），"相同设置再生成"/"生成相似图像"，放大、编辑、去除背景，图库，以及可选的让聊天模型生成图像的工具。图像保存在本地（设置口令后加密）。
+- **文件**: 让模型"整理成报告"，它会把文档（Markdown、CSV 等）保存到"文件"标签页；长文档分段写入；每个文件保留上次修改之前的内容，可以撤销最后一次修改。对话的文件放在工作文件夹中（随第一个文件创建，由模型命名），模型只能读写其中的文件（以及附加到对话的文件），所用工具与编程智能体相同（按模式列出、搜索行、带行号读取、写入、替换、追加、移动和删除；删除每次都会询问），还能打开自己制作的页面查看错误和显示的内容并加以修正（preview_page），这些错误也会在预览上方显示数量，点击即可查看列表；在"文件"标签页中选择"在此文件夹中对话"，即可用已有的文件夹开始新对话。文件名可以包含文件夹（`site/css/style.css`），HTML 页面预览时可以加载同一站点（页面上方最近的含 index.html 的文件夹）中的文件（CSS、JavaScript 模块、图像），仍不连接网络；页面的 localStorage 保存在站点的 localStorage.json 中，重新打开后仍在（删除该文件即可重置页面数据）。"文件"标签页是一个文件管理器（按文件夹、类型或对话浏览，新建文件夹、重命名、通过菜单或拖到文件夹上移动、连同内容删除文件夹、每个项目的菜单和右键，卡片/列表视图、排序、按内容搜索、按类型和对话浏览、多选、拖放导入）。可以从设备或已保存的文件中附加文本、CSV、代码或 PDF（在浏览器内提取文字），也可以拖放或粘贴到输入框。支持查看、编辑、下载和打印（保存为 PDF）。
+- **图像生成**（Venice、OpenAI、Gemini、OpenRouter、NanoGPT、DeepInfra、Together；按指令编辑支持 Gemini、NanoGPT、OpenAI、OpenRouter、Venice；放大和去除背景仅限 Venice）: 输入框的图像模式，设置其中任一密钥后显示（模型、宽高比、分辨率、1–4 张、风格、反向提示词、种子），“用相同种子再来一次”，以及在图像查看器中编辑、放大、去除背景和“生成视频”。对用 Danbooru 标签写提示词的模型（动漫类模型）：输入时的标签建议（来自应用内置的标签列表）、该模型系列推荐的质量标签和反向提示词、“转换为标签”（由聊天模型把文字提示词改写成标签），以及模型的提示词长度上限。还有可选的让聊天模型生成图像的工具。图像保存在本地（设置口令后加密），与视频一起列在“文件”标签页的“图像和视频”中。
 - **视频生成**（Venice、OpenRouter、Gemini）: 输入框的视频模式，设置其中任一密钥后显示（模型、时长、分辨率、宽高比、声音、首帧；可从图像生成动起来的视频，图像上有“生成视频”）。发送前显示价格。生成会在服务端持续数分钟，重新加载页面后也能继续等待（Venice、OpenRouter），也可以停止等待、之后再次等待。视频与图像一起保存。
 - **回复建议**: 在最新回答下方给出几条简短的后续回复，点击即可填入输入框。数量、参考最近几轮对话以及使用的模型都可以设置。
 - **网络**: 用提供商内置的搜索（Anthropic、Gemini、Groq、OpenRouter、Venice）或 Tavily 工具搜索；模型用 `fetch_url` 读取网页（HTML、文本、PDF），由另一次调用只提取所需内容后再交给模型（与 Claude Code 的 WebFetch 相同的方式）；用 `fetch_file` 导入文件。所有获取都在获取页面中确认，并可记住你允许的网站。
 - **技能（Skills）**: 兼容 SKILL.md 的操作说明。模型只在需要时才读取正文，你也可以用 `/名称` 手动指定。在对话中让它"把这个做成技能"，模型会起草一份，经你批准后保存。
 - **长对话**: 对话压缩（手动或自动）、提示缓存、上下文长度保护。
 - **用量**: 显示费用和 token 数的趋势，以及按模型、提供商、用途和对话的明细，记录只保存在本浏览器中。可查看 DeepSeek、NanoGPT、OpenRouter（此密钥额度的剩余）和 Venice 的余额。
-- **数据**: 全文搜索、备份与导入（JSON，包含图像和视频时为 zip；可用密码加密）、删除图像、清除全部数据、PWA、深色模式、移动端布局。
-- **开发者**: 可以查看每条回复发送给服务商的请求（JSON）（设置 → 关于 →“显示已发送的请求”）。
+- **数据**: 全文搜索、备份与导入（JSON，包含图像和视频时为 zip；可用密码加密）、存储用量及其明细、申请持久存储、清除全部数据。从备份恢复的对话在输入密钥之前就能阅读，只在发送时才要求密钥。同一时间只有一个标签页使用数据，其他标签页会等待，直到你选择在那里使用。
+- **应用**: 访问一次后即可离线启动的 PWA、深色主题、移动端布局，以及更新检查（新版本会先告知，重新加载时才切换）。
+- **开发者**: 可以查看每条回复发送给服务商的请求（JSON）（设置 → 关于 →“显示已发送的请求”）。在设置 → 关于中还可以复制用于报告问题的诊断信息（不含密钥、对话正文、文件名或 URL）。
 
 ## 快速开始
 
 ```bash
 npm install
-npm test          # 单元测试（Vitest）
-npm run e2e       # 用生产构建和模拟服务器做端到端测试（首次需 npx playwright install chromium）
-npm run dev       # http://localhost:5173
+npm run dev         # http://localhost:5173
+npm test            # 单元测试（Vitest）
+npm run typecheck   # TypeScript
+npm run lint        # oxlint
+npm run lint:deps   # 各层之间的 import 是否单向（docs/principles.md §5）
+npm run e2e         # 用生产构建和模拟服务器测试用户流程（首次需 npx playwright install chromium）
+npm run perf        # 比较两个版本的 UI 性能（scripts/perf/README.md）
+npm run tags:update # 用存档中最新的列表重建内置的 Danbooru 标签列表（手动运行，构建时不运行）
 ```
+
+只要出现 CSP 违规、控制台错误、对应用和模拟服务器以外的源的请求，或新的严重无障碍问题（axe-core，WCAG 2.1 AA），`npm run e2e` 就会失败。`npm run e2e -- --flows chat,lock` 只运行部分流程。
 
 ### 不用真实 API 试用（模拟服务器）
 
@@ -52,14 +60,14 @@ VITE_JINA_BASE_URL=http://localhost:8787/jina \
 npm run dev
 ```
 
-**模拟密钥**: Venice 用 `mock-key`，Anthropic 用 `mock-ant`，Tavily 用 `tvly-mock`。Gemini（`mock-gem`）、OpenRouter（`mock-or`，仅模型列表、余额、图像和视频）和 OpenAI（`mock-oai`）通过 `VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`、`VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1`、`VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1` 使用。模拟服务器也提供 Venice 的图像模型并生成 PNG，并受理三个视频 API 的生成（查询几次后返回一段短视频）：图像提示词包含 `違反` 时返回内容政策拒绝（附带改写建议），包含 `ぼかし` 时返回模糊处理的结果；对聊天模型说“絵を描いて”（图像工具开启时）会调用 `generate_image`。
+**模拟密钥**: Venice 用 `mock-key`，Anthropic 用 `mock-ant`，Tavily 用 `tvly-mock`。Gemini（`mock-gem`）、OpenRouter（`mock-or`，仅模型列表、余额、图像和视频）和 OpenAI（`mock-oai`）通过 `VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`、`VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1`、`VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1` 使用。模拟服务器也提供 Venice、OpenAI、Gemini 和 OpenRouter 的图像模型并生成 PNG，对“转换为标签”返回标签，并受理三个视频 API 的生成（查询几次后返回一段短视频）：图像或视频提示词包含 `違反` 时返回内容政策拒绝（Venice 附带改写建议），图像提示词包含 `ぼかし` 时返回模糊处理的结果；对聊天模型说“絵を描いて”（图像工具开启时）会调用 `generate_image`。
 
 消息中的**关键词**会改变模拟服务器的行为:
 
 - 通用: `思考` / `think`、`コード`、`長文`、`エラー`、`残高`、`画像`、`xss`、`盗用`
 - 失败（Venice、Anthropic、Gemini、OpenAI 的模拟服务，各按其 API 的格式返回）: `#err:auth`、`#err:balance`、`#err:rate`、`#err:model`、`#err:context`、`#err:policy`、`#err:overloaded`、`#err:server`、`#err:timeout`、`#err:network`（断开连接）、`#err:stream`（回答中途出错）
 - 工具方式的网页搜索: `検索`、`読んで`（搜索之后）。直接读取网页: `ページを読んで`
-- 内置搜索（Anthropic 和 Gemini 的模拟）: `検索` / `天気`
+- 内置搜索（Anthropic 和 Gemini 的模拟）: `検索` / `天気`；再加上 `一時停止` 时，Anthropic 的模拟会在搜索后暂停这一轮（`pause_turn`）
 - 技能: `スキル` 会读取列表中的第一个技能
 - 使用 skill-creator 的对话: `作って` / `直して` 会调用 save_skill
 - 文件: `レポートにまとめて` 会调用 write_file；对话中有文件时，`追記して` / `結論を直して` / `全部読んで` 会调用 append_file / edit_file / read_file
@@ -69,7 +77,7 @@ npm run dev
 
 ```bash
 npm run build
-node scripts/serve-with-headers.mjs dist 4173   # 应用 dist/_headers
+npm run preview:csp                              # 应用 dist/_headers，在 :4173 提供 dist/
 npx wrangler dev --local                         # 或用 Cloudflare 的本地运行环境
 ```
 
@@ -200,10 +208,11 @@ VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localh
 
 - **没有口令时**，密钥和对话按原样保存。
 - **设置口令后**:
-  - API 密钥、对话、文件、图像、已保存的提示词和技能都会被加密（获取页面保存的 Jina Reader 密钥和不再询问的网站除外）。
+  - API 密钥、对话、文件、图像、视频、已保存的提示词、技能，以及包含你自己文字的设置（默认指令、图像设置）都会被加密（获取页面保存的 Jina Reader 密钥和不再询问的网站除外）。
   - 解锁之前，整个应用都被锁屏隐藏。
   - 每个标签页、每次重新加载都需要重新解锁。
   - 可以用侧边栏的按钮锁定，也可以设置无操作时自动锁定。
+  - 浏览器支持时，还可以注册通行密钥（指纹、面容或设备 PIN）来解锁，口令解锁照常可用。修改或移除口令会删除已注册的通行密钥。
 - **如何设置**: 首次保存密钥后，应用会提示一次是否设置口令（可以跳过）。也可以随时在"设置 → 连接与密钥"中设置、修改或移除。修改和移除都需要输入当前口令。
 - **忘记口令将无法恢复。** 锁屏界面只能清除全部数据后重新开始。
 - **除非导出时设置密码，备份是明文 JSON（包含图像和视频时为 zip）**（设置口令后默认加密）。请妥善保管明文备份。
@@ -228,4 +237,4 @@ VITE_CUSTOM_PROVIDERS='[{"id":"ollama","label":"Ollama","baseUrl":"http://localh
 
 ## 许可证
 
-MIT（[LICENSE](LICENSE)）。构建时会把所打包的软件包（Dexie、pdf.js、DOMPurify、highlight.js、marked、Preact 等）的许可证写入 `licenses.md`，并与应用一同提供。字体（Inter，SIL OFL）的许可证以 `licenses-fonts.txt` 提供。
+MIT（[LICENSE](LICENSE)）。构建时会把所打包的软件包（Dexie、pdf.js、DOMPurify、highlight.js、marked、Preact 等）的许可证写入 `licenses.md`，并与应用一同提供。字体（Inter，SIL OFL）的许可证以 `licenses-fonts.txt` 提供。Danbooru 标签列表由 DraconicDragon/dbr-e621-lists-archive（Unlicense）生成。

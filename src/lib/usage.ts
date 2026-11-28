@@ -109,21 +109,36 @@ export function bucketFor(from: number, now: number): UsageBucket {
   return days <= 1 ? 'hour' : days <= 62 ? 'day' : days <= 400 ? 'week' : 'month';
 }
 
+/** What the usage can be split by */
+export type UsageSplit = 'provider' | 'model' | 'kind' | 'conversation';
+export const USAGE_SPLITS: UsageSplit[] = ['provider', 'model', 'kind', 'conversation'];
+
+/**
+ * A record's key in a split: the provider id; "provider\0model"; the kind; the conversation id ('' for requests made
+ * outside any conversation)
+ */
+export function splitKey(r: UsageRecord, split: UsageSplit): string {
+  if (split === 'provider') return r.providerId;
+  if (split === 'model') return `${r.providerId}\u0000${r.model}`;
+  if (split === 'kind') return r.kind;
+  return r.conversationId ?? '';
+}
+
+type Split<T> = Record<UsageSplit, T>;
+const splits = <T>(make: () => T): Split<T> => ({ provider: make(), model: make(), kind: make(), conversation: make() });
+
 export interface UsageSummary {
   total: UsageTotals;
-  /** The period step by step, oldest first (steps without records are zero), each also by provider */
-  series: { at: number; totals: UsageTotals; byProvider: Record<string, UsageTotals> }[];
+  /** The period step by step, oldest first (steps without records are zero), each also by every split */
+  series: { at: number; totals: UsageTotals; by: Split<Record<string, UsageTotals>> }[];
   bucket: UsageBucket;
-  byProvider: { providerId: string; totals: UsageTotals }[];
-  byModel: { providerId: string; model: string; totals: UsageTotals }[];
-  byKind: { kind: UsageRecord['kind']; totals: UsageTotals }[];
-  /** Records of no conversation (e.g. a page's own model calls outside one) are left out */
-  byConversation: { conversationId: string; totals: UsageTotals }[];
+  /** The period by every split, highest cost first (ties broken by request count) */
+  by: Split<{ key: string; totals: UsageTotals }[]>;
 }
 
 /**
  * Aggregates from since to now in one pass. If since is null, from the first record. The step of the series follows
- * the length of the period (bucketFor). Lists are sorted by cost, highest first (ties broken by request count)
+ * the length of the period (bucketFor)
  */
 export function summarizeUsage(records: UsageRecord[], since: number | null, now = Date.now()): UsageSummary {
   const list = records.filter((r) => (since === null || r.at >= since) && r.at <= now);
@@ -131,41 +146,25 @@ export function summarizeUsage(records: UsageRecord[], since: number | null, now
   const from = since ?? list.reduce((min, r) => Math.min(min, r.at), now);
   const bucket = bucketFor(from, now);
   const total = zero();
-  const steps = new Map<number, { totals: UsageTotals; byProvider: Record<string, UsageTotals> }>();
-  const group = <K>(map: Map<K, UsageTotals>, k: K, r: UsageRecord) => {
-    let t = map.get(k);
-    if (!t) map.set(k, (t = zero()));
-    add(t, r);
-  };
-  const prov = new Map<string, UsageTotals>();
-  const mod = new Map<string, UsageTotals>();
-  const kinds = new Map<UsageRecord['kind'], UsageTotals>();
-  const convs = new Map<string, UsageTotals>();
+  const steps = new Map<number, { totals: UsageTotals; by: Split<Record<string, UsageTotals>> }>();
+  const groups = splits(() => new Map<string, UsageTotals>());
   for (const r of list) {
     add(total, r);
     const at = bucketStart(r.at, bucket);
     let step = steps.get(at);
-    if (!step) steps.set(at, (step = { totals: zero(), byProvider: {} }));
+    if (!step) steps.set(at, (step = { totals: zero(), by: splits(() => ({})) }));
     add(step.totals, r);
-    add((step.byProvider[r.providerId] ??= zero()), r);
-    group(prov, r.providerId, r);
-    group(mod, `${r.providerId}\u0000${r.model}`, r);
-    group(kinds, r.kind, r);
-    if (r.conversationId) group(convs, r.conversationId, r);
+    for (const split of USAGE_SPLITS) {
+      const k = splitKey(r, split);
+      add((step.by[split][k] ??= zero()), r);
+      let t = groups[split].get(k);
+      if (!t) groups[split].set(k, (t = zero()));
+      add(t, r);
+    }
   }
   const series: UsageSummary['series'] = [];
-  for (let at = bucketStart(from, bucket); at <= now && series.length < 400; at = nextBucket(at, bucket)) series.push({ at, ...(steps.get(at) ?? { totals: zero(), byProvider: {} }) });
+  for (let at = bucketStart(from, bucket); at <= now && series.length < 400; at = nextBucket(at, bucket)) series.push({ at, ...(steps.get(at) ?? { totals: zero(), by: splits(() => ({})) }) });
   const order = (a: { totals: UsageTotals }, b: { totals: UsageTotals }) => b.totals.costUsd - a.totals.costUsd || b.totals.requests - a.totals.requests;
-  return {
-    total,
-    series,
-    bucket,
-    byProvider: [...prov].map(([providerId, totals]) => ({ providerId, totals })).sort(order),
-    byModel: [...mod].map(([k, totals]) => {
-      const [providerId, model] = k.split('\u0000');
-      return { providerId, model, totals };
-    }).sort(order),
-    byKind: [...kinds].map(([kind, totals]) => ({ kind, totals })).sort(order),
-    byConversation: [...convs].map(([conversationId, totals]) => ({ conversationId, totals })).sort(order)
-  };
+  const sorted = (m: Map<string, UsageTotals>) => [...m].map(([key, totals]) => ({ key, totals })).sort(order);
+  return { total, series, bucket, by: { provider: sorted(groups.provider), model: sorted(groups.model), kind: sorted(groups.kind), conversation: sorted(groups.conversation) } };
 }

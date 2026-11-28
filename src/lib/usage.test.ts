@@ -36,7 +36,7 @@ describe('usage', () => {
     expect(new Date(bucketStart(now, 'month'))).toEqual(new Date(2026, 10, 1));
   });
 
-  it('summarizes by step (including empty ones, each by provider), provider, model, use and conversation', () => {
+  it('summarizes by step (including empty ones) and by every split: provider, model, use and conversation', () => {
     const now = new Date(2026, 10, 25, 12).getTime();
     const since = new Date(2026, 10, 23).getTime();
     const s = summarizeUsage(
@@ -57,11 +57,12 @@ describe('usage', () => {
       [since + DAY, 0],
       [bucketStart(now, 'day'), 2]
     ]);
-    expect(Object.keys(s.series[2].byProvider).sort()).toEqual(['anthropic', 'venice']);
-    expect(s.byProvider.map((p) => p.providerId)).toEqual(['venice', 'anthropic']);
-    expect(s.byModel[0]).toMatchObject({ providerId: 'venice', model: 'a' });
-    expect(s.byKind.map((k) => [k.kind, k.totals.requests])).toEqual([['summary', 1], ['chat', 2]]);
-    expect(s.byConversation.map((c) => c.conversationId)).toEqual(['c2', 'c1']);
+    expect(Object.keys(s.series[2].by.provider).sort()).toEqual(['anthropic', 'venice']);
+    expect(Object.keys(s.series[2].by.kind).sort()).toEqual(['chat', 'summary']);
+    expect(s.by.provider.map((p) => p.key)).toEqual(['venice', 'anthropic']);
+    expect(s.by.model[0].key).toBe('venice\u0000a');
+    expect(s.by.kind.map((k) => [k.key, k.totals.requests])).toEqual([['summary', 1], ['chat', 2]]);
+    expect(s.by.conversation.map((c) => c.key)).toEqual(['c2', 'c1']);
   });
 
   it('backfills the usage log from existing replies when upgrading the database', async () => {

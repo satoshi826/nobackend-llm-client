@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { balances, fetchBalances } from '../../../state/balance';
 import { clearUsage, listUsage } from '../state';
-import { summarizeUsage, type UsageBucket, type UsageRecord, type UsageSummary, type UsageTotals } from '../../../lib/usage';
+import { summarizeUsage, USAGE_SPLITS, type UsageBucket, type UsageRecord, type UsageSplit, type UsageSummary, type UsageTotals } from '../../../lib/usage';
 import { enabledProviders, modelOf, providerById } from '../../../state/models';
 import { conversations, openConversation } from '../../../state/conversations';
 import { PRESETS } from '../../../lib/providers/registry';
@@ -48,19 +48,62 @@ function stepLabel(at: number, bucket: UsageBucket): string {
   return formatDate(at, { month: 'short', day: 'numeric' });
 }
 
-/**
- * Each provider's colour in charts: its place among the connections (stable whatever the period shows), so a provider
- * keeps its colour; past the palette, and for providers no longer connected, the neutral one
- */
-function useProviderColors() {
-  const order = enabledProviders.value.map((p) => p.id);
-  return (providerId: string) => {
-    const i = order.indexOf(providerId);
-    return i >= 0 && i < 8 ? `var(--series-${i + 1})` : 'var(--series-other)';
-  };
-}
+/** Uses in a fixed order: each keeps its colour */
+const KINDS: UsageRecord['kind'][] = ['chat', 'summary', 'suggest', 'image', 'video'];
+/** Coloured entries of a split that has no fixed order (models, conversations): the period's top ones; the rest are "others" */
+const COLOURED = 7;
+const OTHER = '\u0000other';
+const OTHER_COLOUR = 'var(--series-other)';
+const series = (i: number) => `var(--series-${i + 1})`;
 
 const providerName = (pid: string) => providerById(pid)?.name ?? (pid || t('unknownProvider'));
+
+/** One entry of the chosen split, as the legend, the chart and the breakdown show it */
+interface Entry {
+  key: string;
+  label: string;
+  sub?: string;
+  color: string;
+  totals: UsageTotals;
+  open?(): void;
+}
+
+/**
+ * The period by the chosen split, each entry with its colour. Providers are coloured by their place among the
+ * connections and uses by a fixed order, so they keep their colour whatever the period; models and conversations by
+ * their rank in the period (the top seven), the rest grey
+ */
+function useEntries(s: UsageSummary, split: UsageSplit): Entry[] {
+  const orderKey = enabledProviders.value.map((p) => p.id).join();
+  const convs = conversations.value;
+  return useMemo(() => {
+    const order = orderKey.split(',');
+    const titles = new Map(convs.map((c) => [c.id, c.title]));
+    return s.by[split].map(({ key, totals }, rank) => {
+      if (split === 'provider') {
+        const i = order.indexOf(key);
+        return { key, totals, label: providerName(key), color: i >= 0 && i < 8 ? series(i) : OTHER_COLOUR };
+      }
+      if (split === 'kind') return { key, totals, label: t(`kind.${key as UsageRecord['kind']}`), color: series(KINDS.indexOf(key as UsageRecord['kind'])) };
+      const color = rank < COLOURED ? series(rank) : OTHER_COLOUR;
+      if (split === 'model') {
+        const [pid, model] = key.split('\u0000');
+        return { key, totals, color, label: modelOf(pid, model)?.name ?? model, sub: providerName(pid) };
+      }
+      const title = key ? titles.get(key) : undefined;
+      return {
+        key,
+        totals,
+        color,
+        label: !key ? t('breakdown.outside') : (title ?? t('breakdown.deleted')),
+        open: title === undefined ? undefined : () => {
+          modal.value = null;
+          void openConversation(key);
+        }
+      };
+    });
+  }, [s, split, orderKey, convs]);
+}
 
 function Swatch({ color }: { color: string }) {
   return <span class="inline-block size-2.5 shrink-0 rounded-[3px]" style={{ background: color }} aria-hidden="true" />;
@@ -101,17 +144,62 @@ function Headline({ total, prev }: { total: UsageTotals; prev: UsageTotals | nul
   );
 }
 
-/** The period over time: one bar per step, stacked by provider; touching a bar shows its breakdown */
-function Chart({ s, color }: { s: UsageSummary; color(pid: string): string }) {
+/** A step's value for each segment: the coloured entries, and the grey ones together as "others" */
+function segments(by: Record<string, UsageTotals>, entries: Entry[], metric: Metric): { key: string; color: string; value: number; totals: UsageTotals }[] {
+  const out: { key: string; color: string; value: number; totals: UsageTotals }[] = [];
+  let others: UsageTotals | null = null;
+  for (const e of entries) {
+    const v = by[e.key];
+    if (!v) continue;
+    if (e.color !== OTHER_COLOUR) out.push({ key: e.key, color: e.color, value: valueOf(v, metric), totals: v });
+    else others = others ? sumTotals(others, v) : v;
+  }
+  if (others) out.push({ key: OTHER, color: OTHER_COLOUR, value: valueOf(others, metric), totals: others });
+  return out;
+}
+
+const sumTotals = (a: UsageTotals, b: UsageTotals): UsageTotals => ({
+  requests: a.requests + b.requests,
+  inputTokens: a.inputTokens + b.inputTokens,
+  cachedInputTokens: a.cachedInputTokens + b.cachedInputTokens,
+  outputTokens: a.outputTokens + b.outputTokens,
+  costUsd: a.costUsd + b.costUsd,
+  estimated: a.estimated || b.estimated,
+  unknownCost: a.unknownCost + b.unknownCost
+});
+
+/** The chosen split: the switch, and the legend that the chart and the breakdown both follow */
+function SplitBar({ split, onChange, entries }: { split: UsageSplit; onChange(v: UsageSplit): void; entries: Entry[] }) {
+  const shown = entries.filter((e) => e.color !== OTHER_COLOUR);
+  const others = entries.length > shown.length;
+  return (
+    <div class="space-y-2.5">
+      <Segmented label={t('split.label')} items={USAGE_SPLITS.map((v) => ({ id: v, label: t(`breakdown.${v}`) }))} value={split} onChange={onChange} stretch />
+      <ul class="flex flex-wrap gap-x-4 gap-y-1 px-1 text-xs text-muted" aria-label={t(`breakdown.${split}`)}>
+        {shown.map((e) => (
+          <li key={e.key} class="inline-flex min-w-0 items-center gap-1.5">
+            <Swatch color={e.color} />
+            <span class="truncate">{e.label}</span>
+          </li>
+        ))}
+        {others && (
+          <li class="inline-flex items-center gap-1.5">
+            <Swatch color={OTHER_COLOUR} />
+            {t('otherEntries')}
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+/** The period over time: one bar per step, stacked by the chosen split; touching a bar shows its breakdown */
+function Chart({ s, split, entries }: { s: UsageSummary; split: UsageSplit; entries: Entry[] }) {
   const [metric, setMetric] = useState<Metric>('cost');
   const [active, setActive] = useState<number | null>(null);
   const [asTable, setAsTable] = useState(false);
-  // Providers in the period, in their colour order (bars stack the same way in every step)
-  const providers = useMemo(() => {
-    const order = enabledProviders.value.map((p) => p.id);
-    const rank = (pid: string) => (order.includes(pid) ? order.indexOf(pid) : order.length);
-    return s.byProvider.map((p) => p.providerId).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-  }, [s]);
+  const names = new Map(entries.map((e) => [e.key, e.label]));
+  const nameOf = (key: string) => (key === OTHER ? t('otherEntries') : (names.get(key) ?? key));
   const max = Math.max(...s.series.map((x) => valueOf(x.totals, metric)), 0);
   const step = active !== null ? s.series[active] : null;
   const stepName = t(`step.${s.bucket}`);
@@ -163,14 +251,12 @@ function Chart({ s, color }: { s: UsageSummary; color(pid: string): string }) {
                   <span class="font-semibold">{stepLabel(step.at, s.bucket)}</span> ・ {metricText(step.totals, metric)} ・ {t('chart.requests', { n: formatNumber(step.totals.requests) })}
                 </p>
                 <p class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-muted tabular-nums">
-                  {providers
-                    .filter((pid) => step.byProvider[pid]?.requests)
-                    .map((pid) => (
-                      <span key={pid} class="inline-flex items-center gap-1.5">
-                        <Swatch color={color(pid)} />
-                        {providerName(pid)} {metricText(step.byProvider[pid], metric)}
-                      </span>
-                    ))}
+                  {segments(step.by[split], entries, metric).map((g) => (
+                    <span key={g.key} class="inline-flex items-center gap-1.5">
+                      <Swatch color={g.color} />
+                      {nameOf(g.key)} {metricText(g.totals, metric)}
+                    </span>
+                  ))}
                 </p>
               </>
             ) : (
@@ -198,10 +284,7 @@ function Chart({ s, color }: { s: UsageSummary; color(pid: string): string }) {
                       class={cx('flex flex-col-reverse overflow-hidden rounded-t-[4px] transition-opacity', max > 0 && v / max >= 0.08 && 'gap-[2px]', active !== null && active !== i && 'opacity-40')}
                       style={{ height: max > 0 && v > 0 ? `max(2px, ${(v / max) * 100}%)` : '0' }}
                     >
-                      {providers.map((pid) => {
-                        const pv = x.byProvider[pid] ? valueOf(x.byProvider[pid], metric) : 0;
-                        return pv > 0 ? <div key={pid} style={{ flexGrow: pv, flexBasis: 0, background: color(pid) }} /> : null;
-                      })}
+                      {segments(x.by[split], entries, metric).map((g) => (g.value > 0 ? <div key={g.key} style={{ flexGrow: g.value, flexBasis: 0, background: g.color }} /> : null))}
                     </div>
                   </div>
                 );
@@ -213,92 +296,40 @@ function Chart({ s, color }: { s: UsageSummary; color(pid: string): string }) {
               <span>{stepLabel(s.series[s.series.length - 1].at, s.bucket)}</span>
             </div>
           </div>
-          {providers.length > 1 && (
-            <ul class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-label={t('chart.legend')}>
-              {providers.map((pid) => (
-                <li key={pid} class="inline-flex items-center gap-1.5">
-                  <Swatch color={color(pid)} />
-                  {providerName(pid)}
-                </li>
-              ))}
-            </ul>
-          )}
         </>
       )}
     </section>
   );
 }
 
-type By = 'model' | 'provider' | 'kind' | 'conversation';
-type Row = { key: string; label: string; sub?: string; color?: string; totals: UsageTotals; open?(): void };
 /** Rows shown before "show all" */
 const TOP = 8;
 
-/** What the period's cost went to, by model, provider, use or conversation: each row with its share */
-function Breakdown({ s, color }: { s: UsageSummary; color(pid: string): string }) {
-  const [by, setBy] = useState<By>('model');
+/** What the period's cost went to, by the chosen split: each entry with its colour and share */
+function Breakdown({ s, split, entries }: { s: UsageSummary; split: UsageSplit; entries: Entry[] }) {
   const [all, setAll] = useState(false);
-  const convs = conversations.value;
-  const titles = useMemo(() => new Map(convs.map((c) => [c.id, c.title])), [convs]);
-  const rows: Row[] =
-    by === 'model'
-      ? s.byModel.map((m) => ({ key: `${m.providerId}|${m.model}`, label: modelOf(m.providerId, m.model)?.name ?? m.model, sub: providerName(m.providerId), color: color(m.providerId), totals: m.totals }))
-      : by === 'provider'
-        ? s.byProvider.map((p) => ({ key: p.providerId, label: providerName(p.providerId), color: color(p.providerId), totals: p.totals }))
-        : by === 'kind'
-          ? s.byKind.map((k) => ({ key: k.kind, label: t(`kind.${k.kind}`), totals: k.totals }))
-          : s.byConversation.map((c) => {
-              const title = titles.get(c.conversationId);
-              return {
-                key: c.conversationId,
-                label: title ?? t('breakdown.deleted'),
-                totals: c.totals,
-                open: title === undefined ? undefined : () => {
-                  modal.value = null;
-                  void openConversation(c.conversationId);
-                }
-              };
-            });
+  useEffect(() => setAll(false), [split]);
   // Shares of the cost; of the requests when no price is known at all
   const byCost = s.total.costUsd > 0;
   const whole = byCost ? s.total.costUsd : s.total.requests;
-  const shown = all ? rows : rows.slice(0, TOP);
-  const items: { id: By; label: string }[] = [
-    { id: 'model', label: t('breakdown.model') },
-    { id: 'provider', label: t('breakdown.provider') },
-    { id: 'kind', label: t('breakdown.kind') },
-    ...(s.byConversation.length ? [{ id: 'conversation' as const, label: t('breakdown.conversation') }] : [])
-  ];
+  const shown = all ? entries : entries.slice(0, TOP);
   return (
     <section class="space-y-3 rounded-2xl border border-line bg-glass p-4">
-      <div class="flex flex-wrap items-center gap-2">
-        <h3 class="text-sm font-semibold">{t('breakdown.title')}</h3>
-        <Segmented
-          class="ml-auto"
-          label={t('breakdown.label')}
-          size="sm"
-          items={items}
-          value={by}
-          onChange={(v) => {
-            setBy(v);
-            setAll(false);
-          }}
-        />
-      </div>
+      <h3 class="text-sm font-semibold">{t('breakdown.title')}</h3>
       <ul class="divide-y divide-line">
         {shown.map((r) => {
           const part = byCost ? r.totals.costUsd : r.totals.requests;
           const body = (
             <>
               <span class="flex items-baseline gap-2">
-                {r.color && <Swatch color={r.color} />}
+                <Swatch color={r.color} />
                 <span class="min-w-0 truncate text-sm text-ink">{r.label}</span>
                 {r.sub && <span class="shrink-0 text-xs text-faint">{r.sub}</span>}
                 <span class="ml-auto shrink-0 text-sm font-medium tabular-nums">{costText(r.totals)}</span>
               </span>
               <span class="mt-1.5 flex items-center gap-3">
                 <span class="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-sunken">
-                  <span class="block h-full rounded-full" style={{ width: `${whole > 0 ? (part / whole) * 100 : 0}%`, background: r.color ?? 'var(--accent)' }} />
+                  <span class="block h-full rounded-full" style={{ width: `${whole > 0 ? (part / whole) * 100 : 0}%`, background: r.color }} />
                 </span>
                 <span class="shrink-0 text-[11px] text-muted tabular-nums">{t('breakdown.share', { pct: pct(part, whole), n: formatNumber(r.totals.requests) })}</span>
               </span>
@@ -317,12 +348,24 @@ function Breakdown({ s, color }: { s: UsageSummary; color(pid: string): string }
           );
         })}
       </ul>
-      {rows.length > TOP && (
+      {entries.length > TOP && (
         <Button class="text-xs" onClick={() => setAll(!all)}>
-          {all ? t('breakdown.less') : t('breakdown.more', { n: formatNumber(rows.length) })}
+          {all ? t('breakdown.less') : t('breakdown.more', { n: formatNumber(entries.length) })}
         </Button>
       )}
     </section>
+  );
+}
+
+/** The split shared by the legend, the chart and the breakdown */
+function Split({ s, split, onChange }: { s: UsageSummary; split: UsageSplit; onChange(v: UsageSplit): void }) {
+  const entries = useEntries(s, split);
+  return (
+    <>
+      <SplitBar split={split} onChange={onChange} entries={entries} />
+      <Chart s={s} split={split} entries={entries} />
+      <Breakdown s={s} split={split} entries={entries} />
+    </>
   );
 }
 
@@ -357,7 +400,7 @@ export function UsageTab() {
   const [range, setRange] = useState<Range>('30');
   const [records, setRecords] = useState<{ list: UsageRecord[]; since: number | null; now: number } | null>(null);
   const [about, setAbout] = useState(false);
-  const color = useProviderColors();
+  const [split, setSplit] = useState<UsageSplit>('provider');
 
   // The period and the one of the same length before it, read at once
   const load = () => {
@@ -400,8 +443,7 @@ export function UsageTab() {
       ) : (
         <>
           <Headline total={s.total} prev={prev} />
-          <Chart s={s} color={color} />
-          <Breakdown s={s} color={color} />
+          <Split s={s} split={split} onChange={setSplit} />
         </>
       )}
       <BalanceSection />

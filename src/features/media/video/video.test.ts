@@ -120,9 +120,9 @@ describe('OpenRouter video', () => {
     expect(tr.calls.at(-1)?.url).toBe('https://openrouter.ai/api/v1/videos/j1/content?index=0');
   });
 
-  it('reports a failed job with the provider’s reason', async () => {
+  it('reports a failed job, with the provider’s reason in the details', async () => {
     const c = ctx(fakeTransport([json({ id: 'j', status: 'failed', error: 'Content policy violation' })]), 'https://openrouter.ai/api/v1');
-    await expect(openrouterVideoProvider.check!({ id: 'j' }, c)).rejects.toThrow('Content policy violation');
+    await expect(openrouterVideoProvider.check!({ id: 'j' }, c)).rejects.toMatchObject({ error: { kind: 'server', detail: 'Content policy violation' } });
   });
 });
 

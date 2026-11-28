@@ -262,7 +262,7 @@ export async function resumeVideoJob(messageId: string) {
 function transient(e: unknown): boolean {
   if (!(e instanceof VideoApiError)) return (e as Error)?.name !== 'AbortError';
   const { kind, status } = e.error;
-  return kind === 'network-or-cors' || kind === 'rate-limit' || kind === 'auth' || (kind === 'server' && status !== undefined && status >= 500);
+  return ['network-or-cors', 'rate-limit', 'overloaded', 'timeout', 'auth'].includes(kind) || (kind === 'server' && status !== undefined && status >= 500);
 }
 
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -327,7 +327,7 @@ async function follow(conv: Conversation, msg: MessageRecord) {
       const err = e instanceof VideoApiError ? e.error : { kind: 'server' as const, message: String((e as Error)?.message ?? e) };
       // A job the provider failed or refused is over; one that could not be checked may still finish (waited for again)
       const job = transient(e) ? cur.video!.job : undefined;
-      cur = { ...cur, status: 'error', error: { kind: err.kind, message: err.message, hint: err.hint }, video: { ...cur.video!, job, ...(e instanceof VideoApiError && e.suggestedModel ? { suggestedModel: e.suggestedModel } : {}) } };
+      cur = { ...cur, status: 'error', error: { kind: err.kind, message: err.message, hint: err.hint, detail: err.detail, status: err.status }, video: { ...cur.video!, job, ...(e instanceof VideoApiError && e.suggestedModel ? { suggestedModel: e.suggestedModel } : {}) } };
     }
   } finally {
     endRun(conv.id);

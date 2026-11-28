@@ -82,6 +82,21 @@ describe('Anthropic adapter', () => {
     expect(evs[evs.length - 1]).toEqual({ type: 'done', reason: 'tool-calls' });
   });
 
+  it('classifies an error sent inside the stream by its type, and an HTTP error by its status and body', async () => {
+    const cfg = providerConfigOf('anthropic')!;
+    const run = async (res: Response) => {
+      const evs: ProviderEvent[] = [];
+      for await (const ev of anthropicAdapter.chat(cfg, anthropicPreset, { keyId: 'anthropic' }, { model: 'm', messages: [msg('user', [{ type: 'text', text: 'x' }])], signal: new AbortController().signal }, { fetch: async () => res })) evs.push(ev);
+      return evs[evs.length - 1] as Extract<ProviderEvent, { type: 'error' }>;
+    };
+    const overloaded = await run(sse([{ event: 'error', data: { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } } }]));
+    expect(overloaded.error).toMatchObject({ kind: 'overloaded', status: 529, detail: 'Overloaded' });
+    const rate = await run(sse([{ event: 'error', data: { type: 'error', error: { type: 'rate_limit_error', message: 'slow' } } }]));
+    expect(rate.error.kind).toBe('rate-limit');
+    const credit = await run(new Response(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } }), { status: 400 }));
+    expect(credit.error).toMatchObject({ kind: 'insufficient-balance', status: 400 });
+  });
+
   it('sends the key as x-api-key', () => {
     expect(accountById('anthropic')!.keyHeader).toEqual({ name: 'x-api-key', prefix: '' });
     expect(anthropicPreset.modelsNeedKey).toBe(true);

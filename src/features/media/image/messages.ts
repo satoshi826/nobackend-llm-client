@@ -130,7 +130,6 @@ export const t = defineMessages(
     'err.opUnsupported': '{provider} はこの操作に対応していません。',
     'err.policy': 'コンテンツポリシーにより、画像は生成されませんでした。プロンプトを変えて試してください。',
     'err.noImage': '画像が返ってきませんでした。もう一度試してください。',
-    'err.busy': 'このモデルは混み合っています。少し待つか、別のモデルで試してください。',
     'err.tooLong': 'プロンプトが長すぎます（{n} 文字。このモデルは {limit} 文字まで）。短くしてください。',
     // privacy badge (Venice)
     'privacy.privateTitle': 'Venice がホストし、プロンプトを保存しない画像モデル',
@@ -259,7 +258,6 @@ export const t = defineMessages(
       'err.opUnsupported': "{provider} doesn't support this operation.",
       'err.policy': 'The content policy blocked the image. Try a different prompt.',
       'err.noImage': 'No image came back. Try again.',
-      'err.busy': 'This model is busy. Wait a moment or try another model.',
       'err.tooLong': 'The prompt is too long ({n} characters; this model takes up to {limit}). Shorten it.',
       'privacy.privateTitle': "Image model hosted by Venice that doesn't store prompts",
       'privacy.relayed': 'Relayed',
@@ -386,7 +384,6 @@ export const t = defineMessages(
       'err.opUnsupported': '{provider} 不支持此操作。',
       'err.policy': '因内容政策，图像未能生成。请换个提示词再试。',
       'err.noImage': '没有返回图像。请重试。',
-      'err.busy': '此模型当前繁忙。请稍候，或换个模型再试。',
       'err.tooLong': '提示词过长（{n} 个字符，此模型最多 {limit} 个）。请缩短。',
       'privacy.privateTitle': '由 Venice 托管、不保存提示词的图像模型',
       'privacy.relayed': '外部中转',

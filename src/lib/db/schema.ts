@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { ChatMessage, ModelInfo } from '../providers/types';
+import type { ChatMessage, ModelInfo, ProviderError } from '../providers/types';
 import type { UsageRecord } from '../usage';
 import { sealedFromBase64, type Sealed } from '../crypto/data';
 import { fromBase64 } from '../base64';
@@ -111,13 +111,16 @@ export interface VideoResult {
 
 export type MessageStatus = 'streaming' | 'done' | 'error' | 'aborted';
 
+/** Why an answer failed (a ProviderError as stored; kind is a ProviderErrorKind, or another word in records of older versions) */
+export type MessageError = Pick<ProviderError, 'message' | 'hint' | 'detail' | 'status'> & { kind: string };
+
 export interface MessageRecord extends ChatMessage {
   conversationId: string;
   parentId: string | null;
   groupId?: string;
   createdAt: number;
   status: MessageStatus;
-  error?: { kind: string; message: string; hint?: string };
+  error?: MessageError;
   /** Compaction node: the conversation up to coversUntilId is replaced by summary when sending */
   compaction?: { summary: string; coversUntilId: string; count: number; model?: string; auto?: boolean };
   /** Reply suggestions (made after an answer; encrypted along with the conversation) */

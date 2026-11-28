@@ -4,6 +4,8 @@
 //   "思考"  → streams reasoning_content / "think" → <think> tag style
 //   "エラー" → error mid-stream / "残高" → 402 / "長文" → long output / "コード" → code blocks
 //   "画像"  → Markdown with external images (should be blocked) / "xss" → output containing dangerous HTML
+//   "#err:<kind>" → the failure each chat API sends for it (see FAILURES): auth, balance, rate, model, context, policy,
+//   overloaded, server, timeout, network (the connection is dropped), stream (an error after the answer started)
 // Image API: /models?type=image, /image/generate (prompt "違反" → 422, "ぼかし" → blurred), /image/styles, /image/upscale, /image/edit, /image/background-remove
 // Video API (Venice, OpenRouter, Gemini): a job answers after a few asks with scripts/mock-video.mp4; prompt "違反" → 422
 import http from 'node:http';
@@ -192,6 +194,74 @@ function chunked(text, size = 6) {
   return out;
 }
 
+/**
+ * What each chat API sends for a failure, as their docs describe it ("#err:<kind>" in the last user message).
+ * [status, body, headers]; 'network' drops the connection, 'stream' and the in-stream refusals are handled by each route
+ */
+const FAILURES = {
+  venice: {
+    auth: [401, { error: 'Authentication failed', code: 'AUTHENTICATION_FAILED' }],
+    balance: [402, { error: 'Insufficient USD or Diem balance to complete request.', code: 'INSUFFICIENT_BALANCE' }],
+    rate: [429, { error: 'Rate limit exceeded for requests per minute.', code: 'RATE_LIMIT_EXCEEDED' }, { 'retry-after': '20' }],
+    model: [404, { error: 'Specified model not found', code: 'MODEL_NOT_FOUND' }],
+    context: [400, { error: { type: 'invalid_request_error', param: 'messages', code: 'context_length_exceeded', message: "This model's maximum context length is 32768 tokens. However, you requested 40213 tokens." } }],
+    policy: [422, { error: 'Your request violates the content policy.', code: 'CONTENT_POLICY_VIOLATION' }],
+    overloaded: [503, { error: 'The model is at capacity. Please try again later.', code: 'MODEL_AT_CAPACITY' }],
+    server: [500, { error: 'Inference processing failed.', code: 'INFERENCE_FAILED' }],
+    timeout: [504, { error: 'The request timed out. Use stream: true for long requests.', code: 'REQUEST_TIMEOUT' }]
+  },
+  anthropic: {
+    auth: [401, { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }],
+    balance: [400, { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.' } }],
+    rate: [429, { type: 'error', error: { type: 'rate_limit_error', message: 'This request would exceed the rate limit for your organization of 50 requests per minute.' } }, { 'retry-after': '20' }],
+    model: [404, { type: 'error', error: { type: 'not_found_error', message: 'model: claude-mock-9' } }],
+    context: [400, { type: 'error', error: { type: 'invalid_request_error', message: 'prompt is too long: 210432 tokens > 200000 maximum' } }],
+    overloaded: [529, { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } }],
+    server: [500, { type: 'error', error: { type: 'api_error', message: 'Internal server error' } }],
+    timeout: [504, { type: 'error', error: { type: 'timeout_error', message: 'Request timed out' } }]
+  },
+  gemini: {
+    auth: [400, { error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT', details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_INVALID', domain: 'googleapis.com' }] } }],
+    balance: [402, { error: { code: 402, message: 'Your prepayment credits are depleted.', status: 'PAYMENT_REQUIRED' } }],
+    rate: [429, { error: { code: 429, message: 'You exceeded your current quota, please check your plan and billing details.', status: 'RESOURCE_EXHAUSTED', details: [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '17s' }] } }],
+    model: [404, { error: { code: 404, message: 'models/gemini-mock-9 is not found for API version v1beta, or is not supported for generateContent.', status: 'NOT_FOUND' } }],
+    context: [400, { error: { code: 400, message: 'The input token count (1210000) exceeds the maximum number of tokens allowed (1048576).', status: 'INVALID_ARGUMENT' } }],
+    overloaded: [503, { error: { code: 503, message: 'The model is overloaded. Please try again later.', status: 'UNAVAILABLE' } }],
+    server: [500, { error: { code: 500, message: 'An internal error has occurred.', status: 'INTERNAL' } }],
+    timeout: [504, { error: { code: 504, message: 'Deadline expired before operation could complete.', status: 'DEADLINE_EXCEEDED' } }]
+  },
+  openai: {
+    auth: [401, { error: { message: 'Incorrect API key provided: sk-proj-mock1234567890abcdefWXYZ. You can find your API key at https://platform.openai.com/account/api-keys.', type: 'invalid_request_error', code: 'invalid_api_key' } }],
+    balance: [429, { error: { message: 'You exceeded your current quota, please check your plan and billing details.', type: 'insufficient_quota', code: 'insufficient_quota' } }],
+    rate: [429, { error: { message: 'Rate limit reached for requests per min. Please try again in 20s.', type: 'requests', code: 'rate_limit_exceeded' } }, { 'retry-after': '20' }],
+    model: [404, { error: { message: 'The model `gpt-mock-9` does not exist or you do not have access to it.', type: 'invalid_request_error', code: 'model_not_found' } }],
+    context: [400, { error: { message: "This model's maximum context length is 128000 tokens. However, your messages resulted in 130211 tokens.", type: 'invalid_request_error', param: 'messages', code: 'context_length_exceeded' } }],
+    policy: [400, { error: { message: 'Your request was rejected as a result of our safety system.', type: 'invalid_request_error', code: 'content_policy_violation' } }],
+    overloaded: [503, { error: { message: 'The server is overloaded or not ready yet.', type: 'server_error', code: 'server_is_overloaded' } }],
+    server: [500, { error: { message: 'The server had an error while processing your request. Sorry about that!', type: 'server_error' } }],
+    timeout: [504, { error: { message: 'Gateway timeout', type: 'server_error' } }]
+  }
+};
+
+/** The failure asked for in a request ("#err:<kind>" in its last user message) */
+function failureAsked(lastUserMessage) {
+  return /#err:([a-z]+)/.exec(JSON.stringify(lastUserMessage ?? ''))?.[1];
+}
+
+/** Answer with the failure of this API, when there is one for the kind; true when answered */
+function fail(res, req, api, kind) {
+  if (kind === 'network') {
+    req.socket.destroy();
+    return true;
+  }
+  const f = FAILURES[api][kind];
+  if (!f) return false;
+  const [status, body, headers = {}] = f;
+  res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
+  res.end(JSON.stringify(body));
+  return true;
+}
+
 const server = http.createServer(async (req, res) => {
   cors(req, res);
   if (req.method === 'OPTIONS') return res.writeHead(204).end();
@@ -265,9 +335,22 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const lastUser = [...b.messages].reverse().find((m) => m.role === 'user');
       const text = (lastUser?.content ?? []).map((c) => c.text ?? '').join('');
+      const failure = failureAsked(lastUser);
+      if (fail(res, req, 'anthropic', failure)) return;
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       const ev = (o) => res.write(`event: ${o.type}\ndata: ${JSON.stringify(o)}\n\n`);
       ev({ type: 'message_start', message: { usage: { input_tokens: 20, cache_read_input_tokens: 30, cache_creation_input_tokens: 0, output_tokens: 1 } } });
+      if (failure === 'policy') {
+        ev({ type: 'message_delta', delta: { stop_reason: 'refusal' }, usage: { output_tokens: 1 } });
+        ev({ type: 'message_stop' });
+        return res.end();
+      }
+      if (failure === 'stream') {
+        ev({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
+        ev({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '途中まで' } });
+        ev({ type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } });
+        return res.end();
+      }
       // Web search (server tool): with the web_search tool and "天気" / "検索" in the message.
       // "一時停止" pauses the turn (pause_turn) once; the continuation request ends with the paused assistant content.
       const searching = (b.tools ?? []).some((t) => t.type === 'web_search_20250305') && /天気|検索|weather|search/i.test(text);
@@ -337,8 +420,19 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const last = b.contents.at(-1);
       const text = (last?.parts ?? []).map((p) => p.text ?? '').join('');
+      const failure = failureAsked(last);
+      if (fail(res, req, 'gemini', failure)) return;
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       const send = (o) => res.write(`data: ${JSON.stringify(o)}\n\n`);
+      if (failure === 'policy') {
+        send({ promptFeedback: { blockReason: 'PROHIBITED_CONTENT' }, usageMetadata: { promptTokenCount: 40 } });
+        return res.end();
+      }
+      if (failure === 'stream') {
+        send({ candidates: [{ content: { role: 'model', parts: [{ text: '途中まで' }] } }] });
+        send({ error: { code: 503, message: 'The model is overloaded. Please try again later.', status: 'UNAVAILABLE' } });
+        return res.end();
+      }
       const searching = (b.tools ?? []).some((t) => t.google_search) && /天気|検索|weather|search/i.test(text);
       if (b.generationConfig?.thinkingConfig?.includeThoughts) send({ candidates: [{ content: { role: 'model', parts: [{ text: '考えています（モック）', thought: true }] } }] });
       await sleep(300);
@@ -429,6 +523,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/chat/completions' && req.method === 'POST') {
       const b = await readBody(req);
       const text = (b.messages?.at(-1)?.content ?? '').toString();
+      if (fail(res, req, 'openai', failureAsked(b.messages?.at(-1)))) return;
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       for (const c of chunked('OpenAI モックの応答です。あなた: ' + text.slice(0, 40))) { chunk(res, { choices: [{ delta: { content: c } }] }); await sleep(15); }
       chunk(res, { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 20, completion_tokens: 10 } });
@@ -483,6 +578,8 @@ const server = http.createServer(async (req, res) => {
     const sys = (body.messages ?? []).find((m) => m.role === 'system')?.content;
     const vp = body.venice_parameters ?? {};
     if (last.includes('残高')) return json(res, 402, { error: 'Insufficient USD or Diem balance to complete request' });
+    const failure = failureAsked([...(body.messages ?? [])].reverse().find((m) => m.role === 'user'));
+    if (fail(res, req, 'venice', failure)) return;
     if (last.includes('盗用')) balanceUsd -= 2;
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'x-venice-balance-usd': balanceUsd.toFixed(6) });
     balanceUsd -= COST;
@@ -666,6 +763,12 @@ const server = http.createServer(async (req, res) => {
     let i = 0;
     for (const p of chunked(answer)) {
       await send({ content: p });
+      if (failure === 'stream' && ++i > 5) {
+        // OpenRouter / NanoGPT style: an error chunk with finish_reason "error", then the end
+        chunk(res, { id, object: 'chat.completion.chunk', error: { code: 502, message: 'Upstream provider returned an invalid response', metadata: { error_type: 'provider_unavailable' } }, choices: [{ index: 0, delta: { content: '' }, finish_reason: 'error' }] });
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      }
       if (last.includes('エラー') && ++i > 5) {
         chunk(res, { error: { message: 'Model overloaded', type: 'server_error', retry_after: 2 } });
         res.write('data: [DONE]\n\n');

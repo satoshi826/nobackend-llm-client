@@ -4,7 +4,7 @@
 import type { Connection } from '../../connection';
 import type { VideoJob, VideoParams } from '../../../../lib/db/schema';
 import type { AuthRef, ProviderError, Transport } from '../../../../lib/providers/types';
-import { classifyError, errorFromFetchFailure, ProviderFailure } from '../../../../lib/providers/errors';
+import { classifyError, failureOf, isAbort } from '../../../../lib/providers/errors';
 import { t } from '../messages';
 
 export interface VideoModelInfo {
@@ -118,9 +118,8 @@ export async function sendVideoRequest(
   try {
     res = await transport.fetch(url, init, auth);
   } catch (e) {
-    if (e instanceof ProviderFailure) throw new VideoApiError(e.error);
-    if ((e as Error)?.name === 'AbortError') throw e;
-    throw new VideoApiError(errorFromFetchFailure(e));
+    if (isAbort(e)) throw e;
+    throw new VideoApiError(failureOf(e));
   }
   if (!res.ok) {
     let body: any = null;
@@ -131,7 +130,6 @@ export async function sendVideoRequest(
     }
     const own = rejected?.(res.status, body);
     if (own) throw own;
-    if (res.status === 503) throw new VideoApiError({ kind: 'server', status: 503, message: t('err.busy') });
     throw new VideoApiError(classifyError(res.status, body, res.headers.get('retry-after')));
   }
   return res;
@@ -145,7 +143,7 @@ export const jsonPost = (body: unknown, signal?: AbortSignal): RequestInit => ({
 });
 
 /** A content-policy rejection (the prompt or the first frame) */
-export const policyError = (suggestedModel?: string) => new VideoApiError({ kind: 'bad-request', status: 422, message: t('err.policy') }, suggestedModel);
+export const policyError = (suggestedModel?: string) => new VideoApiError({ kind: 'content-policy', status: 422, message: t('err.policy') }, suggestedModel);
 
 /** "5s" → 5 */
 export const seconds = (x: unknown): number | undefined => {

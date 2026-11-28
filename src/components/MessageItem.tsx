@@ -12,6 +12,7 @@ import { modelOf } from '../state/models';
 import { settings } from '../state/settings';
 import { sentRequestsOf } from '../state/sent-requests';
 import { RequestView } from './RequestView';
+import { ErrorNotice } from './ErrorNotice';
 import { copyText } from './clipboard';
 import { composerFocus, composerText, openModelPicker } from '../state/ui';
 import { Markdown } from './Markdown';
@@ -275,10 +276,12 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
         </div>
       )}
       {m.status === 'error' && m.error && (
-        <div role="alert" class="mt-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger">
-          <div>{m.error.message}</div>
-          {m.error.hint && <div class="mt-1 text-xs opacity-80">{m.error.hint}</div>}
-        </div>
+        <ErrorNotice
+          error={m.error}
+          providerId={m.meta?.providerId}
+          retry={rerunnable ? () => regenerate(m.id) : undefined}
+          otherModel={rerunnable && !owned ? () => openModelPicker({ kind: 'regenerate', assistantId: m.id }) : undefined}
+        />
       )}
       {m.status === 'aborted' && <div class="mt-1 text-xs text-muted">{t('msg.stopped')}</div>}
       {!!m.meta?.truncated && (
@@ -287,6 +290,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
         </div>
       )}
       {m.meta?.finishReason === 'length' && <div class="mt-1 text-xs text-warn">{t('msg.lengthLimit')}</div>}
+      {m.meta?.finishReason === 'content-filter' && <div class="mt-1 text-xs text-warn">{t('msg.contentFilter')}</div>}
       <Sources parts={sources} />
       {!streaming && (
         <div class="mt-1.5 flex flex-wrap items-center gap-0.5 text-xs text-muted opacity-70 transition group-hover:opacity-100 focus-within:opacity-100">

@@ -57,6 +57,7 @@ npm run dev
 **Keywords** in a message change the mock's behaviour:
 
 - General: `思考` / `think`, `コード`, `長文`, `エラー`, `残高`, `画像`, `xss`, `盗用`.
+- Failures (Venice, Anthropic, Gemini and OpenAI mocks, each in its API's own shape): `#err:auth`, `#err:balance`, `#err:rate`, `#err:model`, `#err:context`, `#err:policy`, `#err:overloaded`, `#err:server`, `#err:timeout`, `#err:network` (the connection is dropped), `#err:stream` (an error after the answer started).
 - Tool-based web search: `検索`, `読んで` (after a search). Reading a page directly: `ページを読んで`.
 - Built-in search (the Anthropic and Gemini mocks): `検索` / `天気`.
 - Skills: `スキル` loads the first skill.

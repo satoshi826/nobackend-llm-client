@@ -13,7 +13,7 @@ import type {
 } from './types';
 import { parseSSE } from './sse';
 import { ThinkSplitter } from './think-splitter';
-import { failureOf, isAbort, ProviderFailure, sendOrFail } from './errors';
+import { classifyError, failureOf, isAbort, ProviderFailure, sendOrFail } from './errors';
 import { t as tp } from './messages';
 
 /** A number from a JSON number or numeric string */
@@ -187,15 +187,9 @@ async function* streamChat(
       }
       if (chunk?.error) {
         yield* state.closeAll();
+        // Sent after the answer started (OpenRouter, NanoGPT, LiteLLM): the status, when given, is in the error's code or status
         const e = chunk.error;
-        yield {
-          type: 'error',
-          error: {
-            kind: e?.code === 'rate_limit_exceeded' || e?.type === 'rate_limit' ? 'rate-limit' : 'server',
-            message: tp('stream.error', { message: typeof e === 'string' ? e : e?.message ?? tp('stream.unknownError') }),
-            retryAfterMs: typeof e?.retry_after === 'number' ? e.retry_after * 1000 : undefined
-          }
-        };
+        yield { type: 'error', error: classifyError(numberOf(e?.code) ?? numberOf(e?.status), chunk) };
         return;
       }
       if (preset.parseExtra) {

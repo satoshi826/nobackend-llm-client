@@ -2,6 +2,7 @@
 // Requests that need the key go through the transport with an AuthRef (the vault attaches the key).
 // Images come back as base64 / raw bytes, so no new host has to be allowed by the CSP.
 import { joinUrl } from '../../../../lib/providers/openai-compatible';
+import { detailOf } from '../../../../lib/providers/errors';
 import { base64ToBlob, blobToBase64 } from '../../../../lib/base64';
 import type { ImageParams } from '../../../../lib/db/schema';
 import type { ImageCallContext, ImageProvider } from './types';
@@ -90,7 +91,7 @@ export function buildGenerateBody(p: ImageParams, m: ImageModelInfo | undefined)
 function policyError(status: number, body: any): ImageApiError | undefined {
   if (status !== 422) return undefined;
   return new ImageApiError(
-    { kind: 'bad-request', status: 422, message: t('err.policy'), hint: typeof body?.error === 'string' ? body.error : undefined },
+    { kind: 'content-policy', status: 422, message: t('err.policy'), detail: detailOf(typeof body?.error === 'string' ? body.error : undefined) },
     body && (body.suggested_prompt || body.recommended_model) ? { prompt: body.suggested_prompt || undefined, model: body.recommended_model || undefined } : undefined
   );
 }

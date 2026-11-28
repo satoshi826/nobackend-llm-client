@@ -129,9 +129,9 @@ describe('model lists', () => {
 
   it('keeps the error of a failed fetch and the models it had', async () => {
     models.value = [model('venice', 'cached')];
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"down"}', { status: 503 })));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"down"}', { status: 500 })));
     await refreshModels('venice');
-    expect(modelsStates.value.venice).toMatchObject({ loading: false, error: { kind: 'server', status: 503 } });
+    expect(modelsStates.value.venice).toMatchObject({ loading: false, error: { kind: 'server', status: 500 } });
     expect(models.value.map((m) => m.id)).toEqual(['cached']);
   });
 });

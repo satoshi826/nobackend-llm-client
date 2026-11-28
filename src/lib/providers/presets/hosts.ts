@@ -28,7 +28,7 @@ function pricing(input: number | undefined, output: number | undefined, cached?:
 /** The shared parts of these presets: OpenAI-compatible, reasoning never sent back */
 function host(
   id: string,
-  o: Pick<ProviderPreset, 'mapModel' | 'modelsPath' | 'balanceApi' | 'keyUrl' | 'defaultModels'> & {
+  o: Pick<ProviderPreset, 'mapModel' | 'modelsPath' | 'balanceApi' | 'keyUrl' | 'creditUrl' | 'defaultModels'> & {
     hasPrivateModels?: boolean;
     /** Its cheaper flex tier, as the part of the list price it costs */
     flexPriceFactor?: number;
@@ -39,6 +39,7 @@ function host(
     modelsPath: o.modelsPath ?? 'models',
     mapModel: o.mapModel,
     keyUrl: o.keyUrl,
+    creditUrl: o.creditUrl,
     defaultModels: o.defaultModels,
     ...(o.hasPrivateModels
       ? {
@@ -90,6 +91,7 @@ export const nanogptPreset = host('nanogpt', {
 // ---- DeepInfra: open models; per-key monthly spend limits; prompts kept in memory only ----
 export const deepinfraPreset = host('deepinfra', {
   keyUrl: 'https://deepinfra.com/dash/keys',
+  creditUrl: 'https://deepinfra.com/dash/billing',
   defaultModels: ['deepseek-ai/DeepSeek-V4.1-Flash-1017', 'deepseek-ai/DeepSeek-V4.1-Flash', 'openai/gpt-oss-120b'],
   // Flex is billed at 0.8 of the standard price, on the models that offer it
   flexPriceFactor: 0.8,
@@ -113,6 +115,7 @@ export const deepinfraPreset = host('deepinfra', {
 export const cerebrasPreset = host('cerebras', {
   // The console; keys are under API Keys in its menu
   keyUrl: 'https://cloud.cerebras.ai',
+  creditUrl: 'https://cloud.cerebras.ai',
   defaultModels: ['gpt-oss-120b'],
   modelsPath: '../public/v1/models',
   mapModel(raw, providerId) {
@@ -139,6 +142,7 @@ export const cerebrasPreset = host('cerebras', {
 // ---- Novita: open models; per-key budgets; no data kept by default ----
 export const novitaPreset = host('novita', {
   keyUrl: 'https://novita.ai/settings/key-management',
+  creditUrl: 'https://novita.ai/billing',
   defaultModels: ['deepseek/deepseek-v4.1-flash-1017', 'deepseek/deepseek-v4.1-flash'],
   mapModel(raw, providerId) {
     const id = str(raw?.id);
@@ -187,6 +191,7 @@ export const chutesPreset = host('chutes', {
 // Its list is a plain array (not { data }); `type` tells chat models apart and prices are per 1M tokens
 export const togetherPreset = host('together', {
   keyUrl: 'https://api.together.ai/settings/projects/~current/api-keys',
+  creditUrl: 'https://api.together.ai/settings/organization/~current/billing',
   defaultModels: ['deepseek-ai/DeepSeek-V4.1-Flash-1017', 'deepseek-ai/DeepSeek-V4.1-Flash'],
   mapModel(raw, providerId) {
     const id = str(raw?.id);

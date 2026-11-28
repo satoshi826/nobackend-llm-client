@@ -165,11 +165,16 @@ export type ProviderEvent =
   | { type: 'done'; reason: 'stop' | 'length' | 'tool-calls' | 'content-filter' | 'pause' }
   | { type: 'error'; error: ProviderError };
 
+/** What went wrong, by what the user can do about it (lib/providers/errors.ts maps each provider's signals to these) */
 export type ProviderErrorKind =
   | 'auth'
   | 'insufficient-balance'
   | 'rate-limit'
   | 'model-unavailable'
+  | 'context-length'
+  | 'content-policy'
+  | 'overloaded'
+  | 'timeout'
   | 'bad-request'
   | 'server'
   | 'network-or-cors'
@@ -179,9 +184,13 @@ export type ProviderErrorKind =
 export interface ProviderError {
   kind: ProviderErrorKind;
   status?: number;
+  /** What happened and what to do, in the UI language */
   message: string;
   retryAfterMs?: number;
+  /** The app's own advice on what to check (e.g. what may block the provider's host) */
   hint?: string;
+  /** The provider's own words, shown only on request (keys taken out) */
+  detail?: string;
 }
 
 /**
@@ -224,6 +233,8 @@ export interface ProviderPreset {
   keyGuide?: string;
   /** The provider's page where a key is made */
   keyUrl?: string;
+  /** The provider's page where credit is added (offered when a request fails for want of it) */
+  creditUrl?: string;
   /** The catch of the provider's free tier, for providers that have one (they are listed first on the provider picker) */
   freeTier?: string;
   /**

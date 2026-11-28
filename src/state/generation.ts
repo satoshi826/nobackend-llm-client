@@ -163,7 +163,8 @@ async function generateReply(convId: string, parentUserId: string) {
       persist: (m) => repo.putMessage(m)
     });
     recordUsage({ id: final.id, conversationId: conv.id, providerId: cfg.id, model: conv.modelId, kind: 'chat', usage: final.meta?.usage, costUsd: final.meta?.costUsd, temporary: conv.temporary });
-    if (final.status === 'error' && final.error) showToast(final.error.message, 'error');
+    // The answer shows the error; a conversation not on screen tells it in a toast
+    if (final.status === 'error' && final.error && currentId.value !== conv.id) showToast(final.error.message, 'error');
     void suggestReplies(conv, final, history);
   } finally {
     // Ended already unless the run failed

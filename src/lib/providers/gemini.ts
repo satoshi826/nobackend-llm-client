@@ -7,7 +7,7 @@
 // - Google Search grounding (tools: google_search) → sources; image output (responseModalities) → image events
 import type { ChatMessage, ChatRequest, ModelInfo, Part, ProviderAdapter, ProviderEvent } from './types';
 import { parseSSE } from './sse';
-import { failureOf, isAbort } from './errors';
+import { classifyError, failureOf, isAbort } from './errors';
 import { send, toolFailureText } from './openai-compatible';
 import { t as tp } from './messages';
 
@@ -165,7 +165,7 @@ export const geminiAdapter: ProviderAdapter = {
         }
         if (d?.error) {
           yield* closeOpen();
-          yield { type: 'error', error: { kind: 'server', message: tp('stream.error', { message: d.error.message ?? tp('stream.unknownError') }) } };
+          yield { type: 'error', error: classifyError(typeof d.error.code === 'number' ? d.error.code : undefined, d) };
           return;
         }
         if (d?.promptFeedback?.blockReason) blocked = String(d.promptFeedback.blockReason);
@@ -225,7 +225,7 @@ export const geminiAdapter: ProviderAdapter = {
       return;
     }
     if (blocked && !raw.length) {
-      yield { type: 'error', error: { kind: 'bad-request', message: tp('gemini.blocked', { reason: blocked }) } };
+      yield { type: 'error', error: { kind: 'content-policy', message: tp('error.policy'), detail: `promptFeedback.blockReason: ${blocked}` } };
       return;
     }
     // Signed parts of a step with function calls go back as they came (thoughtSignature)

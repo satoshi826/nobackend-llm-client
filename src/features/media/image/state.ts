@@ -3,7 +3,7 @@
 // Providers are reached only through the ImageProvider interface.
 import { computed, effect, signal } from '@preact/signals';
 import * as repo from '../../../lib/db/repo';
-import type { Conversation, ImageParams, ImageResult, MessageRecord } from '../../../lib/db/schema';
+import type { Conversation, ImageParams, ImageResult, MessageError, MessageRecord } from '../../../lib/db/schema';
 import { getImage } from '../../../lib/db/images';
 import { providerConfigOf } from '../../../lib/keys/accounts';
 import { plainTransport } from '../../../lib/providers/transport';
@@ -432,18 +432,18 @@ export async function runImageJob(convId: string, userMsgId: string, override: P
   try {
     const { blobs, result, costUsd } = await call(p, ctrl.signal);
     if (!blobs.length)
-      throw new ImageApiError({ kind: 'bad-request', message: result.violations ? t('err.policy') : t('err.noImage') });
+      throw new ImageApiError(result.violations ? { kind: 'content-policy', message: t('err.policy') } : { kind: 'bad-request', message: t('err.noImage') });
     const parts = await storeImages(conv, draft.id, blobs);
     const cost = recordImageUsage(conv, p, blobs.length, costUsd);
     final = { ...draft, parts, status: 'done', image: { params: p, ...result, costUsd: cost, costEstimated: costUsd === undefined } };
   } catch (e) {
     if (ctrl.signal.aborted) final = { ...draft, status: 'aborted' };
     else {
-      const err: { kind: string; message: string; hint?: string } = e instanceof ImageApiError ? e.error : { kind: 'server', message: String((e as Error)?.message ?? e) };
+      const err: MessageError = e instanceof ImageApiError ? e.error : { kind: 'server', message: String((e as Error)?.message ?? e) };
       final = {
         ...draft,
         status: 'error',
-        error: { kind: err.kind, message: err.message, hint: err.hint },
+        error: { kind: err.kind, message: err.message, hint: err.hint, detail: err.detail, status: err.status },
         image: { params: p, ...(e instanceof ImageApiError && e.suggestion ? { suggestion: e.suggestion } : {}) }
       };
     }

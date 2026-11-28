@@ -86,7 +86,8 @@ export function applyEvent(msg: MessageRecord, ev: ProviderEvent, blocks: BlockM
     case 'error': {
       msg.status = ev.error.kind === 'aborted' ? 'aborted' : 'error';
       if (ev.error.kind !== 'aborted') {
-        msg.error = { kind: ev.error.kind, message: ev.error.message, hint: ev.error.hint };
+        const { kind, message, hint, detail, status } = ev.error;
+        msg.error = { kind, message, hint, detail, status };
         noteError({ source: 'chat', kind: ev.error.kind, status: ev.error.status, provider: msg.meta?.providerId, message: ev.error.message });
       }
       break;

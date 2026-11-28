@@ -1,8 +1,7 @@
 // What every image provider shares: the model description, errors, and the request helper.
 import type { AuthRef, ProviderError, Transport } from '../../../../lib/providers/types';
 import type { ImageParams } from '../../../../lib/db/schema';
-import { classifyError, errorFromFetchFailure, ProviderFailure } from '../../../../lib/providers/errors';
-import { t } from '../messages';
+import { classifyError, failureOf, isAbort } from '../../../../lib/providers/errors';
 
 /** Anime model families prompted with Danbooru tags, each with its own recommended quality tags (presets.ts) */
 export type TagFamily = 'animagine' | 'noobai' | 'pony' | 'illustrious';
@@ -143,9 +142,8 @@ export async function sendImageRequest(
   try {
     res = await transport.fetch(url, init, auth);
   } catch (e) {
-    if (e instanceof ProviderFailure) throw new ImageApiError(e.error);
-    if ((e as Error)?.name === 'AbortError') throw e;
-    throw new ImageApiError(errorFromFetchFailure(e));
+    if (isAbort(e)) throw e;
+    throw new ImageApiError(failureOf(e));
   }
   if (!res.ok) {
     let body: any = null;
@@ -156,7 +154,6 @@ export async function sendImageRequest(
     }
     const own = rejected?.(res.status, body);
     if (own) throw own;
-    if (res.status === 503) throw new ImageApiError({ kind: 'server', status: 503, message: t('err.busy') });
     throw new ImageApiError(classifyError(res.status, body, res.headers.get('retry-after')));
   }
   return res;

@@ -86,9 +86,9 @@ describe('applyEvent', () => {
 
   it('records a provider error on the message and in the error log', () => {
     const before = recentErrors().length;
-    const m = applyAll(draft(), [{ type: 'error', error: { kind: 'rate-limit', status: 429, message: 'slow down', hint: 'h' } }]);
+    const m = applyAll(draft(), [{ type: 'error', error: { kind: 'rate-limit', status: 429, message: 'slow down', hint: 'h', detail: 'raw' } }]);
     expect(m.status).toBe('error');
-    expect(m.error).toEqual({ kind: 'rate-limit', message: 'slow down', hint: 'h' });
+    expect(m.error).toEqual({ kind: 'rate-limit', message: 'slow down', hint: 'h', detail: 'raw', status: 429 });
     const logged = recentErrors();
     expect(logged).toHaveLength(before + 1);
     expect(logged.at(-1)).toMatchObject({ source: 'chat', kind: 'rate-limit', status: 429, provider: 'venice', message: 'slow down' });

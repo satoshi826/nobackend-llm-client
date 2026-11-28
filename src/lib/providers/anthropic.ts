@@ -109,6 +109,20 @@ type Block =
   | { kind: 'server-tool'; args: string; raw: any }
   | { kind: 'other'; raw: any };
 
+/** The HTTP status each error type of the API goes with, for an error sent inside the stream (docs: API errors) */
+const STATUS_OF_ERROR: Record<string, number> = {
+  invalid_request_error: 400,
+  authentication_error: 401,
+  billing_error: 402,
+  permission_error: 403,
+  not_found_error: 404,
+  request_too_large: 413,
+  rate_limit_error: 429,
+  api_error: 500,
+  timeout_error: 504,
+  overloaded_error: 529
+};
+
 export const anthropicAdapter: ProviderAdapter = {
   async listModels(cfg, preset, transport, auth): Promise<ModelInfo[]> {
     const res = await send(cfg, preset, transport, auth, preset.modelsPath ?? 'models?limit=100', { method: 'GET', headers: { Accept: 'application/json' } });
@@ -246,9 +260,7 @@ export const anthropicAdapter: ProviderAdapter = {
           }
           case 'error': {
             yield* closeAll();
-            const e = d.error ?? {};
-            const kind = e.type === 'overloaded_error' ? 'server' : e.type === 'rate_limit_error' ? 'rate-limit' : 'server';
-            yield { type: 'error', error: { ...classifyError(500, { error: e }), kind, message: tp('stream.error', { message: e.message ?? e.type ?? tp('stream.unknownError') }) } };
+            yield { type: 'error', error: classifyError(STATUS_OF_ERROR[d.error?.type] ?? 500, d) };
             return;
           }
         }

@@ -4,6 +4,7 @@
 //   then GET /videos/{id}/content (the MP4, same host, with the key)
 // - a first frame goes in frame_images as a data: URL
 import { joinUrl } from '../../../../lib/providers/openai-compatible';
+import { detailOf } from '../../../../lib/providers/errors';
 import { blobToDataUrl } from '../../../../lib/base64';
 import type { VideoParams } from '../../../../lib/db/schema';
 import { jsonPost, perSecondFor, sendVideoRequest, VideoApiError, type VideoModelInfo, type VideoProvider } from './types';
@@ -91,7 +92,7 @@ export const openrouterVideoProvider: VideoProvider = {
       if (!content.ok) throw new VideoApiError({ kind: 'server', status: content.status, message: t('err.noVideo') });
       return { video: await content.blob(), costUsd: typeof data.usage?.cost === 'number' ? data.usage.cost : undefined };
     }
-    if (['failed', 'cancelled', 'expired'].includes(data?.status)) throw new VideoApiError({ kind: 'server', message: typeof data.error === 'string' && data.error ? t('err.failedWith', { error: data.error }) : t('err.failed') });
+    if (['failed', 'cancelled', 'expired'].includes(data?.status)) throw new VideoApiError({ kind: 'server', message: t('err.failed'), detail: detailOf(typeof data.error === 'string' ? data.error : undefined) });
     return typeof data?.progress === 'number' ? { progress: Math.min(0.95, data.progress / 100) } : {};
   },
   privacyLabel: () => ({ tone: 'zinc', label: 'OpenRouter', title: t('privacy.openrouterTitle') })

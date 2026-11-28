@@ -7,7 +7,7 @@ import { flexTier } from './presets/define';
 import { estimateCost } from '../usage';
 import { venicePreset } from './presets/venice';
 import { plainTransport } from './transport';
-import { classifyError } from './errors';
+import { classifyError, ProviderFailure } from './errors';
 import type { ProviderConfig, ProviderEvent, Transport } from './types';
 import { providerConfigOf } from '../keys/accounts';
 
@@ -149,12 +149,26 @@ describe('openAICompatibleAdapter.chat', () => {
     expect(x).toBe('結論');
   });
 
-  it('turns in-stream errors into error events', async () => {
-    const t = fakeTransport([sse({ choices: [{ delta: { content: 'a' } }] }), sse({ error: { message: 'overloaded', retry_after: 3 } })]);
+  it('turns in-stream errors into classified error events', async () => {
+    const t = fakeTransport([sse({ choices: [{ delta: { content: 'a' } }] }), sse({ error: { message: 'Model overloaded', retry_after: 3 } })]);
     const evs = await collect(openAICompatibleAdapter.chat(cfg, venicePreset, cred, { model: 'm', messages: [], signal: new AbortController().signal }, t));
     const last = evs[evs.length - 1] as any;
     expect(last.type).toBe('error');
-    expect(last.error.retryAfterMs).toBe(3000);
+    expect(last.error).toMatchObject({ kind: 'overloaded', retryAfterMs: 3000, detail: 'Model overloaded' });
+    // OpenRouter: the status in error.code, with finish_reason "error"
+    const or = fakeTransport([sse({ error: { code: 429, message: 'Rate limited', metadata: { error_type: 'rate_limit_exceeded' } }, choices: [{ index: 0, delta: { content: '' }, finish_reason: 'error' }] })]);
+    const orEvs = await collect(openAICompatibleAdapter.chat(cfg, venicePreset, cred, { model: 'm', messages: [], signal: new AbortController().signal }, or));
+    expect((orEvs[orEvs.length - 1] as any).error).toMatchObject({ kind: 'rate-limit', status: 429 });
+  });
+
+  it('gives a key vault network failure the app text and the provider’s CORS hint', async () => {
+    const t: Transport = {
+      fetch: async () => {
+        throw new ProviderFailure({ kind: 'network-or-cors', message: 'vault words' });
+      }
+    };
+    const evs = await collect(openAICompatibleAdapter.chat(cfg, venicePreset, cred, { model: 'm', messages: [], signal: new AbortController().signal }, t));
+    expect((evs[0] as any).error).toMatchObject({ kind: 'network-or-cors', hint: venicePreset.corsHint });
   });
 
   it('accumulates tool_calls fragments and parses JSON at tool-call-end', async () => {

@@ -8,6 +8,7 @@ import { t as tp } from './messages';
 // Texts are getters so they follow the current language
 export const venicePreset = definePreset(ENDPOINTS.venice, {
   keyUrl: 'https://venice.ai/settings/api',
+  creditUrl: 'https://venice.ai/settings/api',
   // Also sent in response headers; this reads it before the first message
   balanceApi: { path: 'api_keys/rate_limits', read: (j) => numberOf(j?.data?.balances?.USD) },
   // Venice's own web search (venice_parameters.enable_web_search, set in requestOptions)

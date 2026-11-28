@@ -4,6 +4,7 @@ import { estimateTokens } from './context';
 import type { MessageRecord } from '../db/schema';
 import type { Part, ProviderConfig, Transport } from '../providers/types';
 import { venicePreset } from '../providers/presets/venice';
+import { t as tp } from '../providers/messages';
 import { providerConfigOf } from '../keys/accounts';
 
 function rec(id: string, role: MessageRecord['role'], parts: Part[], extra: Partial<MessageRecord> = {}): MessageRecord {
@@ -138,6 +139,6 @@ describe('summarize', () => {
 
   it('fails on an empty summary and on a provider error', async () => {
     await expect(summarize(plan, opts(streamTransport([sse({ choices: [{ delta: { content: '   ' }, finish_reason: 'stop' }] })])))).rejects.toThrow();
-    await expect(summarize(plan, opts(streamTransport([sse({ error: { message: 'overloaded' } })])))).rejects.toThrow('overloaded');
+    await expect(summarize(plan, opts(streamTransport([sse({ error: { message: 'overloaded' } })])))).rejects.toThrow(tp('error.overloaded'));
   });
 });

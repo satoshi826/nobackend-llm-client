@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { extractFromPage } from './extract';
 import type { ProviderConfig, Transport } from '../providers/types';
 import { venicePreset } from '../providers/presets/venice';
+import { t as tp } from '../providers/messages';
 import { providerConfigOf } from '../keys/accounts';
 
 const sse = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`;
@@ -47,6 +48,6 @@ describe('reading a page for a model', () => {
 
   it('fails when the reader returns nothing or the provider fails', async () => {
     await expect(extractFromPage(page, 'q', opts(streamTransport([sse({ choices: [{ delta: { content: '' }, finish_reason: 'stop' }] })])))).rejects.toThrow();
-    await expect(extractFromPage(page, 'q', opts(streamTransport([sse({ error: { message: 'boom' } })])))).rejects.toThrow('boom');
+    await expect(extractFromPage(page, 'q', opts(streamTransport([sse({ error: { message: 'boom' } })])))).rejects.toThrow(tp('error.server'));
   });
 });

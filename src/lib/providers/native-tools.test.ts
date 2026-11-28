@@ -171,6 +171,13 @@ describe('Gemini native adapter', () => {
     expect(evs.find((e) => e.type === 'usage')).toMatchObject({ usage: { inputTokens: 10, outputTokens: 8, reasoningTokens: 3, cachedInputTokens: 4, webSearches: 1 } });
     expect(evs.at(-1)).toEqual({ type: 'done', reason: 'tool-calls' });
   });
+  it('reports a blocked prompt as a content-policy error and an error in the stream by its code', async () => {
+    const cfg = providerConfigOf('gemini')!;
+    const blocked = await collect(geminiAdapter.chat(cfg, geminiPreset, { keyId: 'gemini' }, req(), once([{ promptFeedback: { blockReason: 'PROHIBITED_CONTENT' } }])));
+    expect((blocked.at(-1) as any).error).toMatchObject({ kind: 'content-policy', detail: 'promptFeedback.blockReason: PROHIBITED_CONTENT' });
+    const busy = await collect(geminiAdapter.chat(cfg, geminiPreset, { keyId: 'gemini' }, req(), once([{ error: { code: 503, message: 'The model is overloaded.', status: 'UNAVAILABLE' } }])));
+    expect((busy.at(-1) as any).error).toMatchObject({ kind: 'overloaded', status: 503 });
+  });
   it('sends signed parts back verbatim within the turn, and function responses with their ids', () => {
     const raw = [{ functionCall: { id: 'fc1', name: 'echo', args: {} }, thoughtSignature: 'SIG' }];
     const tool = { type: 'tool' as const, toolCallId: 'fc1', name: 'echo', argsText: '{}', input: {}, state: 'output-available' as const, modelOutput: 'ok' };

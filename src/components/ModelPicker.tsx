@@ -15,6 +15,7 @@ import { accountById } from '../lib/keys/accounts';
 import { Badge, Button, Chevron, Collapse, EmptyState, Icon, Modal, MoreMark, ScrollArea, SearchField, Select, Spinner, cx, formatCtx, useBatches } from './ui';
 import { t } from './messages';
 import { formatDate, formatDateTime, formatUsd } from '../lib/i18n';
+import { ErrorNotice } from './ErrorNotice';
 
 /** A list price per million tokens ('—' when the model has none) */
 const price = (n?: number) => (n === undefined ? '—' : formatUsd(n));
@@ -412,12 +413,7 @@ function ModelSections({
                 <p class="rounded-lg bg-warn-soft p-2.5 text-xs text-warn">{copy.relayedNote}</p>
               )}
               {copy.pickerNote && <p class="rounded-lg bg-glass p-2.5 text-xs text-muted">{copy.pickerNote}</p>}
-              {st.error && (
-                <p role="alert" class="rounded-lg bg-danger-soft p-2.5 text-xs text-danger">
-                  {t('picker.loadFailed', { message: st.error.message })}
-                  {st.error.hint && <span class="block opacity-80">{st.error.hint}</span>}
-                </p>
-              )}
+              {st.error && <ErrorNotice error={{ ...st.error, message: t('picker.loadFailed', { message: st.error.message }) }} providerId={p.id} />}
               {list.length > 0 ? (
                 <ul class="space-y-0.5">{rows(p.id, list)}</ul>
               ) : (

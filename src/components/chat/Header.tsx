@@ -5,9 +5,9 @@ import { compactConversation, compactingConv, compactionPreview, contextUsage, l
 import { settings } from '../../state/settings';
 import { inputBudget } from '../../lib/chat/context';
 import { isStreaming } from '../../state/runs';
-import { modal, openSettings } from '../../state/ui';
+import { contextPanelOpen, modal, openSettings } from '../../state/ui';
 import { conversationCosts, loadConversationCost } from '../../state/costs';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import { Badge, Button, Chip, Icon, Spinner, cx } from '../ui';
 import { Popover } from '../menu';
 import { PageHeader } from '../PageHeader';
@@ -28,7 +28,8 @@ const PARTS = [
 
 /** The context meter: its percentage in the header; pressing it opens where the context goes and the compaction */
 function ContextMeter() {
-  const [open, setOpen] = useState(false);
+  const open = contextPanelOpen.value;
+  const setOpen = (v: boolean) => (contextPanelOpen.value = v);
   const ref = useRef<HTMLButtonElement>(null);
   const u = contextUsage.value;
   const pct = u.ratio != null ? Math.round(u.ratio * 100) : null;

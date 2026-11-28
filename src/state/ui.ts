@@ -17,6 +17,8 @@ export const sidebarOpen = signal(false);
 export const composerText = signal('');
 /** Signal to move focus to the input box (moves each time the value changes) */
 export const composerFocus = signal(0);
+/** The chat header's context panel (where the context goes, and compaction) is open */
+export const contextPanelOpen = signal(false);
 export const toast = signal<{ text: string; kind: 'info' | 'error' } | null>(null);
 
 /** Purpose of the model picker: change the conversation's model, or regenerate with another model */

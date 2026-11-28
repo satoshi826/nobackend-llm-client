@@ -14,6 +14,7 @@ function model(providerId: string, id: string, name: string, extra: Partial<Mode
 // ---- Anthropic (native Messages API) ----
 export const anthropicPreset = definePreset(ENDPOINTS.anthropic, {
   keyUrl: 'https://console.anthropic.com/settings/keys',
+  creditUrl: 'https://console.anthropic.com/settings/billing',
   defaultModels: ['claude-sonnet-5-5', 'claude-sonnet-5', 'claude-sonnet-4-6'],
   modelsPath: 'models?limit=100',
   // Anthropic's web search server tool (added by the adapter when ChatRequest.webSearch is set)
@@ -47,6 +48,7 @@ const geminiImageOut = (id: string) => /-image(-|$)|nano-banana/.test(id);
 const geminiSearches = (id: string) => /^gemini-([3-9]|\d{2})/.test(id) && !geminiImageOut(id);
 export const geminiPreset = definePreset(ENDPOINTS.gemini, {
   keyUrl: 'https://aistudio.google.com/apikey',
+  creditUrl: 'https://aistudio.google.com/billing',
   get freeTier() {
     return tp('gemini.freeTier');
   },
@@ -90,6 +92,7 @@ export const geminiPreset = definePreset(ENDPOINTS.gemini, {
 const OPENAI_SKIP = /image|audio|realtime|tts|transcribe|embedding|moderation|search|instruct|dall-e|whisper|babbage|davinci|codex|computer-use|deep-research/;
 export const openaiPreset = definePreset(ENDPOINTS.openai, {
   keyUrl: 'https://platform.openai.com/api-keys',
+  creditUrl: 'https://platform.openai.com/settings/organization/billing',
   defaultModels: ['gpt-6.2-sol', 'gpt-6.1-sol', 'gpt-6-sol'],
   // Chat Completions does not take earlier reasoning back
   reasoningResend: 'never',
@@ -116,6 +119,7 @@ export const openaiPreset = definePreset(ENDPOINTS.openai, {
 // ---- DeepSeek ----
 export const deepseekPreset = definePreset(ENDPOINTS.deepseek, {
   keyUrl: 'https://platform.deepseek.com/api_keys',
+  creditUrl: 'https://platform.deepseek.com/top_up',
   defaultModels: ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-chat'],
   // Accounts topped up in CNY have no USD entry
   balanceApi: { path: 'user/balance', read: (j) => numberOf((Array.isArray(j?.balance_infos) ? j.balance_infos : []).find((b: any) => b?.currency === 'USD')?.total_balance) },
@@ -176,6 +180,7 @@ export function groqExtras(chunk: any, seen: Set<string>): ProviderEvent[] {
 }
 export const groqPreset = definePreset(ENDPOINTS.groq, {
   keyUrl: 'https://console.groq.com/keys',
+  creditUrl: 'https://console.groq.com/settings/billing',
   get freeTier() {
     return tp('groq.freeTier');
   },

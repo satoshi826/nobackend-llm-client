@@ -780,9 +780,7 @@ const server = http.createServer(async (req, res) => {
       return finishTools('run_skill_script', { skill, path: userText.includes('止まらない') ? 'scripts/loop.js' : 'scripts/hello.js', args: ['world'] });
     }
     if (lastMsg?.role === 'tool' && lastCallName === 'run_skill_script') {
-      // Quoted a line a paragraph, not in a code block: one with long lines scrolls sideways, and its scrolled region
-      // cannot take focus (an accessibility failure of code blocks in answers, open)
-      const ans = `スクリプトの結果:\n\n${String(lastMsg.content ?? '').split('\n').filter(Boolean).map((l) => `> ${l}`).join('\n>\n')}`;
+      const ans = `スクリプトの結果:\n\n\`\`\`\n${String(lastMsg.content ?? '')}\n\`\`\``;
       return finishText(ans, { prompt_tokens: 300, completion_tokens: ans.length }, COST);
     }
     // If load_skill is passed and the user wrote "スキル", load the first skill in the list

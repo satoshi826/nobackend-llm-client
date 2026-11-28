@@ -131,6 +131,9 @@ export function renderMarkdown(src: string, opts: { highlight: boolean; citation
     const linked = opts.citations?.length ? linkCitations(src, opts.citations) : src;
     const html = (opts.highlight ? markedHl : markedPlain).parse(linked, { async: false }) as string;
     const nodes = DOMPurify.sanitize(html, { ...PURIFY_CONFIG, RETURN_DOM_FRAGMENT: true });
+    // Code blocks and tables scroll sideways: a keyboard reaches them to scroll (set here, after sanitizing, so the
+    // model's own HTML can't set tab stops)
+    for (const el of nodes.querySelectorAll('pre, table')) el.setAttribute('tabindex', '0');
     // DOMPurify gives nothing back when its own parsing fails
     return nodes.hasChildNodes() || !src.trim() ? nodes : asText();
   } catch (e) {

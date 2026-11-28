@@ -85,7 +85,7 @@ export const t = defineMessages(
       'このアプリはサーバーを持ちません。会話はこのブラウザにだけ保存され、あなたの API キーで LLM の提供元に直接接続します。アカウント登録・解析ツール・外部スクリプトはありません。',
     'onb.introProvider':
       'このアプリはサーバーを持ちません。会話はこのブラウザにだけ保存され、あなたの API キーで {name} に直接接続します。アカウント登録・解析ツール・外部スクリプトはありません。',
-    'onb.step1': '下の一覧から提供元を選びます。',
+    'onb.step1': '下の一覧から提供元を選びます。説明に「無料枠あり」とある提供元は、無料で試せます。',
     'onb.step2': 'その提供元のサイトで API キーを作り、ここに貼り付けます。アカウントがあれば数分で済みます。',
     'onb.step3': 'キーを保存すると、そのままチャットを始められます。',
     'onb.keySafety': 'キーはこのブラウザのキー金庫に保存され、その提供元への通信にだけ付けて送られます。',
@@ -184,7 +184,7 @@ export const t = defineMessages(
         'This app has no server. Your conversations are stored only in this browser, and it connects straight to the LLM provider with your API key. No sign-up, no analytics, no third-party scripts.',
       'onb.introProvider':
         'This app has no server. Your conversations are stored only in this browser, and it connects straight to {name} with your API key. No sign-up, no analytics, no third-party scripts.',
-      'onb.step1': 'Choose a provider below.',
+      'onb.step1': 'Choose a provider below. Those that say “Free tier” can be tried for free.',
       'onb.step2': 'Create an API key on its site and paste it here. With an account there, it takes a few minutes.',
       'onb.step3': 'Once the key is saved, you can start chatting right away.',
       'onb.keySafety': 'Your key is stored in this browser’s key vault and sent only with requests to that provider.',
@@ -279,7 +279,7 @@ export const t = defineMessages(
       'onb.welcome': '开始使用',
       'onb.introAny': '本应用没有服务器。对话只保存在此浏览器中，并使用你的 API 密钥直接连接 LLM 服务商。无需注册账号，不使用分析工具或外部脚本。',
       'onb.introProvider': '本应用没有服务器。对话只保存在此浏览器中，并使用你的 API 密钥直接连接 {name}。无需注册账号，不使用分析工具或外部脚本。',
-      'onb.step1': '从下方列表中选择服务商。',
+      'onb.step1': '从下方列表中选择服务商。说明中写有“有免费额度”的服务商可以免费试用。',
       'onb.step2': '在该服务商的网站创建 API 密钥并粘贴到这里。已有账号的话只需几分钟。',
       'onb.step3': '保存密钥后即可开始对话。',
       'onb.keySafety': '密钥保存在此浏览器的密钥保险库中，只随发往该服务商的请求一起发送。',

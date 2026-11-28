@@ -74,7 +74,7 @@ export const t = defineMessages(
     'openrouter.cheapestDesc': 'オフ（既定）でも、OpenRouter は安い提供元を多めに使います。オンなら、毎回いちばん安い提供元から順に試します。速さは劣ることがあります。',
     'flex.label': '安さを優先する（flex）',
     'flex.desc': '空いているときに処理される安い枠で送ります。料金は {percent}% 安くなりますが、返事が遅くなることがあります。使えないときや対応していないモデルでは、通常の枠で送り直します。',
-    'gemini.tagline': 'Google の Gemini。無料枠では、送った内容が Google のサービス改善に使われることがあります。',
+    'gemini.tagline': 'Google の Gemini。無料枠あり（無料枠では、送った内容が Google のサービス改善に使われることがあります）。',
     'gemini.keyGuide':
       'Google AI Studio（aistudio.google.com）でキーを作ってください。無料枠のキーでは、送った内容が Google のサービス改善に使われ、人が読むこともあります（有料枠では使われません）。有料にする場合は Google Cloud の請求設定で予算を設定してください。',
     'gemini.searchNote': 'Gemini 3 以降のモデルで Google 検索を使います。無料枠（月 5,000 回）を超えると 1,000 回あたり 14 ドルかかります。',
@@ -87,7 +87,7 @@ export const t = defineMessages(
     'deepseek.keyGuide': 'DeepSeek Platform（platform.deepseek.com）でキーを作ってください。プリペイド式なので、チャージした額が使える上限になります。',
     'deepseek.destinationNote': '中国の事業者（DeepSeek）のサーバーで処理されます',
 
-    'groq.tagline': '高速な推論。Llama・Qwen・gpt-oss などのオープンなモデル。',
+    'groq.tagline': '高速な推論。Llama・Qwen・gpt-oss などのオープンなモデル。無料枠あり（回数とトークン数に上限）。',
     'groq.keyGuide': 'GroqCloud（console.groq.com）でキーを作ってください。無料枠には回数とトークン数の上限があります。有料にする場合は利用上限を設定してください。',
 
     'groq.searchNote': 'gpt-oss のモデルで、Groq のブラウザ検索（Exa）を使います。',
@@ -178,7 +178,7 @@ export const t = defineMessages(
       'openrouter.cheapestDesc': 'Even when off (the default), OpenRouter favors cheaper providers. When on, it tries them cheapest first every time, which can be slower.',
       'flex.label': 'Prefer lower cost (flex)',
       'flex.desc': 'Sends requests in a cheaper tier served when capacity is free: {percent}% less, but replies can be slower. When it is unavailable, or the model does not offer it, the request is sent again in the standard tier.',
-      'gemini.tagline': "Google's Gemini. On the free tier, what you send may be used to improve Google's services.",
+      'gemini.tagline': "Google's Gemini. Free tier (on it, what you send may be used to improve Google's services).",
       'gemini.keyGuide':
         "Create a key in Google AI Studio (aistudio.google.com). With a free-tier key, what you send is used to improve Google's services and may be read by people (not on the paid tier). If you switch to paid, set a budget in Google Cloud billing.",
       'gemini.searchNote': 'Uses Google Search on Gemini 3 and later models. Beyond the free allowance (5,000 per month) it costs $14 per 1,000 searches.',
@@ -191,7 +191,7 @@ export const t = defineMessages(
       'deepseek.keyGuide': 'Create a key on the DeepSeek Platform (platform.deepseek.com). It is prepaid, so the amount you top up is your spending limit.',
       'deepseek.destinationNote': 'Processed on servers of a company in China (DeepSeek)',
 
-      'groq.tagline': 'Fast inference. Open models such as Llama, Qwen and gpt-oss.',
+      'groq.tagline': 'Fast inference. Open models such as Llama, Qwen and gpt-oss. Free tier (with rate and token limits).',
       'groq.keyGuide': 'Create a key in GroqCloud (console.groq.com). The free tier limits requests and tokens. If you switch to paid, set a spending limit.',
 
       'groq.searchNote': "Uses Groq's browser search (Exa) on the gpt-oss models.",
@@ -281,7 +281,7 @@ export const t = defineMessages(
       'openrouter.cheapestDesc': '关闭时（默认），OpenRouter 也会更多地使用便宜的提供方。开启后，每次都从最便宜的提供方开始尝试，速度可能较慢。',
       'flex.label': '优先低价（flex）',
       'flex.desc': '以空闲时处理的低价档位发送：费用降低 {percent}%，但回复可能变慢。该档位不可用或模型不支持时，会以标准档位重新发送。',
-      'gemini.tagline': 'Google 的 Gemini。使用免费额度时，发送的内容可能会被用于改进 Google 的服务。',
+      'gemini.tagline': 'Google 的 Gemini。有免费额度（使用免费额度时，发送的内容可能会被用于改进 Google 的服务）。',
       'gemini.keyGuide':
         '请在 Google AI Studio（aistudio.google.com）创建密钥。使用免费额度的密钥时，发送的内容会被用于改进 Google 的服务，也可能被人工查看（付费额度不会）。如改为付费，请在 Google Cloud 的结算设置中设置预算。',
       'gemini.searchNote': '在 Gemini 3 及更新的模型上使用 Google 搜索。超出免费额度（每月 5,000 次）后，每 1,000 次收费 14 美元。',
@@ -294,7 +294,7 @@ export const t = defineMessages(
       'deepseek.keyGuide': '请在 DeepSeek Platform（platform.deepseek.com）创建密钥。采用预付费方式，充值金额即为可用上限。',
       'deepseek.destinationNote': '在中国企业（DeepSeek）的服务器上处理',
 
-      'groq.tagline': '高速推理。提供 Llama、Qwen、gpt-oss 等开放模型。',
+      'groq.tagline': '高速推理。提供 Llama、Qwen、gpt-oss 等开放模型。有免费额度（次数和 token 数有上限）。',
       'groq.keyGuide': '请在 GroqCloud（console.groq.com）创建密钥。免费额度对请求次数和 token 数有上限。如改为付费，请设置用量上限。',
 
       'groq.searchNote': '在 gpt-oss 模型上使用 Groq 的浏览器搜索（Exa）。',

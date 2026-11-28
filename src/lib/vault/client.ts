@@ -38,13 +38,18 @@ interface Pending {
   controller?: ReadableStreamDefaultController<Uint8Array>;
 }
 
+/** The vault's own operations answer at once: one with no answer by then fails instead of waiting forever */
+const ANSWER_MS = 15000;
+
+type Result = { ok: boolean; value?: unknown; message?: string };
+
 class VaultConnection {
   private port: MessagePort | null = null;
   private ready: Promise<void> | null = null;
   private pending = new Map<string, Pending>();
   private statusListeners = new Set<(s: Record<string, KeyStatus>, v: VaultState) => void>();
   private acks = new Map<string, () => void>();
-  private results = new Map<string, (r: { ok: boolean; value?: unknown; message?: string }) => void>();
+  private results = new Map<string, (r: Result) => void>();
   private seq = 0;
 
   connect(): Promise<void> {
@@ -97,6 +102,21 @@ class VaultConnection {
     this.port!.postMessage(m);
   }
 
+  /** Send an operation and wait for its answer (in `waiting` under `id`) */
+  private ask<T>(waiting: Map<string, (r: T) => void>, id: string, m: ToVault): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        waiting.delete(id);
+        reject(new Error(t('vaultFailed')));
+      }, ANSWER_MS);
+      waiting.set(id, (r) => {
+        clearTimeout(timer);
+        resolve(r);
+      });
+      this.send(m);
+    });
+  }
+
   async requestStatus() {
     await this.connect();
     this.send({ type: 'status' });
@@ -108,10 +128,7 @@ class VaultConnection {
   async dataKey(type: 'wrap-data-key' | 'unwrap-data-key', arg: unknown): Promise<unknown> {
     await this.connect();
     const id = `d${++this.seq}`;
-    const r = await new Promise<{ ok: boolean; value?: unknown; message?: string }>((resolve) => {
-      this.results.set(id, resolve);
-      this.send(type === 'wrap-data-key' ? { type, id, raw: String(arg) } : { type, id, blob: arg });
-    });
+    const r = await this.ask(this.results, id, type === 'wrap-data-key' ? { type, id, raw: String(arg) } : { type, id, blob: arg });
     if (!r.ok) throw new Error(r.message ?? t('vaultFailed'));
     return r.value;
   }
@@ -120,10 +137,7 @@ class VaultConnection {
   async command(type: 'clear-all' | 'lock'): Promise<void> {
     await this.connect();
     const id = `c${++this.seq}`;
-    await new Promise<void>((resolve) => {
-      this.acks.set(id, resolve);
-      this.send({ type, id });
-    });
+    await this.ask<void>(this.acks, id, { type, id });
   }
 
   private onMessage(m: FromVault) {

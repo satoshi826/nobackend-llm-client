@@ -58,7 +58,7 @@ npm run dev
 - Built-in search (the Anthropic and Gemini mocks): `検索` / `天気`.
 - Skills: `スキル` loads the first skill.
 - Skill creator: `作って` / `直して` calls `save_skill` in a skill-creator conversation.
-- Files: `レポートにまとめて` calls `create_file`; with a file in the conversation, `追記して` / `結論を直して` / `全部読んで` call `append_file` / `edit_file` / `read_file`.
+- Files: `レポートにまとめて` calls `write_file`; with a file in the conversation, `追記して` / `結論を直して` / `全部読んで` call `append_file` / `edit_file` / `read_file`.
 - Sandbox: `実行できる例` answers with runnable JS and HTML code blocks, `計算して` calls `run_javascript`, `ページを作って` creates an HTML file.
 
 ### Check with production headers

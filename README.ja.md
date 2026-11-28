@@ -58,7 +58,7 @@ npm run dev
 - 内蔵の検索（Anthropic と Gemini のモック）: `検索` / `天気`
 - スキル: `スキル` で一覧の先頭のスキルを読み込む
 - skill-creator を使った会話: `作って` / `直して` で save_skill を呼ぶ
-- ファイル: `レポートにまとめて` で create_file を呼ぶ。会話にファイルがあれば、`追記して` / `結論を直して` / `全部読んで` で append_file / edit_file / read_file を呼ぶ
+- ファイル: `レポートにまとめて` で write_file を呼ぶ。会話にファイルがあれば、`追記して` / `結論を直して` / `全部読んで` で append_file / edit_file / read_file を呼ぶ
 - サンドボックス: `実行できる例` で実行できる JS と HTML のコードブロックを返し、`計算して` で run_javascript を呼び、`ページを作って` で HTML ファイルを作る
 
 ### 本番と同じヘッダで確かめる

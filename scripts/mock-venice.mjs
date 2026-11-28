@@ -541,22 +541,26 @@ const server = http.createServer(async (req, res) => {
     // File tools: "レポートにまとめて" creates a Markdown file, "追記して" appends to the file listed in the
     // system prompt, "結論を直して" edits it, "読んで" (with a file listed) reads it
     const fileInSys = /\(id: ([\w-]+),/.exec(String(sys ?? ''))?.[1];
+    // write_file asks for the working folder's name while the conversation has none
+    const newFolder = (folder) => (body.tools.find((t) => t.function?.name === 'write_file')?.function.parameters?.properties?.folder ? { folder } : {});
     // Sandbox: "計算して" runs JavaScript, "ページを作って" creates an HTML file
     if (toolNames.includes('run_javascript') && lastMsg?.role === 'user' && userText.includes('計算して')) {
       await send({ content: '計算します。' });
       return finishTools('run_javascript', { code: "const xs = [3, 1, 4, 1, 5, 9, 2, 6];\nconst sum = xs.reduce((a, b) => a + b, 0);\nconsole.log('sum', sum);\nreturn { mean: sum / xs.length, max: Math.max(...xs) };" });
     }
-    if (toolNames.includes('create_file') && lastMsg?.role === 'user' && userText.includes('ページを作って')) {
+    if (toolNames.includes('write_file') && lastMsg?.role === 'user' && userText.includes('ページを作って')) {
       await send({ content: 'ページを作ります。' });
-      return finishTools('create_file', {
+      return finishTools('write_file', {
         name: 'counter.html',
+        ...newFolder('counter-page'),
         content: '<!doctype html>\n<html><body style="font:16px sans-serif;padding:16px">\n<h1>Counter</h1>\n<button id="b">+1</button> <span id="n">0</span>\n<script>let c = 0; document.getElementById(\'b\').onclick = () => { document.getElementById(\'n\').textContent = ++c; };</script>\n</body></html>\n'
       });
     }
-    if (toolNames.includes('create_file') && lastMsg?.role === 'user' && userText.includes('レポートにまとめて')) {
+    if (toolNames.includes('write_file') && lastMsg?.role === 'user' && userText.includes('レポートにまとめて')) {
       await send({ content: 'レポートをファイルにまとめます。' });
-      return finishTools('create_file', {
+      return finishTools('write_file', {
         name: '調査レポート.md',
+        ...newFolder('research-report'),
         content: '# 調査レポート\n\n## 概要\nモックで作ったレポートです。\n\n## 比較\n\n| 項目 | A | B |\n|---|---|---|\n| 価格 | 安い | 高い |\n| 速度 | 速い | 普通 |\n\n## 結論\n結論は未定です。\n'
       });
     }
@@ -572,7 +576,7 @@ const server = http.createServer(async (req, res) => {
       await send({ content: 'ファイルを読みます。' });
       return finishTools('read_file', { file_id: fileInSys });
     }
-    if (lastMsg?.role === 'tool' && ['create_file', 'append_file', 'edit_file', 'read_file'].includes(lastCallName)) {
+    if (lastMsg?.role === 'tool' && ['write_file', 'append_file', 'edit_file', 'read_file'].includes(lastCallName)) {
       const ans = lastCallName === 'read_file' ? `読みました（${String(lastMsg.content ?? '').length} 文字）。` : `ファイルに保存しました。${String(lastMsg.content ?? '').slice(0, 60)}`;
       return finishText(ans, { prompt_tokens: 300, completion_tokens: ans.length }, COST);
     }

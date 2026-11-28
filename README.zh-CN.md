@@ -58,7 +58,7 @@ npm run dev
 - 内置搜索（Anthropic 和 Gemini 的模拟）: `検索` / `天気`
 - 技能: `スキル` 会读取列表中的第一个技能
 - 使用 skill-creator 的对话: `作って` / `直して` 会调用 save_skill
-- 文件: `レポートにまとめて` 会调用 create_file；对话中有文件时，`追記して` / `結論を直して` / `全部読んで` 会调用 append_file / edit_file / read_file
+- 文件: `レポートにまとめて` 会调用 write_file；对话中有文件时，`追記して` / `結論を直して` / `全部読んで` 会调用 append_file / edit_file / read_file
 - 沙箱: `実行できる例` 会返回可运行的 JS 和 HTML 代码块，`計算して` 会调用 run_javascript，`ページを作って` 会创建 HTML 文件
 
 ### 用生产环境的响应头检查

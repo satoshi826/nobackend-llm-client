@@ -219,10 +219,25 @@ export interface Skill {
   updatedAt: number;
   /** Skill created by the model via save_skill (omitted for user-created ones) */
   createdBy?: 'model';
+  /** Front matter of its SKILL.md that the app does not use (license, allowed-tools, ...), kept for exporting it */
+  frontmatter?: string;
   // Only built-in skills have the following (not stored)
   builtin?: boolean;
   /** Tools that become available only in conversations that loaded this skill */
   allowedTools?: string[];
+}
+
+/**
+ * A file of a skill (scripts/fill.js, reference/forms.md), at a path inside the skill's folder (lib/skills/files.ts).
+ * With a passphrase its path, type and size are encrypted (enc), and data holds its bytes encrypted apart
+ */
+export interface SkillFileRecord {
+  id: string;
+  skillId: string;
+  path: string;
+  mime: string;
+  bytes: number;
+  data: Blob | SealedBytes;
 }
 
 export interface SavedPrompt {
@@ -285,6 +300,7 @@ export class AppDB extends Dexie {
   models!: Table<ModelRecord, [string, string]>;
   settings!: Table<SettingRecord, string>;
   skills!: Table<Skill, string>;
+  skillFiles!: Table<SkillFileRecord, string>;
   usage!: Table<UsageRecord, string>;
   files!: Table<FileRecord, string>;
   fileVersions!: Table<FileVersionText, string>;
@@ -344,6 +360,8 @@ export class AppDB extends Dexie {
           if (thumb && !(thumb instanceof Blob) && typeof thumb.iv === 'string') thumb.iv = fromBase64(thumb.iv);
         });
     });
+    // v13: a skill's files (SKILL.md's folder); a skill stored before has none
+    this.version(13).stores({ skillFiles: 'id, skillId' });
     this.version(8)
       .stores({ blobs: 'id, conversationId, createdAt' })
       .upgrade((tx) =>

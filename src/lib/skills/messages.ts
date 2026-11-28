@@ -13,6 +13,21 @@ export const t = defineMessages(
     'validate.bodyTooLong': '本文が長すぎます。{max} 文字以内にしてください。',
     'parse.noFrontmatter': '先頭に「---」で囲んだ name と description がありません。SKILL.md の形式で書いてください。',
 
+    // ---- A skill's files, and skills brought in ----
+    'files.escapes': '「{path}」はスキルのフォルダの外を指しています。フォルダの中のパスにしてください。',
+    'files.noPath': 'ファイルのパスがありません。',
+    'files.tooDeep': '「{path}」はフォルダが深すぎるか、長すぎます。フォルダは {folders} 段、パスは {max} 文字までにしてください。',
+    'files.tooMany': 'ファイルが多すぎます。1 つのスキルに {max} 個までにしてください。',
+    'files.tooBig': '「{path}」が大きすぎます。1 つのファイルは {max} までにしてください。',
+    'files.totalTooBig': 'ファイルの合計が大きすぎます。1 つのスキルで {max} までにしてください。',
+    'files.reserved': 'SKILL.md はスキルの本文なので、フォルダの一番上にはファイルとして置けません。',
+    'files.twice': '「{path}」が 2 つあります。どちらかの名前を変えてください。',
+    'files.fileIsFolder': '「{path}」はファイルなので、フォルダとしては使えません。',
+    'package.error': '{name}: {error}',
+    'package.badZip': 'zip ファイルとして読めませんでした。壊れていないか確かめてください。',
+    'package.noSkillMd': 'SKILL.md がありません。スキルのフォルダには SKILL.md を入れてください。',
+    'package.skillMdTooBig': 'SKILL.md が大きすぎます（上限 {max}）。',
+
     // ---- Built-in skill: skill-creator ----
     'creator.description': '新しいスキルを作る・既存のスキルを直すときに使う。「この手順をスキルにして」「スキルを作って」「〇〇のスキルを直して」と頼まれたとき。',
     'creator.body': `# スキルの作り方
@@ -44,6 +59,20 @@ export const t = defineMessages(
       'validate.bodyTooLong': 'The instructions are too long. Keep them to {max} characters or fewer.',
       'parse.noFrontmatter': 'There is no name and description enclosed in "---" at the top. Write it in the SKILL.md format.',
 
+      'files.escapes': '"{path}" points outside the skill\'s folder. Use a path inside it.',
+      'files.noPath': 'The file has no path.',
+      'files.tooDeep': '"{path}" is too deep or too long. Use at most {folders} folders and {max} characters.',
+      'files.tooMany': 'Too many files. A skill can have up to {max}.',
+      'files.tooBig': '"{path}" is too large. Each file can be up to {max}.',
+      'files.totalTooBig': 'The files are too large together. A skill\'s files can add up to {max}.',
+      'files.reserved': 'SKILL.md is the skill\'s instructions, so it can\'t be a file at the top of its folder.',
+      'files.twice': 'There are two files at "{path}". Rename one of them.',
+      'files.fileIsFolder': '"{path}" is a file, so it can\'t be used as a folder.',
+      'package.error': '{name}: {error}',
+      'package.badZip': 'It couldn\'t be read as a zip file. Check that it isn\'t damaged.',
+      'package.noSkillMd': 'There is no SKILL.md. A skill\'s folder needs one.',
+      'package.skillMdTooBig': 'SKILL.md is too large (limit {max}).',
+
       'creator.description': 'Use when creating a new skill or fixing an existing one. When asked things like "turn these steps into a skill", "make a skill" or "fix the ... skill".',
       'creator.body': `# How to create a skill
 
@@ -72,6 +101,20 @@ A skill is a set of instructions for doing a particular task. The model decides 
       'validate.bodyRequired': '请输入指令正文。',
       'validate.bodyTooLong': '正文过长。请控制在 {max} 个字符以内。',
       'parse.noFrontmatter': '开头没有用“---”包围的 name 和 description。请按 SKILL.md 的格式书写。',
+
+      'files.escapes': '“{path}”指向技能文件夹之外。请使用文件夹内的路径。',
+      'files.noPath': '文件没有路径。',
+      'files.tooDeep': '“{path}”层级太深或太长。文件夹最多 {folders} 层，路径最多 {max} 个字符。',
+      'files.tooMany': '文件太多。一个技能最多 {max} 个文件。',
+      'files.tooBig': '“{path}”太大。每个文件最大 {max}。',
+      'files.totalTooBig': '文件总大小太大。一个技能的文件合计最大 {max}。',
+      'files.reserved': 'SKILL.md 是技能的指令，不能作为文件放在文件夹顶层。',
+      'files.twice': '有两个“{path}”。请重命名其中一个。',
+      'files.fileIsFolder': '“{path}”是文件，不能用作文件夹。',
+      'package.error': '{name}：{error}',
+      'package.badZip': '无法作为 zip 文件读取。请确认文件没有损坏。',
+      'package.noSkillMd': '没有 SKILL.md。技能文件夹中需要有 SKILL.md。',
+      'package.skillMdTooBig': 'SKILL.md 太大（上限 {max}）。',
 
       'creator.description': '在创建新技能或修改现有技能时使用。例如用户说“把这个流程做成技能”“创建一个技能”“修改某某技能”时。',
       'creator.body': `# 如何创建技能

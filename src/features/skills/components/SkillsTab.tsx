@@ -149,7 +149,7 @@ const SkillRow = memo(function SkillRow({ s, onEdit }: { s: Skill; onEdit(id: st
           <IconButton label={t('tab.editAria', { name: s.name })} title={t('edit')} onClick={() => onEdit(s.id)}>
             <Icon name="edit" class="size-4" />
           </IconButton>
-          <IconButton label={t('tab.exportAria', { name: s.name })} title={t('tab.export')} onClick={() => downloadSkill(s)}>
+          <IconButton label={t('tab.exportAria', { name: s.name })} title={t('tab.export')} onClick={() => void downloadSkill(s)}>
             <Icon name="download" class="size-4" />
           </IconButton>
           <IconButton

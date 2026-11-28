@@ -208,7 +208,7 @@ There's no storage mode to choose.
 
 - **Without a passphrase**, keys and conversations are stored as-is.
 - **With a passphrase**:
-  - API keys, conversations, files, images, videos, saved prompts, skills and the settings that hold your own text (default instructions, image options) are encrypted (not the fetch page's Jina Reader key and sites not asked about).
+  - API keys, conversations, files, images, videos, saved prompts, skills with their files and the settings that hold your own text (default instructions, image options) are encrypted (not the fetch page's Jina Reader key and sites not asked about).
   - The app is hidden behind a lock screen until you unlock it.
   - Each tab and each reload must be unlocked again.
   - You can lock with the sidebar button, or set an idle auto-lock.

@@ -16,7 +16,14 @@ const ctx = { signal: new AbortController().signal, transport: { fetch: () => Pr
 describe('SKILL.md', () => {
   it('reads name, description and body (Claude format)', () => {
     const s = parseSkillMd(`---\nname: pdf-summary\ndescription: Summarize PDFs. Use when the user shares a PDF.\nlicense: MIT\n---\n\n# PDF summary\n\n1. Read it\n`);
-    expect(s).toEqual({ name: 'pdf-summary', description: 'Summarize PDFs. Use when the user shares a PDF.', body: '# PDF summary\n\n1. Read it', modelInvocable: true });
+    expect(s).toEqual({ name: 'pdf-summary', description: 'Summarize PDFs. Use when the user shares a PDF.', body: '# PDF summary\n\n1. Read it', modelInvocable: true, frontmatter: 'license: MIT' });
+  });
+  it('keeps keys it does not read as written, nested ones included, and writes them back', () => {
+    const md = '---\nname: forms\nallowed-tools: Read, Bash\nmetadata:\n  version: "1.2"\n  tags:\n    - pdf\ndescription: |\n  Fill forms.\n---\nDo it.\n';
+    const s = parseSkillMd(md);
+    expect(s).toMatchObject({ name: 'forms', description: 'Fill forms.', body: 'Do it.' });
+    expect(s.frontmatter).toBe('allowed-tools: Read, Bash\nmetadata:\n  version: "1.2"\n  tags:\n    - pdf');
+    expect(parseSkillMd(serializeSkillMd(s))).toEqual(s);
   });
   it('handles quotes, folded blocks, BOM, CRLF and disable-model-invocation', () => {
     const md = '﻿---\r\nname: "deploy"\r\ndescription: >\r\n  Deploy the app.\r\n  Only when asked.\r\ndisable-model-invocation: true\r\n---\r\nRun it.\r\n';

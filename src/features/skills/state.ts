@@ -1,9 +1,13 @@
-// Skill list, editing, import/export, the skills attached to the next send, and what skills
+// Skill list, editing (with the skill's files), import/export, the skills attached to the next send, and what skills
 // contribute to a reply (load_skill, the catalog in the system prompt, save_skill once unlocked)
 import { computed, signal } from '@preact/signals';
 import * as repo from '../../lib/db/repo';
+import { deleteSkill, listSkillFiles, listSkills, putSkill, readSkillFileData, type SkillFileWrite } from '../../lib/db/skills';
 import type { Skill } from '../../lib/db/schema';
 import { parseSkillMd, serializeSkillMd, skillCatalog, unlockedTools, validateSkill, type SkillDraft } from '../../lib/skills/skill';
+import { cleanSkillPath, isTextMime, SKILL_MD, type SkillFile } from '../../lib/skills/files';
+import { pathKey } from '../../lib/paths';
+import { zip } from '../../lib/zip';
 import { BUILTIN_NAMES, BUILTIN_SKILLS } from '../../lib/skills/builtin';
 import { defineFeatureSettings } from '../../state/feature-settings';
 import { registerDataLoader } from '../../state/lifecycle';
@@ -49,16 +53,18 @@ export async function setBuiltinEnabled(name: string, on: boolean) {
 }
 
 export async function loadSkills() {
-  skills.value = await repo.listSkills();
+  skills.value = await listSkills();
 }
 
 const byName = (a: Skill, b: Skill) => a.name.localeCompare(b.name);
 
 /**
  * Create (no id) or update. Throws on a duplicate name or invalid content.
- * by: 'model' when created from save_skill (marked only when new)
+ * by: 'model' when created from save_skill (marked only when new).
+ * files: they become the skill's files (left out: its files stay as they are).
+ * draft.frontmatter left out keeps the skill's own
  */
-export async function saveSkill(draft: SkillDraft, id?: string, by?: 'model'): Promise<Skill> {
+export async function saveSkill(draft: SkillDraft, id?: string, by?: 'model', files?: SkillFileWrite[]): Promise<Skill> {
   const d: SkillDraft = { name: draft.name.trim(), description: draft.description.trim(), body: draft.body, modelInvocable: draft.modelInvocable };
   if (validateSkill(d)) throw new TranslatedError(() => validateSkill(d)!);
   if (BUILTIN_NAMES.has(d.name)) throw new TranslatedError(() => t('state.builtinName', { name: d.name }));
@@ -66,8 +72,9 @@ export async function saveSkill(draft: SkillDraft, id?: string, by?: 'model'): P
   const prev = id ? skills.value.find((s) => s.id === id) : undefined;
   const now = Date.now();
   const createdBy = prev ? prev.createdBy : by;
-  const s: Skill = { id: prev?.id ?? repo.newId(), createdAt: prev?.createdAt ?? now, updatedAt: now, ...d, ...(createdBy ? { createdBy } : {}) };
-  await repo.putSkill(s);
+  const frontmatter = draft.frontmatter ?? prev?.frontmatter;
+  const s: Skill = { id: prev?.id ?? repo.newId(), createdAt: prev?.createdAt ?? now, updatedAt: now, ...d, ...(createdBy ? { createdBy } : {}), ...(frontmatter ? { frontmatter } : {}) };
+  await putSkill(s, files);
   skills.value = [...skills.value.filter((x) => x.id !== s.id), s].sort(byName);
   return s;
 }
@@ -78,9 +85,28 @@ export async function setModelInvocable(id: string, on: boolean) {
 }
 
 export async function removeSkill(id: string) {
-  await repo.deleteSkill(id);
+  await deleteSkill(id);
   skills.value = skills.value.filter((s) => s.id !== id);
   attachedSkillIds.value = attachedSkillIds.value.filter((x) => x !== id);
+}
+
+// ---- A skill's files ----
+
+/** A skill's files: their paths inside its folder, types and sizes */
+export async function skillFileList(skillId: string): Promise<SkillFile[]> {
+  return (await listSkillFiles(skillId)).map(({ path, mime, bytes }) => ({ path, mime, bytes }));
+}
+
+/**
+ * A file of a skill by its path inside the skill's folder (compared as paths are: lib/paths.ts): its text for a text
+ * file (isTextMime), else its bytes; undefined when the skill has no such file. Throws on a path that leaves the folder
+ */
+export async function readSkillFile(skillId: string, path: string): Promise<string | Blob | undefined> {
+  const key = pathKey(cleanSkillPath(path));
+  const f = (await listSkillFiles(skillId)).find((x) => pathKey(x.path) === key);
+  const data = f && (await readSkillFileData(f.id));
+  if (!f || !data) return undefined;
+  return isTextMime(f.mime) ? data.text() : data;
 }
 
 export interface SkillImportResult {
@@ -106,13 +132,17 @@ export async function importSkillFiles(files: File[]): Promise<SkillImportResult
   return res;
 }
 
-export function downloadSkill(s: Skill) {
-  const blob = new Blob([serializeSkillMd(s)], { type: 'application/octet-stream' });
+/** Download a skill: its SKILL.md alone, or with files a zip of its folder (named after it, as Claude's skills are) */
+export async function downloadSkill(s: Skill) {
+  const files = await listSkillFiles(s.id);
+  const md = new Blob([serializeSkillMd(s)], { type: 'application/octet-stream' });
+  const blob = files.length
+    ? await zip([{ name: `${s.name}/${SKILL_MD}`, data: md }, ...(await Promise.all(files.map(async (f) => ({ name: `${s.name}/${f.path}`, data: (await readSkillFileData(f.id))! }))))])
+    : md;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  // In Claude skills the folder name = the skill name, and the content is SKILL.md
-  a.download = `${s.name}.SKILL.md`;
+  a.download = files.length ? `${s.name}.zip` : `${s.name}.SKILL.md`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }

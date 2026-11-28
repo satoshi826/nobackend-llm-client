@@ -1,9 +1,9 @@
-// Backups: export and import. A backup is one JSON document, or, when it holds images or videos, a zip of that
-// document (backup.json) and their bytes, each an entry of its own. Neither side builds the whole file as one
-// string: the JSON is written a row at a time into a Blob, and the bytes of images and videos stay Blobs throughout.
+// Backups: export and import. A backup is one JSON document, or, when it holds bytes (images, videos, skills' files), a
+// zip of that document (backup.json) and those bytes, each an entry of its own. Neither side builds the whole file as one
+// string: the JSON is written a row at a time into a Blob, and bytes stay Blobs throughout.
 // API keys are never included.
 import { db, type Conversation, type ImageParams, type MessageRecord, type SavedPrompt, type Skill, type VideoParams } from './schema';
-import { validateSkill } from '../skills/skill';
+import { FRONTMATTER_MAX, validateSkill } from '../skills/skill';
 import { openValue, seal, unseal } from './sealed';
 import { DATA_TABLES } from './data-tables';
 import type { Attachment } from './schema';
@@ -19,7 +19,7 @@ export const EXPORT_FORMAT = 'nobackend-llm-client/export';
  * The backup format's version. Raise it when what a backup holds changes, and add a backup of the new version to
  * backups/ (backups.test.ts): every version the app has written stays readable
  */
-export const EXPORT_VERSION = 7;
+export const EXPORT_VERSION = 8;
 /** The JSON document's name in a zip backup */
 export const BACKUP_ENTRY = 'backup.json';
 
@@ -58,14 +58,14 @@ class TextBlob {
   }
 }
 
-/** A backup file of everything in this browser: JSON (application/json), or a zip (application/zip) when it holds images or videos */
+/** A backup file of everything in this browser: JSON (application/json), or a zip (application/zip) when it holds bytes */
 export async function exportBackup(includeImages = false): Promise<Blob> {
   const d = db();
   const media: ZipEntry[] = [];
-  // A Blob in a row (an image's bytes) becomes an entry of the zip, named in the row
+  // A Blob in a row (an image's or a skill file's bytes) becomes an entry of the zip, named in the row
   const replacer = (_key: string, v: unknown) => {
     if (!(v instanceof Blob)) return v;
-    const file = `media/${media.length + 1}.${extOfMime(v.type)}`;
+    const file = `media/${media.length + 1}.${/^(image|video)\//.test(v.type) ? extOfMime(v.type) : 'bin'}`;
     media.push({ name: file, data: v });
     return { file };
   };
@@ -359,6 +359,7 @@ export function validate(raw: unknown, files: ReadonlyMap<string, Blob> = new Ma
       body: s.body,
       modelInvocable: s.modelInvocable !== false,
       ...(s.createdBy === 'model' ? { createdBy: 'model' as const } : {}),
+      ...(isStr(s.frontmatter) && s.frontmatter.length <= FRONTMATTER_MAX ? { frontmatter: s.frontmatter } : {}),
       createdAt: typeof s.createdAt === 'number' ? s.createdAt : Date.now(),
       updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : Date.now()
     }))

@@ -16,7 +16,7 @@ export interface StorageBreakdown {
   videos: StorageUse;
   /** Files with their earlier versions (count: files) */
   files: StorageUse;
-  /** Bytes of the settings, the model lists, the usage log, saved prompts and skills */
+  /** Bytes of the settings, the model lists, the usage log, saved prompts and skills with their files */
   other: number;
 }
 
@@ -57,6 +57,6 @@ export async function storageBreakdown(): Promise<StorageBreakdown> {
     conversations: await measure(['conversations', 'messages'], 'conversations'),
     ...(await media()),
     files: await measure(['files', 'fileTexts'], 'files'),
-    other: (await measure(['settings', 'models', 'usage', 'prompts', 'skills'], 'settings')).bytes
+    other: (await measure(['settings', 'models', 'usage', 'prompts', 'skills', 'skillFiles'], 'settings')).bytes
   };
 }

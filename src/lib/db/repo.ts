@@ -1,6 +1,6 @@
 // Repository layer. Temporary chat conversations are kept in memory only and never written to IndexedDB.
 // With a passphrase, the content of conversations, messages, saved prompts and skills is stored encrypted (sealed.ts).
-import { db, type Conversation, type MessageRecord, type SavedPrompt, type ModelRecord, type SettingRecord, type Skill } from './schema';
+import { db, type Conversation, type MessageRecord, type SavedPrompt, type ModelRecord, type SettingRecord } from './schema';
 import type { UsageRecord } from '../usage';
 import { currentDataKey, openValue, seal, sealValue, unseal, type SealedTable } from './sealed';
 import type { Sealed } from '../crypto/data';
@@ -191,11 +191,6 @@ export const clearUsage = () => db().usage.clear();
 /** Usage of one conversation */
 export const usageForConversation = (conversationId: string) => db().usage.where('conversationId').equals(conversationId).toArray();
 
-// ---- skills ----
-export const listSkills = async () => Promise.all((await db().skills.orderBy('name').toArray()).map((s) => unseal(s)));
-export const putSkill = async (s: Skill) => db().skills.put(await seal('skills', s));
-export const deleteSkill = (id: string) => db().skills.delete(id);
-
 // ---- prompts ----
 export const listPrompts = async () => Promise.all((await db().prompts.orderBy('updatedAt').reverse().toArray()).map((p) => unseal(p)));
 export const putPrompt = async (p: SavedPrompt) => db().prompts.put(await seal('prompts', p));
@@ -281,7 +276,7 @@ export async function wipeAll(): Promise<void> {
 /** Row counts per table (diagnostics; reads no content) */
 export async function tableCounts(): Promise<Record<string, number>> {
   const d = db();
-  const names = ['conversations', 'messages', 'files', 'fileTexts', 'blobs', 'skills', 'prompts', 'usage', 'models'] as const;
+  const names = ['conversations', 'messages', 'files', 'fileTexts', 'blobs', 'skills', 'skillFiles', 'prompts', 'usage', 'models'] as const;
   const out: Record<string, number> = {};
   for (const n of names) out[n] = await d.table(n).count();
   return out;

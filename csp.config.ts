@@ -47,6 +47,8 @@ export function appCsp(env: Env, vaultOrigin?: string, fetchOrigin?: string): st
     "form-action 'none'",
     "frame-ancestors 'none'",
     "object-src 'none'",
+    // Peer connections are outside every fetch directive (as in the sandbox): refused where the directive is enforced
+    "webrtc 'block'",
     "require-trusted-types-for 'script'",
     'trusted-types dompurify app-sw app-pdf'
   ].join('; ');

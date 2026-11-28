@@ -80,14 +80,15 @@ The vault accepts a connection only from the app origins it was built for, never
 
 ### 3.3 CSP, Trusted Types and sanitized Markdown
 
-Every document gets a strict Content Security Policy, built in one place (`csp.config.ts`). It is sent as a header (`_headers`) and also written into the HTML as a `<meta>` tag for hosts that send no headers.
+Every document gets a strict Content Security Policy, built in one place (`csp.config.ts`). It is sent as a header (`_headers`) and also written into the HTML as a `<meta>` tag for hosts that send no headers. The PDF worker gets its own, as a header only (it is served for `/assets/*`).
 
 | Page | Scripts | Network (`connect-src`) | Other |
 |---|---|---|---|
-| App | `'self'` only, no inline | `'self'` and the providers it calls without a key | `img-src 'self' data: blob:`, `media-src blob:`, `form-action 'none'`, `frame-ancestors 'none'`, Trusted Types |
+| App | `'self'` only, no inline | `'self'` and the providers it calls without a key | `img-src 'self' data: blob:`, `media-src blob:`, `form-action 'none'`, `frame-ancestors 'none'`, `webrtc 'block'`, Trusted Types |
 | Key vault | `'self'` only | providers that take a key, and Tavily | `frame-ancestors`: the app; Trusted Types with no policy |
 | Fetch page | `'self'` only | `https:` | `frame-ancestors`: the app; Trusted Types with no policy |
 | Sandbox | inline and `eval` allowed | `'none'` | `frame-src 'none'`, `form-action 'none'`, `webrtc 'block'` |
+| PDF worker | none loaded (`default-src 'none'`) | `'none'` | no `eval` or WebAssembly; Trusted Types with no policy |
 
 Also on every response: `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, a `Permissions-Policy` that turns off camera, microphone, location, payment and USB; on the app, `Cross-Origin-Opener-Policy: same-origin`.
 
@@ -188,7 +189,7 @@ A skill's instructions go to the model as they are: a skill is trusted text. Imp
 
 ### 3.11 The Service Worker
 
-`sw/sw.js` caches only the app's own static files, so it can start offline. It never touches requests to other origins or non-`GET` requests, and it leaves the vault and fetch pages alone. The page itself is network-first, so an update applies on the next load.
+`sw/sw.js` caches only the app's own static files, so it can start offline. It never touches requests to other origins or non-`GET` requests, and it leaves the vault and fetch pages alone. The page itself is network-first, so an update applies on the next load. The previous release's files are kept until the next update, so a tab opened before an update can still load the parts it loads later.
 
 *Prevents:* conversation content ending up in a cache.
 
@@ -206,7 +207,7 @@ Only one tab uses the data at a time (Web Locks, `src/state/tab.ts`). Another ta
 
 - **The code you are served.** Whoever hosts the app (or controls the domain or the CDN) can serve different code at any time, and the next load uses it. There is no code signing and no published build to compare with. Run your own deployment from source you have read if this matters to you.
 - **The default deployment and XSS.** With the vault and the fetch page on the app's origin (the default), a script running in the app could read your keys (when there is no passphrase or the vault is unlocked), read the passphrase as you type it, and fetch any address. Only the strict setup keeps the keys' values and arbitrary fetching out of its reach.
-- **XSS even in the strict setup.** A script running in the app while it is unlocked can read your conversations and files, use your keys through the vault (§3.2), ask the vault to delete all keys, and show a fake lock screen to catch your passphrase. The CSP does not stop it from sending data out by navigating the tab or opening a window, and the app's CSP has no `webrtc` directive. The design relies on preventing XSS in the first place (§3.3).
+- **XSS even in the strict setup.** A script running in the app while it is unlocked can read your conversations and files, use your keys through the vault (§3.2), ask the vault to delete all keys, and show a fake lock screen to catch your passphrase. The CSP does not stop it from sending data out by navigating the tab or opening a window, nor through peer connections (WebRTC) in browsers that do not enforce the `webrtc` directive (Chrome). The design relies on preventing XSS in the first place (§3.3).
 - **Your browser, extensions and operating system.** Anything that can read the page or your keyboard can read keys and conversations.
 - **An unlocked app.** While unlocked, everything decrypted is in memory and on screen. Auto-lock is off unless you set it.
 - **Providers see what you send.** Every prompt, file and image you send goes to the provider in plain text over HTTPS. Their logging and training policies apply (the README notes some).
@@ -217,7 +218,7 @@ Only one tab uses the data at a time (Web Locks, `src/state/tab.ts`). Another ta
 - **Skills and backups you import.** A skill's body is followed as instructions; a conversation imported from a backup brings its own instructions (its system prompt). Import only files you trust.
 - **Data kept plain** (§3.4): the usage log, settings, skill names, timestamps, record sizes, the background picture, and the fetch page's data, even with a passphrase.
 - **Weak passphrases.** A copy of the browser profile can be attacked offline; PBKDF2 slows guessing but does not stop it for a short passphrase. A passkey makes unlocking as strong as the device's own unlock (PIN, fingerprint, face).
-- **Hosts that cannot send headers** (GitHub Pages and the like): the `<meta>` CSP cannot carry `frame-ancestors`, so other sites can frame the pages (the vault and fetch page still accept messages only from the app), and `nosniff`, `Referrer-Policy` and COOP are lost. Project sites under one `*.github.io` share one origin, so your other project sites can read what the app stores.
+- **Hosts that cannot send headers** (GitHub Pages and the like): the `<meta>` CSP cannot carry `frame-ancestors`, so other sites can frame the pages (the vault and fetch page still accept messages only from the app), and `nosniff`, `Referrer-Policy` and COOP are lost. The PDF worker runs without its CSP (a `<meta>` CSP does not reach workers). Project sites under one `*.github.io` share one origin, so your other project sites can read what the app stores.
 - **The sandbox.** DNS prefetch hints are asked off, which browsers do not guarantee; peer connections (WebRTC) are blocked only in browsers that enforce the CSP's `webrtc` directive (not Chrome). The sandbox removes them from its own window, but a frame created inside it has its own.
 - **The relay** checks the `Origin` header, which any script outside a browser can fake, so others can use it within its rate limit, which Cloudflare applies loosely.
 - **Browser storage can be cleared.** Browsers may delete site data when space is low, and Safari deletes data of sites not opened for 7 days. Ask for persistent storage in Settings → Privacy and data, and keep backups.

@@ -26,6 +26,9 @@ describe('fetch page', () => {
     expect(nameFor(new URL('https://img.example/abc'), null, 'image/png')).toBe('abc.png');
     expect(nameFor(new URL('https://img.example/'), null, 'image/jpeg')).toBe('img.example.jpg');
   });
+  it('blocks peer connections in the app, as in the sandbox', () => {
+    expect(appCsp({})).toContain("webrtc 'block'");
+  });
   it('is the only document that may reach any https address', () => {
     expect(fetchCsp(["'self'"])).toContain('connect-src https:');
     expect(appCsp({})).not.toContain('https:;');

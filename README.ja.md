@@ -116,7 +116,7 @@ VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.c
 
 ### ほかの静的ホスト（GitHub Pages など）
 
-`npm run build` は各ページの CSP を `_headers` だけでなく HTML にも入れるので、`_headers` を読まないホスト（GitHub Pages）でも CSP は効きます。ただし `<meta>` の CSP に書けないものは失われます: `frame-ancestors`（ほかのサイトがページを埋め込める）と、ほかのヘッダ（`nosniff`、`Referrer-Policy`、COOP）。普段使いには Cloudflare をおすすめします。
+`npm run build` は各ページの CSP を `_headers` だけでなく HTML にも入れるので、`_headers` を読まないホスト（GitHub Pages）でも CSP は効きます。ただし `<meta>` の CSP に書けないものは失われます: `frame-ancestors`（ほかのサイトがページを埋め込める）、ほかのヘッダ（`nosniff`、`Referrer-Policy`、COOP）、PDF 用 Worker の CSP（`<meta>` の CSP は Worker に届きません）。普段使いには Cloudflare をおすすめします。
 
 標準ではドメインの直下（`<ユーザー名>.github.io` という名前のリポジトリか、独自ドメイン）から配信します。`<ユーザー名>.github.io/<リポジトリ名>/` のようなパスの下に置くときは、そのパスを指定してビルドします。
 

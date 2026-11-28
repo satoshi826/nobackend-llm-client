@@ -116,7 +116,7 @@ VITE_VAULT_URL=https://vault.example.com/ VITE_FETCH_URL=https://fetch.example.c
 
 ### 其他静态主机（GitHub Pages 等）
 
-`npm run build` 会把每个页面的 CSP 同时写入 `_headers` 和 HTML，因此不读取 `_headers` 的主机（GitHub Pages）也会执行 CSP。但 `<meta>` 形式的 CSP 写不了的内容会失去：`frame-ancestors`（其他网站可以嵌入这些页面）以及其他响应头（`nosniff`、`Referrer-Policy`、COOP）。日常使用推荐 Cloudflare。
+`npm run build` 会把每个页面的 CSP 同时写入 `_headers` 和 HTML，因此不读取 `_headers` 的主机（GitHub Pages）也会执行 CSP。但 `<meta>` 形式的 CSP 写不了的内容会失去：`frame-ancestors`（其他网站可以嵌入这些页面）、其他响应头（`nosniff`、`Referrer-Policy`、COOP），以及 PDF Worker 的 CSP（`<meta>` 形式的 CSP 不作用于 Worker）。日常使用推荐 Cloudflare。
 
 默认从域名根目录提供（名为 `<用户名>.github.io` 的仓库，或自定义域名）。要放在 `<用户名>.github.io/<仓库名>/` 这样的路径下时，构建时指定该路径：
 

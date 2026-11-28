@@ -116,7 +116,7 @@ Use subdomains of one custom domain (three Workers or Pages sites, free). Two di
 
 ### Other static hosts (GitHub Pages and the like)
 
-`npm run build` puts each page's CSP in its HTML as well as in `_headers`, so a host that ignores `_headers` (GitHub Pages) still enforces it. What a `<meta>` CSP cannot carry is lost there: `frame-ancestors` (other sites may embed the pages) and the other headers (`nosniff`, `Referrer-Policy`, COOP). Prefer Cloudflare for daily use.
+`npm run build` puts each page's CSP in its HTML as well as in `_headers`, so a host that ignores `_headers` (GitHub Pages) still enforces it. What a `<meta>` CSP cannot carry is lost there: `frame-ancestors` (other sites may embed the pages), the other headers (`nosniff`, `Referrer-Policy`, COOP), and the PDF worker's CSP (a `<meta>` CSP does not reach workers). Prefer Cloudflare for daily use.
 
 By default the app is served from the root of a domain (a repository named `<user>.github.io`, or a custom domain). To serve it under a path such as `<user>.github.io/<repository>/`, build with that path:
 

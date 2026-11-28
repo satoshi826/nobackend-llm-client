@@ -602,7 +602,7 @@ const Card = memo(function Card({ it, picked, api }: { it: FilerItem; picked: bo
       <div class="relative">
         {it.type === 'image' ? (
           <>
-            <ImageThumb blobId={it.id} alt={it.name} class="aspect-[4/3] w-full rounded-none!" onOpen={() => (press.consume() ? undefined : api.selecting() ? api.toggle(it.key, false) : api.open(it.key))} />
+            <ImageThumb blobId={it.id} alt={it.name} class="aspect-[4/3] w-full rounded-none!" onOpen={click} />
             {it.video && (
               <span class="pointer-events-none absolute inset-0 grid place-items-center">
                 <span class="grid size-10 place-items-center rounded-full bg-black/60 text-white">

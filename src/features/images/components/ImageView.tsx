@@ -155,7 +155,7 @@ function useNearScreen(ref: { current: Element | null }): boolean {
  * fixed shape (aspect class), so nothing moves when the image arrives. full: a single image in an answer, shown
  * whole (letterboxed in its box) at full resolution
  */
-export function ImageThumb({ blobId, alt, onOpen, full, class: className }: { blobId: string; alt: string; onOpen(): void; full?: boolean; class?: string }) {
+export function ImageThumb({ blobId, alt, onOpen, full, class: className }: { blobId: string; alt: string; onOpen(e: MouseEvent): void; full?: boolean; class?: string }) {
   const ref = useRef<HTMLButtonElement>(null);
   const near = useNearScreen(ref);
   const url = useImageUrl(blobId, full ? 'full' : 'thumb', near);

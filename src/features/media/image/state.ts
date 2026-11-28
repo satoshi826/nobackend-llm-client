@@ -14,7 +14,7 @@ import { defineFeatureSettings, pickLegacy } from '../../../state/feature-settin
 import { openSettings, showToast } from '../../../state/ui';
 import { recordUsage } from '../../../state/request-helpers';
 import { conversations, currentConv, currentId, messages, persistDraft, saveMessage, updateConversation } from '../../../state/conversations';
-import { storeImages } from '../../../state/media';
+import { savedPathOf, storeImages } from '../../../state/media';
 import { beginRun, endRun } from '../../../state/runs';
 import { cancelSuggestions } from '../../../state/suggestions';
 import { registerToolProvider, registerUserRequestHandler } from '../../../state/tool-registry';
@@ -25,7 +25,8 @@ import { openaiImageProvider } from './providers/openai';
 import { ImageApiError, generationCost, hasOption, promptLength, sizeOf, type ImageModelInfo } from './providers/common';
 import { deepinfraImageProvider, nanogptImageProvider, togetherImageProvider } from './providers/hosts';
 import { imageProviderList, imageProviderOf, registerImageProvider, type ImageCallContext, type ImageProvider } from './providers/types';
-import { makeImageTool, type ImageToolInput } from './tool';
+import { imageStems, makeImageTool, type ImageToolInput } from './tool';
+import { extOfMime } from '../../../lib/paths';
 import { TAG_PRESETS, isPresetNegative, sentPrompt } from './presets';
 import { formatNumber } from '../../../lib/i18n';
 import { modelLists } from '../models';
@@ -485,12 +486,16 @@ async function runImageTool(conv: Conversation, messageId: string, input: ImageT
   const model = imageModelOf(p.providerId, p.model);
   const r = await providerFor(p.providerId).generate({ ...p, prompt: sentPrompt(p) }, model, callContext(p.providerId, signal));
   if (!r.images.length) throw new Error(r.violations ? t('err.policy') : t('err.noImage'));
-  const parts = await storeImages(conv, messageId, r.images);
-  const cost = recordImageUsage(conv, p, r.images.length, r.costUsd);
+  // As the chat is now: a file written earlier in this answer may have made its working folder
+  const now = conversations.value.find((c) => c.id === conv.id) ?? conv;
+  const dir = now.workDir ?? '';
+  const stems = dir && input.path ? imageStems(input.path, r.images.length) : undefined;
+  const parts = await storeImages(now, messageId, r.images, stems?.map((s, i) => `${s}.${extOfMime(r.images[i].type || 'image/png')}`));
+  const cost = recordImageUsage(now, p, r.images.length, r.costUsd);
   return {
     blobIds: parts.map((x) => x.blobId),
-    names: parts.map((x) => x.name),
-    inWorkDir: !!conv.workDir,
+    paths: parts.map((x) => (savedPathOf(x.blobId) ?? x.name).slice(dir.length)),
+    inWorkDir: !!dir,
     model: model?.name ?? p.model,
     blurred: !!r.blurred,
     request: { provider: imageProviderOf(p.providerId)?.label ?? p.providerId, prompt: sentPrompt(p), negativePrompt: p.negativePrompt, aspectRatio: p.aspectRatio, resolution: p.resolution, size: p.size, costUsd: cost, costEstimated: r.costUsd === undefined }

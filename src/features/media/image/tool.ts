@@ -1,5 +1,6 @@
 // generate_image: lets a chat model create images with the default image model. Off by default; asks before running.
 import type { Tool } from '../../../lib/tools/types';
+import { cleanFileName, extOf } from '../../../lib/paths';
 import type { ImageModelInfo } from './providers/common';
 import { t } from './messages';
 
@@ -10,11 +11,34 @@ export interface ImageToolInput {
   prompt: string;
   aspect_ratio?: string;
   negative_prompt?: string;
+  /** Where to save it in the working folder ('assets/hero.png'), cleaned as write_file cleans names */
+  path?: string;
 }
 
 export interface ImageToolRun {
-  /** names: what they were saved as; inWorkDir: in the conversation's working folder (else at the top of the Files tab) */
-  (input: ImageToolInput, signal: AbortSignal): Promise<{ blobIds: string[]; names: string[]; inWorkDir: boolean; model: string; blurred: boolean; request?: Record<string, unknown> }>;
+  /** paths: where they were saved, relative to the working folder when inWorkDir (else in the Files tab) */
+  (input: ImageToolInput, signal: AbortSignal): Promise<{ blobIds: string[]; paths: string[]; inWorkDir: boolean; model: string; blurred: boolean; request?: Record<string, unknown> }>;
+}
+
+/**
+ * The paths `count` images get from the path the model gave, without their extension (the image's type sets it):
+ * 'assets/hero.png' → ['assets/hero'], or ['assets/hero-1', 'assets/hero-2'] for two
+ */
+export function imageStems(path: string, count: number): string[] {
+  const stem = path.replace(/\.[^./]*$/, '');
+  return count === 1 ? [stem] : Array.from({ length: count }, (_, i) => `${stem}-${i + 1}`);
+}
+
+const quoted = (paths: string[]) => paths.map((n) => JSON.stringify(n)).join(', ');
+
+/** Where the images went, for the model: the paths to load them by, and why they differ from the path it gave */
+function savedNote(asked: string | undefined, r: { paths: string[]; inWorkDir: boolean }): string {
+  if (!r.inWorkDir) return `Saved in the Files tab as ${quoted(r.paths)}.${asked ? ' The path was ignored: there is no working folder yet (the first write_file makes it).' : ''}`;
+  const stems = asked ? imageStems(asked, r.paths.length) : [];
+  const differs = !!asked && r.paths.some((p, i) => extOf(p) !== extOf(asked) || p.slice(0, -extOf(p).length - 1) !== stems[i]);
+  return `Saved in the working folder as ${quoted(r.paths)}: pages there can load them by that path.${
+    differs ? " That is not exactly the path you gave: the extension follows the image's type, and a path already taken gets a number (nothing is replaced)." : ''
+  }`;
 }
 
 /** How to write the prompt for the image model (for the model only: English, like the descriptions) */
@@ -44,7 +68,11 @@ export function makeImageTool(run: ImageToolRun, model?: ImageToolModel): Tool<I
       properties: {
         prompt: { type: 'string', description: advice.param },
         aspect_ratio: { type: 'string', enum: ASPECTS, description: 'Optional. Width:height; default 1:1.' },
-        negative_prompt: { type: 'string', description: 'Optional. Things the image should not contain.' }
+        negative_prompt: { type: 'string', description: 'Optional. Things the image should not contain.' },
+        path: {
+          type: 'string',
+          description: 'Optional. Where to save it in the working folder, e.g. "assets/hero.png", when a page there will load it by that path; default a name from the time. The extension follows the image\'s type, and a path already taken gets a number. The result gives the path it was saved at.'
+        }
       },
       required: ['prompt']
     },
@@ -56,15 +84,14 @@ export function makeImageTool(run: ImageToolRun, model?: ImageToolModel): Tool<I
       if (!prompt) throw new Error(t('tool.noPrompt'));
       const aspect = typeof r.aspect_ratio === 'string' && ASPECTS.includes(r.aspect_ratio) ? r.aspect_ratio : undefined;
       const negative = typeof r.negative_prompt === 'string' && r.negative_prompt.trim() ? r.negative_prompt.trim() : undefined;
-      return { prompt: prompt.slice(0, 7000), ...(aspect ? { aspect_ratio: aspect } : {}), ...(negative ? { negative_prompt: negative } : {}) };
+      const path = typeof r.path === 'string' && r.path.trim() ? cleanFileName(r.path, 'png') : undefined;
+      return { prompt: prompt.slice(0, 7000), ...(aspect ? { aspect_ratio: aspect } : {}), ...(negative ? { negative_prompt: negative } : {}), ...(path ? { path } : {}) };
     },
     async execute(input, ctx) {
       const r = await run(input, ctx.signal);
       return {
         // For the model only: English, like the descriptions
-        content: `Created ${r.blobIds.length} image(s) with ${r.model}; they are shown to the user.${r.blurred ? ' The provider blurred them (safe mode).' : ''} You cannot see them, so do not describe them as if you could. ${
-          r.inWorkDir ? `Saved in the working folder as ${r.names.map((n) => JSON.stringify(n)).join(', ')}: pages there can load them by that path.` : `Saved in the Files tab as ${r.names.map((n) => JSON.stringify(n)).join(', ')}.`
-        }`,
+        content: `Created ${r.blobIds.length} image(s) with ${r.model}; they are shown to the user.${r.blurred ? ' The provider blurred them (safe mode).' : ''} You cannot see them, so do not describe them as if you could. ${savedNote(input.path, r)}`,
         // request: what was sent and what it cost (shown in full on the card)
         details: { blobIds: r.blobIds, model: r.model, blurred: r.blurred, request: r.request }
       };

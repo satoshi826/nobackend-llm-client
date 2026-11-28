@@ -5,7 +5,7 @@ import type { Conversation } from '../lib/db/schema';
 import type { Part } from '../lib/providers/types';
 import { deleteImageRecords, getImage, getImageMeta, getImageThumb, putImage } from '../lib/db/images';
 import { catalogImage } from '../lib/db/catalog';
-import { baseName } from '../lib/paths';
+import { baseName, folderOf } from '../lib/paths';
 import * as repo from '../lib/db/repo';
 import { base64ToBlob } from '../lib/base64';
 import { conversations, currentId, messages, openConversation, saveMessage, startNewChat } from './conversations';
@@ -24,13 +24,18 @@ async function imageSizeOf(blob: Blob): Promise<{ width?: number; height?: numbe
   }
 }
 
-/** Store images made for a message, in the chat's working folder (the top without one), named by the time they are saved */
-export async function storeImages(conv: Conversation, messageId: string, blobs: Blob[]): Promise<FilePart[]> {
+/**
+ * Store images made for a message, in the chat's working folder (the top without one), at `paths` in it when given
+ * (a taken one gets a number), else named by the time they are saved
+ */
+export async function storeImages(conv: Conversation, messageId: string, blobs: Blob[], paths?: string[]): Promise<FilePart[]> {
   const parts: FilePart[] = [];
-  for (const blob of blobs) {
+  for (const [i, blob] of blobs.entries()) {
     const blobId = repo.newId();
     const mime = blob.type || 'image/png';
-    const path = await putImage({ id: blobId, conversationId: conv.id, messageId, mime, folder: conv.workDir }, blob, !!conv.temporary);
+    const at = paths?.[i];
+    const named = at ? { folder: (conv.workDir ?? '') + folderOf(at), name: baseName(at) } : { folder: conv.workDir };
+    const path = await putImage({ id: blobId, conversationId: conv.id, messageId, mime, ...named }, blob, !!conv.temporary);
     parts.push({ type: 'file', blobId, name: baseName(path), mimeType: mime, ...(await imageSizeOf(blob)) });
   }
   return parts;

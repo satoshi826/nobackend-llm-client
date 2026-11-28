@@ -15,7 +15,8 @@ import { imageNote } from './transform';
 registerMessageTransform(imageNote);
 import { validate } from '../../../lib/db/export';
 import { generationCost, ImageApiError } from './providers/common';
-import { makeImageTool } from './tool';
+import { imageStems, makeImageTool } from './tool';
+import { savedPathOf, storeImages } from '../../../state/media';
 import type { Transport } from '../../../lib/providers/types';
 
 const widthModel = mapImageModel({ id: 'flux', model_spec: { name: 'Flux', privacy: 'private', traits: ['default'], constraints: { widthHeightDivisor: 16 }, pricing: { generation: { usd: 0.01 } } } })!;
@@ -203,12 +204,44 @@ describe('images in conversations', () => {
   });
 
   it('generate_image tool validates input', async () => {
-    const tool = makeImageTool(async (input) => ({ blobIds: ['b1'], names: ['20261127-160816.webp'], inWorkDir: true, model: 'Flux', blurred: false, ...(input as object) }) as never);
+    const tool = makeImageTool(async (input) => ({ blobIds: ['b1'], paths: ['20261127-160816.webp'], inWorkDir: true, model: 'Flux', blurred: false, ...(input as object) }) as never);
     expect(() => tool.prepare({})).toThrow();
     expect(tool.prepare({ prompt: ' a cat ', aspect_ratio: '5:7' })).toEqual({ prompt: 'a cat' });
     const r = await tool.execute({ prompt: 'a cat' }, { signal: new AbortController().signal } as never);
     expect(r.details).toMatchObject({ blobIds: ['b1'] });
     // The model learns where it went, to use it from a page in the working folder
     expect(r.content).toContain('Saved in the working folder as "20261127-160816.webp"');
+  });
+
+  it('generate_image saves at the path the model gives, cleaned as write_file cleans names', async () => {
+    const ran = (paths: string[], inWorkDir = true) => makeImageTool(async () => ({ blobIds: paths, paths, inWorkDir, model: 'Flux', blurred: false }));
+    const tool = ran([]);
+    expect(tool.prepare({ prompt: 'a', path: '../assets//hero' })).toEqual({ prompt: 'a', path: 'assets/hero.png' });
+    expect(tool.prepare({ prompt: 'a', path: ' ' })).toEqual({ prompt: 'a' });
+    expect(imageStems('assets/hero.png', 1)).toEqual(['assets/hero']);
+    expect(imageStems('assets/hero.png', 2)).toEqual(['assets/hero-1', 'assets/hero-2']);
+    const exec = (paths: string[], path: string, inWorkDir = true) => ran(paths, inWorkDir).execute({ prompt: 'a', path }, { signal: new AbortController().signal } as never);
+    // As asked: only the paths
+    const same = await exec(['assets/hero-1.png', 'assets/hero-2.png'], 'assets/hero.png');
+    expect(same.content).toContain('Saved in the working folder as "assets/hero-1.png", "assets/hero-2.png"');
+    expect(same.content).not.toContain('not exactly');
+    // Another type, or a path taken: told why the path differs
+    expect((await exec(['assets/hero.webp'], 'assets/hero.png')).content).toContain('not exactly the path you gave');
+    expect((await exec(['assets/hero (2).png'], 'assets/hero.png')).content).toContain('a path already taken gets a number');
+    // No working folder yet: saved as before, and the path was ignored
+    expect((await exec(['20261127-160816.webp'], 'assets/hero.png', false)).content).toContain('The path was ignored');
+  });
+
+  it('stores images at the paths given in the working folder, with a number when a path is taken', async () => {
+    resetCatalog();
+    const conv = { id: 'c', workDir: 'game/' } as never;
+    const png = () => new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' });
+    const [a] = await storeImages(conv, 'm', [png()], ['assets/hero.png']);
+    const [b] = await storeImages(conv, 'm', [png()], ['assets/hero.png']);
+    expect(savedPathOf(a.blobId)).toBe('game/assets/hero.png');
+    expect(savedPathOf(b.blobId)).toBe('game/assets/hero (2).png');
+    // Without paths: named by the time, at the top of the working folder
+    const [c] = await storeImages(conv, 'm', [png()]);
+    expect(savedPathOf(c.blobId)).toMatch(/^game\/\d{8}-\d{6}( \(\d+\))?\.png$/);
   });
 });

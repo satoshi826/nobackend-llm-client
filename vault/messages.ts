@@ -70,8 +70,8 @@ export const t = defineMessages(
     'key.replace': 'キーを差し替える',
     'key.save': '確認して保存',
     'key.encryptNote': 'パスフレーズで暗号化して保存します。',
-    'key.plainNoteBrowser': 'このブラウザに保存します。暗号化したい場合は、設定の「接続とキー」でパスフレーズを設定してください。',
-    'key.plainNoteVault': 'この金庫に保存します。暗号化したい場合は、設定の「接続とキー」でパスフレーズを設定してください。',
+    'key.plainNoteBrowser': 'このブラウザに保存します。暗号化したい場合は、上の「パスフレーズ」を設定してください。',
+    'key.plainNoteVault': 'この金庫に保存します。暗号化したい場合は、上の「パスフレーズ」を設定してください。',
     'key.scope': 'キーは {hosts} への通信にだけ付けて送られます。',
     'key.scopeIsolated': 'キーは {hosts} への通信にだけ付けて送られます。アプリ本体が乗っ取られても、キーそのものは読み出せません。',
 
@@ -177,8 +177,8 @@ export const t = defineMessages(
       'key.replace': 'Replace key',
       'key.save': 'Check and save',
       'key.encryptNote': 'The key is encrypted with your passphrase before it is saved.',
-      'key.plainNoteBrowser': 'The key is saved in this browser. To encrypt it, set a passphrase in Settings → Connections and keys.',
-      'key.plainNoteVault': 'The key is saved in this vault. To encrypt it, set a passphrase in Settings → Connections and keys.',
+      'key.plainNoteBrowser': 'The key is saved in this browser. To encrypt it, set the passphrase above.',
+      'key.plainNoteVault': 'The key is saved in this vault. To encrypt it, set the passphrase above.',
       'key.scope': 'The key is attached only to requests to {hosts}.',
       'key.scopeIsolated': 'The key is attached only to requests to {hosts}. Even if the app itself is compromised, the key cannot be read out.',
 
@@ -281,8 +281,8 @@ export const t = defineMessages(
       'key.replace': '替换密钥',
       'key.save': '验证并保存',
       'key.encryptNote': '将用口令加密后保存。',
-      'key.plainNoteBrowser': '将保存在此浏览器中。如需加密，请在设置的“连接与密钥”中设置口令。',
-      'key.plainNoteVault': '将保存在此保险库中。如需加密，请在设置的“连接与密钥”中设置口令。',
+      'key.plainNoteBrowser': '将保存在此浏览器中。如需加密，请设置上方的“口令”。',
+      'key.plainNoteVault': '将保存在此保险库中。如需加密，请设置上方的“口令”。',
       'key.scope': '密钥只会附加在发往 {hosts} 的请求上。',
       'key.scopeIsolated': '密钥只会附加在发往 {hosts} 的请求上。即使应用本身被攻破，也无法读出密钥。',
 

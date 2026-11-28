@@ -4,7 +4,8 @@ import type { Conversation, FileRecord } from '../../../lib/db/schema';
 import { Button, EmptyState, Icon, Modal, SearchField, Spinner, cx } from '../../../components/ui';
 import { MenuItem, Popover } from '../../../components/menu';
 import { ATTACH_INLINE_CHARS, attachExisting, detach, fileList, openFolder, pendingAttachments, refreshFiles, uploadFiles } from '../state';
-import { formatBytes, formatDate, FileIcon, typeLabel } from './common';
+import { formatDate, FileIcon, typeLabel } from './common';
+import { formatBytes } from '../../../lib/i18n';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 

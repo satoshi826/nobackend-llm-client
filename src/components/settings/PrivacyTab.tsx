@@ -1,7 +1,7 @@
 // Settings → プライバシーとデータ: destinations, storage, backups, deleting keys and everything
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { BackupPasswordNeeded, downloadExport, imageUsage, importFromFile, storageBreakdown, wipeEverything, type StorageBreakdown } from '../../state/data';
-import { clearAllKeys, vaultState } from '../../state/keys';
+import { vaultState } from '../../state/keys';
 import { enabledProviders, hostOfProvider } from '../../state/models';
 import { saveSettings, settings } from '../../state/settings';
 import { showToast } from '../../state/ui';
@@ -15,7 +15,7 @@ import { Button, Icon, Spinner, TextField, Checkbox } from '../ui';
 import { Section } from '../settings-ui';
 import { t } from './messages';
 import { sentences } from '../messages';
-import { formatDateTime, formatNumber } from '../../lib/i18n';
+import { formatBytes, formatDateTime, formatNumber } from '../../lib/i18n';
 
 const ONE_DECIMAL = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
 
@@ -56,14 +56,18 @@ export function PrivacyTab() {
       setUsage({ used: est?.usage ?? 0, quota: est?.quota ?? 0, persisted });
     })();
   }, []);
-  const rows: [string, string][] = [
+  // A destination, what goes there, and a second line where needed
+  const rows: [string, string, string?][] = [
     ...enabledProviders.value.map(
       (p) => {
         const preset = getPreset(p.preset);
-        // The provider's own web search: queries go to the provider too (and on to its search engine)
-        const search = preset.nativeWebSearch?.note;
-        const note = [preset.copy?.destinationNote, search && t('privacy.destSearch', { note: search })].filter(Boolean).join(' ');
-        return [hostOfProvider(p.id), note ? t('privacy.destProviderNote', { name: p.name, note }) : t('privacy.destProvider', { name: p.name })] as [string, string];
+        const note = preset.copy?.destinationNote;
+        return [
+          hostOfProvider(p.id),
+          note ? t('privacy.destProviderNote', { name: p.name, note }) : t('privacy.destProvider', { name: p.name }),
+          // The provider's own web search: queries go to the provider too (what it costs is told in the Web tab)
+          preset.nativeWebSearch ? t('privacy.destSearch') : undefined
+        ] as [string, string, string?];
       }
     ),
     [accountById('tavily')!.host, t('privacy.destTavily')],
@@ -75,23 +79,25 @@ export function PrivacyTab() {
   return (
     <div class="space-y-6 text-sm">
       <Section title={t('privacy.destinations')}>
-        <table class="w-full text-left text-xs">
-          <tbody class="divide-y divide-line">
-            {rows.map(([dest, what]) => (
-              <tr key={dest}>
-                <td class="py-1.5 pr-3 align-top font-mono whitespace-nowrap">{dest}</td>
-                <td class="py-1.5">{what}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {/* Two columns where there is room; on a phone the description goes under the destination */}
+        <dl class="divide-y divide-line text-xs">
+          {rows.map(([dest, what, more]) => (
+            <div key={dest} class="py-2 sm:grid sm:grid-cols-[minmax(0,13rem)_1fr] sm:gap-3">
+              <dt class="font-mono text-ink [overflow-wrap:anywhere]">{dest}</dt>
+              <dd class="mt-0.5 text-muted sm:mt-0">
+                {what}
+                {more && <span class="mt-0.5 block">{more}</span>}
+              </dd>
+            </div>
+          ))}
+        </dl>
         <p class="text-xs text-muted">{t('privacy.destinationsNote')}</p>
       </Section>
       <Section title={t('privacy.storage')}>
         {usage && (
           <div class="space-y-1.5">
             <p class="text-xs text-muted">
-              {t('privacy.usage', { used: formatNumber(usage.used / 1024 / 1024, ONE_DECIMAL), quota: formatNumber(usage.quota / 1024 / 1024 / 1024, ONE_DECIMAL) })} ·{' '}
+              {t('privacy.usage', { used: formatBytes(usage.used), quota: formatBytes(usage.quota) })} ·{' '}
               {usage.persisted ? t('privacy.persisted') : t('privacy.notPersisted')}
             </p>
             {safariClearsData && <p class="text-xs text-warn">{t('privacy.iosHomeScreen')}</p>}
@@ -191,7 +197,7 @@ export function PrivacyTab() {
             <span class="block text-xs text-muted">
               {sentences(
                 t('privacy.includeImagesSize'),
-                imgUsage && t('privacy.includeImagesNow', { count: formatNumber(imgUsage.count), size: formatNumber(imgUsage.bytes / 1024 / 1024, ONE_DECIMAL) }),
+                imgUsage && t('privacy.includeImagesNow', { count: formatNumber(imgUsage.count), size: formatBytes(imgUsage.bytes) }),
                 t('privacy.includeImagesOff')
               )}
             </span>
@@ -200,27 +206,6 @@ export function PrivacyTab() {
         <p class="text-xs text-muted">
           {sentences(s.lastBackupAt ? t('privacy.lastBackup', { date: formatDateTime(s.lastBackupAt) }) : t('privacy.noBackupYet'), t('privacy.noKeysInBackup'))}
         </p>
-      </Section>
-      <Section title={t('privacy.deleteKeys')}>
-        <p class="text-xs text-muted">{vaultState.value.hasPassphrase ? t('privacy.deleteKeysTextPass') : t('privacy.deleteKeysText')}</p>
-        <Button
-          variant="danger"
-          onClick={() =>
-            void askConfirm({
-              title: t('privacy.deleteKeysTitle'),
-              message: vaultState.value.hasPassphrase ? t('privacy.deleteKeysConfirmPass') : t('privacy.deleteKeysConfirm'),
-              confirmLabel: t('privacy.deleteKeysButton'),
-              danger: true
-            }).then(async (ok) => {
-              if (!ok) return;
-              await clearAllKeys();
-              showToast(t('privacy.keysDeleted'));
-            })
-          }
-        >
-          <Icon name="trash" />
-          {t('privacy.deleteKeysTitle')}
-        </Button>
       </Section>
       <Section title={t('privacy.wipe')}>
         <p class="text-xs text-muted">{t('privacy.wipeText')}</p>

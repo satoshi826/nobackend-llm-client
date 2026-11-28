@@ -594,6 +594,67 @@ export function SearchField({ value, onInput, placeholder, label, autoFocus, cla
   );
 }
 
+/** One of the choices of a SearchChoice: `sub` is a quieter second part (a provider, a price) */
+export interface Choice {
+  value: string;
+  label: string;
+  sub?: string;
+}
+
+/**
+ * A choice among many (hundreds of models): the chosen one shows as a field; opening it shows, in place, a search and
+ * the list to pick from. A drop-down of hundreds of entries cannot be searched and is hard to scroll on a phone
+ */
+export function SearchChoice({ label, value, choices, onChange, disabled }: { label: string; value: string; choices: Choice[]; onChange(value: string): void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const current = choices.find((c) => c.value === value);
+  const words = q.trim().toLowerCase();
+  const shown = words ? choices.filter((c) => `${c.label} ${c.sub ?? ''}`.toLowerCase().includes(words)) : choices;
+  const pick = (v: string) => {
+    onChange(v);
+    setOpen(false);
+    setQ('');
+  };
+  return (
+    <div class={cx('text-sm', disabled && 'opacity-50')}>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-expanded={open}
+        aria-label={`${label}: ${current?.label ?? value}`}
+        onClick={() => setOpen(!open)}
+        class={cx(SELECT, 'flex w-full items-center gap-2 px-2.5 py-1.5 text-left')}
+      >
+        <span class="min-w-0 flex-1">
+          <span class="block [overflow-wrap:anywhere]">{current?.label ?? value}</span>
+          {current?.sub && <span class="block text-xs text-muted">{current.sub}</span>}
+        </span>
+        <Chevron open={open} />
+      </button>
+      <Collapse open={open}>
+        <div class="mt-1.5 space-y-1.5 rounded-xl border border-line bg-sunken p-1.5">
+          <SearchField value={q} onInput={setQ} placeholder={t('ui.filter')} label={t('ui.filter')} />
+          <ul role="listbox" aria-label={label} class="scroll-thin max-h-72 overflow-y-auto">
+            {shown.map((c) => (
+              <li key={c.value} role="option" aria-selected={c.value === value}>
+                <button type="button" onClick={() => pick(c.value)} class={cx('flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left', c.value === value ? 'bg-glass-strong' : 'hover:bg-glass')}>
+                  <span class="min-w-0 flex-1">
+                    <span class="block [overflow-wrap:anywhere]">{c.label}</span>
+                    {c.sub && <span class="block text-xs text-muted">{c.sub}</span>}
+                  </span>
+                  {c.value === value && <Icon name="check" class="mt-0.5 size-4 shrink-0 text-ink-strong" />}
+                </button>
+              </li>
+            ))}
+            {!shown.length && <li class="px-2 py-3 text-xs text-muted">{t('ui.noMatch')}</li>}
+          </ul>
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
 /** Toggle chip / menu chip (pill). `on` marks a selected or active state */
 export function Chip({ on, class: className, children, title, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { on?: boolean }) {
   return (

@@ -93,9 +93,11 @@ export const t = defineMessages(
     'tab.importedOneUpdated': '1 件のスキルを取り込みました（同じ名前のものを更新）',
     'tab.importFailed': '取り込めなかったファイル: {list}',
     'tab.intro':
-      'スキルは、特定の作業のやり方をまとめた指示書です。モデルには名前と説明だけを渡し、依頼に合うときだけ本文を読み込ませます（ツール呼び出しに対応したモデルのみ）。入力欄の「スキル」ボタンや「/名前」で、自分で指定して使うこともできます。会話の中で「この手順をスキルにして」と頼むと、組み込みの skill-creator を使ってモデルが下書きし、あなたの確認のあとで保存します（既存のスキルの手直しも同じ）。',
+      'スキルは、特定の作業のやり方をまとめた指示書です。依頼に合うときにモデルが読み込みます。入力欄の「スキル」や「/名前」で、自分で指定することもできます。',
     'tab.warning':
-      'スキルの指示はそのままモデルに渡ります。他の人が作ったスキルは、中身を確認してから取り込んでください。Claude の SKILL.md を取り込めますが、同梱のスクリプトや参照ファイルにはまだ対応していません。',
+      'スキルの指示はそのままモデルに渡ります。他の人が作ったスキルは、中身を確認してから取り込んでください。',
+    'tab.details': 'モデルには名前と説明だけを渡し、本文は依頼に合うときだけ読み込ませます（ツール呼び出しに対応したモデルのみ）。会話の中で「この手順をスキルにして」と頼むと、組み込みの skill-creator を使ってモデルが下書きし、あなたの確認のあとで保存します（既存のスキルの手直しも同じ）。Claude の SKILL.md を取り込めますが、同梱のスクリプトや参照ファイルにはまだ対応していません。',
+    'tab.about': 'スキルについて',
     'tab.import': 'SKILL.md を取り込む',
     'tab.yours': 'あなたのスキル'
   },
@@ -185,9 +187,12 @@ export const t = defineMessages(
       'tab.importedOneUpdated': 'Imported 1 skill (it replaced the skill with the same name)',
       'tab.importFailed': "Couldn't import: {list}",
       'tab.intro':
-        'A skill is a set of instructions for a particular kind of task. Models get only its name and description, and load the instructions when a request matches (models with tool calling only). You can also choose a skill yourself with the Skills button in the input box or by typing "/name". Ask in a chat to "turn these steps into a skill" and a model drafts it with the built-in skill-creator; it is saved after you confirm (fixing an existing skill works the same way).',
+        'A skill is a set of instructions for a particular kind of task. A model loads it when a request matches. You can also choose one yourself with Skills in the input box or by typing "/name".',
       'tab.warning':
-        "A skill's instructions go to the model as they are. Check skills made by others before you import them. You can import Claude SKILL.md files, but bundled scripts and reference files aren't supported yet.",
+        "A skill's instructions go to the model as they are. Check skills made by others before you import them.",
+      'tab.details':
+        'Models get only a skill’s name and description, and load the instructions when a request matches (models with tool calling only). Ask in a chat to “turn these steps into a skill” and a model drafts it with the built-in skill-creator; it is saved after you confirm (fixing an existing skill works the same way). You can import Claude SKILL.md files, but bundled scripts and reference files aren’t supported yet.',
+      'tab.about': 'About skills',
       'tab.import': 'Import SKILL.md',
       'tab.yours': 'Your skills'
     },
@@ -276,9 +281,11 @@ export const t = defineMessages(
       'tab.importedOneUpdated': '已导入 1 个技能（更新了同名技能）',
       'tab.importFailed': '无法导入的文件：{list}',
       'tab.intro':
-        '技能是把某类工作的做法整理成的指令。模型只会收到名称和描述，仅在请求相符时才加载指令正文（仅限支持工具调用的模型）。你也可以通过输入框中的“技能”按钮或输入“/名称”自行指定。在对话中让模型“把这些步骤做成技能”，模型会用内置的 skill-creator 起草，经你确认后保存（修改现有技能也一样）。',
+        '技能是把某类工作的做法整理成的指令。请求相符时，模型会加载它。也可以通过输入框中的“技能”或输入“/名称”自行指定。',
       'tab.warning':
-        '技能的指令会原样传给模型。导入他人制作的技能前，请先检查其内容。可以导入 Claude 的 SKILL.md，但暂不支持其中附带的脚本和参考文件。',
+        '技能的指令会原样传给模型。导入他人制作的技能前，请先检查其内容。',
+      'tab.details': '模型只会收到技能的名称和描述，仅在请求相符时才加载正文（仅限支持工具调用的模型）。在对话中让模型“把这些步骤做成技能”，模型会用内置的 skill-creator 起草，经你确认后保存（修改现有技能也一样）。可以导入 Claude 的 SKILL.md，但暂不支持其中附带的脚本和参考文件。',
+      'tab.about': '关于技能',
       'tab.import': '导入 SKILL.md',
       'tab.yours': '你的技能'
     }

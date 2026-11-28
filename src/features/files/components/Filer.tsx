@@ -43,7 +43,8 @@ import {
   type FilerSort,
   type FilerView
 } from '../state';
-import { ActionMenu, Crumb, formatBytes, formatDate, PathName, SubBar, type MenuAction } from './common';
+import { ActionMenu, Crumb, formatDate, PathName, SubBar, type MenuAction } from './common';
+import { formatBytes } from '../../../lib/i18n';
 import { convTitle, useFilerItems, viewLabel, VIEW_ICONS } from './filer-items';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';

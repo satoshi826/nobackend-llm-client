@@ -4,7 +4,7 @@ import type { Permission } from '../lib/tools/types';
 import { keyStatus } from '../state/keys';
 import { modelKey, providerById, visibleModels } from '../state/models';
 import { saveSettings, settings } from '../state/settings';
-import { Select, cx } from './ui';
+import { SearchChoice, Select, cx, type Choice } from './ui';
 import { t } from './messages';
 import { formatUsd } from '../lib/i18n';
 
@@ -57,23 +57,20 @@ export function PermissionSelect({ label, tools, fallback = 'ask' }: { label: st
 
 /** A model for a side job (value "providerId|modelId"; '' is the conversation's model), from the models with a key */
 export function ModelSelect({ label, value, onChange, disabled }: { label: string; value: string; onChange(v: string): void; disabled?: boolean }) {
+  const choices: Choice[] = [
+    { value: '', label: t('model.same') },
+    ...visibleModels.value
+      .filter((m) => keyStatus(m.providerId).present)
+      .map((m) => {
+        const provider = providerById(m.providerId)?.name ?? m.providerId;
+        const price = m.pricing?.inputPerMTok;
+        return { value: modelKey(m.providerId, m.id), label: m.name, sub: price != null ? t('model.subPriced', { provider, price: formatUsd(price) }) : provider };
+      })
+  ];
   return (
-    <label class={cx('block text-sm', disabled && 'opacity-50')}>
-      {label}
-      <Select disabled={disabled} class="mt-1 block w-full" value={value} onChange={(e) => onChange((e.target as HTMLSelectElement).value)}>
-        <option value="">{t('model.same')}</option>
-        {visibleModels.value
-          .filter((m) => keyStatus(m.providerId).present)
-          .map((m) => {
-            const provider = providerById(m.providerId)?.name ?? m.providerId;
-            const price = m.pricing?.inputPerMTok;
-            return (
-              <option key={modelKey(m.providerId, m.id)} value={modelKey(m.providerId, m.id)}>
-                {price != null ? t('model.optionPriced', { provider, model: m.name, price: formatUsd(price) }) : `${provider} / ${m.name}`}
-              </option>
-            );
-          })}
-      </Select>
-    </label>
+    <div class="space-y-1 text-sm">
+      <span class={cx('block', disabled && 'opacity-50')}>{label}</span>
+      <SearchChoice label={label} value={value} choices={choices} onChange={onChange} disabled={disabled} />
+    </div>
   );
 }

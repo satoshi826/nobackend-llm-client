@@ -4,7 +4,7 @@ import { showToast } from '../../../state/ui';
 import type { Skill } from '../../../lib/db/schema';
 import { DESCRIPTION_MAX, NAME_MAX, type SkillDraft } from '../../../lib/skills/skill';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { Button, Chevron, Collapse, EmptyState, Icon, IconButton, TextArea, TextField, Checkbox } from '../../../components/ui';
+import { Button, Chevron, Collapse, EmptyState, Icon, IconButton, TextArea, TextField, Checkbox, cx } from '../../../components/ui';
 import { skillSettings, builtinSkills, downloadSkill, importSkillFiles, removeSkill, saveSkill, setBuiltinEnabled, setModelInvocable, skills } from '../state';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
@@ -169,6 +169,7 @@ export function SkillsTab() {
   const list = skills.value;
   const [editing, setEditing] = useState<string | null>(null); // 'new' | skill id
   const file = useRef<HTMLInputElement>(null);
+  const [about, setAbout] = useState(false);
 
   const onImport = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -186,9 +187,15 @@ export function SkillsTab() {
 
   return (
     <div class="space-y-4">
-      <p class="text-xs leading-5 text-muted">
-        {t('tab.intro')}
-      </p>
+      <div class="flex items-start gap-2">
+        <p class="flex-1 text-xs leading-5 text-muted">{t('tab.intro')}</p>
+        <IconButton onClick={() => setAbout(!about)} label={t('tab.about')} aria-expanded={about} class={cx('-mt-1 shrink-0', about && 'text-ink-strong')}>
+          <Icon name="info" class="size-4" />
+        </IconButton>
+      </div>
+      <Collapse open={about}>
+        <p class="text-xs leading-5 text-muted">{t('tab.details')}</p>
+      </Collapse>
       <p class="rounded-lg bg-warn-soft p-2.5 text-xs text-warn">
         {t('tab.warning')}
       </p>

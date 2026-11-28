@@ -6,7 +6,7 @@ import { Icon } from '../../../components/ui';
 import { getFile, openFile } from '../state';
 import { filesVersion } from '../../../state/stored';
 import type { FileToolDetails } from '../tools';
-import { formatBytes } from './common';
+import { formatBytes } from '../../../lib/i18n';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 

@@ -94,6 +94,15 @@ export function formatUsd(n: number): string {
   return `$${formatNumber(n, n >= 1 ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { minimumSignificantDigits: 2, maximumSignificantDigits: 2 })}`;
 }
 
+/** A size in bytes: B, KB, MB with one decimal, GB with one decimal */
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${formatNumber(n)} B`;
+  if (n < 1024 * 1024) return `${formatNumber(Math.round(n / 1024))} KB`;
+  const one = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+  if (n < 1024 ** 3) return `${formatNumber(n / 1024 / 1024, one)} MB`;
+  return `${formatNumber(n / 1024 ** 3, one)} GB`;
+}
+
 export function formatDate(ts: number | Date, opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }): string {
   return formatter('d', opts, (loc) => new Intl.DateTimeFormat(loc, opts)).format(ts);
 }

@@ -67,7 +67,6 @@ export function ConnectionsTab() {
             </Select>
           </label>
         )}
-        <p class="text-xs text-muted">{t('conn.passphraseNote')}</p>
       </Section>
       <Section title={t('conn.providers')}>
         <div class="space-y-2">

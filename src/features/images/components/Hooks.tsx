@@ -1,7 +1,7 @@
 // The image feature's pieces for the core screens: input-box mode, image model button, user-message label,
 // tool card for generate_image, and the settings tab
 import type { Conversation, MessageRecord } from '../../../lib/db/schema';
-import { Chip, Disclosure, Icon, Select, cx } from '../../../components/ui';
+import { Chip, Disclosure, Icon, SearchChoice, Select, cx } from '../../../components/ui';
 import { PermissionSelect, Section, Toggle } from '../../../components/settings-ui';
 import type { ToolPart } from '../../../components/extensions';
 import { useEffect } from 'preact/hooks';
@@ -24,7 +24,6 @@ import {
 } from '../state';
 import { imageProviderList, imageProviderOf } from '../providers/types';
 import { formatList, formatUsd } from '../../../lib/i18n';
-import { ModelOptions } from './ModelOptions';
 import { ImageBar } from './ImageBar';
 import { t } from '../messages';
 import { ToolImages } from './ImageView';
@@ -186,25 +185,30 @@ function DefaultModelSelect() {
   if (!list.length) return <p class="text-xs text-muted">{t('settings.noModels', { providers: imageProviderNames() })}</p>;
   const cost = m ? estimateCost({ ...toolParams(undefined, {}), providerId: m.providerId, model: m.id }) : undefined;
   return (
-    <label class="block text-sm">
-      {t('settings.model')}
-      <span class="block text-xs text-muted">{t('settings.modelDesc')}</span>
-      <Select
-        class="mt-1.5 block w-full"
+    <div class="space-y-1.5 text-sm">
+      <span class="block">
+        {t('settings.model')}
+        <span class="block text-xs text-muted">{t('settings.modelDesc')}</span>
+      </span>
+      <SearchChoice
+        label={t('settings.model')}
         value={m ? modelRef(m) : ''}
-        onChange={(e) => {
-          const x = list.find((y) => modelRef(y) === (e.target as HTMLSelectElement).value);
+        choices={list.map((x) => ({
+          value: modelRef(x),
+          label: x.privacy === 'anonymized' ? t('bar.relayed', { name: x.name }) : x.name,
+          sub: imageProviderOf(x.providerId)?.label ?? x.providerId
+        }))}
+        onChange={(v) => {
+          const x = list.find((y) => modelRef(y) === v);
           if (x) void setDefaultImageModel(x);
         }}
-      >
-        <ModelOptions list={list} />
-      </Select>
+      />
       {m && (
-        <span class="mt-1 block text-xs text-muted">
+        <span class="block text-xs text-muted">
           {[privacyLabelOf(m).title, cost !== undefined ? t('tool.costEach', { cost: formatUsd(cost) }) : t('settings.priceUnknown')].filter(Boolean).join(' ')}
         </span>
       )}
-    </label>
+    </div>
   );
 }
 
@@ -214,7 +218,7 @@ export function ImageSettings() {
   const saveImage = imageSettings.save;
   return (
     <Section>
-      <p class="text-xs text-muted">{t('settings.desc', { providers: imageProviderNames() })}</p>
+      <p class="text-xs text-muted">{t('settings.desc')}</p>
       <DefaultModelSelect />
       <label class="flex items-center justify-between gap-3 text-sm">
         {t('settings.format')}

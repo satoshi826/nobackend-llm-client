@@ -2,7 +2,7 @@
 import type { ButtonHTMLAttributes, ComponentChildren } from 'preact';
 import type { FileRecord } from '../../../lib/db/schema';
 import { baseName, extOf, folderOf } from '../../../lib/paths';
-import { formatDate as fmtDate, formatNumber, formatTime } from '../../../lib/i18n';
+import { formatDate as fmtDate, formatTime } from '../../../lib/i18n';
 import { useRef, useState } from 'preact/hooks';
 import { Button, Icon, IconButton, cx, type IconName } from '../../../components/ui';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
@@ -96,13 +96,6 @@ export function ActionMenu({
       )}
     </span>
   );
-}
-
-/** A size in bytes, as files and images show it */
-export function formatBytes(n: number): string {
-  if (n < 1024) return `${formatNumber(n)} B`;
-  if (n < 1024 * 1024) return `${formatNumber(Math.round(n / 1024))} KB`;
-  return `${formatNumber(n / 1024 / 1024, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MB`;
 }
 
 export function formatDate(ts: number): string {

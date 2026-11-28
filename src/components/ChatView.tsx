@@ -37,11 +37,15 @@ export function ChatView() {
   useLayoutEffect(() => {
     const el = main.current;
     if (!el) return;
+    // Every size is read before anything is set: a property set between two reads makes the browser work out the
+    // styles of the whole screen again (they are inherited), once for each read
     const measure = () => {
-      el.style.setProperty('--chat-top', `${top.current?.offsetHeight ?? 0}px`);
-      el.style.setProperty('--chat-bottom', `${bottom.current?.offsetHeight ?? 0}px`);
+      const topH = top.current?.offsetHeight ?? 0;
+      const bottomH = bottom.current?.offsetHeight ?? 0;
       const box = bottom.current?.querySelector('[data-composer-box]');
       const fade = box ? Math.max(0, el.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom) : 0;
+      el.style.setProperty('--chat-top', `${topH}px`);
+      el.style.setProperty('--chat-bottom', `${bottomH}px`);
       el.style.setProperty('--chat-fade', `${Math.round(fade)}px`);
     };
     measure();

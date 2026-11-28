@@ -5,7 +5,7 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 ## 1. Principles
 
 1. **Quiet glass on a dark night.** A near-black ground, a few large, slow, desaturated light blobs behind, and translucent "glass" panels on top. The light sets the mood; it never competes with the text.
-2. **Color means something.** Silver is the only accent (focus, selection, the primary action). Green = protected / private, amber = relayed / caution, rose = danger / error. Features do not get their own colors (no violet skills, green attachments, fuchsia images, sky web search): they are told apart by icon and label. Charts are the one place with more colours: their data series (each provider in Settings → 使用量) take the `--series-*` palette in its fixed order, keep their colour whatever the period shows, and always come with a legend or a label.
+2. **Color means something.** Silver is the only accent (focus, selection, the primary action). Green = protected / private, amber = relayed / caution, rose = danger / error. Features do not get their own colors (no violet skills, green attachments, fuchsia images, sky web search): they are told apart by icon and label. Two places have more colours. Charts: their data series (each provider in Settings → 使用量) take the `--series-*` palette in its fixed order, keep their colour whatever the period shows, and always come with a legend or a label. Image and video mode: the input box and the mode's chip take the mode's edge (`--mode-*`), so what the text will make is seen at a glance; nothing else uses those colours.
 3. **Consistent everywhere.** The same kind of thing looks, moves and reads the same wherever it appears, so what the user learns in one place holds in every other: the app's model is learned by using it. Before adding UI, find where the app already does the same thing and do it that way.
 4. **Shared components, not copies.** UI that should be the same is one component (`components/ui.tsx`, `components/settings-ui.tsx`), used everywhere; a screen never re-creates it with its own markup and classes. A continuous setting, for example, is always the shared `Slider`, never a bare range input. Copies drift apart, and a fix then reaches only one of them.
 5. **Icons carry meaning.** Actions, navigation and kinds of things get an icon, so they are recognized at a glance, in any of the three languages and in narrow space. One meaning has one icon everywhere; icon-only buttons always have `aria-label` and a tooltip.
@@ -65,6 +65,8 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 | `--scrim` | `rgba(0,0,0,.5)` | Fields laid over an image |
 | `--series-1` … `--series-8` | `#3987e5` `#d95926` `#199e70` `#c98500` `#d55181` `#0ca30c` `#9085e9` `#e66767` | Data series in charts, in this order (validated for colour-blind separation on the dark surface); nothing else uses them |
 | `--series-other` | `#7d8196` | Entries past the coloured ones (providers past the eighth, models and conversations past the period's top seven), and providers no longer connected |
+| `--mode-image-from` / `--mode-image-to` | `#67e8f9` / `#a78bfa` | The edge of the input box and of the image chip while image mode is on: a 1 px gradient from one to the other. Nothing else uses them |
+| `--mode-video-from` / `--mode-video-to` | `#fdba74` / `#f9a8d4` | The same for video mode. Only for that edge: they do not mean caution or danger, though their hues are near `--warn` and `--danger` |
 
 **Dark only for now**: the light theme is not offered (`DARK_ONLY` in `state/settings.ts`; the theme picker is hidden and the stored setting is kept). When it comes back, it uses the same token names with light values (`:root` in `src/styles.css`): ground `#eceef4`, white glass, slate accent `#334155`.
 
@@ -94,6 +96,7 @@ Inter, then the system's Japanese font (Hiragino Sans, Noto Sans JP, Yu Gothic U
 | `collapse` | Accordions: grid rows 0fr ↔ 1fr + opacity, 300 ms |
 | `pop` | Menus: 180 ms fade + scale from .96 |
 | `fade-in` | Settings tab panels, the selection bar: 220 ms |
+| `mode` | Image / video mode's edge fading in and out, and what takes another's place when a mode is switched (the chip beside the mode's, the send button's icon) fading in: 500 ms, cubic-bezier(.4,0,.2,1) |
 | `caret` | Streaming caret pulse, 2 s |
 | `shimmer` | "Working…" text sweep 1.8 s linear |
 

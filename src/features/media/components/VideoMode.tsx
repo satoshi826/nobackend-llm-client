@@ -22,7 +22,7 @@ import {
   videoReady
 } from '../video/state';
 import { t as tv } from '../video/messages';
-import { ModelButton, ModeNotice, OptionRow, OptionsChip, SwitchRow, type ModelEntry } from './Mode';
+import { ModelButton, ModeNotice, OptionRow, OptionsButton, SwitchRow, type ModelEntry } from './Mode';
 import { t } from '../messages';
 
 const seconds = (n: number) => tv('seconds', { n: formatNumber(n) });
@@ -40,7 +40,7 @@ function Choose<T extends string>({ label, value, items, onChange }: { label: st
   );
 }
 
-/** The video options chip and its popover */
+/** The video options button and its popover */
 export function VideoOptions() {
   const m = currentVideoModel.value;
   if (!m) return null;
@@ -50,7 +50,7 @@ export function VideoOptions() {
   const cost = q.asking ? tv('bar.costAsking') : q.usd !== undefined ? (price ? formatUsd(q.usd) : t('cost.estimate', { cost: formatUsd(q.usd) })) : t('cost.unknown');
   const summary = [seconds(p.duration), m.resolutions.length > 1 && p.resolution, p.aspectRatio && m.aspects.length > 1 && p.aspectRatio].filter(Boolean).join(' · ');
   return (
-    <OptionsChip label={tv('bar.group')} summary={summary} cost={cost} costTitle={price ? tv('bar.costPriceTitle') : tv('bar.costEstimateTitle')}>
+    <OptionsButton label={tv('bar.group')} summary={summary} cost={cost} costTitle={price ? tv('bar.costPriceTitle') : tv('bar.costEstimateTitle')}>
       {m.durations.length > 1 && (
         <OptionRow label={tv('bar.duration')}>
           <Choose label={tv('bar.duration')} value={String(p.duration)} items={m.durations.map((d) => ({ id: String(d), label: seconds(d) }))} onChange={(d) => void setVideoDefaults({ duration: Number(d) })} />
@@ -71,7 +71,7 @@ export function VideoOptions() {
       {m.durations.length <= 1 && m.resolutions.length <= 1 && (firstFrame.value || m.aspects.length <= 1) && m.audio !== 'optional' && (
         <p class="py-2.5 text-xs text-muted">{tv('bar.noOptions', { model: m.name })}</p>
       )}
-    </OptionsChip>
+    </OptionsButton>
   );
 }
 

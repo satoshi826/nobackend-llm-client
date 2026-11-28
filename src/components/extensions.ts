@@ -21,6 +21,9 @@ export const textOf = (x: Text): string => (typeof x === 'function' ? x() : x);
 /** A mode that takes over the input box (e.g. image mode: the text becomes an image prompt) */
 export interface ComposerMode {
   id: string;
+  /** The send button's name and icon ("Generate") */
+  sendLabel: string;
+  sendIcon: IconName;
   placeholder: string;
   touchPlaceholder: string;
   /** Whether sending can work now (e.g. a model with a key is chosen); the send button waits for it */
@@ -31,6 +34,8 @@ export interface ComposerMode {
   End?: ComponentType<{ api: ComposerApi }>;
   /** Inside the box, under the text (e.g. image mode's "Convert to tags") */
   Below?: ComponentType<{ api: ComposerApi }>;
+  /** Its options, left of its model (bottom right) */
+  Options?: ComponentType;
   /** Where its prompts go, in place of the chat model (bottom right) */
   Model?: ComponentType;
 }

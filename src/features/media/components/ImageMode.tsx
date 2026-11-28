@@ -32,7 +32,7 @@ import {
   setQualityTags
 } from '../image/state';
 import { imageCount, t as ti } from '../image/messages';
-import { ModelButton, ModeNotice, OptionRow, OptionsChip, SwitchRow, type ModelEntry } from './Mode';
+import { ModelButton, ModeNotice, OptionRow, OptionsButton, SwitchRow, type ModelEntry } from './Mode';
 import { closeTagSuggestions } from './TagSuggestions';
 import { t } from '../messages';
 
@@ -82,7 +82,7 @@ function QualityTags({ family }: { family: TagFamily }) {
   );
 }
 
-/** The image options chip and its popover */
+/** The image options button and its popover */
 export function ImageOptions() {
   // Styles come from the current model's provider: loaded again when it changes, or when image providers become usable
   const providerId = currentImageModel.value?.providerId;
@@ -108,7 +108,7 @@ export function ImageOptions() {
   const costText = cost !== undefined ? t('cost.estimate', { cost: formatUsd(cost) }) : t('cost.unknown');
   const summary = [size?.aspect ?? size?.id, tiers.length > 1 && size?.tier, variants > 1 && imageCount(variants), styles.length > 0 && d.style].filter(Boolean).join(' · ');
   return (
-    <OptionsChip
+    <OptionsButton
       label={ti('bar.group')}
       summary={summary}
       cost={d.enhancePrompt && cost !== undefined ? `${costText}+` : costText}
@@ -192,7 +192,7 @@ export function ImageOptions() {
         />
       </OptionRow>
       {hasOption(m, 'enhance') && <SwitchRow label={ti('bar.enhance')} checked={d.enhancePrompt} onChange={(v) => void setImageDefaults({ enhancePrompt: v })} />}
-    </OptionsChip>
+    </OptionsButton>
   );
 }
 

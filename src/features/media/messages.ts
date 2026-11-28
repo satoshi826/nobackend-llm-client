@@ -4,6 +4,7 @@ import { defineMessages } from '../../lib/i18n';
 
 export const t = defineMessages(
   {
+    'mode.generate': '生成',
     'model.loading': 'モデルを読み込んでいます',
     'model.failed': 'モデルの一覧を取得できませんでした: {error}',
     'model.retry': '再試行',
@@ -16,6 +17,7 @@ export const t = defineMessages(
   },
   {
     en: {
+      'mode.generate': 'Generate',
       'model.loading': 'Loading models',
       'model.failed': "Couldn't load the model list: {error}",
       'model.retry': 'Retry',
@@ -27,6 +29,7 @@ export const t = defineMessages(
       'working.elapsed': '{n}s'
     },
     zh: {
+      'mode.generate': '生成',
       'model.loading': '正在加载模型',
       'model.failed': '无法获取模型列表：{error}',
       'model.retry': '重试',

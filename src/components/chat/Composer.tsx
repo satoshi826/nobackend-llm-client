@@ -96,6 +96,9 @@ export function Composer() {
   const inside = addons.filter((a) => a.Button && a.placement === 'inside');
   const below = addons.filter((a) => a.Button && a.placement !== 'inside');
   const Mode = active?.mode;
+  // Kept after the mode goes off, so its edge fades out in its colours
+  const lastMode = useRef<string>(undefined);
+  if (Mode) lastMode.current = Mode.id;
 
   // 16px wider than the message column on each side (max-w-3xl + 2rem), so text scrolling under it never shows past its rounded corners
   return (
@@ -103,8 +106,11 @@ export function Composer() {
       <div
         ref={boxRef}
         data-composer-box
+        data-mode={lastMode.current}
         class={cx(
-          'glass-deep relative rounded-[22px] transition-colors duration-200 focus-within:border-line-strong',
+          // A mode's edge, in its colours, fades in and out (styles.css: mode-edge)
+          'glass-deep mode-edge rounded-[22px] transition-colors duration-200 focus-within:border-line-strong',
+          Mode && 'is-on',
           dragging && 'border-accent! ring-2 ring-accent/40'
         )}
         onDragOver={(e) => {
@@ -156,18 +162,22 @@ export function Composer() {
               <Icon name="stop" class="size-4" />
             </IconButton>
           ) : (
-            <IconButton variant="primary" label={t('composer.send')} disabled={!canSend} onClick={() => void submit()} class="shrink-0 rounded-full! p-2!">
-              <Icon name="send" class="size-4" />
+            <IconButton variant="primary" label={Mode ? Mode.sendLabel : t('composer.send')} disabled={!canSend} onClick={() => void submit()} class="shrink-0 rounded-full! p-2!">
+              <Icon key={Mode ? Mode.sendIcon : 'send'} name={Mode ? Mode.sendIcon : 'send'} class="swap-in size-4" />
             </IconButton>
           )}
         </div>
         {Mode?.Below && <Mode.Below api={api} />}
       </div>
-      {/* Below the box: the features' chips, and the model on the right, on one line. When it is narrow the chips keep
-          only their icons (their labels: @max-[22rem]:hidden), and the model's name gives way last (ellipsis) */}
+      {/* Below the box: the features' chips, and the model (with a mode's options before it) on the right, on one line.
+          When it is narrow the chips keep only their icons (their labels: @max-[22rem]:hidden), the options their cost
+          (@max-[30rem]:hidden), and the model's name gives way last (ellipsis) */}
       <div class="@container mt-2 flex items-center gap-1.5 px-1">
         {below.map((a) => a.Button && <a.Button key={a.id} conv={conv} />)}
-        <div class="flex min-w-0 flex-1 items-center justify-end">{Mode?.Model ? <Mode.Model /> : <ModelButton />}</div>
+        <div class="flex min-w-0 flex-1 items-center justify-end gap-0.5">
+          {Mode?.Options && <Mode.Options />}
+          {Mode?.Model ? <Mode.Model /> : <ModelButton />}
+        </div>
       </div>
     </div>
   );

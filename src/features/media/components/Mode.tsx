@@ -1,5 +1,5 @@
 // The parts image mode and video mode share in the input box: the mode chips, the options button with its popover,
-// the model button with its list, and the notice when no model can be used
+// the model button with its list (the two at the right below the box), and the notice when no model can be used
 import type { ComponentChildren } from 'preact';
 import { useRef, useState } from 'preact/hooks';
 import { MenuItem, MenuSeparator, Popover } from '../../../components/menu';
@@ -8,37 +8,53 @@ import { Switch } from '../../../components/settings-ui';
 import { openSettings } from '../../../state/ui';
 import { t } from '../messages';
 
-/** A mode's chip below the input box. Its text stays the same; on is shown by the chip's look (and aria-pressed) */
-export function ModeChip({ icon, label, on, title, onClick }: { icon: IconName; label: string; on: boolean; title: string; onClick(): void }) {
+/**
+ * A mode's chip below the input box. Its text stays the same; while on (aria-pressed) it keeps the off chip's fill and
+ * takes the mode's edge, as the box does (styles.css: mode-edge)
+ */
+export function ModeChip({ mode, icon, label, on, title, onClick }: { mode: 'image' | 'video'; icon: IconName; label: string; on: boolean; title: string; onClick(): void }) {
   return (
-    <Chip aria-pressed={on} on={on} aria-label={label} title={title} onClick={onClick}>
+    <Chip aria-pressed={on} aria-label={label} title={title} class={cx('swap-in mode-edge', on && 'is-on text-ink-strong')} data-mode={mode} onClick={onClick}>
       <Icon name={icon} class="size-3.5" />
       <span class="@max-[22rem]:hidden">{label}</span>
     </Chip>
   );
 }
 
-/** The options of a mode: a chip that sums them up (and the cost), opening them in a popover over the input box */
-export function OptionsChip({ summary, cost, costTitle, label, children }: { summary: string; cost: string; costTitle: string; label: string; children: ComponentChildren }) {
+/** The quiet look of the buttons beside each other at the right below the box (the mode's options and its model) */
+const QUIET = 'group flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs text-muted transition duration-200 hover:bg-glass-strong hover:text-ink active:scale-[.97]';
+
+/**
+ * The options of a mode, left of its model: a button that sums them up (while there is room) with the cost, opening
+ * them in a popover over the input box
+ */
+export function OptionsButton({ summary, cost, costTitle, label, children }: { summary: string; cost: string; costTitle: string; label: string; children: ComponentChildren }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
+  const ref = useRef<HTMLButtonElement>(null);
   return (
-    <span ref={ref} class="flex min-w-0">
-      <Chip on={open} aria-haspopup="dialog" aria-expanded={open} aria-label={`${label}: ${[summary, cost].filter(Boolean).join(' ')}`} title={label} class="min-w-0" onClick={() => setOpen(!open)}>
+    <>
+      <button
+        ref={ref}
+        type="button"
+        class={cx(QUIET, 'swap-in shrink-0', open && 'bg-glass-strong text-ink')}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`${label}: ${[summary, cost].filter(Boolean).join(' ')}`}
+        data-tip={`${label}\n${costTitle}`}
+        onClick={() => setOpen(!open)}
+      >
         <Icon name="sliders" class="size-3.5 shrink-0" />
-        {summary && <span class="truncate @max-[26rem]:hidden">{summary}</span>}
-        <span class="shrink-0 tabular-nums" data-tip={costTitle}>
-          {cost}
-        </span>
-        <Icon name="chevron-down" class={cx('size-3 shrink-0 transition-transform duration-200', open && 'rotate-180')} />
-      </Chip>
+        {summary && <span class="@max-[30rem]:hidden">{summary} ·</span>}
+        <span class="tabular-nums">{cost}</span>
+        <Icon name="chevron-down" class={cx('size-3 shrink-0 text-faint transition-transform duration-200', open && 'rotate-180')} />
+      </button>
       {open && (
         // Above the input box, so it covers neither the text nor the chips
         <Popover anchor={document.querySelector<HTMLElement>('[data-composer-box]')} opener={ref.current} onClose={() => setOpen(false)} role="dialog" label={label} class="w-80 px-3! py-1!">
           <div class="divide-y divide-line">{children}</div>
         </Popover>
       )}
-    </span>
+    </>
   );
 }
 
@@ -114,7 +130,7 @@ export function ModelButton({
       <button
         ref={ref}
         type="button"
-        class="group flex min-w-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs text-muted transition duration-200 hover:bg-glass-strong hover:text-ink active:scale-[.97]"
+        class={cx(QUIET, 'min-w-0')}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${label}: ${name}`}

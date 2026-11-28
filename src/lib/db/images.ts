@@ -107,7 +107,6 @@ export async function getImage(id: string): Promise<Blob | null> {
   return rec ? toBlob(rec) : null;
 }
 
-/** The thumbnail of an image (made and saved on first use for images stored before thumbnails existed) */
 /** The thumbnail (made when first needed for older images); null for a video without one */
 export async function getImageThumb(id: string): Promise<Blob | null> {
   const video = (r: BlobRecord) => r.mime.startsWith('video/');

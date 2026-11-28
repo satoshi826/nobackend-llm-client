@@ -1,6 +1,6 @@
 // Key vault client on the app side.
 // Places one invisible iframe (view=transport) and sends requests over a MessageChannel.
-// Responses are repacked into a ReadableStream and returned as a Response, so the existing Adapters / SSE parser work unchanged.
+// Responses are repacked into a ReadableStream and returned as a Response, so the adapters and the SSE parser read it like any other response.
 import { ProviderFailure } from '../providers/errors';
 import type { Transport } from '../providers/types';
 import { plainTransport } from '../providers/transport';

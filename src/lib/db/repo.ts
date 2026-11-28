@@ -73,10 +73,7 @@ export async function listMessages(conversationId: string): Promise<MessageRecor
   return Promise.all((await db().messages.where('conversationId').equals(conversationId).toArray()).map((m) => unseal(m)));
 }
 
-/**
- * Save a message; a temporary conversation's (its conversation saved before it) stays in memory.
- * The second argument is not read (the conversation decides); it goes once the image and video features stop passing it
- */
+/** Save a message; a temporary conversation's (its conversation saved before it) stays in memory */
 export async function putMessage(m: MessageRecord): Promise<void> {
   if (temporaryIds.has(m.conversationId)) {
     memMessages.set(m.id, structuredClone(m));

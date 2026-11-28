@@ -1,4 +1,4 @@
-// OpenAI-compatible Chat Completions adapter (used by Venice / OpenRouter / Gemini / DeepSeek / Groq / Ollama, etc.)
+// OpenAI-compatible Chat Completions adapter (every provider but Anthropic and Gemini, the custom ones added at build time included)
 import type {
   ChatMessage,
   ChatRequest,

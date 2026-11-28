@@ -70,7 +70,6 @@ export async function convertFile(r: Old): Promise<FileRecord> {
   return record;
 }
 
-/** An image's info in the shape from before ({ name, source }) */
 /** An image's info in a shape from before: none (made in a chat), { name, source }, or without a path */
 export const isOldImageInfo = (info: object | undefined): boolean => !info || 'name' in info || 'source' in info || !('path' in info);
 

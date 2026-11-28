@@ -30,7 +30,6 @@ export async function* parseSSE(stream: ReadableStream<Uint8Array>, signal?: Abo
       let nl: number;
       while ((nl = indexOfNewline(buffer)) >= 0) {
         let line = buffer.slice(0, nl);
-        // Treat \r\n as a single line break
         const skip = buffer[nl] === '\r' && buffer[nl + 1] === '\n' ? 2 : 1;
         buffer = buffer.slice(nl + skip);
         if (line === '') {

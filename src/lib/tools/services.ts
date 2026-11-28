@@ -1,4 +1,4 @@
-// External services used by tools (other than LLMs). Keys are kept the same way as for LLM providers (direct mode / key vault).
+// External services used by tools (other than LLMs). Their keys are kept in the key vault, like LLM providers' keys.
 import { t } from './messages';
 
 export interface ToolService {

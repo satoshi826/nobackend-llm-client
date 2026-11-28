@@ -217,7 +217,7 @@ export interface ProviderSetting {
 
 export interface RequestOptionsContext {
   purpose: 'chat' | 'summary';
-  /** Provider's built-in web search (only something other than 'off' when features.builtInWebSearch) */
+  /** Provider's built-in web search for this request ('off' unless a chat reply uses it) */
   webSearch: 'off' | 'auto' | 'on';
   /** Values of ProviderSetting */
   settings: Record<string, boolean>;

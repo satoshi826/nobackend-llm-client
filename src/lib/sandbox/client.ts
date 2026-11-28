@@ -286,7 +286,6 @@ function hiddenFrame(): Hidden {
   return { frame: f, port };
 }
 
-/** How long a run may take */
 export const RUN_TIMEOUT_MS = 10_000;
 
 export interface RunOptions {

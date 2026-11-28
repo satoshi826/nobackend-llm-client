@@ -4,8 +4,10 @@
 // - assets/ is cache-first since file names carry a hash
 // - every built script and stylesheet is cached at install (PRECACHE, filled in by the build:
 //   vite.config.ts serviceWorkerPlugin), so screens that load their code later (components/lazy.tsx)
-//   also open offline. Files a build no longer has are removed when the new worker activates;
-//   files that did not change keep their cached copy.
+//   also open offline. Files that did not change keep their cached copy across updates.
+// - a tab opened before an update keeps running its build, and may load more of that build's files later (PDF
+//   reading, code highlighting), which the host no longer has. So the files of the build before stay cached until
+//   the next update; only older ones are removed when a new worker activates
 // - handles only the app page (the scope itself). Leaves the vault page (vault/) alone
 // - index.html gets redirected to the scope by the host, so the cache key is always the scope
 //   (browsers refuse to render a page from a redirected response)
@@ -18,6 +20,8 @@ const SHELL = [BASE, `${BASE}favicon.svg`, `${BASE}manifest.webmanifest`];
 const PRECACHE = self.__PRECACHE__ ?? [];
 /** Every file under assets/ in this build, including ones only cached when used (fonts) */
 const KNOWN = new Set(self.__ASSETS__ ?? []);
+/** Where the cache keeps the asset list of the build that activated last, for the next one to read */
+const LISTED = `${BASE}sw-assets.json`;
 /** A real asset, not a page some host returns for a missing file (that must never be cached as a script) */
 const isAsset = (res) => res.ok && !(res.headers.get('content-type') ?? '').includes('text/html');
 
@@ -42,13 +46,18 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       for (const k of await caches.keys()) if (k !== CACHE) await caches.delete(k);
-      // Drop assets the current build no longer has
+      // Drop assets neither this build nor the one before has (none when the one before is not known)
       if (KNOWN.size) {
         const cache = await caches.open(CACHE);
-        for (const req of await cache.keys()) {
-          const path = new URL(req.url).pathname;
-          if (path.startsWith(ASSETS) && !KNOWN.has(path)) await cache.delete(req);
+        const before = await cache.match(LISTED).then((r) => r?.json()).catch(() => null);
+        if (Array.isArray(before)) {
+          const keep = new Set([...KNOWN, ...before]);
+          for (const req of await cache.keys()) {
+            const path = new URL(req.url).pathname;
+            if (path.startsWith(ASSETS) && !keep.has(path)) await cache.delete(req);
+          }
         }
+        await cache.put(LISTED, new Response(JSON.stringify([...KNOWN]), { headers: { 'Content-Type': 'application/json' } }));
       }
       await self.clients.claim();
     })()

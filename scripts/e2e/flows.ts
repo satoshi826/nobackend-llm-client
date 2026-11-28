@@ -13,6 +13,8 @@ export interface FlowContext {
   newContext(): Promise<BrowserContext>;
   /** A folder for downloads, removed after the run */
   tmp: string;
+  /** Serves a new release in place of the one served: the same app with every file under assets/ renamed */
+  deploy(): void;
 }
 
 export interface Flow {
@@ -311,4 +313,62 @@ const pdf: Flow = {
   }
 };
 
-export const FLOWS: Flow[] = [chat, lock, backup, files, images, fetchPage, pdf];
+/** Controlled by the Service Worker, which has cached the build's files */
+const swReady = (page: Page) => until('the Service Worker to control the page', () => page.evaluate(() => navigator.serviceWorker.ready.then(() => !!navigator.serviceWorker.controller)));
+
+/**
+ * Has the browser check for a new Service Worker now (as it does by itself now and then), and waits until it has
+ * activated: done with its activate step, which comes after it takes over the page
+ */
+const swUpdate = (page: Page) =>
+  page.evaluate(async () => {
+    const reg = (await navigator.serviceWorker.getRegistration())!;
+    const activated = new Promise<void>((ok) =>
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing!;
+        sw.addEventListener('statechange', () => sw.state === 'activated' && ok());
+      })
+    );
+    await reg.update();
+    await Promise.race([activated, new Promise((_, fail) => setTimeout(() => fail(new Error('No new Service Worker activated')), 20_000))]);
+  });
+
+/** The files under assets/ the Service Worker has cached */
+const cachedAssets = (page: Page) =>
+  page.evaluate(async () => {
+    const names: string[] = [];
+    for (const key of await caches.keys()) for (const req of await (await caches.open(key)).keys()) if (new URL(req.url).pathname.startsWith('/assets/')) names.push(new URL(req.url).pathname);
+    return names;
+  });
+
+const update: Flow = {
+  name: 'update',
+  label: 'a tab opened before a release still loads its build\'s later parts (code highlighting, PDF reading) → reloaded, it runs the new one',
+  async run({ page, url, tmp, deploy }) {
+    await page.goto(url);
+    await addVenice(page);
+    await swReady(page);
+    const first = await cachedAssets(page);
+    deploy();
+    await swUpdate(page);
+    // Neither part has been loaded yet; the host has only the new release's files
+    await send(page, 'コード例を見せて');
+    await page.locator('[data-message-id] .hljs-keyword').first().waitFor();
+    await settled(page);
+    await attachPdf(page, tmp);
+
+    await page.reload();
+    await swReady(page);
+    const renamed = (await page.evaluate(() => [...document.scripts].map((s) => s.src))).some((src) => src.endsWith('-r1.js'));
+    if (!renamed) throw new Error('The reloaded page does not run the new release');
+    // One release later the first release's files are gone, and the second's are kept
+    const second = (await cachedAssets(page)).filter((f) => !first.includes(f));
+    deploy();
+    await swUpdate(page);
+    const now = await cachedAssets(page);
+    if (first.some((f) => now.includes(f))) throw new Error('Files of two releases ago are still cached');
+    if (!second.every((f) => now.includes(f))) throw new Error('Files of the release before are no longer cached');
+  }
+};
+
+export const FLOWS: Flow[] = [chat, lock, backup, files, images, fetchPage, pdf, update];

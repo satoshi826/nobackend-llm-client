@@ -10,7 +10,7 @@
 // stops everything it started. A screenshot at the end of each flow (and of a failing one) goes to
 // .claude/artifacts/branches/<branch>/screens/e2e/.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, renameSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { chromium, type Browser, type BrowserContext } from 'playwright';
@@ -107,11 +107,23 @@ async function main() {
     const mock = `http://localhost:${mockPort}`;
     children.push(spawn('node', [join(ROOT, 'scripts/mock-venice.mjs'), String(mockPort)], { stdio: 'ignore' }));
     if (!(await up(`${mock}/api/v1/models`))) throw new Error(`The mock server did not start on ${mock}`);
-    const out = join(TMP, 'build');
+    // The folder served; deploy() puts a new build in its place
+    const live = join(TMP, 'live');
+    const build = (outDir: string, extra: string[] = [], env: Record<string, string> = {}) =>
+      execFileSync('npx', ['vite', 'build', ...extra, '--outDir', outDir, '--emptyOutDir', '--logLevel', 'error'], { cwd: ROOT, env: { ...process.env, ...mockEnv(mock), ...env }, stdio: 'inherit' });
     console.error('Building the app against the mock providers…');
-    execFileSync('npx', ['vite', 'build', '--outDir', out, '--emptyOutDir', '--logLevel', 'error'], { cwd: ROOT, env: { ...process.env, ...mockEnv(mock) }, stdio: 'inherit' });
+    build(live);
+    let releases = 0;
+    const deploy = () => {
+      const next = join(TMP, 'next');
+      build(next, ['--config', join(ROOT, 'scripts/e2e/vite.renamed.config.ts')], { E2E_RENAME: `r${++releases}` });
+      const old = join(TMP, 'old');
+      renameSync(live, old);
+      renameSync(next, live);
+      rmSync(old, { recursive: true, force: true });
+    };
     const port = await freePort();
-    children.push(spawn('node', [join(ROOT, 'scripts/serve-with-headers.mjs'), out, String(port)], { stdio: 'ignore' }));
+    children.push(spawn('node', [join(ROOT, 'scripts/serve-with-headers.mjs'), live, String(port)], { stdio: 'ignore' }));
     const url = `http://localhost:${port}/`;
     if (!(await up(url))) throw new Error(`The build is not served at ${url}`);
 
@@ -128,7 +140,7 @@ async function main() {
       };
       const page = await (await open()).newPage();
       try {
-        await flow.run({ page, url, newContext: open, tmp: TMP });
+        await flow.run({ page, url, newContext: open, tmp: TMP, deploy });
         // Off any tooltip
         await page.mouse.move(0, 0);
         await page.screenshot({ path: join(screens, `${flow.name}.png`), animations: 'disabled' });

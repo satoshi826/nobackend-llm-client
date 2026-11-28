@@ -1,9 +1,12 @@
 // The option bar shown above the input box in image mode
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import type { ComposerApi } from '../../../components/extensions';
 import { hasOption, sizeOf } from '../providers/common';
 import { ModelOptions } from './ModelOptions';
 import { TAG_PRESETS } from '../presets';
-import { openSettings } from '../../../state/ui';
+import { openSettings, showToast } from '../../../state/ui';
+import { tagWriter, toTags } from '../to-tags';
+import { closeTagSuggestions } from './TagSuggestions';
 import { Button, Chevron, Collapse, Select, Spinner, TextField, Checkbox, Icon, cx } from '../../../components/ui';
 import {
   currentImageModel,
@@ -19,6 +22,7 @@ import {
   loadImageModels,
   loadImageStyles,
   paramsFromBar,
+  promptRoom,
   promptUse,
   setImageDefaults
 } from '../state';
@@ -39,8 +43,53 @@ function PromptRoom({ use }: { use: { n: number; limit: number } }) {
   );
 }
 
-/** prompt: what is in the input box */
-export function ImageBar({ prompt }: { prompt: string }) {
+/**
+ * "To tags" for tag models: the chat model rewrites the prompt as tags. While the tags are as they came, the button
+ * puts the text from before back instead. Shown while a chat model can be used, and off while the prompt is empty
+ */
+/** Text put in whole (not typed) gets no tag suggestions for its last tag */
+function setText(api: ComposerApi, text: string) {
+  api.setText(text);
+  closeTagSuggestions(text);
+}
+
+function ToTags({ api, limit }: { api: ComposerApi; limit: number | undefined }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<{ from: string; to: string } | null>(null);
+  const ctrl = useRef<AbortController | null>(null);
+  useEffect(() => () => ctrl.current?.abort(), []);
+  if (!tagWriter()) return null;
+  const run = async () => {
+    const from = api.text;
+    ctrl.current = new AbortController();
+    setBusy(true);
+    try {
+      const to = await toTags(from, limit, ctrl.current.signal);
+      if (!to) throw new Error(t('bar.toTagsEmpty'));
+      setText(api, to);
+      setDone({ from, to });
+    } catch (e) {
+      if (!ctrl.current.signal.aborted) showToast(t('bar.toTagsFailed', { error: (e as Error).message }), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const button = 'flex items-center gap-1 text-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-50';
+  return done && api.text === done.to ? (
+    <button type="button" class={button} onClick={() => setText(api, done.from)}>
+      <Icon name="history" class="size-3.5" />
+      {t('bar.toTagsBack')}
+    </button>
+  ) : (
+    <button type="button" class={button} disabled={busy || !api.text.trim()} data-tip={t('bar.toTagsTitle')} onClick={() => void run()}>
+      {busy ? <Spinner class="size-3.5" /> : <Icon name="wand" class="size-3.5" />}
+      {t('bar.toTags')}
+    </button>
+  );
+}
+
+export function ImageBar({ api }: { api: ComposerApi }) {
+  const prompt = api.text;
   const [details, setDetails] = useState(false);
   const providerId = currentImageModel.value?.providerId;
   useEffect(() => {
@@ -162,6 +211,7 @@ export function ImageBar({ prompt }: { prompt: string }) {
           {t('bar.details')}
           <Chevron open={details} />
         </button>
+        {m?.promptStyle === 'tags' && <ToTags api={api} limit={promptRoom(params)} />}
         <span class="ml-auto flex gap-2">
           {use && <PromptRoom use={use} />}
           <span class="text-muted tabular-nums" data-tip={t('bar.costTitle')}>

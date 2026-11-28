@@ -488,6 +488,12 @@ export function promptUse(p: ImageParams): { n: number; limit: number } | undefi
   return limit === undefined ? undefined : { n: promptLength(sentPrompt(p)), limit };
 }
 
+/** Characters the prompt itself may take: its model's limit less the quality tags added to it (undefined: no limit) */
+export function promptRoom(p: ImageParams): number | undefined {
+  const limit = promptUse(p)?.limit;
+  return limit === undefined ? undefined : limit - promptLength(sentPrompt({ ...p, prompt: '' }));
+}
+
 /** Refuse a prompt longer than its model takes, before it is sent */
 function checkPromptLength(p: ImageParams) {
   const use = promptUse(p);
@@ -673,10 +679,8 @@ registerToolProvider({
     // Load the model list now, so the approval card can name the model and its price
     if (!imageModels.value.length) void loadImageModels();
     const m = imageModelFor(conv);
-    const quality = qualityTagsFor(m)?.text;
-    // The limit left for the chat model's own prompt once the quality tags are added
-    const limit = m?.promptLimit !== undefined && quality ? m.promptLimit - promptLength(quality) - 2 : m?.promptLimit;
-    return [makeImageTool((input, signal) => runImageTool(conv, messageId, input, signal), m && { promptStyle: m.promptStyle, promptLimit: limit, qualityTags: quality })];
+    const p = toolParams(conv, {});
+    return [makeImageTool((input, signal) => runImageTool(conv, messageId, input, signal), m && { promptStyle: m.promptStyle, promptLimit: promptRoom(p), qualityTags: p.qualityTags?.text })];
   }
 });
 

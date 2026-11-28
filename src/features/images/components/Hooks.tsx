@@ -47,7 +47,7 @@ export function ImageBarAbove({ conv, api }: { conv: Conversation; api: Composer
   if (!conv.imageMode) return null;
   return (
     <>
-      <ImageBar prompt={api.text} />
+      <ImageBar api={api} />
       <TagSuggestions api={api} />
     </>
   );

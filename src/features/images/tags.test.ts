@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { completeTag, parseTags, searchTags, tagQuery, tagText } from './tags';
+import { cleanTags } from './to-tags';
 
 const list = parseTags(
   [
@@ -46,5 +47,12 @@ describe('Danbooru tags', () => {
     expect(completeTag('lon', 'long_hair')).toBe('long hair, ');
     expect(completeTag('1girl, (lon', 'long_hair')).toBe('1girl, (long hair, ');
     expect(completeTag('a\nmik', 'hatsune_miku')).toBe('a\nhatsune miku, ');
+  });
+});
+
+describe('to tags', () => {
+  it("read the chat model's answer as one line of tags", () => {
+    expect(cleanTags('```\n1girl, solo,\nsmile\n```')).toBe('1girl, solo, smile');
+    expect(cleanTags('"1girl, long hair"')).toBe('1girl, long hair');
   });
 });

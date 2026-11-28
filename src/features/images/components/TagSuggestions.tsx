@@ -17,6 +17,7 @@ import { t } from '../messages';
 const offered = computed(() => !!currentConv.value.imageMode && currentImageModel.value?.promptStyle === 'tags');
 /** The text the list was closed for (Esc or a press outside): it opens again once the text changes */
 const closedFor = signal<string | null>(null);
+export const closeTagSuggestions = (text: string) => (closedFor.value = text);
 /** The highlighted suggestion, for the text it was moved in */
 const active = signal({ text: '', index: 0 });
 

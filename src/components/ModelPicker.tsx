@@ -241,9 +241,9 @@ export function ModelPicker() {
   const all = useMemo(() => (regen ? models.filter((m) => provIds.split(',').includes(m.providerId)) : models), [models, regen, provIds]);
 
   // Show only filters that match some model (e.g. "private" only exists on some providers)
-  const chips = FILTER_ORDER.map((f) => ({ f, count: all.filter((m) => matchesFilter(m, f)).length })).filter((c) => c.count > 0);
-  const active = filters.filter((f) => chips.some((c) => c.f === f));
-  const arranged = useMemo(() => arrangeModels(all, { query: q, filters: active, sort }), [all, q, active.join(), sort]);
+  const chips = useMemo(() => FILTER_ORDER.map((f) => ({ f, count: all.filter((m) => matchesFilter(m, f)).length })).filter((c) => c.count > 0), [all]);
+  const active = useMemo(() => filters.filter((f) => chips.some((c) => c.f === f)), [filters, chips]);
+  const arranged = useMemo(() => arrangeModels(all, { query: q, filters: active, sort }), [all, q, active, sort]);
 
   const anyLoading = Object.values(modelsStates.value).some((s) => s.loading);
   const toggleFilter = (f: ModelFilter) => saveSettings({ modelFilters: filters.includes(f) ? filters.filter((x) => x !== f) : [...filters, f] });

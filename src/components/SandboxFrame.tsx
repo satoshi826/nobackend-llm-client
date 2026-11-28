@@ -36,7 +36,7 @@ export function SandboxFrame({ html, page, title, class: className, onLog }: { h
     if (!ref.current || stuck) return;
     log.current?.([], key);
     return renderInFrame(ref.current, html, () => setStuckKey(key), page, (logs) => log.current?.(logs, key));
-  }, [key, stuck]);
+  }, [html, page, key, stuck]);
   if (stuck)
     return (
       <div class={cx('flex flex-col items-center justify-center gap-2 rounded-xl border border-line bg-sunken p-4 text-center text-xs text-muted', className)}>

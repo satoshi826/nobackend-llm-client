@@ -56,9 +56,10 @@ export function Composer() {
   const [dragging, setDragging] = useState(false);
   const streaming = isStreaming.value;
 
+  const focusAsked = composerFocus.value;
   useEffect(() => {
-    if (composerFocus.value) ref.current?.focus();
-  }, [composerFocus.value]);
+    if (focusAsked) ref.current?.focus();
+  }, [focusAsked]);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;

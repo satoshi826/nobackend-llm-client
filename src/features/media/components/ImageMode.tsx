@@ -48,11 +48,12 @@ function Choose<T extends string>({ label, value, items, onChange }: { label: st
 
 /** The image options chip and its popover */
 export function ImageOptions() {
+  // Styles come from the current model's provider: loaded again when it changes, or when image providers become usable
   const providerId = currentImageModel.value?.providerId;
-  // Styles come from the current model's provider
+  const ready = imageReady.value;
   useEffect(() => {
     void loadImageStyles();
-  }, [imageReady.value, providerId]);
+  }, [ready, providerId]);
   const m = currentImageModel.value;
   if (!m) return null;
   const d = imageDefaults.value;
@@ -156,9 +157,11 @@ export function ImageOptions() {
 
 /** Where image prompts go: the conversation's image model, chosen from every provider in use */
 export function ImageModel() {
+  // Loaded again when image providers become usable, or stop being usable
+  const ready = imageReady.value;
   useEffect(() => {
     void loadImageModels();
-  }, [imageReady.value]);
+  }, [ready]);
   const m = currentImageModel.value;
   const list = generationModels.value;
   const def = defaultImageModel.value;

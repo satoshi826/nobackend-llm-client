@@ -19,6 +19,9 @@ export function FetchDialog() {
 function FetchFrame({ title, src, done }: { title: string; src: string; done(r: Fetched | null): void }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(220);
+  // done may change identity every render: the page's answer goes to the latest one
+  const answer = useRef(done);
+  answer.current = done;
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       if (e.origin !== FETCH_ORIGIN || e.source !== ref.current?.contentWindow) return;
@@ -26,9 +29,9 @@ function FetchFrame({ title, src, done }: { title: string; src: string; done(r: 
       if (m?.type === 'fetch-resize' && typeof m.height === 'number') setHeight(Math.min(800, Math.max(120, m.height + 4)));
       if (m?.type === 'fetch-result') {
         const { type: _type, ...r } = m;
-        done(r);
+        answer.current(r);
       }
-      if (m?.type === 'fetch-close') done(null);
+      if (m?.type === 'fetch-close') answer.current(null);
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);

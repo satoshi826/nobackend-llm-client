@@ -20,7 +20,7 @@ function useNearScreen(ref: { current: Element | null }): boolean {
     const io = new IntersectionObserver((entries) => setNear(entries[entries.length - 1].isIntersecting), { root: area?.current ?? null, rootMargin: '1500px 0px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [area]);
+  }, [ref, area]);
   return near;
 }
 

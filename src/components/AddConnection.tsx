@@ -1,6 +1,6 @@
 // Adding a connection: choose a provider, then save its key. The provider becomes a connection, turned on, once its
 // key is stored (a provider that needs no key, at once). Used on the first screen and in Settings → 接続とキー
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { getPreset } from '../lib/providers/registry';
 import { accountById } from '../lib/keys/accounts';
 import { keyStatus } from '../state/keys';
@@ -14,9 +14,12 @@ export function AddConnection({ onAdded, heading = true, compact }: { onAdded(id
   const [chosen, setChosen] = useState<string | null>(null);
   const keyless = chosen ? !!accountById(chosen)?.keyOptional : false;
   const saved = chosen !== null && (keyless || keyStatus(chosen).present);
+  // onAdded may change identity every render: the latest one is told, once per provider saved
+  const latestOnAdded = useRef(onAdded);
+  latestOnAdded.current = onAdded;
   useEffect(() => {
     if (!chosen || !saved) return;
-    void setProviderEnabled(chosen, true).then(() => onAdded(chosen));
+    void setProviderEnabled(chosen, true).then(() => latestOnAdded.current(chosen));
   }, [chosen, saved]);
 
   if (chosen && !saved) {

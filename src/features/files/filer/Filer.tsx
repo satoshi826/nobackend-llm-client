@@ -37,7 +37,8 @@ import {
   searchContents,
   setFilerPrefs,
   attachToChat,
-  type FilerPrefs,
+  type FilerOrder,
+  type FilerSort,
   type FilerView
 } from '../state';
 import { ActionMenu, Crumb, SubBar, type MenuAction } from '../components/common';
@@ -56,9 +57,9 @@ const BATCH = 120;
 const downloadItem = (it: FilerItem) => (it.type === 'file' ? downloadFile(it.file) : downloadImage(it.id, it.name));
 
 /** Folders in the order the items are sorted in: by name, or by when something in them last changed */
-function sortFolders(folders: FolderItem[], prefs: FilerPrefs): FolderItem[] {
-  const dir = prefs.order === 'asc' ? 1 : -1;
-  return [...folders].sort((a, b) => (prefs.sort === 'updated' ? (a.updatedAt - b.updatedAt) * dir : a.name.localeCompare(b.name) * (prefs.sort === 'name' ? dir : 1)));
+function sortFolders(folders: FolderItem[], sort: FilerSort, order: FilerOrder): FolderItem[] {
+  const dir = order === 'asc' ? 1 : -1;
+  return [...folders].sort((a, b) => (sort === 'updated' ? (a.updatedAt - b.updatedAt) * dir : a.name.localeCompare(b.name) * (sort === 'name' ? dir : 1)));
 }
 
 type Dialog =
@@ -77,7 +78,8 @@ export function Filer() {
   const conv = filerConversation.value;
   const folder = filerFolder.value;
   // Searching reads file contents: wait until typing pauses
-  const query = useDebounced(filerQuery.value, 150);
+  const typed = filerQuery.value;
+  const query = useDebounced(typed, 150);
   // The folder being looked at, searched in or not (null when listing by type or by chat): where files are brought in
   const inFolder = view === 'all' && !conv ? (folder ?? '') : null;
   // By folder, without a search: what is right in the open folder
@@ -105,7 +107,7 @@ export function Filer() {
     for (const p of pending) {
       if (isInside(p, here) && !p.slice(here.length, -1).includes('/') && !found.some((f) => pathKey(f.path) === pathKey(p))) found.push({ path: p, name: p.slice(here.length, -1), count: 0, updatedAt: 0 });
     }
-    return sortFolders(found, prefs);
+    return sortFolders(found, prefs.sort, prefs.order);
   }, [all, here, pending, prefs.sort, prefs.order]);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -117,7 +119,7 @@ export function Filer() {
   useEffect(() => {
     setPicked(new Set());
     lastIndex.current = null;
-  }, [view, conv, folder, filerQuery.value]);
+  }, [view, conv, folder, typed]);
   const list = items ?? NO_ITEMS;
   // Drawn in batches as the list scrolls: the first screenful shows at once, even with thousands of entries
   const scrollArea = useRef<HTMLDivElement>(null);
@@ -127,9 +129,11 @@ export function Filer() {
   const keys = useMemo(() => [...folders.map(folderKey), ...list.map((i) => i.key)], [folders, list]);
   // Drop picks that disappeared (deleted, moved)
   useEffect(() => {
-    if (!picked.size) return;
-    const shown = new Set(keys);
-    if ([...picked].some((k) => !shown.has(k))) setPicked(new Set([...picked].filter((k) => shown.has(k))));
+    setPicked((picked) => {
+      if (!picked.size) return picked;
+      const shown = new Set(keys);
+      return [...picked].some((k) => !shown.has(k)) ? new Set([...picked].filter((k) => shown.has(k))) : picked;
+    });
   }, [keys]);
 
   // A folder from its key, whether it is listed or open (the open folder's menu uses the same actions)

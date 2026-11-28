@@ -12,9 +12,11 @@ const imageProviderNames = () => formatList(imageProviderList().map((p) => p.lab
 
 /** The default image model (tool and image mode) */
 function DefaultModelRow() {
+  // Loaded again when image providers become usable, or stop being usable
+  const ready = imageReady.value;
   useEffect(() => {
     void loadImageModels();
-  }, [imageReady.value]);
+  }, [ready]);
   const list = generationModels.value;
   const m = defaultImageModel.value;
   if (!list.length) return <Row label={t('settings.model')} below={<p class="text-xs leading-5 text-muted">{t('settings.noModels', { providers: imageProviderNames() })}</p>} />;

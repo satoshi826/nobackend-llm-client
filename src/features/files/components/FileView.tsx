@@ -32,6 +32,8 @@ export function FileView({ id = '' }: { id?: string }) {
   const editor = useFocusWhen<HTMLTextAreaElement>(edit.open);
   const [name, setName] = useState('');
   const body = useRef<HTMLDivElement>(null);
+  // Read again when any file changes
+  const version = filesVersion.value;
   useEffect(() => {
     let alive = true;
     void getFile(id).then(async (x) => {
@@ -43,7 +45,7 @@ export function FileView({ id = '' }: { id?: string }) {
     return () => {
       alive = false;
     };
-  }, [id, filesVersion.value]);
+  }, [id, version]);
   const { close: endEdit } = edit;
   const { close: endRename } = rename;
   useEffect(() => {
@@ -319,10 +321,13 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
   // Waits for both lists, so the page is not shown once before they arrive and again after
   const ready = !!fileList.value && !!imageList.value;
   const signature = siteSignature(file);
+  // The newest record, but loaded again only for another page or site, not for each change of this record
+  const latestFile = useRef(file);
+  latestFile.current = file;
   useEffect(() => {
     if (svg || !ready) return;
     let alive = true;
-    void pageOf(file).then((x) => alive && setFiles(x));
+    void pageOf(latestFile.current).then((x) => alive && setFiles(x));
     return () => {
       alive = false;
     };

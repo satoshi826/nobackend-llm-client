@@ -48,7 +48,13 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
     if (md && !streaming && !hlReady && /```/.test(text)) {
       md.ensureHighlighter().then(() => setHlReady(true));
     }
-  }, [md, streaming, text]);
+  }, [md, streaming, text, hlReady]);
+
+  // The same addresses keep the same array, so a new array from the parent with nothing changed renders nothing again
+  const cites = citations?.join('|') ?? '';
+  const kept = useRef({ cites, citations });
+  if (kept.current.cites !== cites) kept.current = { cites, citations };
+  const cited = kept.current.citations;
 
   // While streaming: the source already rendered for good (see settledEnd) and how many child nodes it made
   const settled = useRef<{ src: string; cites: string; nodes: number } | null>(null);
@@ -63,16 +69,15 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
     if (!streaming) {
       settled.current = null;
       // Do not highlight while streaming (expensive, and the code is incomplete)
-      el.replaceChildren(md.renderMarkdownCached(text, { highlight: hlReady, citations }));
+      el.replaceChildren(md.renderMarkdownCached(text, { highlight: hlReady, citations: cited }));
       return;
     }
-    const cites = citations?.join('|') ?? '';
     let s = settled.current;
     if (!s || s.cites !== cites || !text.startsWith(s.src)) {
       el.textContent = '';
       s = settled.current = { src: '', cites, nodes: 0 };
     }
-    const render = (src: string) => md.renderMarkdown(src, { highlight: false, citations });
+    const render = (src: string) => md.renderMarkdown(src, { highlight: false, citations: cited });
     while (el.childNodes.length > s.nodes) el.lastChild!.remove();
     const end = md.settledEnd(text, s.src.length);
     if (end > s.src.length) {
@@ -81,7 +86,7 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
       s.nodes = el.childNodes.length;
     }
     el.append(render(text.slice(end)));
-  }, [md, text, streaming, hlReady, citations?.join('|')]);
+  }, [md, text, streaming, hlReady, cites, cited]);
 
   const onClick = async (e: MouseEvent) => {
     const runBtn = (e.target as HTMLElement).closest('[data-run]') as HTMLElement | null;

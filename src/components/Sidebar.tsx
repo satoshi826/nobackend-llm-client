@@ -284,8 +284,9 @@ export function Sidebar() {
   const asideRef = useRef<HTMLElement>(null);
   // The saved width, or the one being dragged to (saved when the drag ends)
   const [dragged, setWidth] = useState<number | null>(null);
-  const width = dragged ?? settings.value.sidebarWidth;
-  useEffect(() => setWidth(null), [settings.value.sidebarWidth]);
+  const saved = settings.value.sidebarWidth;
+  const width = dragged ?? saved;
+  useEffect(() => setWidth(null), [saved]);
   const [mobile, setMobile] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(MOBILE).matches);
   useEffect(() => {
     const mq = matchMedia(MOBILE);
@@ -294,22 +295,23 @@ export function Sidebar() {
     return () => mq.removeEventListener('change', f);
   }, []);
   // On phones the sidebar is a drawer: a dialog while open, and out of the tab order while closed
-  useDialog(asideRef, { onClose: () => (sidebarOpen.value = false), active: mobile && sidebarOpen.value });
+  const open = sidebarOpen.value;
+  useDialog(asideRef, { onClose: () => (sidebarOpen.value = false), active: mobile && open });
   useEffect(() => {
-    if (asideRef.current) asideRef.current.inert = mobile && !sidebarOpen.value;
-  }, [mobile, sidebarOpen.value]);
+    if (asideRef.current) asideRef.current.inert = mobile && !open;
+  }, [mobile, open]);
   const tab = sidebarTab.value;
   const allTabs = [{ id: 'chats', label: t('side.chats'), icon: 'chat' as const }, ...sidebarTabs];
   const ActivePanel = sidebarTabs.find((x) => x.id === tab)?.Panel;
 
   return (
     <>
-      {sidebarOpen.value && <div data-dialog-backdrop class="backdrop fixed inset-0 z-20 md:hidden" onClick={() => (sidebarOpen.value = false)} />}
+      {open && <div data-dialog-backdrop class="backdrop fixed inset-0 z-20 md:hidden" onClick={() => (sidebarOpen.value = false)} />}
       <aside
         ref={asideRef}
         class={cx(
           'panel fixed inset-y-0 left-0 z-30 flex w-72 flex-col rounded-r-[22px] transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)] md:glass md:relative md:w-(--sidebar-w) md:shrink-0 md:translate-x-0 md:rounded-[22px] md:shadow-none',
-          sidebarOpen.value ? 'translate-x-0' : '-translate-x-full'
+          open ? 'translate-x-0' : '-translate-x-full'
         )}
         style={{ '--sidebar-w': `${width}px` }}
         data-tip-beside

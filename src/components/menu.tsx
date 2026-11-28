@@ -71,6 +71,9 @@ export function Popover({
   const [pos, setPos] = useState<Position | null>(null);
   // Whether focus is inside; by the time it closes, it is gone from the page and focus with it
   const focused = useRef(false);
+  // onClose may change identity every render: a press outside or Escape runs the latest one
+  const close = useRef(onClose);
+  close.current = onClose;
 
   useLayoutEffect(() => {
     const update = () => {
@@ -90,11 +93,11 @@ export function Popover({
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
-      if (!ref.current?.contains(t) && !anchor?.contains(t) && !opener?.contains(t)) onClose();
+      if (!ref.current?.contains(t) && !anchor?.contains(t) && !opener?.contains(t)) close.current();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      onClose();
+      close.current();
       // Only the menu or dialog closes, not a dialog it is in (a suggestion list lets the input see the key)
       if (role !== 'listbox') e.stopPropagation();
     };
@@ -107,7 +110,7 @@ export function Popover({
       const back = opener ?? anchor;
       if (focused.current) (back?.matches('button') ? back : back?.querySelector<HTMLElement>('button'))?.focus();
     };
-  }, [anchor, opener]);
+  }, [anchor, opener, role]);
 
   // Focus the first item (a dialog's first control) once placed: it is hidden, and cannot take focus, until then
   const placed = !!pos;

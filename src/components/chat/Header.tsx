@@ -145,7 +145,7 @@ function ConversationCost() {
   const conv = currentConv.value;
   useEffect(() => {
     if (!isDraft.value && !conv.temporary) void loadConversationCost(conv.id);
-  }, [conv.id]);
+  }, [conv.id, conv.temporary]);
   const c = conversationCosts.value[conv.id];
   if (!c || (c.usd === 0 && c.unknown === 0)) return null;
   const title = [t('header.costTitle'), c.unknown ? t('header.costUnknown', { n: formatNumber(c.unknown) }) : '', c.estimated ? t('header.costEstimated') : ''].filter(Boolean).join('\n');

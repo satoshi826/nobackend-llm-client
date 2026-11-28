@@ -5,7 +5,7 @@
 // - focus moves into the dialog ([data-autofocus] first, then the first field, then the first control)
 //   and returns to the previously focused element when it closes (through the nearest shown control when that one
 //   is hidden). On touch devices it skips unmarked fields (focusing one would bring up the on-screen keyboard)
-import { useEffect } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import type { RefObject } from 'preact';
 import { touchDevice } from './device';
 
@@ -73,6 +73,9 @@ function refocus(el: HTMLElement) {
 
 export function useDialog(ref: RefObject<HTMLElement | null>, opts: { onClose(): void; active?: boolean }) {
   const active = opts.active ?? true;
+  // onClose may change identity every render: a key press runs the latest one
+  const onClose = useRef(opts.onClose);
+  onClose.current = opts.onClose;
   useEffect(() => {
     const el = ref.current;
     if (!active || !el) return;
@@ -89,7 +92,7 @@ export function useDialog(ref: RefObject<HTMLElement | null>, opts: { onClose():
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopImmediatePropagation();
-        opts.onClose();
+        onClose.current();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -118,6 +121,5 @@ export function useDialog(ref: RefObject<HTMLElement | null>, opts: { onClose():
       undoInert();
       if (previous && previous.isConnected && !previous.closest('[inert]')) refocus(previous);
     };
-    // opts.onClose may change identity every render; the latest one is read through the closure on each key press
-  }, [active]);
+  }, [ref, active]);
 }

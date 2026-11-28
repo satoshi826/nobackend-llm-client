@@ -464,6 +464,7 @@ type Box = { x: number; y: number; w: number; h: number };
  */
 export function useSelectedBox(ref: RefObject<HTMLElement | null>, selector: string): Box | null {
   const [box, setBox] = useState<Box | null>(null);
+  // oxlint-disable-next-line react/exhaustive-deps -- measured after every render on purpose; an unchanged box keeps the state, so it renders no more
   useLayoutEffect(() => {
     const el = ref.current?.querySelector<HTMLElement>(selector);
     const next = el ? { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight } : null;

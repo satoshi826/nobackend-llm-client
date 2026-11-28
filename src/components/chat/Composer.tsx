@@ -11,6 +11,7 @@ import { getPreset } from '../../lib/providers/registry';
 import { cancelSuggestions } from '../../state/suggestions';
 import { isStreaming, stopGeneration } from '../../state/runs';
 import { sendMessage } from '../../state/generation';
+import { needsSetup } from '../../state/setup';
 import { composerFocus, composerText } from '../../state/ui';
 import { activeComposerMode, collectComposerExtras, visibleComposerAddons, type ComposerApi } from '../extensions';
 import { Icon, IconButton, cx } from '../ui';
@@ -76,6 +77,8 @@ export function Composer() {
 
   const submit = async () => {
     if (!canSend || streaming) return;
+    // No provider or key yet (e.g. a conversation from a backup): what is missing shows, and the text stays for then
+    if (!active && needsSetup()) return;
     const sent = text;
     setText('');
     if (active) return void active.mode.send(sent, conv);

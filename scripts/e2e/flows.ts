@@ -175,17 +175,27 @@ async function importBackup(page: Page, file: string, password?: string) {
   await page.getByText(/^Imported conversations: 1\b/).waitFor();
 }
 
-/** The imported conversation with its answer, once the key is entered again (backups hold no keys) */
+/**
+ * The imported conversation is readable before any key is entered (backups hold no keys); sending from it asks for
+ * a provider and key, and the message typed is sent once they are set
+ */
 async function restored(page: Page, message: string) {
   await page.keyboard.press('Escape');
   await page.getByText(message, { exact: true }).first().click();
-  await addVenice(page);
   await answer(page, message).waitFor();
+  const next = 'After the restore';
+  await composer(page).fill(next);
+  await page.getByRole('button', { name: 'Send' }).click();
+  await addVenice(page);
+  if ((await composer(page).inputValue()) !== next) throw new Error('The message typed before the key was set is gone');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await answer(page, next).waitFor();
+  await settled(page);
 }
 
 const backup: Flow = {
   name: 'backup',
-  label: 'export a backup, plain and encrypted → import each into an empty app → the conversation is back',
+  label: 'export a backup, plain and encrypted → import each into an empty app → the conversation reads before a key is set, and sends once it is',
   async run({ page, url, newContext, tmp }) {
     const message = 'A conversation to back up';
     await conversation(page, url, message);

@@ -50,7 +50,13 @@ export function ProviderChooser() {
           {t('onb.keySafety')}
         </p>
         <h2 class="mt-6 mb-2 text-sm font-semibold">{t('onb.chooseProvider')}</h2>
-        <AddConnection heading={false} onAdded={(id) => void updateConversation({ providerId: id, modelId: '' })} />
+        <AddConnection
+          heading={false}
+          onAdded={(id) => {
+            // A conversation that already uses this provider keeps its model
+            if (id !== currentConv.value.providerId) void updateConversation({ providerId: id, modelId: '' });
+          }}
+        />
         <p class="mt-4 text-xs text-muted">{t('onb.addLater')}</p>
       </div>
     </div>

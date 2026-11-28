@@ -42,13 +42,10 @@ function PrivacyBadge({ m }: { m: ModelInfo }) {
 /** One model; drawn again only when what it shows changes (a search adds and removes rows, it does not redraw them) */
 const ModelRow = memo(function ModelRow({ m, selected, fav, onPick, showProvider }: { m: ModelInfo; selected: boolean; fav: boolean; onPick(m: ModelInfo): void; showProvider?: boolean }) {
   return (
-    <li class="relative">
-      <button
-        type="button"
-        onClick={() => onPick(m)}
-        class={cx('w-full rounded-lg py-2.5 pr-10 pl-3 text-left', selected ? 'bg-glass-strong' : 'hover:bg-glass')}
-        aria-pressed={selected}
-      >
+    // The bookmark star has a column of its own, the row's full height, beside the button that picks: a tap that misses
+    // the star by a little bookmarks nothing rather than picking the model and closing the list
+    <li class={cx('flex rounded-lg', selected ? 'bg-glass-strong' : 'hover:bg-glass')}>
+      <button type="button" onClick={() => onPick(m)} class="min-w-0 flex-1 rounded-l-lg py-2.5 pr-1 pl-3 text-left" aria-pressed={selected}>
         <div class="flex items-center gap-2">
           <span class="truncate text-sm font-medium">{m.name}</span>
           {showProvider && <span class="shrink-0 text-xs text-muted">{providerById(m.providerId)?.name}</span>}
@@ -101,7 +98,7 @@ ${t('picker.priceListed', { date: m.pricing.listedAt })}` : t('picker.priceTitle
       </button>
       <button
         type="button"
-        class={cx('absolute top-2 right-2 rounded-md p-1 hover:bg-glass-strong', fav ? 'text-ink-strong' : 'text-faint')}
+        class={cx('flex w-11 shrink-0 justify-center rounded-r-lg pt-2.5 hover:text-ink-strong', fav ? 'text-ink-strong' : 'text-faint')}
         aria-pressed={fav}
         aria-label={fav ? t('picker.unbookmarkNamed', { name: m.name }) : t('picker.bookmarkNamed', { name: m.name })}
         data-tip={fav ? t('picker.unbookmark') : t('picker.bookmarkTitle')}
@@ -313,8 +310,19 @@ function ModelSections({
     });
   };
 
+  // The model in use comes first, so it is seen (and picked again) without looking for it
+  const current = !searching && !filtering ? arranged.find((m) => `${m.providerId}|${m.id}` === selected) : undefined;
+
   return (
     <div>
+      {current && (
+        <div class="pb-2">
+          <p class="px-2 py-2 text-sm font-semibold">{t('picker.selected')}</p>
+          <ul>
+            <ModelRow m={current} showProvider selected fav={favs.has(selected)} onPick={onPick} />
+          </ul>
+        </div>
+      )}
       {favList.length > 0 && (
         <Section
           id={BOOKMARKS}

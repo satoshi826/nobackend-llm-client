@@ -13,6 +13,7 @@ import {
 import { registerMessageTransform } from '../../lib/chat/request';
 import { ImageModelButton, ImageBarAbove, ImageModeButton, ImageSettings, ImageToolDetail, UserImageRequest, imageToolNote } from './components/Hooks';
 import { ImageAnswer, Lightbox, ReplyImages } from './components/ImageView';
+import { tagKeys } from './components/TagSuggestions';
 import { imageNote } from './transform';
 import { composerText } from '../../state/ui';
 import { currentImageModel, imageReady, paramsFromBar, promptUse, sendImagePrompt } from './state';
@@ -28,6 +29,7 @@ registerComposerAddon({
   alwaysShown: true,
   Button: ImageModeButton,
   Above: ImageBarAbove,
+  onKeyDown: tagKeys,
   mode: (conv) =>
     conv.imageMode
       ? {

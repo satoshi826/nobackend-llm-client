@@ -25,6 +25,7 @@ import {
 import { imageProviderList, imageProviderOf } from '../providers/types';
 import { formatList, formatUsd } from '../../../lib/i18n';
 import { ImageBar } from './ImageBar';
+import { TagSuggestions } from './TagSuggestions';
 import { sentPrompt } from '../presets';
 import { t } from '../messages';
 import { ToolImages } from './ImageView';
@@ -43,7 +44,13 @@ export function ImageModeButton({ conv }: { conv: Conversation }) {
 
 /** The option bar above the text area, only in image mode */
 export function ImageBarAbove({ conv, api }: { conv: Conversation; api: ComposerApi }) {
-  return conv.imageMode ? <ImageBar prompt={api.text} /> : null;
+  if (!conv.imageMode) return null;
+  return (
+    <>
+      <ImageBar prompt={api.text} />
+      <TagSuggestions api={api} />
+    </>
+  );
 }
 
 /** In image mode the input box shows where prompts go: the image model, not the chat model */

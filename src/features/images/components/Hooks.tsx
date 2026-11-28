@@ -25,6 +25,7 @@ import {
 import { imageProviderList, imageProviderOf } from '../providers/types';
 import { formatList, formatUsd } from '../../../lib/i18n';
 import { ImageBar } from './ImageBar';
+import { sentPrompt } from '../presets';
 import { t } from '../messages';
 import { ToolImages } from './ImageView';
 
@@ -86,6 +87,7 @@ export function UserImageRequest({ m }: { m: MessageRecord }) {
           : r.op === 'edit'
             ? t('request.edit')
             : t('request.removeBg')}
+      {r.qualityTags && <span data-tip={r.qualityTags.text}>· {t('request.qualityTags')}</span>}
     </div>
   );
 }
@@ -124,7 +126,7 @@ function ToolRequestDetails({ p, ran }: { p: ToolPart; ran?: ToolRequest & { mod
     req = {
       model: m?.name ?? params.model,
       provider: imageProviderOf(params.providerId)?.label ?? params.providerId,
-      prompt: params.prompt,
+      prompt: sentPrompt(params),
       negativePrompt: params.negativePrompt,
       aspectRatio: params.aspectRatio,
       resolution: params.resolution,

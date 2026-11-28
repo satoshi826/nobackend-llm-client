@@ -18,8 +18,8 @@ export interface ImageToolRun {
 }
 
 /** How to write the prompt for the image model (for the model only: English, like the descriptions) */
-function promptAdvice(m: Pick<ImageModelInfo, 'promptStyle' | 'promptLimit'> | undefined): { how: string; param: string } {
-  const limit = m?.promptLimit ? ` Keep it within ${m.promptLimit} characters.` : '';
+function promptAdvice(m: ImageToolModel | undefined): { how: string; param: string } {
+  const limit = (m?.promptLimit ? ` Keep it within ${m.promptLimit} characters.` : '') + (m?.qualityTags ? ` The app adds the quality tags "${m.qualityTags}" itself; do not write them.` : '');
   return m?.promptStyle === 'tags'
     ? {
         how: `The image model is an anime model prompted with Danbooru tags: write the prompt as comma-separated Danbooru tags in English, with spaces instead of underscores and parentheses escaped with a backslash (hatsune miku \\(cosplay\\)), not as sentences. Start with the subject count (1girl, 1boy, ...), then the character and series if any, then appearance, clothing, pose, setting and style (e.g. "1girl, solo, long hair, school uniform, sitting, classroom, window, sunlight, smile").${limit}`,
@@ -28,8 +28,10 @@ function promptAdvice(m: Pick<ImageModelInfo, 'promptStyle' | 'promptLimit'> | u
     : { how: `Write the prompt in English when possible, describing subject, style, composition and lighting.${limit}`, param: `A detailed description of the image, in English when possible.${limit}` };
 }
 
-/** model: the image model it will use, whose prompt style and limit the description tells the chat model */
-export function makeImageTool(run: ImageToolRun, model?: Pick<ImageModelInfo, 'promptStyle' | 'promptLimit'>): Tool<ImageToolInput> {
+/** What the description tells the chat model about the image model: its prompt style, the room left, the quality tags the app adds */
+export type ImageToolModel = Pick<ImageModelInfo, 'promptStyle' | 'promptLimit'> & { qualityTags?: string };
+
+export function makeImageTool(run: ImageToolRun, model?: ImageToolModel): Tool<ImageToolInput> {
   const advice = promptAdvice(model);
   return {
     name: GENERATE_IMAGE,

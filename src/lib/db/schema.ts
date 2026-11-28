@@ -39,6 +39,8 @@ export interface ImageParams {
   /** Image model (generate / edit) */
   model: string;
   prompt: string;
+  /** Quality tags added to the prompt when it is sent (the model family's recommended ones, when the user keeps them on) */
+  qualityTags?: { text: string; at: 'start' | 'end' };
   negativePrompt?: string;
   /** The model's size (ImageSize.id); requests saved before it have only the aspect ratio and resolution */
   size?: string;

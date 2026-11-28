@@ -28,6 +28,7 @@ import { ImageApiError, generationCost, hasOption, promptLength, sizeOf, type Im
 import { deepinfraImageProvider, nanogptImageProvider, togetherImageProvider } from './providers/hosts';
 import { imageProviderList, imageProviderOf, registerImageProvider, type ImageCallContext, type ImageProvider } from './providers/types';
 import { makeImageTool, type ImageToolInput } from './tool';
+import { TAG_PRESETS, isPresetNegative, sentPrompt } from './presets';
 import type { IconName } from '../../components/ui';
 import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
@@ -54,12 +55,14 @@ export interface ImageDefaults {
   negativePrompt: string;
   enhancePrompt: boolean;
   seed: string;
+  /** Add the recommended quality tags of the model's family (presets.ts) */
+  qualityTags: boolean;
 }
 const DEFAULT_IMAGE_SETTINGS = {
   /** Format images are saved in */
   imageFormat: 'webp' as 'webp' | 'png' | 'jpeg',
   /** Last-used options (the image bar starts from these) */
-  imageDefaults: { providerId: '', model: '', size: '', aspectRatio: '1:1', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '' } as ImageDefaults,
+  imageDefaults: { providerId: '', model: '', size: '', aspectRatio: '1:1', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '', qualityTags: true } as ImageDefaults,
   /** Let chat models create images with the generate_image tool */
   imageTool: true
 };
@@ -71,6 +74,9 @@ export const imageSettings = defineFeatureSettings('images', DEFAULT_IMAGE_SETTI
     return p.imageDefaults ? { ...p, imageDefaults: { ...DEFAULT_IMAGE_SETTINGS.imageDefaults, ...p.imageDefaults } } : p;
   }
 });
+
+/** The bar's options, with the defaults of options added after they were saved */
+export const imageDefaults = computed((): ImageDefaults => ({ ...DEFAULT_IMAGE_SETTINGS.imageDefaults, ...imageSettings.value.value.imageDefaults }));
 
 /** Changes to an existing image, and the provider method that runs each */
 export type EditOp = 'upscale' | 'edit' | 'remove-bg';
@@ -142,7 +148,7 @@ export function imageWorkOf(item: LightboxItem, stored: boolean): ImageWork {
   const editor = able ? editTargetFor('edit', from) : undefined;
   const chat = item.conversationId && (currentId.value === item.conversationId || conversations.value.some((c) => c.id === item.conversationId)) ? item.conversationId : undefined;
   return {
-    prompt: msg?.image?.params.prompt || source?.imageRequest?.prompt || '',
+    prompt: (msg?.image && sentPrompt(msg.image.params)) || source?.imageRequest?.prompt || '',
     from,
     ...(able ? { upscale: editTargetFor('upscale', from)?.provider.id, removeBg: editTargetFor('remove-bg', from)?.provider.id } : {}),
     ...(editor ? { edit: { providerId: editor.provider.id, model: editor.model, name: editor.model ? (imageModelOf(editor.provider.id, editor.model)?.name ?? editor.model) : editor.provider.label } } : {}),
@@ -270,7 +276,7 @@ function byRef(ref: string | undefined): ImageModelInfo | undefined {
 /** The default model: the one chosen in settings, else one its provider marks as default (Venice does), else the first one */
 export const defaultImageModel = computed(() => {
   const list = generationModels.value;
-  const d = imageSettings.value.value.imageDefaults;
+  const d = imageDefaults.value;
   return imageModelOf(d.providerId || undefined, d.model || undefined) ?? list.find((m) => m.traits.includes('default')) ?? list[0];
 });
 
@@ -283,7 +289,7 @@ export function imageModelFor(conv: Conversation | undefined): ImageModelInfo | 
 export const currentImageModel = computed(() => imageModelFor(currentConv.value));
 
 export async function setImageDefaults(patch: Partial<ImageDefaults>) {
-  await imageSettings.save({ imageDefaults: { ...imageSettings.value.value.imageDefaults, ...patch } });
+  await imageSettings.save({ imageDefaults: { ...imageDefaults.value, ...patch } });
 }
 
 /** Choose the model for the current conversation only (the image bar); the default clears the choice */
@@ -296,6 +302,23 @@ export async function setConversationImageModel(m: ImageModelInfo) {
 /** Choose the default model (settings) */
 export async function setDefaultImageModel(m: ImageModelInfo) {
   await setImageDefaults({ providerId: m.providerId, model: m.id, size: '' });
+}
+
+// The bar's negative prompt follows the model's family while the user has none of their own (it is empty or a preset)
+let negativeFor: string | undefined;
+effect(() => {
+  const m = currentImageModel.value;
+  if (!m || modelRef(m) === negativeFor) return;
+  negativeFor = modelRef(m);
+  const now = imageDefaults.peek().negativePrompt;
+  const preset = m.family ? TAG_PRESETS[m.family].negative : '';
+  if (now !== preset && (!now || isPresetNegative(now))) void setImageDefaults({ negativePrompt: preset });
+});
+
+/** The quality tags a model's family recommends, when the user keeps them on */
+function qualityTagsFor(m: ImageModelInfo | undefined): ImageParams['qualityTags'] {
+  const preset = m?.family && TAG_PRESETS[m.family];
+  return preset && imageDefaults.value.qualityTags ? { text: preset.quality, at: preset.at } : undefined;
 }
 
 // Prices some providers list per model (OpenRouter) are fetched when the model is in use
@@ -339,7 +362,7 @@ export async function setImageMode(on: boolean) {
 
 /** Parameters for a new request with a conversation's model and the bar's options (options the model lacks are left out) */
 export function paramsFor(conv: Conversation | undefined, prompt: string): ImageParams {
-  const d = imageSettings.value.value.imageDefaults;
+  const d = imageDefaults.value;
   const m = imageModelFor(conv);
   const seed = d.seed.trim() ? Number(d.seed) : undefined;
   const size = sizeOf(m, d);
@@ -348,6 +371,7 @@ export function paramsFor(conv: Conversation | undefined, prompt: string): Image
     providerId: m?.providerId ?? '',
     model: m?.id ?? '',
     prompt,
+    qualityTags: qualityTagsFor(m),
     negativePrompt: hasOption(m, 'negativePrompt') ? d.negativePrompt || undefined : undefined,
     size: size?.id,
     aspectRatio: size ? size.aspect : d.aspectRatio || undefined,
@@ -461,7 +485,7 @@ async function storeImages(conv: Conversation, messageId: string, blobs: Blob[])
 /** A prompt's length and its model's limit, when the model has one */
 export function promptUse(p: ImageParams): { n: number; limit: number } | undefined {
   const limit = p.op === 'generate' ? imageModelOf(p.providerId, p.model)?.promptLimit : undefined;
-  return limit === undefined ? undefined : { n: promptLength(p.prompt), limit };
+  return limit === undefined ? undefined : { n: promptLength(sentPrompt(p)), limit };
 }
 
 /** Refuse a prompt longer than its model takes, before it is sent */
@@ -476,7 +500,7 @@ async function call(p: ImageParams, signal: AbortSignal): Promise<{ blobs: Blob[
   const ctx = callContext(p.providerId, signal);
   if (p.op === 'generate') {
     checkPromptLength(p);
-    const r = await provider.generate(p, imageModelOf(p.providerId, p.model), ctx);
+    const r = await provider.generate({ ...p, prompt: sentPrompt(p) }, imageModelOf(p.providerId, p.model), ctx);
     return { blobs: r.images, result: { seed: p.seed, blurred: r.blurred || undefined, violations: r.violations || undefined, enhancedPrompt: r.enhancedPrompt }, costUsd: r.costUsd };
   }
   const source = p.sourceBlobId ? await getImage(p.sourceBlobId) : null;
@@ -615,7 +639,9 @@ export function toolParams(conv: Conversation | undefined, input: Partial<ImageT
   // The aspect the chat model asked for, in the bar's tier (when the image model has that aspect)
   const asked = input.aspect_ratio ? sizeOf(m, { aspectRatio: input.aspect_ratio, resolution: base.resolution }) : undefined;
   const sized = asked && asked.aspect === input.aspect_ratio ? { size: asked.id, aspectRatio: asked.aspect, resolution: asked.tier } : {};
-  return { ...base, ...sized, variants: 1, negativePrompt: hasOption(m, 'negativePrompt') ? input.negative_prompt : undefined, seed: hasOption(m, 'seed') ? randomSeed() : undefined, enhancePrompt: false };
+  // Without a negative prompt of the chat model's own, a tag family's recommended one
+  const negative = input.negative_prompt || (m?.family ? TAG_PRESETS[m.family].negative : '') || undefined;
+  return { ...base, ...sized, variants: 1, negativePrompt: hasOption(m, 'negativePrompt') ? negative : undefined, seed: hasOption(m, 'seed') ? randomSeed() : undefined, enhancePrompt: false };
 }
 
 async function runImageTool(conv: Conversation, messageId: string, input: ImageToolInput, signal: AbortSignal) {
@@ -624,7 +650,7 @@ async function runImageTool(conv: Conversation, messageId: string, input: ImageT
   if (!p.model) throw new Error(t('err.modelsFailed'));
   checkPromptLength(p);
   const model = imageModelOf(p.providerId, p.model);
-  const r = await providerFor(p.providerId).generate(p, model, callContext(p.providerId, signal));
+  const r = await providerFor(p.providerId).generate({ ...p, prompt: sentPrompt(p) }, model, callContext(p.providerId, signal));
   if (!r.images.length) throw new Error(r.violations ? t('err.policy') : t('err.noImage'));
   const parts = await storeImages(conv, messageId, r.images);
   const cost = recordImageUsage(conv, p, r.images.length, r.costUsd);
@@ -634,7 +660,7 @@ async function runImageTool(conv: Conversation, messageId: string, input: ImageT
     inWorkDir: !!conv.workDir,
     model: model?.name ?? p.model,
     blurred: !!r.blurred,
-    request: { provider: imageProviderOf(p.providerId)?.label ?? p.providerId, prompt: p.prompt, negativePrompt: p.negativePrompt, aspectRatio: p.aspectRatio, resolution: p.resolution, size: p.size, costUsd: cost, costEstimated: r.costUsd === undefined }
+    request: { provider: imageProviderOf(p.providerId)?.label ?? p.providerId, prompt: sentPrompt(p), negativePrompt: p.negativePrompt, aspectRatio: p.aspectRatio, resolution: p.resolution, size: p.size, costUsd: cost, costEstimated: r.costUsd === undefined }
   };
 }
 
@@ -646,7 +672,11 @@ registerToolProvider({
     if (!imageSettings.value.value.imageTool || !imageReady.value) return [];
     // Load the model list now, so the approval card can name the model and its price
     if (!imageModels.value.length) void loadImageModels();
-    return [makeImageTool((input, signal) => runImageTool(conv, messageId, input, signal), imageModelFor(conv))];
+    const m = imageModelFor(conv);
+    const quality = qualityTagsFor(m)?.text;
+    // The limit left for the chat model's own prompt once the quality tags are added
+    const limit = m?.promptLimit !== undefined && quality ? m.promptLimit - promptLength(quality) - 2 : m?.promptLimit;
+    return [makeImageTool((input, signal) => runImageTool(conv, messageId, input, signal), m && { promptStyle: m.promptStyle, promptLimit: limit, qualityTags: quality })];
   }
 });
 

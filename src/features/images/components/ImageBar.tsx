@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { hasOption, sizeOf } from '../providers/common';
 import { ModelOptions } from './ModelOptions';
+import { TAG_PRESETS } from '../presets';
 import { openSettings } from '../../../state/ui';
 import { Button, Chevron, Collapse, Select, Spinner, TextField, Checkbox, Icon, cx } from '../../../components/ui';
 import {
@@ -10,7 +11,7 @@ import {
   modelRef,
   setConversationImageModel,
   estimateCost,
-  imageSettings,
+  imageDefaults,
   generationModels,
   imageModelsError,
   imageReady,
@@ -59,7 +60,7 @@ export function ImageBar({ prompt }: { prompt: string }) {
         </Button>
       </div>
     );
-  const d = imageSettings.value.value.imageDefaults;
+  const d = imageDefaults.value;
   const m = currentImageModel.value;
   const list = generationModels.value;
   if (!list.length)
@@ -94,6 +95,7 @@ export function ImageBar({ prompt }: { prompt: string }) {
   const params = paramsFromBar(prompt.trim());
   const cost = estimateCost(params);
   const use = promptUse(params);
+  const preset = m?.family && TAG_PRESETS[m.family];
   return (
     <div class="space-y-1.5 px-3 pt-2.5 text-xs" role="group" aria-label={t('bar.group')}>
       <div class="flex flex-wrap items-center gap-1.5">
@@ -185,6 +187,14 @@ export function ImageBar({ prompt }: { prompt: string }) {
             onInput={(e) => void setImageDefaults({ seed: (e.target as HTMLInputElement).value.replace(/[^\d-]/g, '') })}
             aria-label={t('bar.seed')}
           />}
+          {preset && (
+            <div class="sm:col-span-2">
+              <Checkbox class="text-muted" checked={d.qualityTags} onChange={(v) => void setImageDefaults({ qualityTags: v })}>
+                {t('bar.qualityTags')}
+              </Checkbox>
+              {d.qualityTags && <p class="pl-6 break-words text-faint">{t(preset.at === 'start' ? 'bar.qualityStart' : 'bar.qualityEnd', { tags: preset.quality })}</p>}
+            </div>
+          )}
           {hasOption(m, 'enhance') && <Checkbox class="text-muted sm:col-span-2" checked={d.enhancePrompt} onChange={(v) => void setImageDefaults({ enhancePrompt: v })}>
             {t('bar.enhance')}
           </Checkbox>}

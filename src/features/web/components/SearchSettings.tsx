@@ -1,5 +1,6 @@
 // Settings → Web: searching (on/off, the model's built-in search or Tavily, the route each connection ends up with, the Tavily
 // key) and fetching pages (fetch_url on/off, the model that reads pages, the ways the fetch page tries)
+import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 import { saveSettings, settings } from '../../../state/settings';
 import { enabledProviders } from '../../../state/models';
@@ -11,11 +12,22 @@ import { fetchSettingsOpen } from '../../../state/fetch-page';
 import { KeyPanel } from '../../../components/KeyPanel';
 import { AccountRow } from '../../../components/settings/AccountRow';
 import { Button, Icon, Select, cx } from '../../../components/ui';
-import { ModelSelect, PermissionSelect, Section, Toggle } from '../../../components/settings-ui';
+import { Group, ModelChoice, PermissionRow, Row, ToggleRow } from '../../../components/settings-ui';
 import { providerSearchRoute, webSettings } from '../state';
 import { t } from '../messages';
 
-const listClass = 'divide-y divide-line rounded-xl border border-line bg-glass';
+/** A row that only tells something (a search route, a fetch route): its mark, a name and what it means */
+function InfoRow({ mark, name, desc }: { mark: ComponentChildren; name: string; desc: string }) {
+  return (
+    <div class="flex items-start gap-3 px-4 py-3">
+      <span class="mt-0.5 flex w-4 shrink-0 justify-center text-xs text-muted">{mark}</span>
+      <span class="min-w-0 flex-1">
+        <span class="block text-sm text-ink">{name}</span>
+        <span class="mt-0.5 block text-xs leading-5 text-muted">{desc}</span>
+      </span>
+    </div>
+  );
+}
 
 export function SearchSettings() {
   const s = settings.value;
@@ -32,83 +44,68 @@ export function SearchSettings() {
   ];
   return (
     <div class="space-y-8">
-      <Section title={t('settings.searchTitle')}>
-        <Toggle checked={w.enabled} onChange={(v) => void webSettings.save({ enabled: v })} title={t('settings.enabled')} desc={t('settings.enabledDesc')} />
-        <div class={cx('space-y-3', !w.enabled && 'pointer-events-none opacity-50')} aria-disabled={!w.enabled}>
+      <Group title={t('settings.searchTitle')} footer={t('settings.routesNote')}>
+        <ToggleRow checked={w.enabled} onChange={(v) => void webSettings.save({ enabled: v })} label={t('settings.enabled')} hint={t('settings.enabledDesc')}>
           {anyNative && (
-            <label class="flex items-center justify-between gap-3 text-sm">
-              {t('settings.engine')}
-              <Select value={w.searchEngine} onChange={(e) => void webSettings.save({ searchEngine: (e.target as HTMLSelectElement).value as 'builtin' | 'tools' })}>
-                <option value="builtin">{t('settings.engineNative')}</option>
-                <option value="tools">Tavily</option>
-              </Select>
-            </label>
+            <Row
+              label={t('settings.engine')}
+              control={
+                <Select aria-label={t('settings.engine')} value={w.searchEngine} onChange={(e) => void webSettings.save({ searchEngine: (e.target as HTMLSelectElement).value as 'builtin' | 'tools' })}>
+                  <option value="builtin">{t('settings.engineNative')}</option>
+                  <option value="tools">Tavily</option>
+                </Select>
+              }
+            />
           )}
-          {provs.length > 0 && (
-            <ul class={listClass}>
-              {provs.map((p) => {
-                const route = providerSearchRoute(p.id);
-                const note = route === 'native' ? getPreset(p.preset).nativeWebSearch?.note : undefined;
-                return (
-                  <li key={p.id} class="flex items-start gap-3 px-3 py-2.5 text-sm">
-                    <Icon name={route === 'native' ? 'globe' : 'search'} class={cx('mt-0.5 size-4 shrink-0', route ? 'text-ink' : 'text-faint')} />
-                    <span class="min-w-0 flex-1">
-                      <span class="font-medium text-ink-strong">{p.name}</span>
-                      <span class="block text-xs text-muted">
-                        {[route === 'native' ? t('settings.routeNative') : route === 'tools' ? 'Tavily' : t('settings.routeNone'), note].filter(Boolean).join(' — ')}
-                      </span>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <p class="text-xs text-muted">{t('settings.routesNote')}</p>
-          <PermissionSelect label={t('settings.tavilyPermission')} tools={['web_search']} />
-          {SERVICE_ORDER.map((id) => {
-            const a = accountById(id)!;
+          {provs.map((p) => {
+            const route = providerSearchRoute(p.id);
+            const note = route === 'native' ? getPreset(p.preset).nativeWebSearch?.note : undefined;
             return (
-              <AccountRow key={id} id={id} title={a.label} host={a.host} open={open === id} onToggle={() => setOpen(open === id ? '' : id)}>
-                <KeyPanel accountId={id} compact />
-              </AccountRow>
+              <InfoRow
+                key={p.id}
+                mark={<Icon name={route === 'native' ? 'globe' : 'search'} class={cx('size-4', route ? 'text-ink' : 'text-faint')} />}
+                name={p.name}
+                desc={[route === 'native' ? t('settings.routeNative') : route === 'tools' ? 'Tavily' : t('settings.routeNone'), note].filter(Boolean).join(' — ')}
+              />
             );
           })}
-        </div>
-      </Section>
-      <Section title={t('settings.fetchTitle')}>
-        <Toggle
+          <PermissionRow label={t('settings.tavilyPermission')} tools={['web_search']} />
+        </ToggleRow>
+        {SERVICE_ORDER.map((id) => {
+          const a = accountById(id)!;
+          return (
+            <AccountRow key={id} id={id} title={a.label} host={a.host} open={open === id} onToggle={() => setOpen(open === id ? '' : id)}>
+              <KeyPanel accountId={id} compact />
+            </AccountRow>
+          );
+        })}
+      </Group>
+
+      <Group title={t('settings.fetchTitle')} footer={t('settings.readNote')}>
+        <ToggleRow
           checked={reads}
           onChange={(v) => saveSettings({ toolPermissions: { ...s.toolPermissions, fetch_url: v ? 'ask' : 'deny' } })}
-          title={t('settings.readToggle')}
-          desc={t('settings.readDesc')}
+          label={t('settings.readToggle')}
+          hint={t('settings.readDesc')}
+        >
+          <Row label={t('settings.readerModel')} below={<ModelChoice label={t('settings.readerModel')} value={w.readerModel} onChange={(v) => void webSettings.save({ readerModel: v })} />} />
+        </ToggleRow>
+      </Group>
+
+      <Group title={t('settings.ways')} note={t('settings.waysDesc')} footer={relay ? undefined : t('settings.noRelay')}>
+        {ways.map(([name, desc], i) => (
+          <InfoRow key={name} mark={i + 1} name={name} desc={desc} />
+        ))}
+        <Row
+          label={t('settings.pageSettings')}
+          hint={t('settings.pageSettingsDesc')}
+          control={
+            <Button variant="outline" onClick={() => (fetchSettingsOpen.value = true)}>
+              {t('settings.open')}
+            </Button>
+          }
         />
-        <ModelSelect label={t('settings.readerModel')} disabled={!reads} value={w.readerModel} onChange={(v) => void webSettings.save({ readerModel: v })} />
-        <div class="space-y-2">
-          <p class="text-sm">{t('settings.ways')}</p>
-          <p class="text-xs text-muted">{t('settings.waysDesc')}</p>
-          <ol class={listClass}>
-            {ways.map(([name, desc], i) => (
-              <li key={name} class="flex items-start gap-3 px-3 py-2.5 text-sm">
-                <span class="mt-0.5 w-4 shrink-0 text-center text-xs text-muted">{i + 1}</span>
-                <span class="min-w-0 flex-1">
-                  <span class="font-medium text-ink-strong">{name}</span>
-                  <span class="block text-xs text-muted">{desc}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
-          {!relay && <p class="text-xs text-muted">{t('settings.noRelay')}</p>}
-        </div>
-        <div class="flex items-center justify-between gap-4 text-sm">
-          <span>
-            {t('settings.pageSettings')}
-            <span class="mt-0.5 block text-xs text-muted">{t('settings.pageSettingsDesc')}</span>
-          </span>
-          <Button variant="outline" onClick={() => (fetchSettingsOpen.value = true)}>
-            {t('settings.open')}
-          </Button>
-        </div>
-      </Section>
+      </Group>
     </div>
   );
 }

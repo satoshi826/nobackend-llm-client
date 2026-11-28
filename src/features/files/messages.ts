@@ -128,7 +128,8 @@ export const t = defineMessages(
       'レポートや長い文書は、モデルが「ファイル」として保存できます（サイドバーの「ファイル」タブ）。入力欄の「添付」から、テキストや PDF をモデルに読ませることもできます。ファイルはこのブラウザの中だけに保存され、パスフレーズがあれば暗号化されます。',
     'settings.count': 'いま {n} 件のファイルが保存されています。',
     'settings.toggle': 'モデルがファイルを作成・編集できるようにする',
-    'settings.toggleDesc': 'ツール呼び出しに対応したモデルで使えます。送信のたびにツールの説明が増えます（作業フォルダができるまで約 {before} トークン、できたあとは約 {after} トークン）。オフでも、添付したファイルの内容はメッセージと一緒に送られます。',
+    'settings.toggleDesc': 'ツール呼び出しに対応したモデルで使えます。送信のたびにツールの説明が増えます（約 {before}〜{after} トークン）。',
+    'settings.attachNote': 'オフでも、添付したファイルの内容はメッセージと一緒に送られます。',
     'settings.previewPermission': 'ページを試す（preview_page）前の確認',
     'settings.permission': 'ファイルを書き込む前の確認',
 
@@ -346,7 +347,8 @@ export const t = defineMessages(
         'Models can save reports and long documents as files (the Files tab in the sidebar). You can also have a model read text or PDFs with Attach in the input box. Files are stored only in this browser and are encrypted when you set a passphrase.',
       'settings.count': 'Files stored: {n}.',
       'settings.toggle': 'Let models create and edit files',
-      'settings.toggleDesc': 'Works with models that support tool calling. Each request gets longer for the tool descriptions (about {before} tokens until the working folder exists, about {after} after). When off, attached files are still sent with the message.',
+      'settings.toggleDesc': 'Works with models that support tool calling. Each request gets longer for the tool descriptions (about {before}–{after} tokens).',
+      'settings.attachNote': 'When off, attached files are still sent with the message.',
       'settings.previewPermission': 'Before trying a page (preview_page)',
       'settings.permission': 'Confirm before writing files',
 
@@ -559,7 +561,8 @@ export const t = defineMessages(
         '模型可以把报告和长文档保存为文件（侧边栏的“文件”标签页）。也可以通过输入框中的“附件”让模型读取文本或 PDF。文件只保存在此浏览器中，设置口令后会被加密。',
       'settings.count': '当前已保存 {n} 个文件。',
       'settings.toggle': '允许模型创建和编辑文件',
-      'settings.toggleDesc': '支持工具调用的模型可用。每次发送都会附带工具说明（工作文件夹建立前约 {before} 个令牌，之后约 {after} 个）。关闭后，附件内容仍会随消息发送。',
+      'settings.toggleDesc': '支持工具调用的模型可用。每次发送都会附带工具说明（约 {before}～{after} 个令牌）。',
+      'settings.attachNote': '关闭后，附件内容仍会随消息发送。',
       'settings.previewPermission': '试用页面（preview_page）前的确认',
       'settings.permission': '写入文件前确认',
 

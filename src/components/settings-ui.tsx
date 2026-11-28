@@ -4,19 +4,72 @@ import type { Permission } from '../lib/tools/types';
 import { keyStatus } from '../state/keys';
 import { modelKey, providerById, visibleModels } from '../state/models';
 import { saveSettings, settings } from '../state/settings';
-import { SearchChoice, Select, cx, type Choice } from './ui';
+import { Collapse, SearchChoice, Select, cx, type Choice } from './ui';
 import { t } from './messages';
 import { formatUsd } from '../lib/i18n';
 
 /** Label of a permission choice (call it at render time: the language can change) */
 const permLabel = (p: Permission): string => t(`perm.${p}`);
 
-export function Section({ title, children }: { title?: string; children: ComponentChildren }) {
+// ---- Grouped lists: each group of settings is one card, its rows divided by lines ----
+
+/**
+ * A group of settings: its heading and a short note above, the rows in one card (divided by lines), and a footnote
+ * below. Groups are kept well apart, so where one ends is seen before anything is read
+ */
+export function Group({ title, note, footer, children }: { title?: string; note?: ComponentChildren; footer?: ComponentChildren; children: ComponentChildren }) {
   return (
-    <section class="space-y-3">
-      {title && <h3 class="text-sm font-semibold">{title}</h3>}
-      {children}
+    <section>
+      {title && <h3 class="px-1 text-sm font-semibold text-ink-strong">{title}</h3>}
+      {note && <p class="mt-1 px-1 text-xs leading-5 text-muted">{note}</p>}
+      <div class="mt-2.5 divide-y divide-line rounded-2xl border border-line bg-glass">{children}</div>
+      {footer && <p class="mt-2 px-1 text-xs leading-5 text-muted">{footer}</p>}
     </section>
+  );
+}
+
+/**
+ * One setting in a group: its name (and a one-line hint) on the left, its control on the right; a control too wide for
+ * that (a model choice, a text, a picker) goes on a second line, the row's full width. A row of only `below` holds a
+ * control that names itself (a slider with its label, a set of swatches under the group's heading)
+ */
+export function Row({ label, hint, control, below, disabled }: { label?: string; hint?: string; control?: ComponentChildren; below?: ComponentChildren; disabled?: boolean }) {
+  return (
+    <div class={cx('px-4 py-3', disabled && 'opacity-50')}>
+      {(label || hint || control) && (
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            {label && <div class="text-sm text-ink">{label}</div>}
+            {hint && <div class="mt-0.5 text-xs leading-5 text-muted">{hint}</div>}
+          </div>
+          {control && <div class="shrink-0">{control}</div>}
+        </div>
+      )}
+      {below && <div class={label || hint || control ? 'mt-2.5' : undefined}>{below}</div>}
+    </div>
+  );
+}
+
+/**
+ * A setting turned on or off, in a group. What only matters while it is on (children) opens under it, recessed, and
+ * is not shown while it is off
+ */
+export function ToggleRow({ checked, onChange, label, hint, children }: { checked: boolean; onChange(v: boolean): void; label: string; hint?: string; children?: ComponentChildren }) {
+  return (
+    <div class="px-4 py-3">
+      <label class="flex cursor-pointer items-start justify-between gap-4">
+        <span class="min-w-0">
+          <span class="block text-sm text-ink">{label}</span>
+          {hint && <span class="mt-0.5 block text-xs leading-5 text-muted">{hint}</span>}
+        </span>
+        <Switch class="mt-0.5" checked={checked} onChange={onChange} />
+      </label>
+      {children && (
+        <Collapse open={checked}>
+          <div class="mt-3 divide-y divide-line rounded-xl bg-sunken [&>div]:px-3">{children}</div>
+        </Collapse>
+      )}
+    </div>
   );
 }
 
@@ -25,39 +78,30 @@ export function Switch({ checked, onChange, label, disabled, class: className }:
   return <input type="checkbox" role="switch" class={cx('switch shrink-0', className)} checked={checked} disabled={disabled} aria-label={label} onChange={(e) => onChange((e.target as HTMLInputElement).checked)} />;
 }
 
-export function Toggle({ checked, onChange, title, desc, disabled }: { checked: boolean; onChange(v: boolean): void; title: string; desc?: string; disabled?: boolean }) {
-  return (
-    <label class={cx('flex cursor-pointer items-start justify-between gap-4 text-sm', disabled && 'cursor-not-allowed opacity-50')}>
-      <span>
-        {title}
-        {desc && <span class="mt-0.5 block text-xs text-muted">{desc}</span>}
-      </span>
-      <Switch class="mt-0.5" checked={checked} disabled={disabled} onChange={onChange} />
-    </label>
-  );
-}
-
-/** A "confirm before running" select; saved for every tool in tools, read from the first */
-export function PermissionSelect({ label, tools, fallback = 'ask' }: { label: string; tools: string[]; fallback?: Permission }) {
+/** "Confirm before running" as a row of a group; saved for every tool in tools, read from the first */
+export function PermissionRow({ label, hint, tools, fallback = 'ask' }: { label: string; hint?: string; tools: string[]; fallback?: Permission }) {
   const perms = settings.value.toolPermissions;
   const save = (v: Permission) => void saveSettings({ toolPermissions: { ...perms, ...Object.fromEntries(tools.map((n) => [n, v])) } });
   return (
-    <label class="flex items-center justify-between gap-3 text-sm">
-      {label}
-      <Select value={perms[tools[0]] ?? fallback} onChange={(e) => save((e.target as HTMLSelectElement).value as Permission)}>
-        {(['ask', 'allow', 'deny'] as Permission[]).map((v) => (
-          <option key={v} value={v}>
-            {permLabel(v)}
-          </option>
-        ))}
-      </Select>
-    </label>
+    <Row
+      label={label}
+      hint={hint}
+      control={
+        <Select aria-label={label} value={perms[tools[0]] ?? fallback} onChange={(e) => save((e.target as HTMLSelectElement).value as Permission)}>
+          {(['ask', 'allow', 'deny'] as Permission[]).map((v) => (
+            <option key={v} value={v}>
+              {permLabel(v)}
+            </option>
+          ))}
+        </Select>
+      }
+    />
   );
 }
 
-/** A model for a side job (value "providerId|modelId"; '' is the conversation's model), from the models with a key */
-export function ModelSelect({ label, value, onChange, disabled }: { label: string; value: string; onChange(v: string): void; disabled?: boolean }) {
-  const choices: Choice[] = [
+/** The models a side job can use (value "providerId|modelId"), the conversation's model ('') first */
+function modelChoices(): Choice[] {
+  return [
     { value: '', label: t('model.same') },
     ...visibleModels.value
       .filter((m) => keyStatus(m.providerId).present)
@@ -67,10 +111,10 @@ export function ModelSelect({ label, value, onChange, disabled }: { label: strin
         return { value: modelKey(m.providerId, m.id), label: m.name, sub: price != null ? t('model.subPriced', { provider, price: formatUsd(price) }) : provider };
       })
   ];
-  return (
-    <div class="space-y-1 text-sm">
-      <span class={cx('block', disabled && 'opacity-50')}>{label}</span>
-      <SearchChoice label={label} value={value} choices={choices} onChange={onChange} disabled={disabled} />
-    </div>
-  );
 }
+
+/** The model of a side job, as a Row's second line (the row names it) */
+export function ModelChoice({ label, value, onChange }: { label: string; value: string; onChange(v: string): void }) {
+  return <SearchChoice label={label} value={value} choices={modelChoices()} onChange={onChange} />;
+}
+

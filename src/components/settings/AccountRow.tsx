@@ -11,11 +11,11 @@ function KeyBadge({ id }: { id: string }) {
   return <Badge>{accountById(id)?.keyOptional ? t('account.noKeyNeeded') : t('account.noKey')}</Badge>;
 }
 
-/** Collapsible key settings row */
+/** An account as a row of a settings group (Group): its name, host and key status; its details open under it */
 export function AccountRow(props: { id: string; title: string; host: string; open: boolean; onToggle(): void; right?: ComponentChildren; children: ComponentChildren }) {
   return (
-    <div class="rounded-lg border border-line">
-      <div class="flex items-center gap-2 px-3 py-2">
+    <div>
+      <div class="flex items-center gap-2 px-4 py-3">
         <button type="button" class="-mx-1.5 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-0.5 text-left hover:bg-glass-strong" onClick={props.onToggle} aria-expanded={props.open}>
           <span class="font-medium">{props.title}</span>
           <span class="truncate text-xs text-muted">{props.host}</span>
@@ -24,8 +24,8 @@ export function AccountRow(props: { id: string; title: string; host: string; ope
         </button>
         {props.right}
       </div>
-      <Collapse open={props.open} class="border-t border-line p-3">
-        {props.children}
+      <Collapse open={props.open}>
+        <div class="px-4 pb-4">{props.children}</div>
       </Collapse>
     </div>
   );

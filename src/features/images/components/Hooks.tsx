@@ -2,7 +2,7 @@
 // tool card for generate_image, and the settings tab
 import type { Conversation, MessageRecord } from '../../../lib/db/schema';
 import { Chip, Disclosure, Icon, SearchChoice, Select, cx } from '../../../components/ui';
-import { PermissionSelect, Section, Toggle } from '../../../components/settings-ui';
+import { Group, PermissionRow, Row, ToggleRow } from '../../../components/settings-ui';
 import type { ToolPart } from '../../../components/extensions';
 import { useEffect } from 'preact/hooks';
 import { conversations, currentConv } from '../../../state/conversations';
@@ -176,39 +176,41 @@ export function ImageToolDetail({ p, owner }: { p: ToolPart; owner?: { conversat
 const imageProviderNames = () => formatList(imageProviderList().map((p) => p.label).sort((a, b) => a.localeCompare(b)));
 
 /** The default image model (tool and image mode) */
-function DefaultModelSelect() {
+function DefaultModelRow() {
   useEffect(() => {
     void loadImageModels();
   }, [imageReady.value]);
   const list = generationModels.value;
   const m = defaultImageModel.value;
-  if (!list.length) return <p class="text-xs text-muted">{t('settings.noModels', { providers: imageProviderNames() })}</p>;
+  if (!list.length) return <Row label={t('settings.model')} below={<p class="text-xs leading-5 text-muted">{t('settings.noModels', { providers: imageProviderNames() })}</p>} />;
   const cost = m ? estimateCost({ ...toolParams(undefined, {}), providerId: m.providerId, model: m.id }) : undefined;
   return (
-    <div class="space-y-1.5 text-sm">
-      <span class="block">
-        {t('settings.model')}
-        <span class="block text-xs text-muted">{t('settings.modelDesc')}</span>
-      </span>
-      <SearchChoice
-        label={t('settings.model')}
-        value={m ? modelRef(m) : ''}
-        choices={list.map((x) => ({
-          value: modelRef(x),
-          label: x.privacy === 'anonymized' ? t('bar.relayed', { name: x.name }) : x.name,
-          sub: imageProviderOf(x.providerId)?.label ?? x.providerId
-        }))}
-        onChange={(v) => {
-          const x = list.find((y) => modelRef(y) === v);
-          if (x) void setDefaultImageModel(x);
-        }}
-      />
-      {m && (
-        <span class="block text-xs text-muted">
-          {[privacyLabelOf(m).title, cost !== undefined ? t('tool.costEach', { cost: formatUsd(cost) }) : t('settings.priceUnknown')].filter(Boolean).join(' ')}
-        </span>
-      )}
-    </div>
+    <Row
+      label={t('settings.model')}
+      hint={t('settings.modelDesc')}
+      below={
+        <>
+          <SearchChoice
+            label={t('settings.model')}
+            value={m ? modelRef(m) : ''}
+            choices={list.map((x) => ({
+              value: modelRef(x),
+              label: x.privacy === 'anonymized' ? t('bar.relayed', { name: x.name }) : x.name,
+              sub: imageProviderOf(x.providerId)?.label ?? x.providerId
+            }))}
+            onChange={(v) => {
+              const x = list.find((y) => modelRef(y) === v);
+              if (x) void setDefaultImageModel(x);
+            }}
+          />
+          {m && (
+            <p class="mt-1.5 text-xs leading-5 text-muted">
+              {[privacyLabelOf(m).title, cost !== undefined ? t('tool.costEach', { cost: formatUsd(cost) }) : t('settings.priceUnknown')].filter(Boolean).join(' ')}
+            </p>
+          )}
+        </>
+      }
+    />
   );
 }
 
@@ -217,26 +219,25 @@ export function ImageSettings() {
   const s = imageSettings.value.value;
   const saveImage = imageSettings.save;
   return (
-    <Section>
-      <p class="text-xs text-muted">{t('settings.desc')}</p>
-      <DefaultModelSelect />
-      <label class="flex items-center justify-between gap-3 text-sm">
-        {t('settings.format')}
-        <Select value={s.imageFormat} onChange={(e) => void saveImage({ imageFormat: (e.target as HTMLSelectElement).value as 'webp' | 'png' | 'jpeg' })}>
-          <option value="webp">{t('settings.webp')}</option>
-          <option value="png">{t('settings.png')}</option>
-          <option value="jpeg">JPEG</option>
-        </Select>
-      </label>
-      <Toggle
-        checked={s.imageTool}
-        onChange={(v) => void saveImage({ imageTool: v })}
-        title={t('settings.tool')}
-        desc={t('settings.toolDesc')}
-      />
-      {s.imageTool && (
-        <PermissionSelect label={t('settings.permission')} tools={['generate_image']} />
-      )}
-    </Section>
+    <div class="space-y-8">
+      <Group note={t('settings.desc')}>
+        <DefaultModelRow />
+        <Row
+          label={t('settings.format')}
+          control={
+            <Select aria-label={t('settings.format')} value={s.imageFormat} onChange={(e) => void saveImage({ imageFormat: (e.target as HTMLSelectElement).value as 'webp' | 'png' | 'jpeg' })}>
+              <option value="webp">{t('settings.webp')}</option>
+              <option value="png">{t('settings.png')}</option>
+              <option value="jpeg">JPEG</option>
+            </Select>
+          }
+        />
+      </Group>
+      <Group>
+        <ToggleRow checked={s.imageTool} onChange={(v) => void saveImage({ imageTool: v })} label={t('settings.tool')} hint={t('settings.toolDesc')}>
+          <PermissionRow label={t('settings.permission')} tools={['generate_image']} />
+        </ToggleRow>
+      </Group>
+    </div>
   );
 }

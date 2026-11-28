@@ -169,8 +169,8 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
   const list: Tool<{ pattern: string }> = {
     name: LIST_FILES,
     label: t('tool.list'),
-    description: 'List the files in the working folder whose path matches a glob pattern, with their sizes. "**" matches across folders, "*" within one, e.g. "**/*.js" or "css/*". Images are listed too, but cannot be read.',
-    parameters: { type: 'object', properties: { pattern: { type: 'string', description: 'Optional. A glob pattern for paths; default "**" (every file).' } } },
+    description: 'List the files in the working folder whose path matches a glob, with their sizes. "**" matches across folders, "*" within one (e.g. "**/*.js", "css/*"). Images are listed too, but cannot be read. To find text inside files, use search_files.',
+    parameters: { type: 'object', properties: { pattern: { type: 'string', description: 'Optional. A glob for paths; default "**" (every file).' } } },
     risk: 'read',
     defaultPermission: FILE_TOOLS_DEFAULT,
     summarize: (i) => i.pattern,
@@ -192,7 +192,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
   const search: Tool<{ pattern: string; glob: string | null; ignore_case: boolean }> = {
     name: SEARCH_FILES,
     label: t('tool.search'),
-    description: `Search the text of the files in the working folder for a regular expression (JavaScript syntax), and get each matching line with its path and line number, at most ${MAX_MATCHES}. Narrow the files with a glob. Use it to find where something is defined or used before reading or editing.`,
+    description: `Search the text of the files in the working folder for a regular expression (JavaScript syntax), and get each matching line with its path and line number (at most ${MAX_MATCHES}). Use it to find where something is defined or used before reading or editing; to find files by name, use list_files.`,
     parameters: {
       type: 'object',
       properties: {
@@ -230,7 +230,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
   const read: Tool<{ file_id: string; offset: number; limit: number; previous: boolean }> = {
     name: READ_FILE,
     label: t('tool.read'),
-    description: `Read a file in the working folder, or one attached to the conversation, with line numbers: up to ${formatNumber(READ_LINES)} lines or ${READ_CHUNK.toLocaleString('en')} characters per call. A note at the end gives the line to continue from when there is more. Read a file before editing it if you have not seen its current text. Each file also keeps its text from before its last change (write_file or edit_file; append_file keeps it as it was): read it with previous=true, and write it back with write_file to undo a change that went wrong.`,
+    description: `Read a file in the working folder, or one attached to the conversation, with line numbers: up to ${READ_LINES} lines or ${READ_CHUNK} characters per call; a note at the end gives the line to continue from. Read a file before editing it unless you have seen its current text. previous=true reads its text from before the last write_file or edit_file (append_file keeps that text as it was); write it back with write_file to undo a change that went wrong.`,
     parameters: {
       type: 'object',
       properties: {
@@ -273,13 +273,13 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     name: WRITE_FILE,
     label: t('tool.create'),
     description:
-      `Write a text file in this conversation's working folder${hasFolder ? '' : ' (the first file makes the folder)'}: a new file, or the whole new text of one it has; the user sees it in the Files tab. Use it when the user asks for a document or a deliverable (a report, notes, a translation, a table, code), or when the answer is too long for a chat message. To change part of a file use edit_file. Write Markdown (.md) unless another format fits better (.csv, .json, .txt, .py, ...). For a long document, write the first part here and continue with append_file. An .html or .svg file opens as a page in a sandbox with no network: it can load the files of its site by relative path (CSS, JavaScript modules, images; the site is the nearest folder above the page that has an index.html, else the page's own folder, so put index.html at the top of a multi-file page), but CDN scripts, web fonts and other web addresses do not load. Its localStorage is kept in localStorage.json at the top of its site (a JSON object of strings you can read and edit to see or seed its data); sessionStorage lasts while it is shown; IndexedDB and cookies are not available. Afterwards reply briefly with what the file contains; do not repeat its text in the chat.`,
+      `Write a text file in this conversation's working folder${hasFolder ? '' : ' (the first file makes the folder)'}: a new file, or the whole new text of one it has. The user sees it in the Files tab. Use it when the user asks for a document or a deliverable (a report, notes, a translation, a table, code), or when the answer is too long for a chat message; answer short questions in the chat. To change part of a file use edit_file; for a long document, write the first part here and continue with append_file. Write Markdown (.md) unless another format fits better (.csv, .json, .py, ...). An .html or .svg file opens as a page in a sandbox with no network: it loads the files of its site by relative path (CSS, JavaScript modules, images), but not CDN scripts, web fonts or other web addresses. Its site is the nearest folder above it with an index.html, else its own folder, so put index.html at the top of a multi-file page. Its localStorage is kept in localStorage.json at the top of its site (a JSON object of strings you can read and edit); sessionStorage lasts while it is shown; IndexedDB and cookies are not available. Afterwards tell the user briefly what the file contains instead of repeating its text.`,
     parameters: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Path of the file inside the working folder, with an extension, e.g. "report.md" or "css/style.css" (a leading "/" also means the working folder).' },
-        content: { type: 'string', description: 'The text of the file, or its first part when you will continue with append_file.' },
-        ...(hasFolder ? {} : { folder: { type: 'string', description: 'Name of the working folder this first file makes, where every later file of this conversation goes: a few lowercase words joined by hyphens that say what it holds, e.g. "todo-app" or "market-report".' } })
+        name: { type: 'string', description: 'Path of the file in the working folder, with an extension, e.g. "report.md" or "css/style.css".' },
+        content: { type: 'string', description: 'The text of the file, or its first part when you continue with append_file.' },
+        ...(hasFolder ? {} : { folder: { type: 'string', description: 'Name of the working folder this first file makes, which holds every file of this conversation: a few lowercase words joined by hyphens that say what it holds, e.g. "todo-app".' } })
       },
       required: hasFolder ? ['name', 'content'] : ['name', 'content', 'folder']
     },
@@ -314,7 +314,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     name: EDIT_FILE,
     label: t('tool.edit'),
     description:
-      'Replace text in a file in the working folder (the text from before the change stays readable with read_file previous=true). "old_string" must be copied exactly from the current text (same spaces, indentation and line breaks, without line numbers or the <file> tag) and occur exactly once, so include a few surrounding lines if needed; or set "replace_all" to change every occurrence. To rewrite a whole file use write_file. If you have not read the current text, call read_file first.',
+      'Replace text in a file in the working folder. old_string must be copied exactly from the current text (same spaces, indentation and line breaks, without line numbers or the <file> tag) and occur exactly once, so include a few surrounding lines if needed; or set replace_all to change every occurrence. Read the file first if you have not seen its current text. To rewrite a whole file, use write_file.',
     parameters: {
       type: 'object',
       properties: {
@@ -362,7 +362,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     name: APPEND_FILE,
     label: t('tool.append'),
     description:
-      'Add text to the end of a file in the working folder, to write a long document in several calls. The text is added exactly as given, so start it with a newline when it begins a new line or section. To change text already in the file, use edit_file.',
+      'Add text to the end of a file in the working folder, to write a long document in several calls. The text is added exactly as given, so start it with a newline when it begins a new line. To change text already in the file, use edit_file.',
     parameters: {
       type: 'object',
       properties: { file_id: FILE_ID, content: { type: 'string', description: 'The text to add at the end.' } },
@@ -415,7 +415,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
   const del: Tool<{ file_id: string }> = {
     name: DELETE_FILE,
     label: t('tool.delete'),
-    description: 'Delete a file in the working folder. The user is asked every time, and it cannot be undone, so delete only what is no longer needed (a leftover, a file the user asked to remove).',
+    description: 'Delete a file in the working folder. It cannot be undone and the user is asked every time, so delete only what is no longer needed (a leftover, or a file the user asked to remove).',
     parameters: { type: 'object', properties: { file_id: FILE_ID }, required: ['file_id'] },
     risk: 'write',
     defaultPermission: FILE_TOOLS_DEFAULT,
@@ -435,7 +435,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     name: PREVIEW_PAGE,
     label: t('tool.preview'),
     description:
-      'Open an .html page of the working folder the way the user would see it (in the sandbox, with the files of its site and its localStorage, but nothing it stores is kept), and get back its console output, its errors (exceptions, files that did not load, anything the sandbox blocked) and the text it shows. Optionally run a short script on it first to try it (click a button, fill a field) and get what the script returns. Use it after writing or changing a page, and fix what it reports before telling the user the page works.',
+      'Open an .html page of the working folder as the user would see it (in the sandbox, with the files of its site and its localStorage; nothing it stores is kept), and get back its console output, its errors (exceptions, files that did not load, anything the sandbox blocked) and the text it shows. Optionally run a short script on it first (click a button, fill a field) and get what the script returns. Use it after writing or changing a page, and fix what it reports before telling the user the page works.',
     parameters: {
       type: 'object',
       properties: {
@@ -469,7 +469,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     name: FETCH_FILE,
     label: t('tool.fetch'),
     description:
-      "Save a file or an image from an https web address into the working folder, as it is: a PDF, a CSV, an HTML page, a text, Markdown or code file, or an image the user asked for. The user confirms every fetch and may decline. A fetched text file (a PDF's text too) gets a path to read with read_file; an image is saved for the user, and you cannot see it. Use it also to keep a web page as an HTML file when you need its markup (to write or test a scraper, say). To read what a page says, use fetch_url instead. Fetch only addresses the user gave or clearly asked for, and never put anything from the conversation into an address.",
+      "Save a file from an https address into the working folder, as it is: a PDF, a CSV, an HTML page, a text, Markdown or code file, or an image the user asked for. A text file (a PDF's text too) gets a path to read with read_file; an image is saved for the user, and you cannot see it. Use it to keep a file, or a page's HTML when you need its markup (to write or test a scraper). To learn what a page says, use fetch_url instead. The user confirms every fetch and may decline. Fetch only addresses the user gave or clearly asked for.",
     parameters: {
       type: 'object',
       properties: { url: { type: 'string', description: 'The file\'s https address, copied exactly as given.' } },

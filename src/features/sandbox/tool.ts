@@ -23,12 +23,12 @@ export function makeRunJavaScriptTool(readFile: FileReader): Tool<RunInput> {
     get label() {
       return t('tool.label');
     },
-    description: `Run JavaScript in an isolated sandbox and get back what it printed with console.log and the value it returned. Use it for exact arithmetic, statistics, date math, or processing data rather than doing it in your head, and to try code on a file in the working folder (e.g. a scraper on an HTML page saved with fetch_file). The code runs as the body of an async function: use \`return\` for the result and \`await\` freely. Files given in file_ids are readable as \`files\` ({ "name": text }); set dom to true when the code needs DOMParser (to parse HTML). There is no network and no access to the user's other files or this app, so put any other data the code needs into the code itself. It is stopped after ${RUN_TIMEOUT_MS / 1000} seconds.`,
+    description: `Run JavaScript in an isolated sandbox and get back what it printed with console.log and the value it returned. Use it for exact arithmetic, statistics, date math and data processing instead of working them out in your head, and to try code on a file in the working folder (e.g. a scraper on an HTML page saved with fetch_file). The code runs as the body of an async function: use \`return\` for the result and \`await\` freely. Files given in file_ids are readable as \`files\` ({ "name": text }); set dom to true when the code needs DOMParser (to parse HTML). There is no network and no access to the user's other files or this app, so put any other data the code needs into the code. It is stopped after ${RUN_TIMEOUT_MS / 1000} seconds.`,
     parameters: {
       type: 'object',
       properties: {
         code: { type: 'string', description: 'The JavaScript to run, as the body of an async function (end with `return value` to get a result back).' },
-        file_ids: { type: 'array', items: { type: 'string' }, description: 'Optional. Ids or paths of files in the working folder to read as `files` (from the files list in the system prompt, or write_file / fetch_file results).' },
+        file_ids: { type: 'array', items: { type: 'string' }, description: 'Optional. Paths or ids of files of the conversation to read as `files`.' },
         dom: { type: 'boolean', description: 'Optional. true to have DOMParser and document (for parsing HTML); default false.' }
       },
       required: ['code']

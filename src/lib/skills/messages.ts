@@ -1,5 +1,5 @@
-// Texts of lib/skills (validation errors, the texts passed to models, and the built-in skills).
-// Model-facing texts follow the UI language; the <skill name="…"> tag format never changes.
+// Texts of lib/skills (validation errors and the built-in skills). The built-in skills are translated: the user reads
+// them in the Skills tab too
 import { defineMessages } from '../i18n';
 
 export const t = defineMessages(
@@ -12,8 +12,6 @@ export const t = defineMessages(
     'validate.bodyRequired': '指示の本文を入れてください。',
     'validate.bodyTooLong': '本文が長すぎます。{max} 文字以内にしてください。',
     'parse.noFrontmatter': '先頭に「---」で囲んだ name と description がありません。SKILL.md の形式で書いてください。',
-
-    // ---- Passed to the model ----
 
     // ---- Built-in skill: skill-creator ----
     'creator.description': '新しいスキルを作る・既存のスキルを直すときに使う。「この手順をスキルにして」「スキルを作って」「〇〇のスキルを直して」と頼まれたとき。',

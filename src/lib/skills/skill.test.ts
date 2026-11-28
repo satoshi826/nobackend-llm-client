@@ -132,9 +132,9 @@ describe('creating and editing skills from a conversation', () => {
     expect(() => tool.prepare({ name: 'skill-creator', description: 'd', body: 'b' })).toThrow(/組み込み/);
     const input = tool.prepare({ name: ' New-One ', description: ' does x ', body: 'steps' });
     expect(input).toEqual({ name: 'new-one', description: 'does x', body: 'steps', model_invocable: true });
-    expect((await tool.execute(input, ctx)).content).toContain('作成');
+    expect((await tool.execute(input, ctx)).content).toBe('Created the skill "new-one".');
     const upd = await tool.execute(tool.prepare({ name: 'notes', description: 'd', body: 'b2', model_invocable: false }), ctx);
-    expect(upd.content).toContain('更新');
+    expect(upd.content).toContain('Updated the skill');
     expect(saved[1]).toEqual({ draft: { name: 'notes', description: 'd', body: 'b2', modelInvocable: false }, id: 'n1' });
     expect(tool.alwaysAsk).toBe(true);
   });

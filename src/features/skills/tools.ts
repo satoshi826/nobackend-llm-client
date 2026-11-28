@@ -11,10 +11,10 @@ export function makeSkillTool(list: Pick<Skill, 'name' | 'body'>[]): Tool<{ name
   return {
     name: LOAD_SKILL,
     label: t('tool.load'),
-    description: 'Load the full instructions of one of the skills listed in the system prompt. Call this before starting a task that matches a skill, then follow the loaded instructions.',
+    description: 'Load the full instructions of a skill listed under "Skills" in the system prompt. Call it before starting a task that matches the skill, then follow the loaded instructions.',
     parameters: {
       type: 'object',
-      properties: { name: { type: 'string', enum: names, description: 'Skill name exactly as listed' } },
+      properties: { name: { type: 'string', enum: names, description: 'The skill name exactly as listed.' } },
       required: ['name']
     },
     risk: 'read',
@@ -83,7 +83,8 @@ export function makeSaveSkillTool(deps: SaveSkillDeps): Tool<SaveSkillInput> {
     async execute(i) {
       const existing = deps.find(i.name);
       await deps.save({ name: i.name, description: i.description, body: i.body, modelInvocable: i.model_invocable }, existing?.id);
-      return { content: t(existing ? 'tool.updatedResult' : 'tool.createdResult', { name: i.name }), details: { name: i.name, updated: !!existing } };
+      // For the model only: English, like the descriptions
+      return { content: `${existing ? 'Updated' : 'Created'} the skill ${JSON.stringify(i.name)}.`, details: { name: i.name, updated: !!existing } };
     }
   };
 }

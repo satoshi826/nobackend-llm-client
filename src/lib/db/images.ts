@@ -7,7 +7,7 @@ import { currentDataKey, DataLockedError } from './sealed';
 import { openBytes, sealBytes, sealJSON, type DataKey } from '../crypto/data';
 import { allImages, dropImage, ensureCatalog, imageEntry, infoOf, putImage as catalogPut, resetCatalog, withTakenPaths, type ImageEntry } from './catalog';
 import { cleanFileName, extOfMime, freePath, timeName } from '../paths';
-import { registerDataTable } from './data-tables';
+import type { DataTable } from './data-tables';
 import { storeChanged } from './changes';
 import { t } from './messages';
 
@@ -298,7 +298,7 @@ function cleanImageInfo(raw: any): ImageInfo | undefined {
   return path ? { path: cleanFileName(path, 'png'), origin } : undefined;
 }
 
-registerDataTable<ExportedImage>({
+export const imagesTable: DataTable<ExportedImage> = {
   key: 'images',
   exportRows: async ({ includeImages }) => (includeImages ? exportImages() : undefined),
   clean: (raw) =>
@@ -326,4 +326,4 @@ registerDataTable<ExportedImage>({
       await deleteImageRecords(ids);
     }
   }
-});
+};

@@ -2,7 +2,7 @@
 import { db, type Conversation, type ImageParams, type MessageRecord, type SavedPrompt, type Skill, type VideoParams } from './schema';
 import { validateSkill } from '../skills/skill';
 import { openValue, seal, unseal } from './sealed';
-import { dataTables } from './data-tables';
+import { DATA_TABLES } from './data-tables';
 import type { Attachment } from './schema';
 import { t } from './messages';
 import { cleanFolderName } from '../paths';
@@ -49,7 +49,7 @@ export async function exportAll(includeImages = false): Promise<ExportFile> {
 
 async function tableRows(includeImages: boolean): Promise<Record<string, unknown[]>> {
   const out: Record<string, unknown[]> = {};
-  for (const t of dataTables()) {
+  for (const t of DATA_TABLES) {
     const rows = await t.exportRows({ includeImages });
     if (rows) out[t.key] = rows;
   }
@@ -111,7 +111,7 @@ export async function importAll(raw: unknown): Promise<ImportResult> {
       res.skills++;
     }
   });
-  for (const t of dataTables()) {
+  for (const t of DATA_TABLES) {
     const rows = f[t.key] as unknown[] | undefined;
     if (rows?.length) res.tables[t.key] = await t.importRows(rows);
   }
@@ -257,6 +257,6 @@ export function validate(raw: unknown): ExportFile {
     }))
     .filter((s) => !validateSkill(s));
   const conversationIds = new Set(conversations.map((c) => c.id));
-  const tables = Object.fromEntries(dataTables().map((t) => [t.key, t.clean(f[t.key], { conversationIds })]));
+  const tables = Object.fromEntries(DATA_TABLES.map((t) => [t.key, t.clean(f[t.key], { conversationIds })]));
   return { format: EXPORT_FORMAT, version: f.version, exportedAt: String(f.exportedAt ?? ''), conversations, messages, prompts, skills, ...tables, settings: [] };
 }

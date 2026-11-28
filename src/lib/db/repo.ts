@@ -5,7 +5,7 @@ import type { UsageRecord } from '../usage';
 import { currentDataKey, openValue, seal, sealValue, unseal, type SealedTable } from './sealed';
 import type { Sealed } from '../crypto/data';
 import type { DataKey } from '../crypto/data';
-import { dataTables } from './data-tables';
+import { DATA_TABLES } from './data-tables';
 
 const memConversations = new Map<string, Conversation>();
 const memMessages = new Map<string, MessageRecord>();
@@ -45,14 +45,14 @@ export async function putConversation(c: Conversation): Promise<void> {
 export async function deleteConversation(id: string, withItems = false): Promise<void> {
   if (memConversations.delete(id)) {
     for (const [k, m] of memMessages) if (m.conversationId === id) memMessages.delete(k);
-    for (const t of dataTables()) await t.onConversationDeleted?.(id, { temporary: true, withItems });
+    for (const t of DATA_TABLES) await t.onConversationDeleted?.(id, { temporary: true, withItems });
     return;
   }
   await db().transaction('rw', db().conversations, db().messages, async () => {
     await db().messages.where('conversationId').equals(id).delete();
     await db().conversations.delete(id);
   });
-  for (const t of dataTables()) await t.onConversationDeleted?.(id, { temporary: false, withItems });
+  for (const t of DATA_TABLES) await t.onConversationDeleted?.(id, { temporary: false, withItems });
   for (const [k, m] of searchIndex) if (m.conversationId === id) searchIndex.delete(k);
   searchOrder = null;
 }
@@ -61,7 +61,7 @@ export async function deleteConversation(id: string, withItems = false): Promise
 export async function countMadeIn(id: string): Promise<number> {
   if (memConversations.has(id)) return 0;
   let n = 0;
-  for (const t of dataTables()) n += (await t.countMadeIn?.(id)) ?? 0;
+  for (const t of DATA_TABLES) n += (await t.countMadeIn?.(id)) ?? 0;
   return n;
 }
 
@@ -267,7 +267,7 @@ export async function resealTable(t: SealedTable, from: DataKey | null, to: Data
  */
 export async function resealAll(from: DataKey | null, to: DataKey | null, onProgress?: (done: number, total: number) => void): Promise<void> {
   for (const t of CORE_SEALED_TABLES) await resealTable(t, from, to, onProgress);
-  for (const t of dataTables()) await t.reseal?.(from, to, onProgress);
+  for (const t of DATA_TABLES) await t.reseal?.(from, to, onProgress);
   await resealSettings(from, to);
   clearSearchCache();
 }

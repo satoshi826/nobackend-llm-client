@@ -6,7 +6,7 @@
 import { db, PREVIEW_CHARS, textBytes, type FileRecord, type Origin, type SavedBy, type TextStamp } from './schema';
 import { seal, unseal } from './sealed';
 import type { DataKey } from '../crypto/data';
-import { registerDataTable } from './data-tables';
+import type { DataTable } from './data-tables';
 import { storeChanged } from './changes';
 import { allFiles, catalogFile, dropFile, ensureCatalog, isTemporary, putFile as catalogPut, resetCatalog } from './catalog';
 import { cleanFileName, mimeFromName } from '../paths';
@@ -254,7 +254,7 @@ export async function importFiles(files: ExportedFile[]): Promise<number> {
   return n;
 }
 
-registerDataTable<ExportedFile>({
+export const filesTable: DataTable<ExportedFile> = {
   key: 'files',
   exportRows: () => exportFiles(),
   clean: (raw) => cleanFiles(raw),
@@ -266,4 +266,4 @@ registerDataTable<ExportedFile>({
     if (temporary) forgetTemporaryFiles(id);
     else if (withItems) await deleteFiles((await db().files.where('conversationId').equals(id).primaryKeys()) as string[]);
   }
-});
+};

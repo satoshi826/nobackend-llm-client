@@ -1,7 +1,9 @@
-// Stored data beyond the core tables (images, files, ...). Each storage module registers how its table
-// is backed up, restored, re-encrypted and cleaned up with a conversation, so the backup code, the
-// passphrase switch and conversation deletion do not need to know every table.
+// Stored data beyond the core tables (files, images). Each storage module says how its table is backed up,
+// restored, re-encrypted and cleaned up with a conversation; the backup code, the passphrase switch and conversation
+// deletion go through this list.
 import type { DataKey } from '../crypto/data';
+import { filesTable } from './files';
+import { imagesTable } from './images';
 
 export interface DataTable<Row = unknown> {
   /** Property name in backup files (kept stable: older backups use it too) */
@@ -23,14 +25,5 @@ export interface DataTable<Row = unknown> {
   onConversationDeleted?(conversationId: string, o: { temporary: boolean; withItems: boolean }): void | Promise<void>;
 }
 
-const tables: DataTable<any>[] = [];
-
-export function registerDataTable<Row>(t: DataTable<Row>) {
-  const i = tables.findIndex((x) => x.key === t.key);
-  if (i >= 0) tables[i] = t;
-  else tables.push(t);
-}
-
-export function dataTables(): readonly DataTable<any>[] {
-  return tables;
-}
+/** In backup order */
+export const DATA_TABLES: readonly DataTable<any>[] = [filesTable, imagesTable];

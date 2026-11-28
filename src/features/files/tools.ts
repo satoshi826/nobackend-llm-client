@@ -69,9 +69,10 @@ export interface FolderEntry {
 /** An image move_file may move */
 export interface MovableImage {
   id: string;
-  /** Its path relative to the working folder */
+  /** Its path relative to the working folder; whole (in the Files tab) when it is outside */
   path: string;
   mime: string;
+  inFolder: boolean;
 }
 
 /** A line search_files found */
@@ -99,10 +100,16 @@ export interface FileToolDeps {
   search(pattern: string, ignoreCase: boolean, only: string | null): Promise<Match[]>;
   /** Give a file in the working folder another path in it; throws when that path is taken */
   move(id: string, to: string): Promise<FileRecord>;
-  /** An image in the working folder, by its path there or its id; undefined otherwise */
+  /**
+   * An image the model may move, undefined otherwise: one in the working folder (by its path there or its id), or one
+   * made in this conversation and in no other chat's working folder (by its id)
+   */
   image(ref: string): Promise<MovableImage | undefined>;
-  /** Give an image in the working folder another path in it; throws when that path is taken */
-  moveImage(id: string, to: string): Promise<void>;
+  /**
+   * Give such an image a path in the working folder; throws when that path is taken. folder: the working folder's
+   * name, when this move makes it
+   */
+  moveImage(id: string, to: string, folder?: string): Promise<void>;
   /** Delete a file in the working folder */
   remove(id: string): Promise<void>;
   /** Open a page of the working folder out of sight and read back what happened on it (nothing it stores is kept) */
@@ -181,13 +188,30 @@ function checkGlob(glob: string) {
   }
 }
 
+/** The name of the working folder, asked of the call that makes it */
+const FOLDER = {
+  type: 'string',
+  description: 'Name of the working folder this call makes, which holds every file of this conversation: a few lowercase words joined by hyphens that say what it holds, e.g. "todo-app".'
+};
+
+/** The working folder's name from the call that makes it: one the model chose, one level */
+function folderName(r: Record<string, unknown>): string {
+  const folder = str(r, 'folder');
+  // A call without one is told, and written again
+  if (!folder.trim()) throw new TranslatedError(() => t('tool.missingFolder'));
+  // One level: a "/" could name a folder inside another chat's
+  if (/[\\/]/.test(folder.trim().replace(/\/+$/, ''))) throw new TranslatedError(() => t('tool.folderOneLevel'));
+  return folder;
+}
+
 const FILE_ID = { type: 'string', description: 'The file\'s path in the working folder (e.g. "js/app.js"), or its id.' };
 
 /**
- * The file tools. Without a working folder only write_file (whose first file makes the folder, named by the model)
- * and fetch_file: the others have nothing to work on until then
+ * The file tools. Without a working folder only write_file (whose first file makes the folder, named by the model),
+ * fetch_file, and move_file when the conversation has made images (it can bring one in, making the folder): the
+ * others have nothing to work on until then
  */
-export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: boolean }): Tool[] {
+export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { hasFolder: boolean; madeImages: boolean }): Tool[] {
   const shown = (f: FileRecord) => JSON.stringify(deps.pathOf(f));
 
   const list: Tool<{ pattern: string }> = {
@@ -303,7 +327,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       properties: {
         name: { type: 'string', description: 'Path of the file in the working folder, with an extension, e.g. "report.md" or "css/style.css".' },
         content: { type: 'string', description: 'The text of the file, or its first part when you continue with append_file.' },
-        ...(hasFolder ? {} : { folder: { type: 'string', description: 'Name of the working folder this first file makes, which holds every file of this conversation: a few lowercase words joined by hyphens that say what it holds, e.g. "todo-app".' } })
+        ...(hasFolder ? {} : { folder: FOLDER })
       },
       required: hasFolder ? ['name', 'content'] : ['name', 'content', 'folder']
     },
@@ -317,11 +341,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const name = cleanFileName(str(r, 'name'));
       const content = str(r, 'content');
       checkSize(content);
-      // The working folder needs a name the model chose; a call without one is told, and written again
-      if (!hasFolder && !str(r, 'folder').trim()) throw new TranslatedError(() => t('tool.missingFolder'));
-      // One level: a "/" could name a folder inside another chat's
-      if (!hasFolder && /[\\/]/.test(str(r, 'folder').trim().replace(/\/+$/, ''))) throw new TranslatedError(() => t('tool.folderOneLevel'));
-      return { name, content, ...(!hasFolder ? { folder: str(r, 'folder') } : {}) };
+      return { name, content, ...(!hasFolder ? { folder: folderName(r) } : {}) };
     },
     async execute(i) {
       const { file: f, replaced } = await deps.create(i.name, i.content, i.folder);
@@ -413,17 +433,23 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     }
   };
 
-  const move: Tool<{ file_id: string; to: string }> = {
+  const move: Tool<{ file_id: string; to: string; folder?: string }> = {
     name: MOVE_FILE,
     label: t('tool.move'),
-    description: 'Rename a file or an image in the working folder, or move it into another folder inside it. An image keeps its type, so its extension stays. Pages that refer to it by its old path need editing too.',
+    description: hasFolder
+      ? 'Rename a file or an image in the working folder, or move it into another folder inside it; or move an image made in this conversation into the working folder, by the id generate_image gave. An image keeps its type, so its extension stays. Pages that refer to what moved by its old path need editing too.'
+      : 'Move an image made in this conversation into the working folder, by the id generate_image gave, so pages there can load it. This first move makes the folder. The image keeps its type, so its extension stays.',
     parameters: {
       type: 'object',
       properties: {
-        file_id: { type: 'string', description: 'The path in the working folder of the file or image (e.g. "js/app.js"), or its id.' },
-        to: { type: 'string', description: 'Its new path in the working folder, with an extension, e.g. "js/app.js".' }
+        file_id: {
+          type: 'string',
+          description: hasFolder ? 'The path in the working folder of the file or image (e.g. "js/app.js"), or its id.' : "The image's id, as generate_image gave it."
+        },
+        to: { type: 'string', description: 'Its new path in the working folder, with an extension, e.g. "js/app.js".' },
+        ...(hasFolder ? {} : { folder: FOLDER })
       },
-      required: ['file_id', 'to']
+      required: hasFolder ? ['file_id', 'to'] : ['file_id', 'to', 'folder']
     },
     risk: 'write',
     defaultPermission: FILE_TOOLS_DEFAULT,
@@ -433,7 +459,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const file_id = requireId(r);
       const to = str(r, 'to').trim();
       if (!to) throw new TranslatedError(() => t('tool.missingTo'));
-      return { file_id, to };
+      return { file_id, to, ...(!hasFolder ? { folder: folderName(r) } : {}) };
     },
     async execute(i) {
       const f = await deps.get(i.file_id);
@@ -449,8 +475,11 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const to = cleanFileName(i.to, ext);
       // Its bytes stay as they are, so its extension keeps saying their type (in the Files tab, a zip, on a disk)
       if (extOf(to) !== ext && extOf(to) !== extOfMime(im.mime)) throw new TranslatedError(() => t('tool.imageType', { name: to, ext }));
-      await deps.moveImage(im.id, to);
-      return { content: `Moved the image ${JSON.stringify(im.path)} to ${JSON.stringify(to)}. Pages that load it by its old path need editing.`, details: { name: to } };
+      await deps.moveImage(im.id, to, i.folder);
+      const moved = im.inFolder
+        ? `Moved the image ${JSON.stringify(im.path)} to ${JSON.stringify(to)}. Pages that load it by its old path need editing.`
+        : `Moved the image ${JSON.stringify(im.path)} from the Files tab into the working folder as ${JSON.stringify(to)}: pages there can load it by that path.`;
+      return { content: moved, details: { name: to } };
     }
   };
 
@@ -539,7 +568,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     }
   };
 
-  return hasFolder ? [list, search, read, write, edit, append, move, del, preview, fetchFile] : [write, fetchFile];
+  return hasFolder ? [list, search, read, write, edit, append, move, del, preview, fetchFile] : [write, ...(madeImages ? [move] : []), fetchFile];
 }
 /** A tried page's key elements for the model, one a line: 'button#start "Start" at 412,300 200×48' */
 export function layoutText(l: PageLayout): string {

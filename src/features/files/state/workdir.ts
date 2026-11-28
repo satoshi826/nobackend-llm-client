@@ -80,15 +80,22 @@ async function readableFile(convId: string, history: MessageRecord[], ref: strin
   return at?.kind === 'file' ? at.file : undefined;
 }
 
-/** An image in the conversation's working folder, by its id or its path there (else undefined) */
-async function folderImage(convId: string, ref: string): Promise<ImageEntry | undefined> {
+/**
+ * An image the conversation's model may move (else undefined): one in its working folder, by its id or its path there,
+ * or one made in the conversation, by its id, while it lies in no other chat's working folder (that is theirs now)
+ */
+async function movableImage(convId: string, ref: string): Promise<ImageEntry | undefined> {
   const dir = workDirOf(convId);
-  if (!dir) return undefined;
   await ensureCatalog();
-  const at = atPath(dir + cleanFileName(ref, extOf(ref) || 'png'));
+  const at = dir ? atPath(dir + cleanFileName(ref, extOf(ref) || 'png')) : undefined;
   const im = catalogImage(ref) ?? (at?.kind === 'image' ? at.image : undefined);
-  return im && isInside(im.path, dir) ? im : undefined;
+  if (!im || (dir && isInside(im.path, dir))) return im;
+  const others = conversations.value.some((c) => c.id !== convId && c.workDir && isInside(im.path, c.workDir));
+  return im.conversationId === convId && !others ? im : undefined;
 }
+
+/** Whether these messages show images a tool made (generate_image's card), which move_file may bring into the folder */
+const showsToolImages = (msgs: MessageRecord[]) => msgs.some((m) => m.parts.some((p) => p.type === 'tool' && !!(p.uiDetails as { blobIds?: string[] } | undefined)?.blobIds?.length));
 
 /** A file this conversation's model may read (in its working folder, or attached): its path and text, for other features' tools */
 export async function conversationFile(conv: Conversation, history: MessageRecord[], ref: string): Promise<{ name: string; text: string } | undefined> {
@@ -126,7 +133,7 @@ return out;`;
   return JSON.parse(r.result) as Match[];
 }
 
-function fileTools(conv: Conversation, history: MessageRecord[]) {
+function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageRecord) {
   const dir = () => workDirOf(conv.id);
   /** A file the model may change: one in the working folder (one attached from outside is only read) */
   const inFolder = async (id: string) => {
@@ -179,14 +186,14 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
         });
       },
       async image(ref) {
-        const im = await folderImage(conv.id, ref);
-        return im && { id: im.id, path: relativeTo(dir(), im.path), mime: im.mime };
+        const im = await movableImage(conv.id, ref);
+        return im && { id: im.id, path: relativeTo(dir(), im.path), mime: im.mime, inFolder: !!dir() && isInside(im.path, dir()) };
       },
-      async moveImage(id, to) {
-        const full = dir() + to;
+      async moveImage(id, to, folder) {
+        const full = (await ensureWorkDir(conv.id, to, folder)) + to;
         await withTakenPaths(async (space) => {
-          // Checked again in the queue: a move waiting before this one may have taken it out
-          if (!(await folderImage(conv.id, id))) throw new TranslatedError(() => t('tool.moveNotHere', { id }));
+          // Checked again in the queue: a move waiting before this one may have taken it elsewhere
+          if (!(await movableImage(conv.id, id))) throw new TranslatedError(() => t('tool.moveNotHere', { id }));
           if (!pathFree(full, space, id)) throw new TranslatedError(() => t('tool.moveTaken', { name: to }));
           await renameImages([{ id, path: full }]);
         });
@@ -205,7 +212,7 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
       pathOf: (f) => relativeTo(dir(), f.name),
       syntax: (path, text) => syntaxProblem(path, text, parseInSandbox)
     },
-    { hasFolder: !!dir() }
+    { hasFolder: !!dir(), madeImages: showsToolImages(turn ? [...history, turn] : history) }
   );
 }
 
@@ -215,9 +222,10 @@ const NOTE_FILES = 200;
 registerToolProvider({
   id: 'files',
   label: () => t('files'),
-  // Until the working folder exists only write_file and fetch_file; once a file made it (in this answer too) all
+  // Until the working folder exists only write_file, fetch_file, and move_file once the chat made images (in this answer
+  // too); once a file made it (in this answer too) all
   tools: ({ conv, history }) => (fileSettings.value.value.fileTools ? fileTools(conv, history) : []),
-  dynamicTools: ({ conv, history }) => (fileSettings.value.value.fileTools && workDirOf(conv.id) ? fileTools(conv, history) : []),
+  dynamicTools: ({ conv, history }, turn) => (fileSettings.value.value.fileTools ? fileTools(conv, history, turn) : []),
   systemNote({ conv }) {
     const dir = workDirOf(conv.id);
     if (!fileSettings.value.value.fileTools || !dir) return undefined;

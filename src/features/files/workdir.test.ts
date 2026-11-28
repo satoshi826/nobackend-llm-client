@@ -21,7 +21,7 @@ const conv = (id: string, extra: Partial<Conversation> = {}): Conversation =>
 
 function toolsFor(c: Conversation, history: MessageRecord[] = []) {
   const live = conversations.value.find((x) => x.id === c.id) ?? c;
-  const tools = contributedTools({ conv: live, history, model, messageId: '' }).filter((t) => t.name.endsWith('_file'));
+  const tools = contributedTools({ conv: live, history, model, messageId: '' }).filter((t) => /_files?$/.test(t.name));
   const run = async (name: string, raw: unknown) => {
     const t = tools.find((x) => x.name === name);
     if (!t) throw new Error(`no ${name}`);
@@ -111,6 +111,34 @@ describe('working folder', () => {
     await expect(tools.run('move_file', { file_id: 'out', to: 'cat.png' })).rejects.toThrow(/移動できません|can't be moved/);
     await expect(tools.run('move_file', { file_id: '../cat.png', to: 'cat.png' })).rejects.toThrow(/移動できません|can't be moved/);
     expect(await pathOf('out')).toBe('cat.png');
+  });
+
+  it('brings in an image made in the conversation by its id, making the folder; never another conversation’s', async () => {
+    const c = conv('c');
+    const o = conv('o', { workDir: 'theirs/' });
+    conversations.value = [c, o];
+    const png = () => new Blob(['x'], { type: 'image/png' });
+    const at = await putImage({ id: 'made', mime: 'image/png', conversationId: 'c' }, png(), false);
+    await putImage({ id: 'foreign', mime: 'image/png', conversationId: 'o' }, png(), false);
+    // Made here, but the user put it in another chat's folder: theirs now
+    await putImage({ id: 'given', mime: 'image/png', conversationId: 'c', folder: 'theirs/', name: 'g.png' }, png(), false);
+    // Offered without a folder only once the chat made images with a tool
+    expect(toolsFor(c).names).toEqual(['write_file', 'fetch_file']);
+    const made = [{ parts: [{ type: 'tool', name: 'generate_image', uiDetails: { blobIds: ['made'] } }] } as unknown as MessageRecord];
+    const tools = toolsFor(c, made);
+    expect(tools.names).toEqual(['write_file', 'move_file', 'fetch_file']);
+    await expect(tools.run('move_file', { file_id: 'foreign', to: 'cat.png', folder: 'cat-page' })).rejects.toThrow(/移動できません|can't be moved/);
+    await expect(tools.run('move_file', { file_id: 'given', to: 'cat.png', folder: 'cat-page' })).rejects.toThrow(/移動できません|can't be moved/);
+    // By its path in the Files tab it is not found: only by id
+    await expect(tools.run('move_file', { file_id: at, to: 'cat.png', folder: 'cat-page' })).rejects.toThrow(/移動できません|can't be moved/);
+    expect(workDirOf('c')).toBe('');
+    const r = await tools.run('move_file', { file_id: 'made', to: 'assets/cat.png', folder: 'cat-page' });
+    expect(r.content).toContain('into the working folder as "assets/cat.png"');
+    expect(workDirOf('c')).toBe('cat-page/');
+    const paths = Object.fromEntries((await listImages()).map((im) => [im.id, im.path]));
+    expect(paths).toEqual({ made: 'cat-page/assets/cat.png', foreign: expect.not.stringMatching(/^cat-page/), given: 'theirs/g.png' });
+    // Now in the folder: list_files shows it
+    expect((await toolsFor(c).run('list_files', {})).content).toContain('assets/cat.png (image, 1 bytes)');
   });
 });
 

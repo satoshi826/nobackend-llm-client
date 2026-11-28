@@ -648,6 +648,18 @@ const server = http.createServer(async (req, res) => {
       const ans = `窓辺の猫の絵を描きました。\n\n${String(lastMsg.content ?? '')}`;
       return finishText(ans, { prompt_tokens: 200, completion_tokens: ans.length });
     }
+    // "絵をページに入れて" after "絵を描いて" in a chat without a working folder: move_file brings the image in by the id
+    // generate_image gave (naming the folder it makes), then write_file makes the page that shows it
+    const madeImage = [...msgs].reverse().map((m) => m.role === 'tool' && /Saved in the Files tab as "[^"]*\.(\w+)" \(id: ([\w-]+)\)/.exec(String(m.content ?? ''))).find(Boolean);
+    if (toolNames.includes('move_file') && lastMsg?.role === 'user' && userText.includes('絵をページに入れて') && madeImage) {
+      await send({ content: '絵を作業フォルダに入れて、ページを作ります。' });
+      const folder = body.tools.find((t) => t.function?.name === 'move_file')?.function.parameters?.properties?.folder ? { folder: 'cat-page' } : {};
+      return finishTools('move_file', { file_id: madeImage[2], to: `assets/cat.${madeImage[1]}`, ...folder });
+    }
+    if (lastMsg?.role === 'tool' && lastCallName === 'move_file' && userText.includes('絵をページに入れて')) {
+      const to = /as "([^"]+)"/.exec(String(lastMsg.content ?? ''))?.[1] ?? 'assets/cat.png';
+      return finishTools('write_file', { name: 'index.html', content: `<!doctype html>\n<html><body>\n<h1>Cat</h1>\n<img src="${to}" alt="A cat">\n</body></html>\n` });
+    }
     // File tools: "レポートにまとめて" creates a Markdown file, "追記して" appends to the file listed in the
     // system prompt, "結論を直して" edits it, "読んで" (with a file listed) reads it
     const fileInSys = /\(id: ([\w-]+),/.exec(String(sys ?? ''))?.[1];

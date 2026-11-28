@@ -214,7 +214,7 @@ describe('images in conversations', () => {
   });
 
   it('generate_image saves at the path the model gives, cleaned as write_file cleans names', async () => {
-    const ran = (paths: string[], inWorkDir = true) => makeImageTool(async () => ({ blobIds: paths, paths, inWorkDir, model: 'Flux', blurred: false }));
+    const ran = (paths: string[], inWorkDir = true) => makeImageTool(async () => ({ blobIds: paths.map((_, i) => `b${i + 1}`), paths, inWorkDir, model: 'Flux', blurred: false }));
     const tool = ran([]);
     expect(tool.prepare({ prompt: 'a', path: '../assets//hero' })).toEqual({ prompt: 'a', path: 'assets/hero.png' });
     expect(tool.prepare({ prompt: 'a', path: ' ' })).toEqual({ prompt: 'a' });
@@ -223,13 +223,15 @@ describe('images in conversations', () => {
     const exec = (paths: string[], path: string, inWorkDir = true) => ran(paths, inWorkDir).execute({ prompt: 'a', path }, { signal: new AbortController().signal } as never);
     // As asked: only the paths
     const same = await exec(['assets/hero-1.png', 'assets/hero-2.png'], 'assets/hero.png');
-    expect(same.content).toContain('Saved in the working folder as "assets/hero-1.png", "assets/hero-2.png"');
+    expect(same.content).toContain('Saved in the working folder as "assets/hero-1.png" (id: b1), "assets/hero-2.png" (id: b2)');
     expect(same.content).not.toContain('not exactly');
     // Another type, or a path taken: told why the path differs
     expect((await exec(['assets/hero.webp'], 'assets/hero.png')).content).toContain('not exactly the path you gave');
     expect((await exec(['assets/hero (2).png'], 'assets/hero.png')).content).toContain('a path already taken gets a number');
-    // No working folder yet: saved as before, and the path was ignored
-    expect((await exec(['20261127-160816.webp'], 'assets/hero.png', false)).content).toContain('The path was ignored');
+    // No working folder yet: saved in the Files tab, with the id that move_file brings it into the folder by
+    const loose = await exec(['20261127-160816.webp'], 'assets/hero.png', false);
+    expect(loose.content).toContain('Saved in the Files tab as "20261127-160816.webp" (id: b1), outside any working folder (there is none yet), so the path was ignored.');
+    expect(loose.content).toContain('move it into the working folder with move_file and its id (to that path)');
   });
 
   it('stores images at the paths given in the working folder, with a number when a path is taken', async () => {

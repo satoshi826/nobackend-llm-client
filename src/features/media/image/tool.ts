@@ -29,14 +29,16 @@ export function imageStems(path: string, count: number): string[] {
   return count === 1 ? [stem] : Array.from({ length: count }, (_, i) => `${stem}-${i + 1}`);
 }
 
-const quoted = (paths: string[]) => paths.map((n) => JSON.stringify(n)).join(', ');
+/** The images' paths with their ids: '"assets/hero.png" (id: b1)' */
+const listed = (r: { paths: string[]; blobIds: string[] }) => r.paths.map((n, i) => `${JSON.stringify(n)} (id: ${r.blobIds[i]})`).join(', ');
 
 /** Where the images went, for the model: the paths to load them by, and why they differ from the path it gave */
-function savedNote(asked: string | undefined, r: { paths: string[]; inWorkDir: boolean }): string {
-  if (!r.inWorkDir) return `Saved in the Files tab as ${quoted(r.paths)}.${asked ? ' The path was ignored: there is no working folder yet (the first write_file makes it).' : ''}`;
+function savedNote(asked: string | undefined, r: { paths: string[]; blobIds: string[]; inWorkDir: boolean }): string {
+  if (!r.inWorkDir)
+    return `Saved in the Files tab as ${listed(r)}, outside any working folder${asked ? ' (there is none yet), so the path was ignored' : ''}. For a page to load one, move it into the working folder with move_file and its id${asked ? ' (to that path)' : ''}.`;
   const stems = asked ? imageStems(asked, r.paths.length) : [];
   const differs = !!asked && r.paths.some((p, i) => extOf(p) !== extOf(asked) || p.slice(0, -extOf(p).length - 1) !== stems[i]);
-  return `Saved in the working folder as ${quoted(r.paths)}: pages there can load them by that path.${
+  return `Saved in the working folder as ${listed(r)}: pages there can load them by that path.${
     differs ? " That is not exactly the path you gave: the extension follows the image's type, and a path already taken gets a number (nothing is replaced)." : ''
   }`;
 }
@@ -71,7 +73,8 @@ export function makeImageTool(run: ImageToolRun, model?: ImageToolModel): Tool<I
         negative_prompt: { type: 'string', description: 'Optional. Things the image should not contain.' },
         path: {
           type: 'string',
-          description: 'Optional. Where to save it in the working folder, e.g. "assets/hero.png", when a page there will load it by that path; default a name from the time. The extension follows the image\'s type, and a path already taken gets a number. The result gives the path it was saved at.'
+          description:
+            'Optional. Where to save it in the working folder, e.g. "assets/hero.png", when a page there will load it by that path; default a name from the time. The extension follows the image\'s type, and a path already taken gets a number. The result gives the path it was saved at. Without a working folder, it is saved in the Files tab; move it in with move_file and its id when a page needs it.'
         }
       },
       required: ['prompt']

@@ -60,7 +60,7 @@ VITE_JINA_BASE_URL=http://localhost:8787/jina \
 npm run dev
 ```
 
-**模拟密钥**: Venice 用 `mock-key`，Anthropic 用 `mock-ant`，Tavily 用 `tvly-mock`。Gemini（`mock-gem`）、OpenRouter（`mock-or`，仅模型列表、余额、图像和视频）和 OpenAI（`mock-oai`）通过 `VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`、`VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1`、`VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1` 使用。模拟服务器也提供 Venice、OpenAI、Gemini 和 OpenRouter 的图像模型并生成 PNG，对“转换为标签”返回标签，并受理三个视频 API 的生成（查询几次后返回一段短视频）：图像或视频提示词包含 `違反` 时返回内容政策拒绝（Venice 附带改写建议），图像提示词包含 `ぼかし` 时返回模糊处理的结果；对聊天模型说“絵を描いて”（图像工具开启时）会以 `path: assets/cat.png` 调用 `generate_image`；说“スクリプトを書いて”会写出带语法错误的脚本，说“スクリプトを直して”会用 `edit_file` 修正它（文件工具开启时）。
+**模拟密钥**: Venice 用 `mock-key`，Anthropic 用 `mock-ant`，Tavily 用 `tvly-mock`。Gemini（`mock-gem`）、OpenRouter（`mock-or`，仅模型列表、余额、图像和视频）和 OpenAI（`mock-oai`）通过 `VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`、`VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1`、`VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1` 使用。模拟服务器也提供 Venice、OpenAI、Gemini 和 OpenRouter 的图像模型并生成 PNG，对“转换为标签”返回标签，并受理三个视频 API 的生成（查询几次后返回一段短视频）：图像或视频提示词包含 `違反` 时返回内容政策拒绝（Venice 附带改写建议），图像提示词包含 `ぼかし` 时返回模糊处理的结果；对聊天模型说“絵を描いて”（图像工具开启时）会以 `path: assets/cat.png` 调用 `generate_image`，在没有工作文件夹的对话中接着说“絵をページに入れて”会用 `move_file` 按 ID 把该图像移入工作文件夹，并写出显示它的页面；说“スクリプトを書いて”会写出带语法错误的脚本，说“スクリプトを直して”会用 `edit_file` 修正它（文件工具开启时）。
 
 消息中的**关键词**会改变模拟服务器的行为:
 

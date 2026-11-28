@@ -51,7 +51,7 @@ export const t = defineMessages(
     'tool.notFound': 'ファイルが見つかりません。',
     'tool.readOnly': '{name} は作業フォルダの外にあるため、読むことしかできません。変えた内容は作業フォルダに新しいファイルとして作ってください。',
     'tool.pathTaken': '{name} は使えません（作業フォルダの中のフォルダや画像と同じ名前です）。別の名前にしてください。',
-    'tool.moveNotHere': '{id} は移動できません。移動できるのは、作業フォルダの中のファイルと画像（パスか ID で指定）だけです。',
+    'tool.moveNotHere': '{id} は移動できません。移動できるのは、作業フォルダの中のファイルと画像（パスか ID で指定）と、この会話で作った画像（generate_image が返した ID で指定）だけです。ほかの会話の画像は移動できません。',
     'tool.imageType': '画像の種類は変わらないため、{name} にはできません。拡張子は .{ext} にしてください。',
 
     // reading files from the device
@@ -262,7 +262,7 @@ export const t = defineMessages(
       'tool.notFound': 'File not found.',
       'tool.readOnly': '{name} is outside the working folder, so it can only be read. Write the changed text as a new file in the working folder.',
       'tool.pathTaken': "{name} can't be used (a folder or an image in the working folder has that name). Choose another name.",
-      'tool.moveNotHere': "{id} can't be moved. move_file moves only files and images in the working folder (given by path or id).",
+      'tool.moveNotHere': "{id} can't be moved. move_file moves only files and images in the working folder (given by path or id) and images made in this conversation (given by the id generate_image gave), never another conversation's images.",
       'tool.imageType': "An image keeps its type, so it can't become {name}. Use the extension .{ext}.",
 
       'import.truncated': '"{name}" is too long, so only the first {n} characters were imported.',
@@ -464,7 +464,7 @@ export const t = defineMessages(
       'tool.notFound': '找不到文件。',
       'tool.readOnly': '{name} 位于工作文件夹之外，只能读取。请把修改后的内容作为新文件写入工作文件夹。',
       'tool.pathTaken': '无法使用 {name}（与工作文件夹中的文件夹或图像同名）。请换一个名称。',
-      'tool.moveNotHere': '无法移动 {id}。只能移动工作文件夹中的文件和图像（用路径或 ID 指定）。',
+      'tool.moveNotHere': '无法移动 {id}。只能移动工作文件夹中的文件和图像（用路径或 ID 指定），以及在此对话中生成的图像（用 generate_image 返回的 ID 指定），不能移动其他对话的图像。',
       'tool.imageType': '图像的类型不会改变，因此不能改为 {name}。请使用扩展名 .{ext}。',
 
       'import.truncated': '“{name}”过长，仅导入了前 {n} 个字符。',

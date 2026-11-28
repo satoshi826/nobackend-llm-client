@@ -257,7 +257,7 @@ const backup: Flow = {
 
 const files: Flow = {
   name: 'files',
-  label: 'a model writes an HTML page and its script with a tool → open the page from the Files tab → it is shown in standards mode, and the script it loads by a relative path runs, logs, and keeps its count in localStorage.json for the next showing → a script with a syntax error is told, and its fix shows the changed line → an image is saved at the path the model gives',
+  label: 'a model writes an HTML page and its script with a tool → open the page from the Files tab → it is shown in standards mode, and the script it loads by a relative path runs, logs, and keeps its count in localStorage.json for the next showing → a script with a syntax error is told, and its fix shows the changed line → an image is saved at the path the model gives → one made in a chat without a working folder is moved in by its id, making the folder, and the page next to it shows it',
   async run({ page, url, a11y }) {
     await page.goto(url);
     await addVenice(page);
@@ -301,6 +301,23 @@ const files: Flow = {
     await page.getByRole('button', { name: 'Run', exact: true }).click();
     await page.getByText(/Saved in the working folder as "assets\/cat\.(png|webp|jpg)"/).waitFor();
     await settled(page);
+    // In a chat with no working folder the image goes to the Files tab; move_file brings it in by its id later,
+    // making the folder, and the page written next to it shows it
+    await page.getByRole('button', { name: 'New chat' }).click();
+    await send(page, '絵を描いて');
+    await page.getByRole('button', { name: 'Run', exact: true }).click();
+    await page.getByText(/Saved in the Files tab as "[^"]+" \(id: [\w-]+\)/).waitFor();
+    await settled(page);
+    await send(page, '絵をページに入れて');
+    await page.getByText('cat-page/index.html').first().waitFor();
+    await settled(page);
+    await page.getByRole('tab', { name: 'Files' }).click();
+    // The Files tab opens where it was left (counter-page): the new folder is in the list of folders
+    await page.getByText('cat-page', { exact: true }).first().click();
+    await page.getByRole('main').getByText('index.html').dblclick();
+    const shown = page.frameLocator('iframe[src*="/sandbox/"]').getByRole('img', { name: 'A cat' });
+    await shown.waitFor();
+    await until('the moved image to load in the page', () => shown.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth > 0));
   }
 };
 

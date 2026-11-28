@@ -101,7 +101,7 @@ function memDeps(scope = new Set<string>()) {
   return { deps, files, texts, scope, images };
 }
 
-const tool = (deps: FileToolDeps, name: string) => makeFileTools(deps, { hasFolder: true }).find((t) => t.name === name)!;
+const tool = (deps: FileToolDeps, name: string) => makeFileTools(deps, { hasFolder: true, madeImages: false }).find((t) => t.name === name)!;
 const run = async (deps: FileToolDeps, name: string, raw: unknown) => {
   const t = tool(deps, name);
   return t.execute(t.prepare(raw), ctx);
@@ -267,7 +267,7 @@ describe('file tools', () => {
   });
   it('moves an image by its path or id, keeping its type, and says pages need editing', async () => {
     const { deps, images } = memDeps();
-    images.set('im1', { id: 'im1', path: 'hero.jpeg', mime: 'image/jpeg' });
+    images.set('im1', { id: 'im1', path: 'hero.jpeg', mime: 'image/jpeg', inFolder: true });
     const r = await run(deps, 'move_file', { file_id: 'hero.jpeg', to: 'assets/hero' });
     expect(images.get('im1')!.path).toBe('assets/hero.jpeg');
     expect(r.content).toBe('Moved the image "hero.jpeg" to "assets/hero.jpeg". Pages that load it by its old path need editing.');
@@ -321,16 +321,28 @@ describe('file tools', () => {
   });
   it('offers only create_file and fetch_file until the working folder exists, and lets the model name it', () => {
     const { deps } = memDeps();
-    const before = makeFileTools(deps, { hasFolder: false });
+    const before = makeFileTools(deps, { hasFolder: false, madeImages: false });
     expect(before.map((t) => t.name)).toEqual(['write_file', 'fetch_file']);
     const create = before[0];
     expect(Object.keys((create.parameters as { properties: object }).properties)).toContain('folder');
     expect(create.prepare({ name: 'a.md', content: 'x', folder: 'todo-app' })).toEqual({ name: 'a.md', content: 'x', folder: 'todo-app' });
-    const after = makeFileTools(deps, { hasFolder: true });
+    const after = makeFileTools(deps, { hasFolder: true, madeImages: false });
     expect(after.map((t) => t.name)).toEqual(['list_files', 'search_files', 'read_file', 'write_file', 'edit_file', 'append_file', 'move_file', 'delete_file', 'preview_page', 'fetch_file']);
     const write = after.find((t) => t.name === 'write_file')!;
     expect(Object.keys((write.parameters as { properties: object }).properties)).not.toContain('folder');
     expect(write.prepare({ name: 'a.md', content: 'x', folder: 'ignored' })).toEqual({ name: 'a.md', content: 'x' });
+  });
+  it('offers move_file without a working folder once the chat made images, to bring one in and name the folder', async () => {
+    const { deps, images } = memDeps();
+    const tools = makeFileTools(deps, { hasFolder: false, madeImages: true });
+    expect(tools.map((t) => t.name)).toEqual(['write_file', 'move_file', 'fetch_file']);
+    const move = tools[1];
+    expect((move.parameters as { required: string[] }).required).toEqual(['file_id', 'to', 'folder']);
+    expect(() => move.prepare({ file_id: 'im1', to: 'cat.png' })).toThrow(/folder/);
+    expect(() => move.prepare({ file_id: 'im1', to: 'cat.png', folder: 'a/b' })).toThrow(/folder/);
+    images.set('im1', { id: 'im1', path: '20261127-160816.webp', mime: 'image/webp', inFolder: false });
+    const r = await move.execute(move.prepare({ file_id: 'im1', to: 'assets/cat', folder: 'cat-page' }), ctx);
+    expect(r.content).toBe('Moved the image "20261127-160816.webp" from the Files tab into the working folder as "assets/cat.webp": pages there can load it by that path.');
   });
 });
 

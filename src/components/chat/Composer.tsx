@@ -78,7 +78,8 @@ export function Composer() {
     const sent = text;
     setText('');
     if (active) return void active.mode.send(sent, conv);
-    void sendMessage(sent, await collectComposerExtras(conv));
+    // Not sent (e.g. it could not be saved): what was typed comes back, unless something new was typed meanwhile
+    if (!(await sendMessage(sent, await collectComposerExtras(conv)))) composerText.value ||= sent;
   };
   const takeFiles = (files: File[]) => {
     const target = !active && addons.find((a) => a.onFiles);

@@ -57,24 +57,28 @@ function ensureKey(providerId: string): boolean {
 /** Extra content features add to the user message (attached files, picked skills, ...) */
 export type SendExtras = Partial<Pick<MessageRecord, 'attachments' | 'skills'>>;
 
-export async function sendMessage(text: string, extras: SendExtras = {}) {
+/** Send a message and start the reply. false: it was not sent (nothing to send, no key or model, or it could not be saved) */
+export async function sendMessage(text: string, extras: SendExtras = {}): Promise<boolean> {
   cancelSuggestions();
   const skills = extras.skills ?? [];
   const files: Attachment[] = extras.attachments ?? [];
-  if (!text.trim() && !skills.length && !files.length) return;
+  if (!text.trim() && !skills.length && !files.length) return false;
   const cur = currentConv.value;
-  if (!ensureKey(cur.providerId)) return;
+  if (!ensureKey(cur.providerId)) return false;
   if (!cur.modelId) {
     showToast(t('gen.chooseModel'), 'error');
-    return;
+    return false;
   }
   // Auto-compaction: if the input about to be sent is likely to exceed the context-length threshold, summarize the older part first
   if (currentId.value && settings.value.autoCompact) {
     const u = contextUsage.value;
     if (u.limit && (u.total + estimateTokens(text)) / u.limit >= settings.value.compactThreshold) await compactConversation(true);
   }
-  const conv = await persistDraft(text.trim() ? text : [...skills.map((s) => s.name), ...files.map((f) => f.name)].join(', '));
-  const user: MessageRecord = {
+  let conv: Conversation;
+  let user: MessageRecord;
+  try {
+    conv = await persistDraft(text.trim() ? text : [...skills.map((s) => s.name), ...files.map((f) => f.name)].join(', '));
+    user = {
     id: repo.newId(),
     conversationId: conv.id,
     parentId: currentConv.value.currentLeafId,
@@ -84,11 +88,22 @@ export async function sendMessage(text: string, extras: SendExtras = {}) {
     status: 'done',
     ...(skills.length ? { skills } : {}),
     ...(files.length ? { attachments: files } : {})
-  };
-  await putMessage(user, conv);
+    };
+    await putMessage(user, conv);
+  } catch (e) {
+    showToast(storageFull(e) ? t('gen.storageFull') : t('gen.notSaved', { message: (e as Error)?.message ?? String(e) }), 'error');
+    return false;
+  }
   messages.value = [...messages.value, user];
-  await generateReply(conv.id, user.id);
+  void generateReply(conv.id, user.id);
+  return true;
 }
+
+/** The browser refused to store more (Dexie passes the browser's error on, or wraps it) */
+const storageFull = (e: unknown): boolean => {
+  const err = e as { name?: string; inner?: { name?: string } } | null;
+  return err?.name === 'QuotaExceededError' || err?.inner?.name === 'QuotaExceededError';
+};
 
 /** The request's parameters: the temperature from settings, and this chat's answer length and reasoning effort */
 function replyParams(convId: string): ChatParams | undefined {

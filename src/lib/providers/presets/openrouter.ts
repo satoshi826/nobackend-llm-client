@@ -112,15 +112,17 @@ export const openrouterPreset: ProviderPreset = {
         vision: inputs.includes('image'),
         tools: params.includes('tools'),
         reasoning: params.includes('reasoning') || params.includes('include_reasoning'),
-        reasoningEffort: params.includes('reasoning') ? ['low', 'medium', 'high'] : undefined,
+        // The model's own levels when listed (max, xhigh, minimal, none...); OpenRouter maps the usual three for the rest
+        reasoningEffort: !params.includes('reasoning') ? undefined : Array.isArray(raw.reasoning?.supported_efforts) ? raw.reasoning.supported_efforts.map(String) : ['low', 'medium', 'high'],
         webSearch: params.includes('tools'),
         jsonSchema: params.includes('structured_outputs'),
         imageOutput: outputs.includes('image')
       },
-      pricing: { inputPerMTok: perMTok(raw.pricing?.prompt), outputPerMTok: perMTok(raw.pricing?.completion), currency: 'USD' },
+      pricing: { inputPerMTok: perMTok(raw.pricing?.prompt), outputPerMTok: perMTok(raw.pricing?.completion), cachedInputPerMTok: perMTok(raw.pricing?.input_cache_read), currency: 'USD' },
       // OpenRouter relays to multiple providers. Retention policies differ per provider
       privacy: 'unknown',
       tags: String(raw.id).endsWith(':free') ? ['free'] : [],
+      deprecated: typeof raw.expiration_date === 'string' ? { date: raw.expiration_date } : undefined,
       source: 'fetched'
     };
   },

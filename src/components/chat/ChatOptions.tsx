@@ -15,7 +15,12 @@ import { Button, Chevron, Icon, Select, cx } from '../ui';
 import { t } from './messages';
 
 const MAX_TOKENS = [1000, 2000, 4000, 8000, 16000, 32000];
-const EFFORT_NAMES = ['none', 'minimal', 'low', 'medium', 'high', 'max'] as const;
+/** Levels from least to most: providers list theirs in any order, the menu shows them in this one */
+const EFFORT_NAMES = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+const effortRank = (e: string) => {
+  const i = (EFFORT_NAMES as readonly string[]).indexOf(e);
+  return i < 0 ? EFFORT_NAMES.length : i;
+};
 const effortLabel = (e: string) => ((EFFORT_NAMES as readonly string[]).includes(e) ? t(`opts.effort.${e as (typeof EFFORT_NAMES)[number]}`) : e);
 
 const changed = (o: ChatOptions) => o.off.size > 0 || o.maxTokens !== null || o.reasoningEffort !== null || o.resendReasoning !== null;
@@ -65,7 +70,7 @@ function ChatOptionsPanel() {
   const onTools = allTools.filter((x) => toolOn(o, x.group, x.name));
   const groupOn = (g: ToolGroup) => g.tools.some((x) => toolOn(o, g.id, x.name));
   const sum = (list: { tokens: number }[]) => list.reduce((n, x) => n + x.tokens, 0);
-  const efforts = model?.capabilities.reasoningEffort ?? [];
+  const efforts = [...(model?.capabilities.reasoningEffort ?? [])].sort((a, b) => effortRank(a) - effortRank(b));
   // Some providers never take earlier reasoning back: there is nothing to choose
   const cfg = providerById(conv.providerId);
   const resends = !!model?.capabilities.reasoning && !!cfg && getPreset(cfg.preset).reasoningResend !== 'never';

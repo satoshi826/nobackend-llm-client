@@ -47,10 +47,15 @@ export const anthropicPreset: ProviderPreset = {
   },
   mapModel(raw, providerId) {
     if (!raw?.id) return null;
+    // Each capability is { supported }; a list without them (older API) keeps what every current model has
+    const cap = raw.capabilities;
+    const has = (c: any) => (cap ? c?.supported === true : true);
+    const ends = typeof raw.retires_at === 'string' ? raw.retires_at.slice(0, 10) : undefined;
     return model(providerId, String(raw.id), String(raw.display_name ?? raw.id), {
       contextLength: typeof raw.max_input_tokens === 'number' ? raw.max_input_tokens : undefined,
       maxOutputTokens: typeof raw.max_tokens === 'number' ? raw.max_tokens : undefined,
-      capabilities: { tools: true, vision: true, webSearch: true }
+      capabilities: { tools: true, vision: has(cap?.image_input), webSearch: has(cap?.server_tools?.web_search), jsonSchema: cap ? has(cap.structured_outputs) : undefined },
+      deprecated: raw.lifecycle === 'deprecated' || ends ? { date: ends } : undefined
     });
   },
   validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models?limit=1'), f, anthropicPreset.corsHint, cfg.extraHeaders as Record<string, string>)
@@ -145,7 +150,8 @@ export const openaiPreset: ProviderPreset = {
     if (!/^(gpt-|o\d|chatgpt-)/.test(id) || OPENAI_SKIP.test(id)) return null;
     const reasoning = /^o\d|^gpt-5/.test(id);
     return model(providerId, id, id, {
-      capabilities: { tools: true, vision: /gpt-4o|gpt-4\.1|gpt-5|^o[34]|chatgpt/.test(id), reasoning, reasoningEffort: reasoning ? ['low', 'medium', 'high'] : undefined }
+      capabilities: { tools: true, vision: /gpt-4o|gpt-4\.1|gpt-5|^o[34]|chatgpt/.test(id), reasoning, reasoningEffort: reasoning ? ['low', 'medium', 'high'] : undefined },
+      deprecated: typeof raw.shutdown_date === 'string' ? { date: raw.shutdown_date } : undefined
     });
   },
   validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models'), f, openaiPreset.corsHint)
@@ -180,7 +186,13 @@ export const deepseekPreset: ProviderPreset = {
   mapModel(raw, providerId) {
     if (!raw?.id) return null;
     const id = String(raw.id);
-    return model(providerId, id, id, { capabilities: { tools: true, reasoning: id.includes('reasoner') }, tags: id === 'deepseek-chat' ? ['default'] : [] });
+    const inputs: string[] = Array.isArray(raw.input_modalities) ? raw.input_modalities : [];
+    return model(providerId, id, typeof raw.name === 'string' ? raw.name : id, {
+      contextLength: numberOf(raw.context_window),
+      maxOutputTokens: numberOf(raw.max_output_tokens),
+      // Thinking models list their effort levels; which request field takes a level is not documented, so none is offered
+      capabilities: { tools: true, vision: inputs.includes('image'), reasoning: raw.effort ? true : id.includes('reasoner') }
+    });
   },
   validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models'), f, deepseekPreset.corsHint)
 };

@@ -83,12 +83,21 @@ export const nanogptPreset = host({
     const out: string[] = raw?.architecture?.output_modalities ?? ['text'];
     if (!id || raw.available === false || !out.includes('text')) return null;
     const c = raw.capabilities ?? {};
+    // zero_data_retention is "unknown" on every model; whether data is kept is told per route it relays to
+    const routes: any[] = Array.isArray(raw.privacy?.providers) ? raw.privacy.providers : [];
+    const zdr = raw.privacy?.zero_data_retention === true || (routes.length > 0 && routes.every((r) => r?.zdr_policy_eligible === true));
+    const cachePer1k = num(raw.pricing?.cacheReadInputPer1kTokens);
     return model(providerId, id, str(raw.name), {
       contextLength: num(raw.context_length),
       maxOutputTokens: num(raw.max_output_tokens),
-      capabilities: { tools: !!c.tool_calling, vision: !!c.vision, reasoning: !!c.reasoning },
-      pricing: pricing(num(raw.pricing?.prompt), num(raw.pricing?.completion)),
-      privacy: raw.privacy?.zero_data_retention === true ? 'private' : 'unknown'
+      capabilities: {
+        tools: !!c.tool_calling,
+        vision: !!c.vision,
+        reasoning: !!c.reasoning,
+        reasoningEffort: Array.isArray(raw.reasoning_efforts) && raw.reasoning_efforts.length ? raw.reasoning_efforts.map(String) : undefined
+      },
+      pricing: pricing(num(raw.pricing?.prompt), num(raw.pricing?.completion), cachePer1k === undefined ? undefined : cachePer1k * 1000),
+      privacy: zdr ? 'private' : 'unknown'
     });
   }
 });
@@ -135,7 +144,7 @@ export const cerebrasPreset = host({
       maxOutputTokens: num(raw.limits?.max_completion_tokens),
       capabilities: { tools: !!(c.tools ?? c.function_calling), vision: !!c.vision, reasoning: !!c.reasoning },
       pricing: pricing(perM(raw.pricing?.prompt), perM(raw.pricing?.completion)),
-      tags: raw.deprecated ? ['deprecated'] : []
+      deprecated: raw.deprecated ? {} : undefined
     });
   }
 });

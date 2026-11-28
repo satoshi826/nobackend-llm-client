@@ -96,7 +96,7 @@ export const venicePreset: ProviderPreset = {
         jsonSchema: !!cap.supportsResponseSchema
       },
       pricing: spec.pricing
-        ? { inputPerMTok: spec.pricing.input?.usd, outputPerMTok: spec.pricing.output?.usd, currency: 'USD' }
+        ? { inputPerMTok: spec.pricing.input?.usd, outputPerMTok: spec.pricing.output?.usd, cachedInputPerMTok: spec.pricing.cache_input?.usd, currency: 'USD' }
         : undefined,
       privacy: spec.privacy === 'private' ? 'private' : spec.privacy === 'anonymized' ? 'anonymized' : 'unknown',
       tags: Array.isArray(spec.traits) ? spec.traits.map(String) : [],

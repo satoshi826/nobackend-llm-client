@@ -219,7 +219,9 @@ There's no storage mode to choose.
 
 ## API key safety
 
-Always use **spend-limited keys**. If a key ever leaks, the damage stops at the limit.
+Always use **spend-limited keys**: set a spending limit at the provider where it offers one (below). If a key ever leaks, the damage stops at the limit.
+
+Store only **keys for normal use**, never admin, management or provisioning keys (such as OpenRouter provisioning keys or OpenAI admin keys). The vault attaches a key only to its provider's API, but a script that ever ran in the app could still use whatever that key is allowed to do there.
 
 - **Venice**: create an **INFERENCE** key with a daily consumption limit and an expiry. `modelPrivacy: PRIVATE_ONLY` blocks models relayed to third parties.
 - **OpenRouter**: set a credit limit on the key.
@@ -234,6 +236,25 @@ Always use **spend-limited keys**. If a key ever leaks, the damage stops at the 
 - **Chutes**: a per-key spending limit could not be confirmed; top up small amounts.
 - **Together**: prepaid with no per-key limit; top up small amounts.
 - **Tavily** (tool-based web search): set a usage limit.
+
+## Privacy
+
+The app has no server of its own: your browser sends your requests straight to the provider. What each party can see:
+
+- **The site you open the app from, and its host** (Cloudflare with the deploy above): what any static site sees. Its request logs may hold your IP address, your browser's user agent, and which of the app's files were requested (pages, scripts, and the update check at start and then every hour). Nothing you send to providers goes through it, and a conversation's address comes after `#`, which browsers do not send.
+- **The relay and its host**, if the site has a relay for reading pages and fetching files: the addresses fetched through it.
+- **Providers**, Tavily, Jina Reader and the sites a model reads: what is sent to them, your IP address, and the site's address (the `Origin` header). What they keep and how they use it is up to their own policies (see "API key safety").
+- **No analytics and no cookies.** The app has no analytics or tracking, loads no third-party scripts or fonts, sets no cookies, and sends its requests without cookies. Its CSP lets it connect only to the site itself and to the providers; other sites are reached only by the fetch page, after it asks you. The diagnostics in Settings → About are only copied, for you to paste where you choose.
+
+Details: [docs/security.md](docs/security.md) §3.1, §3.6 and §4.
+
+## Reporting a vulnerability
+
+Report it privately with GitHub's private vulnerability reporting, not in a public issue. How, and what to include: [SECURITY.md](SECURITY.md).
+
+## Disclaimer
+
+The software is provided "as is", without warranty of any kind, under the MIT License ([LICENSE](LICENSE)). You are responsible for your API keys, the costs of your requests, and what you send to providers. This project is not affiliated with or endorsed by any of the providers or services it works with.
 
 ## License
 

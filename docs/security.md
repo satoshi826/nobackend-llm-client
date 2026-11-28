@@ -229,7 +229,8 @@ Only one tab uses the data at a time (Web Locks, `src/state/tab.ts`). Another ta
 
 **For users**
 
-- Use **spend-limited keys** that can only make requests (for Venice, an INFERENCE key with a daily limit; see the README for each provider). Never store an admin or key-management key.
+- Use **spend-limited keys** that can only make requests (for Venice, an INFERENCE key with a daily limit; see the README for each provider). Set a spending limit at the provider where it offers one.
+- Never store an admin, management or provisioning key (such as an OpenRouter provisioning key or an OpenAI admin key). The vault sends a key only to its provider's API, but a script running in the app can use whatever the key is allowed to do there (§3.2).
 - Set a **passphrase** of several words, and an **auto-lock** time. Lock before leaving the device.
 - **Encrypt backups** with a password, and keep them where only you can read them.
 - **Read what you approve**: the address in the fetch page, the code before you run it, the skill draft before you save it.
@@ -247,3 +248,9 @@ Only one tab uses the data at a time (Web Locks, `src/state/tab.ts`). Another ta
 - Build from **source you have read**, pin it, and review dependency updates.
 - Deploy the **relay** only if you need it, with `ALLOWED_ORIGINS` set to your fetch page's origin.
 - Never serve a build with **`VITE_EXPERIMENTAL_PAGE_API`** to others.
+
+## 6. Reporting a vulnerability, and disclaimer
+
+Report a vulnerability privately with GitHub's private vulnerability reporting, not in a public issue: see [SECURITY.md](../SECURITY.md) for how, what to include and what to expect. The limits in §4 are known; a report that shows one is worse than described, or a way around a protection in §3, is in scope.
+
+The software is provided "as is", without warranty of any kind, under the MIT License ([LICENSE](../LICENSE)). This document describes the design; it is not a guarantee that the design holds. You are responsible for your API keys, the costs of your requests, and what you send to providers. This project is not affiliated with or endorsed by any of the providers or services it works with.

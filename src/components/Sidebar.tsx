@@ -6,10 +6,8 @@ import { useDialog } from './dialog';
 import type { Conversation } from '../lib/db/schema';
 import { conversations, countMadeIn, currentId, openConversation, removeConversation, searchMessages, showChat, startNewChat, updateConversation, type SearchHit } from '../state/conversations';
 import { abortConversation, streamingConv } from '../state/runs';
-import { balanceAlerts } from '../state/balance';
 import { clearLeftoverLocalKeys, leftoverLocalKeys } from '../state/keys';
 import { dataLock, lockNow } from '../state/lock';
-import { providerById } from '../state/models';
 import { newerBuild } from '../state/version';
 import { openSettings, showToast, sidebarOpen, sidebarTab } from '../state/ui';
 import { DEFAULT_SETTINGS, SIDEBAR_WIDTH, saveSettings, settings } from '../state/settings';
@@ -17,7 +15,7 @@ import { Button, EmptyState, Icon, IconButton, MoreMark, RowHighlight, SearchFie
 import { askConfirm, askConfirmWithCheck } from './ConfirmDialog';
 import { sidebarTabs, textOf } from './extensions';
 import { t } from './messages';
-import { formatDate, formatNumber, formatUsd } from '../lib/i18n';
+import { formatDate, formatNumber } from '../lib/i18n';
 
 /** The label of the group a conversation last changed at `ts` goes in, counted from today (made once per listing) */
 function grouper(): (ts: number) => string {
@@ -121,17 +119,6 @@ const Row = memo(function Row({ c, active, snippet }: { c: Conversation; active:
 /** Things that need the user's attention (shown together in one place) */
 function Notices() {
   const items = [];
-  for (const [pid, b] of balanceAlerts.value) {
-    const name = providerById(pid)?.name ?? pid;
-    items.push(
-      <div key={`balance-${pid}`} role="alert" class="rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger">
-        <div class="font-semibold">
-          {t('side.balanceAlertTitle', { name, amount: formatUsd(b.unexplainedUsd) })}
-        </div>
-        {t('side.balanceAlertText', { name })}
-      </div>
-    );
-  }
   if (leftoverLocalKeys.value)
     items.push(
       <div key="leftover" role="alert" class="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">

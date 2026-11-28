@@ -1,7 +1,7 @@
 // Settings > Usage: what was spent in a period at a glance (the cost, against the period before), how it went over
 // time by provider, and what it went to (models, providers, uses, conversations)
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { BALANCE_ALERT_USD, balances, fetchBalances } from '../../../state/balance';
+import { balances, fetchBalances } from '../../../state/balance';
 import { clearUsage, listUsage } from '../state';
 import { summarizeUsage, type UsageBucket, type UsageRecord, type UsageSummary, type UsageTotals } from '../../../lib/usage';
 import { enabledProviders, modelOf, providerById } from '../../../state/models';
@@ -326,10 +326,10 @@ function Breakdown({ s, color }: { s: UsageSummary; color(pid: string): string }
   );
 }
 
-/** Latest balance of providers that report one (asked again when shown), and what the alert means */
+/** Latest balance of providers that report one (asked again when shown) */
 function BalanceSection() {
   useEffect(() => void fetchBalances(), []);
-  const list = Object.entries(balances.value).filter(([, b]) => b.last);
+  const list = Object.entries(balances.value);
   return (
     <section class="space-y-2">
       <h3 class="text-sm font-semibold">{t('balance.title')}</h3>
@@ -340,17 +340,15 @@ function BalanceSection() {
           {list.map(([pid, b]) => (
             <li key={pid} class="rounded-xl border border-line bg-glass px-3 py-2.5">
               <p class="text-xs text-muted">{providerById(pid)?.name ?? pid}</p>
-              <p class="text-lg font-semibold tabular-nums">{formatUsd(b.last!.usd)}</p>
+              <p class="text-lg font-semibold tabular-nums">{formatUsd(b.usd)}</p>
               <p class="text-[11px] text-faint">
                 {PRESETS[providerById(pid)?.preset ?? '']?.balanceApi?.scope === 'key' && `${t('balance.keyLimit')} ・ `}
-                {t('balance.row', { time: formatDateTime(b.last!.at) })}
+                {t('balance.row', { time: formatDateTime(b.at) })}
               </p>
-              {b.unexplainedUsd > 0 && <p class="mt-1 text-xs text-warn">{t('balance.unexplained', { amount: formatUsd(b.unexplainedUsd) })}</p>}
             </li>
           ))}
         </ul>
       )}
-      <p class="text-xs text-muted">{t('balance.alertNote', { amount: formatUsd(BALANCE_ALERT_USD) })}</p>
     </section>
   );
 }

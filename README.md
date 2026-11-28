@@ -26,7 +26,7 @@ The UI is available in Japanese, English and Simplified Chinese (automatic, or c
 - **Web**: search with the provider's built-in search (Anthropic, Gemini, Groq, OpenRouter, Venice) or the Tavily tool; models read pages (HTML, text, PDF) with `fetch_url`, where a separate call takes out only what was asked before the model sees it (like Claude Code's WebFetch); and bring files in with `fetch_file`. Every fetch is confirmed in the fetch page, which can remember sites you allow.
 - **Skills**: SKILL.md-compatible instruction files. The model loads a skill's body only when it needs it, or you can attach one with `/name`. Ask it to "turn this into a skill" and it drafts one, which is saved after you approve it.
 - **Long conversations**: compaction (manual or automatic), prompt caching, and a context-length safeguard.
-- **Usage**: tokens and cost per day, provider and model, recorded only in this browser. Balance and balance alert for DeepSeek, NanoGPT, OpenRouter (the key's limit left) and Venice.
+- **Usage**: cost and tokens over time, by model, provider, use and conversation, recorded only in this browser. The balance of DeepSeek, NanoGPT, OpenRouter (the key's limit left) and Venice.
 - **Data**: full-text search, JSON backup/import (optionally password-encrypted), image deletion, wipe everything, PWA, dark mode, mobile layout.
 - **For developers**: each reply can show the requests (JSON) sent to the provider (Settings → About → "Show the requests sent").
 

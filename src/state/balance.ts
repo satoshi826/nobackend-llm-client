@@ -1,32 +1,22 @@
-// Provider balance, read from response headers or a balance API: warn when it drops more than this app spent
-import { computed, signal } from '@preact/signals';
-import { initialBalanceState, observeBalance, recordSpend, type BalanceState } from '../lib/chat/balance';
+// Provider balance: the latest one each provider reported (with an answer, or asked of its balance API), for the
+// usage tab
+import { signal } from '@preact/signals';
 import { PRESETS } from '../lib/providers/registry';
 import { joinUrl } from '../lib/providers/openai-compatible';
 import { vaultTransport as transport } from '../lib/vault/client';
 import { authFor, keyReady } from './keys';
 import { providerById, providers } from './models';
 
-export const balances = signal<Record<string, BalanceState>>({});
-export const BALANCE_ALERT_USD = 0.5;
-/** Providers whose balance dropped by an unexplained amount */
-export const balanceAlerts = computed(() => Object.entries(balances.value).filter(([, b]) => b.unexplainedUsd >= BALANCE_ALERT_USD));
-
-function updateBalance(providerId: string, fn: (b: BalanceState) => BalanceState) {
-  balances.value = { ...balances.value, [providerId]: fn(balances.value[providerId] ?? initialBalanceState()) };
+/** A provider's balance in USD and when it was read */
+export interface BalanceReading {
+  usd: number;
+  at: number;
 }
 
-/** Count this app's own spend (only for providers whose balance is watched), so it is not taken for an unexplained drop */
-export function recordProviderSpend(providerId: string, usd: number) {
-  if (balances.value[providerId]) updateBalance(providerId, (b) => recordSpend(b, usd));
-}
-/** Start the balance comparison afresh (after spend whose exact price is unknown, e.g. image jobs) */
-export function resetProviderBalanceBaseline(providerId: string) {
-  const b = balances.value[providerId];
-  if (b) balances.value = { ...balances.value, [providerId]: { ...b, last: null, spentSinceLast: 0 } };
-}
+export const balances = signal<Record<string, BalanceReading>>({});
+
 export function observeProviderBalance(providerId: string, usd: number) {
-  updateBalance(providerId, (b) => observeBalance(b, usd));
+  balances.value = { ...balances.value, [providerId]: { usd, at: Date.now() } };
 }
 
 /** Ask a provider's balance API (through the key vault); failures are ignored, the balance is optional */

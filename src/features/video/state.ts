@@ -20,7 +20,6 @@ import { recordUsage } from '../../state/request-helpers';
 import { conversations, currentConv, currentId, liveMessages, messages, persistDraft, putMessage, updateConversation } from '../../state/conversations';
 import { beginRun, endRun } from '../../state/runs';
 import { cancelSuggestions } from '../../state/suggestions';
-import { resetProviderBalanceBaseline } from '../../state/balance';
 import { registerUserRequestHandler } from '../../state/tool-registry';
 import { veniceVideoProvider } from './providers/venice';
 import { openrouterVideoProvider } from './providers/openrouter';
@@ -351,8 +350,6 @@ async function follow(conv: Conversation, msg: MessageRecord) {
     const costEstimated = done.costUsd === undefined && cur.video!.costEstimated;
     cur = { ...cur, parts: [part], status: 'done', video: { ...cur.video!, job: undefined, costUsd, costEstimated } };
     recordUsage({ id: repo.newId(), conversationId: conv.id, providerId: p.providerId, model: p.model, kind: 'video', costUsd, costEstimated, temporary: conv.temporary });
-    // Our own spend at a price that may be an estimate: restart the balance comparison instead of adding a guess
-    resetProviderBalanceBaseline(p.providerId);
   } catch (e) {
     if (ctrl.signal.aborted) cur = { ...cur, status: 'aborted' };
     else {

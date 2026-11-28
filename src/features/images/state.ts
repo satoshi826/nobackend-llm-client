@@ -19,7 +19,6 @@ import { recordUsage } from '../../state/request-helpers';
 import { conversations, currentConv, currentId, liveMessages, messages, openConversation, persistDraft, putMessage, startNewChat, updateConversation } from '../../state/conversations';
 import { beginRun, endRun } from '../../state/runs';
 import { cancelSuggestions } from '../../state/suggestions';
-import { resetProviderBalanceBaseline } from '../../state/balance';
 import { registerToolProvider, registerUserRequestHandler } from '../../state/tool-registry';
 import { veniceImageProvider } from './providers/venice';
 import { openrouterImageProvider } from './providers/openrouter';
@@ -494,9 +493,6 @@ export function currentPrivacyLabel() {
 function recordImageUsage(conv: Conversation, p: ImageParams, count: number, reported?: number): number | undefined {
   const est = reported ?? estimateCost({ ...p, variants: count });
   recordUsage({ id: repo.newId(), conversationId: conv.id, providerId: p.providerId, model: p.model || p.op, kind: 'image', costUsd: est, costEstimated: reported === undefined, temporary: conv.temporary });
-  // Image prices are estimates (and some are unknown): restart the balance comparison instead of
-  // adding a guess, so the "unexplained drop" alert is not triggered by our own image spend
-  resetProviderBalanceBaseline(p.providerId);
   return est;
 }
 

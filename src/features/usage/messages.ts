@@ -8,8 +8,6 @@ export const t = defineMessages(
     'balance.none': '残高を確認できる接続先（{providers}）のキーを設定すると、ここに最新の残高が表示されます。',
     'balance.keyLimit': 'このキーの上限の残り',
     'balance.row': '{time} 時点',
-    'balance.alertNote': '残高がこのアプリで使った分より {amount} 以上多く減ると、キーが別の場所で使われている可能性があるとして、サイドバーに警告を出します。',
-    'balance.unexplained': '説明のつかない減り: {amount}',
     intro:
       'このブラウザで送った分のトークン数と費用です。記録はこの端末の中だけにあり、会話を消しても残ります（一時チャットは記録しません）。費用を返さない接続先は、モデルの単価から推定して「約」を付けます。単価も分からないものは「—」です。',
     about: 'この画面について',
@@ -82,8 +80,6 @@ export const t = defineMessages(
       'balance.none': 'Set a key for a provider that reports its balance ({providers}) to see the latest balance here.',
       'balance.keyLimit': 'left on this key’s limit',
       'balance.row': 'as of {time}',
-      'balance.alertNote': 'If the balance drops by {amount} or more beyond what this app spent, the sidebar warns you that the key may be used somewhere else.',
-      'balance.unexplained': 'Unexplained drop: {amount}',
       intro:
         'Tokens and cost of what you sent from this browser. The records stay on this device and remain after you delete conversations (temporary chats are not recorded). For providers that do not report cost, it is estimated from model prices and marked "~". "—" means the price is unknown too.',
       about: 'About this page',
@@ -150,8 +146,6 @@ export const t = defineMessages(
       'balance.none': '为可查询余额的服务商（{providers}）设置密钥后，这里会显示最新余额。',
       'balance.keyLimit': '此密钥额度的剩余',
       'balance.row': '截至 {time}',
-      'balance.alertNote': '如果余额减少的金额比本应用的花费多出 {amount} 以上，侧边栏会提示密钥可能在别处被使用。',
-      'balance.unexplained': '无法解释的减少：{amount}',
       intro:
         '这是从此浏览器发送的 Token 数和费用。记录只保存在此设备上，删除对话后仍会保留（临时对话不记录）。对于不返回费用的服务商，会根据模型单价估算并标注“约”。连单价也未知的显示为“—”。',
       about: '关于此页面',

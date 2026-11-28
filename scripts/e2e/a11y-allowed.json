@@ -36,11 +36,6 @@
   },
   {
     "rule": "color-contrast",
-    "element": ">No key<",
-    "reason": "The \"No key\" badge in Settings → Web: 11 px muted text on glass-strong, 4.3-4.4:1 (design system: 4.5:1)"
-  },
-  {
-    "rule": "color-contrast",
     "element": "text-faint\">as of",
     "reason": "The \"as of <time>\" line of a balance in Settings → Usage: 11 px faint text, 4.2:1 on phones (design system: 4.5:1)"
   }

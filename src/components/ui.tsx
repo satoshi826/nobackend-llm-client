@@ -622,10 +622,11 @@ export function SearchChoice({ label, value, choices, onChange, disabled }: { la
         type="button"
         disabled={disabled}
         aria-expanded={open}
-        aria-label={`${label}: ${current?.label ?? value}`}
         onClick={() => setOpen(!open)}
         class={cx(SELECT, 'flex w-full items-center gap-2 px-2.5 py-1.5 text-left')}
       >
+        {/* Its name is what it shows, after what it chooses */}
+        <span class="sr-only">{label}: </span>
         <span class="min-w-0 flex-1">
           <span class="block [overflow-wrap:anywhere]">{current?.label ?? value}</span>
           {current?.sub && <span class="block text-xs text-muted">{current.sub}</span>}
@@ -735,12 +736,13 @@ export function Modal({
 }
 
 export function Badge({ children, tone = 'zinc', title }: { children: ComponentChildren; tone?: 'zinc' | 'green' | 'amber' | 'sky' | 'rose'; title?: string }) {
-  // Only ok (green), warn (amber) and danger (rose) carry meaning; everything else is neutral
+  // Only ok (green), warn (amber) and danger (rose) carry meaning; everything else is neutral, in body ink: muted text
+  // at 11 px on glass-strong stays under 4.5:1
   const toneCls = {
-    zinc: 'bg-glass-strong text-muted',
+    zinc: 'bg-glass-strong text-ink',
     green: 'bg-ok-soft text-ok',
     amber: 'bg-warn-soft text-warn',
-    sky: 'bg-glass-strong text-muted',
+    sky: 'bg-glass-strong text-ink',
     rose: 'bg-danger-soft text-danger'
   }[tone];
   return (

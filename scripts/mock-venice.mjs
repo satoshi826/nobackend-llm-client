@@ -454,10 +454,16 @@ const server = http.createServer(async (req, res) => {
     });
   }
   // The fetch page's relay (relay/worker.js), with VITE_FETCH_RELAY_URL=http://localhost:8787/relay: a made-up page for
-  // any address, and a PNG for addresses ending in .png
+  // any address, and a PNG for addresses ending in .png. redirect.example redirects, as the relay reports it: /same to
+  // another address on its own site, ?to=<address> anywhere
   if (url.pathname === '/relay' && req.method === 'GET') {
     const target = url.searchParams.get('url') ?? '';
     console.log(`relay ${target}`);
+    const t = URL.canParse(target) ? new URL(target) : null;
+    if (t?.host === 'redirect.example' && (t.pathname === '/same' || t.searchParams.has('to'))) {
+      res.writeHead(204, { 'X-Redirect-To': t.pathname === '/same' ? 'https://redirect.example/landed' : new URL(t.searchParams.get('to'), t).href });
+      return res.end();
+    }
     if (/\.png($|\?)/.test(target)) {
       res.writeHead(200, { 'Content-Type': 'image/png' });
       return res.end(makePng(160, 100, colourFor(target.length)));

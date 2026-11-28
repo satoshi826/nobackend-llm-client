@@ -32,4 +32,14 @@ describe('fetch relay', () => {
     vi.stubGlobal('fetch', async () => new Response('x', { headers: { 'Content-Length': String(30 * 1024 * 1024) } }));
     expect((await call('https://files.example/big.bin')).status).toBe(413);
   });
+  it('follows no redirect: it answers with where one leads, for the fetch page to decide on', async () => {
+    const upstream = vi.fn(async (_u: string, _init: RequestInit) => new Response(null, { status: 302, headers: { Location: '/next?a=1' } }));
+    vi.stubGlobal('fetch', upstream);
+    const res = await call('https://files.example/a');
+    expect(res.status).toBe(204);
+    expect(res.headers.get('x-redirect-to')).toBe('https://files.example/next?a=1');
+    expect(res.headers.get('access-control-expose-headers')).toContain('X-Redirect-To');
+    expect(upstream).toHaveBeenCalledTimes(1);
+    expect(upstream.mock.calls[0][1].redirect).toBe('manual');
+  });
 });

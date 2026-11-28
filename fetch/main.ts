@@ -1,6 +1,7 @@
 // The fetch page. The app opens it in a frame: #url=<address>&mode=read|save&app=<app origin>&lang=..&theme=..
 // It is the only page allowed to reach any https address (its own CSP), and it asks the user before every fetch,
-// unless they chose not to be asked again for that site and mode (kept in this page's storage).
+// unless they chose not to be asked again for that site and mode (kept in this page's storage). A redirect to another
+// site is asked about the same way (redirect.ts).
 // read: a page for a model to read. Straight from the site, then through the user's relay, and as text from Jina
 // Reader when neither works or the HTML holds almost no text (a page drawn by scripts). save: a file, kept as it is.
 // page (experimental, only in builds where pagesReachWeb): no address; it stays open, takes GET requests from the
@@ -9,9 +10,10 @@
 // app can fetch without the user (fully so when this page is on its own origin, VITE_FETCH_URL).
 // No dependencies on the app. The DOM is built with createElement and textContent only (no innerHTML).
 import { detectLang, formatNumber, getLang, setLang } from '../src/lib/i18n';
-import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, pagesReachWeb, type FetchMode, type FetchVia, type FromFetcher, type ToPageFetcher } from '../src/lib/fetcher/protocol';
+import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, pagesReachWeb, type FetchMode, type FromFetcher, type ToPageFetcher } from '../src/lib/fetcher/protocol';
 import '../vault/style.css';
 import { t } from './messages';
+import { MAX_REDIRECTS, redirectStep } from './redirect';
 
 const env = (import.meta as any).env ?? {};
 // App origins allowed to embed us: the ones given at build time (separate-origin hosting) and our own
@@ -100,27 +102,78 @@ function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, 
 
 const size = (n: number) => (n < 1024 * 1024 ? `${formatNumber(Math.round(n / 1024))} KB` : `${formatNumber(n / 1024 / 1024, { maximumFractionDigits: 1 })} MB`);
 
-/** Fetch directly; when the site does not allow it (or cannot be reached) and a relay is set, through the relay */
-async function download(u: URL, onProgress: (bytes: number) => void): Promise<{ res: Response; body: ArrayBuffer; relayed: boolean }> {
-  const init: RequestInit = { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store' };
-  let res: Response;
-  let relayed = false;
+/**
+ * An address to fetch, with how many redirects led to it. from: the address that redirected to it (shown in the
+ * question). blind: it redirects where the browser hides and no relay can tell; the user agreed to follow it anywhere
+ */
+interface Req {
+  url: URL;
+  hops: number;
+  from?: URL;
+  blind?: boolean;
+}
+interface Got {
+  res: Response;
+  body: ArrayBuffer;
+  /** Where it came from, after the redirects followed */
+  url: URL;
+  relayed: boolean;
+}
+
+const relayUrl = (u: URL) => `${RELAY}${RELAY.includes('?') ? '&' : '?'}url=${encodeURIComponent(u.href)}`;
+
+/**
+ * One request, its redirect not followed: the response, or where the redirect leads (null: unknown). A direct fetch
+ * cannot see where (the browser hides it), so a redirect goes through the relay, which tells; so does a site that
+ * does not allow fetching directly (or cannot be reached).
+ */
+async function request(u: URL, blind: boolean): Promise<{ res: Response; relayed: boolean } | { location: string | null }> {
+  const init: RequestInit = { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', redirect: blind ? 'follow' : 'manual' };
+  let redirected = false;
   try {
-    res = await fetch(u, init);
+    const res = await fetch(u, init);
+    if (res.type !== 'opaqueredirect') return { res, relayed: false };
+    redirected = true;
   } catch {
-    if (!RELAY) throw new Error(t('blocked', { host: u.host }));
-    try {
-      res = await fetch(`${RELAY}${RELAY.includes('?') ? '&' : '?'}url=${encodeURIComponent(u.href)}`, init);
-      relayed = true;
-    } catch {
-      throw new Error(t('blockedRelay', { host: u.host }));
-    }
+    /* refused or unreachable: try the relay */
   }
+  if (!RELAY) {
+    if (redirected) return { location: null };
+    throw new Error(t('blocked', { host: u.host }));
+  }
+  let res: Response;
+  try {
+    res = await fetch(relayUrl(u), init);
+  } catch {
+    throw new Error(t('blockedRelay', { host: u.host }));
+  }
+  const location = res.headers.get('x-redirect-to');
+  return location === null ? { res, relayed: true } : { location };
+}
+
+/**
+ * Fetch an address, following redirects that need no question (redirect.ts); one that does stops the fetch and is
+ * returned as the next address to ask about
+ */
+async function download(r: Req, onProgress: (bytes: number) => void): Promise<Got | { ask: Req }> {
+  let u = r.url;
+  for (let hops = r.hops; ; hops++) {
+    const got = await request(u, !!r.blind);
+    if ('res' in got) return { ...(await readBody(got.res, u, onProgress)), url: got.relayed ? u : (fetchableUrl(got.res.url) ?? u), relayed: got.relayed };
+    if (hops >= MAX_REDIRECTS) throw new Error(t('tooManyRedirects', { host: u.host, max: formatNumber(MAX_REDIRECTS) }));
+    const step = redirectStep(u, got.location, allowedSites()[mode]);
+    if ('refuse' in step) throw new Error(t('badRedirect', { host: u.host }));
+    if ('ask' in step) return { ask: step.ask ? { url: step.ask, hops: hops + 1, from: u } : { url: u, hops: hops + 1, blind: true } };
+    u = step.follow;
+  }
+}
+
+async function readBody(res: Response, u: URL, onProgress: (bytes: number) => void): Promise<{ res: Response; body: ArrayBuffer }> {
   if (!res.ok) throw new Error(t('status', { host: u.host, status: String(res.status) }));
   if (Number(res.headers.get('content-length') ?? 0) > MAX_FETCH_BYTES) throw new Error(t('tooBig', { max: MAX_MB }));
   // Read with a running limit (the length header may be missing or wrong)
   const reader = res.body?.getReader();
-  if (!reader) return { res, body: await res.arrayBuffer(), relayed };
+  if (!reader) return { res, body: await res.arrayBuffer() };
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
@@ -140,7 +193,7 @@ async function download(u: URL, onProgress: (bytes: number) => void): Promise<{ 
     body.set(c, at);
     at += c.byteLength;
   }
-  return { res, body: body.buffer, relayed };
+  return { res, body: body.buffer };
 }
 
 /** Roughly how much text a page shows, from its first 2 MB, in one pass (a crafted page must not stall it) */
@@ -178,30 +231,34 @@ async function viaJina(u: URL): Promise<{ title: string; text: string }> {
 
 type Result = Extract<FromFetcher, { type: 'fetch-result' }>;
 
-/** What to hand to the app: the file as fetched, or for reading, Jina's text when the site gave none */
-async function fetchFor(u: URL, onProgress: (bytes: number) => void): Promise<Result> {
-  const asText = (r: { title: string; text: string }): Result => {
-    const data = new TextEncoder().encode(r.title ? `# ${r.title}\n\n${r.text}` : r.text).buffer as ArrayBuffer;
-    return { type: 'fetch-result', name: nameFor(u, null, 'text/markdown'), mime: 'text/markdown', data, url: u.href, via: 'jina' };
+/**
+ * What to hand to the app: the file as fetched, or for reading, Jina's text when the site gave none; or a redirect to
+ * ask about first
+ */
+async function fetchFor(r: Req, onProgress: (bytes: number) => void): Promise<Result | { ask: Req }> {
+  const asText = (j: { title: string; text: string }, at: URL): Result => {
+    const data = new TextEncoder().encode(j.title ? `# ${j.title}\n\n${j.text}` : j.text).buffer as ArrayBuffer;
+    return { type: 'fetch-result', name: nameFor(at, null, 'text/markdown'), mime: 'text/markdown', data, url: at.href, via: 'jina' };
   };
   let got: Awaited<ReturnType<typeof download>>;
   try {
-    got = await download(u, onProgress);
+    got = await download(r, onProgress);
   } catch (e) {
-    if (mode === 'read') return asText(await viaJina(u).catch(() => Promise.reject(e)));
+    if (mode === 'read') return asText(await viaJina(r.url).catch(() => Promise.reject(e)), r.url);
     throw e;
   }
-  const { res, body, relayed } = got;
-  const mime = (res.headers.get('content-type') ?? 'application/octet-stream').split(';')[0].trim().toLowerCase();
-  const finalUrl = fetchableUrl(relayed ? u.href : res.url || u.href) ?? u;
-  const via: FetchVia = relayed ? 'relay' : 'direct';
+  if ('ask' in got) return got;
+  const { res, body, url: finalUrl, relayed } = got;
+  const mime = mimeOf(res);
   // A page drawn by scripts holds almost no text in its HTML: read it through Jina instead (when that works)
   if (mode === 'read' && mime === 'text/html' && visibleTextLength(new TextDecoder().decode(body)) < 400) {
-    const r = await viaJina(finalUrl).catch(() => null);
-    if (r) return asText(r);
+    const j = await viaJina(finalUrl).catch(() => null);
+    if (j) return asText(j, finalUrl);
   }
-  return { type: 'fetch-result', name: nameFor(finalUrl, res.headers.get('content-disposition'), mime), mime, data: body, url: finalUrl.href, via };
+  return { type: 'fetch-result', name: nameFor(finalUrl, res.headers.get('content-disposition'), mime), mime, data: body, url: finalUrl.href, via: relayed ? 'relay' : 'direct' };
 }
+
+const mimeOf = (res: Response) => (res.headers.get('content-type') ?? 'application/octet-stream').split(';')[0].trim().toLowerCase();
 
 const root = document.getElementById('root')!;
 /** Cancelled, or the settings closed */
@@ -265,13 +322,14 @@ function renderSettings() {
   );
 }
 
+/** Why a redirected address is asked about: where it came from, or that where it leads is unknown */
+const redirectNote = (r: Req): Child =>
+  r.blind ? h('p', { class: 'muted' }, t('redirectHidden', { host: r.url.host })) : r.from && h('p', { class: 'muted' }, t('redirected', { from: r.from.host }));
+
 // ---- mode=page: the shown pages' requests, asked about one at a time, fetched at most PAGE_PARALLEL at once ----
 const PAGE_FETCH = pagesReachWeb(env);
 const PAGE_PARALLEL = 4;
-interface Job {
-  id: string;
-  url: URL;
-}
+type Job = Req & { id: string };
 /** Waiting for the user, in order; the one asked about now */
 const toAsk: Job[] = [];
 let asking: Job | null = null;
@@ -289,10 +347,11 @@ function pump() {
   while (running < PAGE_PARALLEL && toRun.length) {
     const j = toRun.shift()!;
     running++;
-    download(j.url, () => {})
-      .then(({ res, body, relayed }) => {
-        const mime = (res.headers.get('content-type') ?? 'application/octet-stream').split(';')[0].trim().toLowerCase();
-        const finalUrl = fetchableUrl(relayed ? j.url.href : res.url || j.url.href) ?? j.url;
+    download(j, () => {})
+      .then((got) => {
+        if ('ask' in got) return ask({ ...got.ask, id: j.id });
+        const { res, body, url: finalUrl, relayed } = got;
+        const mime = mimeOf(res);
         post({ type: 'page-result', id: j.id, name: nameFor(finalUrl, res.headers.get('content-disposition'), mime), mime, data: body, url: finalUrl.href, via: relayed ? 'relay' : 'direct' }, [body]);
       })
       .catch((e: Error) => fail(j.id, e.message))
@@ -316,8 +375,12 @@ function onPageRequest(d: ToPageFetcher) {
   if (!PAGE_FETCH) return fail(d.id, t('pageOff'));
   const u = fetchableUrl(d.url);
   if (!u) return fail(d.id, t('badUrl'));
-  const job = { id: d.id, url: u };
+  const job = { id: d.id, url: u, hops: 0 };
   if (allowedSites().page.includes(u.host)) return allow(job);
+  ask(job);
+}
+
+function ask(job: Job) {
   toAsk.push(job);
   if (!asking) askNext();
 }
@@ -329,7 +392,7 @@ function answer(yes: boolean, remember: boolean) {
   asking = null;
   if (yes && remember) {
     setAllowed('page', [...allowedSites().page, job.url.host]);
-    for (let i = toAsk.length - 1; i >= 0; i--) if (toAsk[i].url.host === job.url.host) allow(toAsk.splice(i, 1)[0]);
+    for (let i = toAsk.length - 1; i >= 0; i--) if (toAsk[i].url.host === job.url.host && !toAsk[i].blind) allow(toAsk.splice(i, 1)[0]);
   }
   if (yes) allow(job);
   else fail(job.id, t('declined'));
@@ -350,10 +413,11 @@ function askNext() {
       h('strong', {}, t('titlePage')),
       h('div', {}, h('span', { class: 'muted' }, `${t('from')}: `), h('strong', {}, u.host)),
       h('p', { class: 'mono secret' }, u.href),
+      redirectNote(asking),
       h('p', { class: 'muted' }, t('noteDirect', { host: u.host })),
       RELAY && h('p', { class: 'muted' }, t('noteRelay', { host: u.host, relay: new URL(RELAY).host })),
-      h('label', { class: 'check' }, remember, t('rememberPage', { host: u.host })),
-      h('p', { class: 'muted' }, t('rememberPageNote', { host: u.host })),
+      !asking.blind && h('label', { class: 'check' }, remember, t('rememberPage', { host: u.host })),
+      !asking.blind && h('p', { class: 'muted' }, t('rememberPageNote', { host: u.host })),
       toAsk.length > 0 && h('p', { class: 'muted' }, t('moreWaiting', { n: formatNumber(toAsk.length) })),
       h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: () => answer(false, false) }, t('cancel')), go)
     )
@@ -382,6 +446,15 @@ function render() {
     );
     return;
   }
+  question({ url, hops: 0 });
+}
+
+/** Sites ticked "without asking" during this fetch (the address asked first and any redirect asked about): kept once it succeeds */
+const toRemember: string[] = [];
+
+/** The question for one address (read or save); a redirect to a site that is not allowed asks again about where it leads */
+function question(r: Req) {
+  const u = r.url;
   const status = h('p', { class: 'muted', role: 'status', 'aria-live': 'polite' });
   const cancel = h('button', { type: 'button', class: 'btn outline', onClick: close }, t('cancel'));
   const go = h('button', { type: 'button', class: 'btn primary' }, t(mode === 'read' ? 'read' : 'fetch'));
@@ -393,9 +466,11 @@ function render() {
     status.className = 'muted';
     status.textContent = t('progress', { size: size(0) });
     try {
-      const r = await fetchFor(url, (n) => (status.textContent = t('progress', { size: size(n) })));
-      if (remember.checked) setAllowed(mode, [...allowedSites()[mode], url.host]);
-      post(r, [r.data]);
+      const got = await fetchFor(r, (n) => (status.textContent = t('progress', { size: size(n) })));
+      if (remember.checked) toRemember.push(u.host);
+      if ('ask' in got) return question(got.ask);
+      if (toRemember.length) setAllowed(mode, [...allowedSites()[mode], ...toRemember]);
+      post(got, [got.data]);
     } catch (e) {
       go.removeAttribute('aria-busy');
       go.disabled = false;
@@ -418,21 +493,23 @@ function render() {
       'div',
       { class: 'card stack' },
       h('strong', {}, t(mode === 'read' ? 'titleRead' : 'title')),
-      h('div', {}, h('span', { class: 'muted' }, `${t('from')}: `), h('strong', {}, url.host)),
-      h('p', { class: 'mono secret' }, url.href),
-      h('p', { class: 'muted' }, t('noteDirect', { host: url.host })),
-      RELAY && h('p', { class: 'muted' }, t('noteRelay', { host: url.host, relay: new URL(RELAY).host })),
+      h('div', {}, h('span', { class: 'muted' }, `${t('from')}: `), h('strong', {}, u.host)),
+      h('p', { class: 'mono secret' }, u.href),
+      redirectNote(r),
+      h('p', { class: 'muted' }, t('noteDirect', { host: u.host })),
+      RELAY && h('p', { class: 'muted' }, t('noteRelay', { host: u.host, relay: new URL(RELAY).host })),
       mode === 'read' && h('p', { class: 'muted' }, t('noteJina', { jina: new URL(JINA).host })),
       mode === 'save' && h('p', { class: 'muted' }, t('limit', { max: MAX_MB })),
-      h('label', { class: 'check' }, remember, t(mode === 'read' ? 'rememberRead' : 'rememberSave', { host: url.host })),
-      h('p', { class: 'muted' }, t('rememberNote', { host: url.host })),
+      !r.blind && h('label', { class: 'check' }, remember, t(mode === 'read' ? 'rememberRead' : 'rememberSave', { host: u.host })),
+      !r.blind && h('p', { class: 'muted' }, t('rememberNote', { host: u.host })),
       allowed.length > 0 && forget,
       status,
       h('div', { class: 'btns' }, cancel, go)
     )
   );
-  // A site the user chose not to be asked about again (for this mode): fetch right away (the request still shows while it runs)
-  if (allowed.includes(url.host)) {
+  // A site the user chose not to be asked about again (for this mode): fetch right away (the request still shows while it
+  // runs). Never so for a hidden redirect: where it leads is not that site
+  if (!r.blind && allowed.includes(u.host)) {
     remember.checked = true;
     void run();
     return;

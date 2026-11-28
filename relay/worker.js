@@ -2,9 +2,9 @@
 // a browser (no CORS). Deploy it on your own Cloudflare account and build the app with VITE_FETCH_RELAY_URL set to
 // its address (with the fetch page on its own origin, its build:fetch too; README). It keeps nothing, sends no
 // cookies or headers of the caller, answers only to the fetch page's origin(s) in ALLOWED_ORIGINS, and limits
-// requests per client IP (LIMITER in wrangler.jsonc).
+// requests per client IP (LIMITER in wrangler.jsonc). It follows no redirect: it answers with where one leads
+// (X-Redirect-To), and the fetch page decides whether to go on, as it does for a direct fetch (fetch/redirect.ts).
 const MAX_BYTES = 20 * 1024 * 1024;
-const MAX_REDIRECTS = 5;
 
 /** Hosts the relay never reaches: this machine, private networks, link-local and similar */
 function isPrivateHost(host) {
@@ -22,18 +22,6 @@ function isPrivateHost(host) {
 /** Only public https addresses, without credentials */
 const allowedTarget = (u) => u.protocol === 'https:' && !u.username && !u.password && !isPrivateHost(u.hostname);
 
-/** Follow redirects one by one, checking each address like the first (a public page may redirect elsewhere) */
-async function fetchChecked(url) {
-  for (let i = 0; i <= MAX_REDIRECTS; i++) {
-    const res = await fetch(url.href, { redirect: 'manual', headers: { Accept: '*/*', 'User-Agent': 'nobackend-llm-client-fetch-relay' } });
-    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
-    if (!location) return res;
-    url = new URL(location, url);
-    if (!allowedTarget(url)) return null;
-  }
-  return null;
-}
-
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') ?? '';
@@ -42,7 +30,7 @@ export default {
       .map((s) => s.trim())
       .filter(Boolean);
     if (!allowed.includes(origin)) return new Response('Forbidden', { status: 403 });
-    const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'Content-Disposition', Vary: 'Origin' };
+    const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'Content-Disposition, X-Redirect-To', Vary: 'Origin' };
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...cors, 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '86400' } });
     if (request.method !== 'GET') return new Response('Method not allowed', { status: 405, headers: cors });
     if (env.LIMITER) {
@@ -59,8 +47,18 @@ export default {
     if (!allowedTarget(target)) return new Response('Address not allowed', { status: 400, headers: cors });
 
     // A plain request: none of the caller's headers or cookies go on
-    const res = await fetchChecked(target);
-    if (!res) return new Response('Address not allowed', { status: 400, headers: cors });
+    const res = await fetch(target.href, { redirect: 'manual', headers: { Accept: '*/*', 'User-Agent': 'nobackend-llm-client-fetch-relay' } });
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+    if (location) {
+      // Where it leads, for the fetch page to ask about (it comes back here to fetch it, checked like any address)
+      let to;
+      try {
+        to = new URL(location, target);
+      } catch {
+        return new Response('Bad redirect', { status: 502, headers: cors });
+      }
+      return new Response(null, { status: 204, headers: { ...cors, 'X-Redirect-To': to.href, 'Cache-Control': 'no-store' } });
+    }
     if (!res.ok || !res.body) return new Response(null, { status: !res.ok && res.status >= 300 && res.status <= 599 ? res.status : 502, headers: cors });
     if (Number(res.headers.get('content-length') ?? 0) > MAX_BYTES) return new Response('Too large', { status: 413, headers: cors });
     let total = 0;

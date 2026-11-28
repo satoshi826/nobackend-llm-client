@@ -343,8 +343,9 @@ const files: Flow = {
 
 const images: Flow = {
   name: 'images',
-  label: 'image mode with the mock image model → the generated image shows → its options → it opens in the viewer',
-  async run({ page, url, a11y }) {
+  label:
+    'image mode with the mock image model → the generated image shows → its options → it opens in the viewer → a tag model: its badge in the picker, its quality tags edited and reset, tag suggestions off and on, Convert to tags stopped by typing, then converted and undone',
+  async run({ page, url, a11y, shot }) {
     await page.goto(url);
     await addVenice(page);
     await page.getByRole('button', { name: 'Image', exact: true }).click();
@@ -366,8 +367,65 @@ const images: Flow = {
     await image.click();
     await page.getByRole('dialog').waitFor();
     await a11y('image view');
+    await page.keyboard.press('Escape');
+    await tagModel(page, a11y, shot);
   }
 };
+
+/** Image mode with the mock's tag model (Illustrious family): what the app offers for Danbooru tags */
+async function tagModel(page: Page, a11y: FlowContext['a11y'], shot: FlowContext['shot']) {
+  // Marked by its family before it is picked
+  await page.getByRole('button', { name: /^Image model:/ }).click();
+  const anime = page.getByRole('menuitemcheckbox', { name: /Mock Anime \(WAI\)/ });
+  await anime.getByText('Illustrious', { exact: true }).waitFor();
+  await shot('tag model in the picker', { phone: false });
+  await anime.click();
+  await page.getByRole('button', { name: 'Image model: Mock Anime (WAI)' }).waitFor();
+
+  // Its quality tags: the recommended ones, changed, then reset
+  const options = page.getByRole('button', { name: /^Image settings/ });
+  await options.click();
+  const tags = page.getByRole('textbox', { name: 'Quality tags for Illustrious' });
+  await until('the recommended quality tags', async () => (await tags.inputValue()) === 'masterpiece, best quality, amazing quality');
+  const reset = page.getByRole('button', { name: 'Reset to recommended' });
+  await tags.fill('masterpiece, very aesthetic');
+  await reset.waitFor();
+  await a11y('quality tags edited');
+  await shot('quality tags edited');
+  await reset.click();
+  await until('the quality tags reset', async () => (await tags.inputValue()) === 'masterpiece, best quality, amazing quality');
+  await reset.waitFor({ state: 'hidden' });
+
+  // Tag suggestions: shown for a tag model, none once they are off
+  const suggestions = page.getByRole('listbox', { name: 'Tag suggestions' });
+  await page.getByRole('tab', { name: 'Off', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await composer(page).fill('1girl, long_h');
+  await page.waitForTimeout(500);
+  if (await suggestions.isVisible()) throw new Error('Tag suggestions showed while they were off');
+  await options.click();
+  await page.getByRole('tab', { name: 'Match the model' }).click();
+  await page.keyboard.press('Escape');
+  await composer(page).fill('1girl, long_ha');
+  await suggestions.getByRole('option', { name: /^long hair \d/ }).waitFor();
+  await page.keyboard.press('Escape');
+
+  // Convert to tags: typing while it runs stops it and keeps what was typed
+  const convert = page.getByRole('button', { name: 'Convert to tags' });
+  await composer(page).fill('ゆっくり: a girl under cherry blossoms');
+  await convert.click();
+  await until('the conversion to run', () => convert.getAttribute('aria-busy').then((v) => v === 'true'));
+  await composer(page).fill('a girl in a school uniform');
+  await page.waitForTimeout(2500);
+  if ((await composer(page).inputValue()) !== 'a girl in a school uniform') throw new Error('The tags replaced what was typed during the conversion');
+  // Converted, then undone
+  await convert.click();
+  await until('the tags', async () => (await composer(page).inputValue()).startsWith('1girl, solo'));
+  await a11y('converted to tags');
+  await shot('converted to tags');
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await until('the text back', async () => (await composer(page).inputValue()) === 'a girl in a school uniform');
+}
 
 const settings: Flow = {
   name: 'settings',

@@ -241,16 +241,47 @@ describe('running code in the sandbox', () => {
     await vi.waitFor(() => expect(frames).toHaveLength(2));
   });
 
-  it('stops a run at once when asked, telling the sandbox to stop its worker', async () => {
+  it('stops a run when asked, with what it logged until then as the sandbox answers the stop', async () => {
+    const { runJavaScript } = await load();
+    respond = (m, s) => m.type === 'stop' && s.send({ type: 'result', id: m.id, logs: ['so far'], result: 'not a result', stopped: 'user' });
+    const ctrl = new AbortController();
+    const p = runJavaScript('console.log("so far"); while (true) {}', { signal: ctrl.signal });
+    await vi.waitFor(() => expect(sandboxes[0]?.got[0]?.type).toBe('run'));
+    ctrl.abort();
+    expect(await p).toEqual({ logs: ['so far'], result: undefined, error: 'Stopped by the user.' });
+    expect(sandboxes[0].got[1]).toEqual({ type: 'stop', id: sandboxes[0].got[0].id });
+    // The shared frame stays for the next run
+    expect(frames[0].removed).toBe(false);
+  });
+
+  it('gives the time limit as the error of a run stopped by it, with what it logged', async () => {
+    const { runJavaScript } = await load();
+    respond = (m, s) => s.send({ type: 'result', id: m.id, logs: ['started'], stopped: 'time' });
+    expect(await runJavaScript('while (true) {}')).toEqual({ logs: ['started'], result: undefined, error: 'Stopped after 10 s.' });
+  });
+
+  it('takes a stop the sandbox does not answer as stopped with nothing printed, after a moment', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { runJavaScript } = await load();
     const ctrl = new AbortController();
     const p = runJavaScript('while (true) {}', { signal: ctrl.signal });
     await vi.waitFor(() => expect(sandboxes[0]?.got[0]?.type).toBe('run'));
     ctrl.abort();
-    expect(await p).toEqual({ logs: [], error: 'Stopped.' });
-    await vi.waitFor(() => expect(sandboxes[0].got[1]).toEqual({ type: 'stop', id: sandboxes[0].got[0].id }));
-    // The shared frame stays for the next run
-    expect(frames[0].removed).toBe(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await p).toEqual({ logs: [], result: undefined, error: 'Stopped by the user.' });
+  });
+
+  it('stops code on the page by removing its frame, and one stopped before it starts is never sent', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { runJavaScript, RUN_TIMEOUT_MS } = await load();
+    const p = runJavaScript('while (true) {}', { dom: true });
+    await vi.advanceTimersByTimeAsync(RUN_TIMEOUT_MS);
+    expect(await p).toEqual({ logs: [], result: undefined, error: 'Stopped after 10 s.' });
+    expect(frames[0].removed).toBe(true);
+    const ctrl = new AbortController();
+    ctrl.abort();
+    expect(await runJavaScript('return 1', { signal: ctrl.signal })).toEqual({ logs: [], result: undefined, error: 'Stopped by the user.' });
+    expect(sandboxes.slice(1).every((s) => s.got.length === 0)).toBe(true);
   });
 });
 
@@ -268,17 +299,24 @@ describe('running a skill\'s script in the sandbox', () => {
     expect(r).toEqual({ code: 2, stdout: 'out', stderr: '', stdoutChars: 3, stderrChars: 0, written: { '/work/a.txt': 'A', '/work/b.bin': new Uint8Array([1]) } });
   });
 
-  it('gives what stopped it: the time limit in the sandbox, or a stop asked for', async () => {
+  it('gives what stopped it with what it printed until then, and none of what it wrote', async () => {
     const { runScript } = await load();
-    let answers = true;
-    respond = (m, s) => answers && s.send({ type: 'scriptResult', id: m.id, logs: [], error: 'Stopped: it ran longer than 10000 ms.' });
-    expect(await runScript(job)).toMatchObject({ code: 1, error: 'Stopped: it ran longer than 10000 ms.', written: {} });
-    answers = false;
+    respond = (m, s) => {
+      if (m.type === 'script') s.send({ type: 'scriptResult', id: m.id, stdout: 'so far', stderr: 'warned', written: { '/work/a.txt': 'half' }, stopped: 'time' });
+    };
+    expect(await runScript(job)).toEqual({ code: 1, stdout: 'so far', stderr: 'warned', stdoutChars: 6, stderrChars: 6, written: {}, stopped: 'time' });
+    // Worker runs share the frame: it answers from now on like this
+    sandboxes[0].onMessage = (m, s) => {
+      if (m.type === 'stop') s.send({ type: 'scriptResult', id: m.id, stdout: 'until the stop', stopped: 'user' });
+    };
     const ctrl = new AbortController();
     const p = runScript(job, ctrl.signal);
     await vi.waitFor(() => expect(sandboxes[0].got.length).toBe(2));
     ctrl.abort();
-    expect((await p).error).toBe('Stopped.');
-    await vi.waitFor(() => expect(sandboxes[0].got.at(-1)).toEqual({ type: 'stop', id: sandboxes[0].got[1].id }));
+    expect(await p).toMatchObject({ stdout: 'until the stop', stopped: 'user' });
+    expect(sandboxes[0].got.at(-1)).toEqual({ type: 'stop', id: sandboxes[0].got[1].id });
+    // The sandbox failed: told as an error, with what it printed
+    sandboxes[0].onMessage = (m, s) => s.send({ type: 'scriptResult', id: m.id, stdout: 'x', error: 'Out of memory' });
+    expect(await runScript(job)).toEqual({ code: 1, stdout: 'x', stderr: '', stdoutChars: 1, stderrChars: 0, written: {}, error: 'Out of memory' });
   });
 });

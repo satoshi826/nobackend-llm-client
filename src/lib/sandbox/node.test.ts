@@ -11,7 +11,7 @@ interface Result {
   stderrChars: number;
   written: Record<string, string | Uint8Array>;
 }
-const nodeScript = new Function(`${source}\nreturn nodeScript;`)() as (job: unknown, compile: (code: string) => string) => Promise<Result>;
+const nodeScript = new Function(`${source}\nreturn nodeScript;`)() as (job: unknown, compile: (code: string) => string, onPrint?: (kind: string, text: string) => void) => Promise<Result>;
 
 // As the worker does: each module is a script of its own, named by a URL its stack frames carry
 let n = 0;
@@ -21,7 +21,7 @@ const compile = (code: string) => {
   return url;
 };
 
-const run = (files: Record<string, string | Uint8Array>, o: { main?: string; args?: string[]; libraries?: Record<string, string>; libraryNames?: string[] } = {}) =>
+const run = (files: Record<string, string | Uint8Array>, o: { main?: string; args?: string[]; libraries?: Record<string, string>; libraryNames?: string[]; onPrint?: (kind: string, text: string) => void } = {}) =>
   nodeScript(
     {
       main: o.main ?? '/skill/scripts/main.js',
@@ -32,7 +32,8 @@ const run = (files: Record<string, string | Uint8Array>, o: { main?: string; arg
       libraries: o.libraries ?? {},
       libraryNames: o.libraryNames ?? Object.keys(o.libraries ?? {})
     },
-    compile
+    compile,
+    o.onPrint
   );
 
 describe('a skill script in the Node-like shim', () => {
@@ -148,6 +149,18 @@ helper.fail();`,
     const r = await run({ '/skill/scripts/main.js': "process.stdout.write('x'.repeat(1_200_000));" });
     expect(r.stdout.length).toBe(1_000_000);
     expect(r.stdoutChars).toBe(1_200_000);
+  });
+
+  it('tells what it prints as it prints it, within the same limit, so a run stopped midway keeps it', async () => {
+    const told: [string, string][] = [];
+    let atPrint = '';
+    const r = await run(
+      { '/skill/scripts/main.js': "console.log('one'); console.error('two'); process.stdout.write('x'.repeat(1_200_000)); console.log('past the limit');" },
+      { onPrint: (kind, text) => (told.push([kind, text.slice(0, 5)]), kind === 'stderr' && (atPrint = text)) }
+    );
+    expect(told).toEqual([['stdout', 'one\n'], ['stderr', 'two\n'], ['stdout', 'xxxxx']]);
+    expect(atPrint).toBe('two\n');
+    expect(r.stdout.length).toBe(1_000_000);
   });
 
   it('works out paths as Node does', async () => {

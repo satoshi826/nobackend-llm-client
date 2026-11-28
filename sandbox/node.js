@@ -3,16 +3,18 @@
 // page gives its source to a worker of its own for each run, so it must keep to one function and use only what a
 // worker has. It must not contain a closing script tag. It changes no global: what a script sees as process, console
 // and the timers are given to each module, as Node gives require and module.
-//   nodeScript(job, compile): job is { main, args, cwd, files, readOnly, libraries, libraryNames }:
+//   nodeScript(job, compile, onPrint): job is { main, args, cwd, files, readOnly, libraries, libraryNames }:
 //     main: the script's absolute path ('/skill/scripts/fill.js'); args: its arguments (strings); cwd: the directory
 //     relative paths start from; files: { absolute path: text or Uint8Array }, the files it starts with; readOnly:
 //     directories nothing may be written in ('/skill'); libraries: { name: source of a CommonJS module } that require
 //     gives by name; libraryNames: every library the app could have given (to tell one not loaded from an unknown one).
 //   compile(code) runs a classic script and returns the name its stack frames carry (a blob: URL in the worker).
+//   onPrint(kind, text), if given, gets what it prints as it prints it ('stdout' or 'stderr', within OUT_MAX), so that
+//   a run stopped before it ends still has its output.
 //   Resolves to { code, stdout, stderr, stdoutChars, stderrChars, written }: the exit code, what it printed (each cut at
 //   OUT_MAX; the *Chars say how much there was), and { absolute path: text or Uint8Array } of every file it wrote that
 //   still exists. It ends as Node does: on process.exit, on an error nothing caught, or once no timer is left.
-function nodeScript(job, compile) {
+function nodeScript(job, compile, onPrint) {
   'use strict';
   const OUT_MAX = 1_000_000;
   const WRITE_MAX = 50 * 1024 * 1024;
@@ -106,8 +108,10 @@ function nodeScript(job, compile) {
   const out = { stdout: '', stderr: '', stdoutChars: 0, stderrChars: 0 };
   const print = (kind, s) => {
     s = typeof s === 'string' ? s : ArrayBuffer.isView(s) ? dec.decode(s) : String(s);
-    if (out[kind].length < OUT_MAX) out[kind] += s.slice(0, OUT_MAX - out[kind].length);
+    const kept = s.slice(0, OUT_MAX - out[kind].length);
+    out[kind] += kept;
     out[kind + 'Chars'] += s.length;
+    if (kept && onPrint) onPrint(kind, kept);
   };
   /** A value as Node's console shows it (shortened: no colours, nested objects two levels deep) */
   function inspect(v, depth = 2, seen = []) {

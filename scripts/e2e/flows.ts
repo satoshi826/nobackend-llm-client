@@ -823,7 +823,7 @@ const skillFiles: Flow = {
 
 const skillScripts: Flow = {
   name: 'skill-scripts',
-  label: "import a skill zip with a script that reads its skill's data and writes a file → a chat loads the skill and runs the script (approved) → what it printed is shown → saving the file it wrote is asked, and it is saved in the working folder",
+  label: "import a skill zip with a script that reads its skill's data and writes a file → a chat loads the skill and runs the script (approved) → what it printed is shown → saving the file it wrote is asked, and it is saved in the working folder → a script that prints, writes and never ends is always allowed → stopped after 10 s, what it printed is shown, nothing is offered for saving, and the setting shows Always allow",
   async run({ page, url, a11y, shot }) {
     await page.goto(url);
     await addVenice(page);
@@ -834,6 +834,7 @@ const skillScripts: Flow = {
       'greeter/SKILL.md': '---\nname: greeter\ndescription: Greets someone with a line from its data.\n---\nRun scripts/hello.js with the name to greet.\n',
       'greeter/scripts/hello.js':
         "const fs = require('fs');\nconst path = require('path');\nconst data = JSON.parse(fs.readFileSync(path.join(__dirname, '../reference/data.json'), 'utf8'));\nconsole.log('Hello, ' + process.argv[2] + '! ' + data.greeting);\nfs.writeFileSync('out.txt', 'Greeted ' + process.argv[2] + '\\n');\n",
+      'greeter/scripts/loop.js': "console.log('Counting up');\nrequire('fs').writeFileSync('half.txt', 'half done');\nlet i = 0;\nwhile (true) i++;\n",
       'greeter/reference/data.json': '{"greeting": "Nice to meet you."}'
     });
     await (await chooser).setFiles({ name: 'greeter.zip', mimeType: 'application/zip', buffer: zipFile });
@@ -861,6 +862,23 @@ const skillScripts: Flow = {
     await page.locator('[data-message-id]').last().getByText('Saved in the working folder: "out.txt" (new).').waitFor();
     await settled(page);
     await shot('skill script saved');
+
+    // A script that never ends, allowed always: stopped by the time limit, with what it printed until then; what it
+    // wrote is not offered
+    await send(page, 'greeter の止まらないスクリプトを実行して');
+    await approval.getByText('Runs scripts/loop.js of the skill "greeter" in an isolated space').waitFor();
+    await approval.getByRole('button', { name: 'Always allow' }).click();
+    const looped = page.locator('[data-message-id]').last();
+    await looped.getByText('Stopped after 10 seconds. The output is what it printed until then').waitFor({ timeout: 20_000 });
+    await looped.getByText('Counting up').first().waitFor();
+    await settled(page);
+    if (await save.count()) throw new Error('A stopped script\'s files are offered for saving');
+    await a11y('skill script stopped');
+    await shot('skill script stopped');
+    await openSettings(page, 'Running code');
+    const allowed = await page.getByRole('combobox', { name: "Let models run skills' scripts" }).inputValue();
+    if (allowed !== 'allow') throw new Error(`The skill script setting is ${allowed}, not allow`);
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Close' }).click();
     await page.getByRole('tab', { name: 'Files' }).click();
     await page.getByRole('main').getByText('greeter', { exact: true }).dblclick();
     await page.getByRole('main').getByText('out.txt').dblclick();

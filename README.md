@@ -68,7 +68,7 @@ npm run dev
 - Failures (Venice, Anthropic, Gemini and OpenAI mocks, each in its API's own shape): `#err:auth`, `#err:balance`, `#err:rate`, `#err:model`, `#err:context`, `#err:policy`, `#err:overloaded`, `#err:server`, `#err:timeout`, `#err:network` (the connection is dropped), `#err:stream` (an error after the answer started).
 - Tool-based web search: `検索`, `読んで` (after a search). Reading a page directly: `ページを読んで`.
 - Built-in search (the Anthropic and Gemini mocks): `検索` / `天気`; with `一時停止` too, the Anthropic mock pauses the turn after the search (`pause_turn`).
-- Skills: `スキル` loads the first skill; `<name> のスクリプトを実行して` loads the skill named and runs its `scripts/hello.js` with `run_skill_script`.
+- Skills: `スキル` loads the first skill; `<name> のスクリプトを実行して` loads the skill named and runs its `scripts/hello.js` with `run_skill_script` (`scripts/loop.js` when the message has `止まらない`).
 - Skill creator: `作って` / `直して` calls `save_skill` in a skill-creator conversation.
 - Files: `レポートにまとめて` calls `write_file`; with a file in the conversation, `追記して` / `結論を直して` / `全部読んで` call `append_file` / `edit_file` / `read_file`.
 - Sandbox: `実行できる例` answers with runnable JS and HTML code blocks, `計算して` calls `run_javascript`, `ページを作って` creates an HTML page and the script it loads, `ゲームを作って` writes a page that counts its animation frames and tries it with `preview_page`.

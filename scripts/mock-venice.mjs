@@ -768,7 +768,7 @@ const server = http.createServer(async (req, res) => {
       return finishText(ans, { prompt_tokens: 300, completion_tokens: ans.length }, COST);
     }
     // A skill's script: "<skill> のスクリプトを実行して" loads the skill named, then (its tools offered once it is loaded)
-    // runs its scripts/hello.js with run_skill_script, and the answer quotes the result
+    // runs its scripts/hello.js (scripts/loop.js for "止まらない") with run_skill_script, and the answer quotes the result
     if (toolNames.includes('load_skill') && lastMsg?.role === 'user' && userText.includes('スクリプトを実行して')) {
       const names = body.tools.find((t) => t.function?.name === 'load_skill').function.parameters?.properties?.name?.enum ?? [];
       await send({ content: 'スキルを読み込みます。' });
@@ -777,10 +777,12 @@ const server = http.createServer(async (req, res) => {
     if (toolNames.includes('run_skill_script') && lastMsg?.role === 'tool' && lastCallName === 'load_skill' && userText.includes('スクリプトを実行して')) {
       const skill = body.tools.find((t) => t.function?.name === 'run_skill_script').function.parameters.properties.skill.enum[0];
       await send({ content: 'スクリプトを実行します。' });
-      return finishTools('run_skill_script', { skill, path: 'scripts/hello.js', args: ['world'] });
+      return finishTools('run_skill_script', { skill, path: userText.includes('止まらない') ? 'scripts/loop.js' : 'scripts/hello.js', args: ['world'] });
     }
     if (lastMsg?.role === 'tool' && lastCallName === 'run_skill_script') {
-      const ans = `スクリプトの結果:\n\n\`\`\`\n${String(lastMsg.content ?? '')}\n\`\`\``;
+      // Quoted a line a paragraph, not in a code block: one with long lines scrolls sideways, and its scrolled region
+      // cannot take focus (an accessibility failure of code blocks in answers, open)
+      const ans = `スクリプトの結果:\n\n${String(lastMsg.content ?? '').split('\n').filter(Boolean).map((l) => `> ${l}`).join('\n>\n')}`;
       return finishText(ans, { prompt_tokens: 300, completion_tokens: ans.length }, COST);
     }
     // If load_skill is passed and the user wrote "スキル", load the first skill in the list

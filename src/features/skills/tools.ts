@@ -6,7 +6,7 @@ import { skillBlock, validateSkill, type SkillDraft } from '../../lib/skills/ski
 import { cleanSkillPath, isTextMime, type SkillFile } from '../../lib/skills/files';
 import { cleanFileName, extOf, pathKey } from '../../lib/paths';
 import { MAX_FILE_CHARS } from '../../lib/db/files';
-import { RUN_TIMEOUT_MS, type ScriptJob, type ScriptResult } from '../../lib/sandbox/client';
+import { RUN_TIMEOUT_MS, stoppedText, type ScriptJob, type ScriptResult, type Stopped } from '../../lib/sandbox/client';
 import type { Tool } from '../../lib/tools/types';
 import { READ_CHUNK, READ_LINES, readLines } from '../../lib/tools/lines';
 import { t } from './messages';
@@ -160,7 +160,9 @@ export interface ScriptPrinted {
 
 /** What the card of a run shows once it ended */
 export interface ScriptDetails extends Partial<ScriptPrinted> {
-  /** It did not end by itself (stopped by the time limit) */
+  /** It was stopped before it ended: what it printed is what it printed until then, and what it wrote is dropped */
+  stopped?: Stopped;
+  /** The sandbox failed */
   error?: string;
   saved?: string[];
   /** The user chose not to save the files it wrote */
@@ -211,7 +213,7 @@ export function makeRunSkillScriptTool(deps: ScriptDeps): Tool<{ skill: string; 
   return {
     name: RUN_SKILL_SCRIPT,
     label: t('tool.runScript'),
-    description: `Run a JavaScript file of a skill loaded in this conversation, as \`node <path> <args>\` would, in an isolated sandbox with no network and no access to this app, and get back its exit code, what it printed (stdout, stderr) and the files it wrote. CommonJS only (.js, .cjs: require and module.exports, not import/export). It has process (argv, exit, exitCode, env, stdout/stderr.write), console, timers, __dirname, __filename and require of fs (sync, callback and promise forms), path, util${libs} and the skill's own .js and .json files by relative path; no other packages, no child processes. Only JavaScript runs here: a .py or .sh script cannot. The skill's files are at ${SKILL_ROOT}/<path> (read-only). The script starts in ${WORK}: the working-folder files given in file_ids are there at their paths, and the files it writes under ${WORK} are offered to the user to save in the working folder at the same paths (the result says what was saved). It is stopped after ${RUN_TIMEOUT_MS / 1000} seconds.`,
+    description: `Run a JavaScript file of a skill loaded in this conversation, as \`node <path> <args>\` would, in an isolated sandbox with no network and no access to this app, and get back its exit code, what it printed (stdout, stderr) and the files it wrote. CommonJS only (.js, .cjs: require and module.exports, not import/export). It has process (argv, exit, exitCode, env, stdout/stderr.write), console, timers, __dirname, __filename and require of fs (sync, callback and promise forms), path, util${libs} and the skill's own .js and .json files by relative path; no other packages, no child processes. Only JavaScript runs here: a .py or .sh script cannot. The skill's files are at ${SKILL_ROOT}/<path> (read-only). The script starts in ${WORK}: the working-folder files given in file_ids are there at their paths, and the files it writes under ${WORK} are offered to the user to save in the working folder at the same paths (the result says what was saved). It is stopped after ${RUN_TIMEOUT_MS / 1000} seconds: then you get what it printed until then, and the files it wrote are discarded.`,
     parameters: {
       type: 'object',
       properties: {
@@ -253,10 +255,19 @@ export function makeRunSkillScriptTool(deps: ScriptDeps): Tool<{ skill: string; 
       }
       const job: ScriptJob = { main: `${SKILL_ROOT}/${main.path}`, args: i.args, cwd: WORK, files, readOnly: [SKILL_ROOT], libraries: await deps.libraries(sources), libraryNames: deps.libraryNames };
       const r = await deps.run(job, ctx.signal);
-      if (r.error) return { content: `${main.path} of the skill "${s.name}" did not finish: ${r.error}`, isError: true, details: { error: r.error } satisfies ScriptDetails };
-
       const printed: ScriptPrinted = { code: r.code, stdout: clip(r.stdout, r.stdoutChars, STDOUT_CHARS, 'stdout'), stderr: clip(r.stderr, r.stderrChars, STDERR_CHARS, 'stderr', true) };
-      const out = [`Ran ${main.path} of the skill "${s.name}": exit code ${r.code}.`, `stdout:\n${printed.stdout || '(nothing)'}`, ...(printed.stderr ? [`stderr:\n${printed.stderr}`] : [])];
+      const output = [`stdout:\n${printed.stdout || '(nothing)'}`, ...(printed.stderr ? [`stderr:\n${printed.stderr}`] : [])];
+      // Stopped, or the sandbox failed: what it printed until then; what it wrote may be half done, so it is dropped
+      if (r.stopped || r.error) {
+        const why = r.stopped ? stoppedText(r.stopped) : r.error;
+        return {
+          content: [`${main.path} of the skill "${s.name}" did not finish: ${why} What it printed until then:`, ...output, 'Files it wrote, if any, were discarded.'].join('\n'),
+          isError: true,
+          details: { stdout: printed.stdout, stderr: printed.stderr, ...(r.stopped ? { stopped: r.stopped } : { error: r.error }) } satisfies ScriptDetails
+        };
+      }
+
+      const out = [`Ran ${main.path} of the skill "${s.name}": exit code ${r.code}.`, ...output];
       const details: ScriptDetails = { ...printed };
       // What it wrote under the working directory, as working-folder files: text only, within a file's limit
       const wrote = Object.entries(r.written)

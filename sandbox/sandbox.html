@@ -34,8 +34,10 @@
     { type: 'script', id, job, timeoutMs } run a skill's script as Node would (sandbox/node.js, job as nodeScript
                                            takes it) in a worker of its own, stopped after timeoutMs, and answer
                                            { type: 'scriptResult', id, code, stdout, stderr, stdoutChars, stderrChars,
-                                           written } or { type: 'scriptResult', id, error }
-    { type: 'stop', id }                   stop the run or script with that id at once (no answer)
+                                           written } or { type: 'scriptResult', id, stdout, stderr, error }
+    { type: 'stop', id }                   stop the run or script with that id at once
+                                           A worker's run stopped (after timeoutMs, or by stop) is answered with what it
+                                           printed until then (logs, or stdout and stderr) and stopped: 'time' or 'user'
     { type: 'ping', n }                    answered with { type: 'pong', n } while this page is not stuck
   A page without an origin has no localStorage or sessionStorage of its own: sandbox/storage.js stands in for both
   (in memory; a shown page's localStorage is kept by the app when the render gives storage).
@@ -68,7 +70,7 @@
         installStorage(makeStorage(), makeStorage());
         // Runs code as the body of an async function and collects its console output: on this page (dom), and from
         // its source in each worker
-        async function runCode(code, files) {
+        async function runCode(code, files, onLog) {
           const logs = [];
           const show = (v) => {
             try {
@@ -81,8 +83,10 @@
           for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
             saved[level] = console[level];
             console[level] = (...args) => {
-              logs.push((level === 'log' || level === 'info' ? '' : level + ': ') + args.map(show).join(' '));
+              const line = (level === 'log' || level === 'info' ? '' : level + ': ') + args.map(show).join(' ');
+              logs.push(line);
               if (logs.length > 1000) logs.shift();
+              onLog?.(line);
             };
           }
           try {
@@ -94,7 +98,8 @@
             Object.assign(console, saved);
           }
         }
-        const WORKER = `const runCode = ${runCode};\nonmessage = async (e) => postMessage(await runCode(e.data.code, e.data.files));`;
+        // A worker tells each line or piece of output as it comes ({ printed }), so a run stopped before it ends keeps it
+        const WORKER = `const runCode = ${runCode};\nonmessage = async (e) => postMessage(await runCode(e.data.code, e.data.files, (line) => postMessage({ printed: line })));`;
         // Each module of a script is a classic script of its own (from a blob: URL), so its stack frames carry its lines
         const NODE_WORKER = `const nodeScript = ${nodeScript};
 const compile = (code) => {
@@ -106,7 +111,7 @@ const compile = (code) => {
   }
   return url;
 };
-onmessage = async (e) => postMessage(await nodeScript(e.data, compile));`;
+onmessage = async (e) => postMessage(await nodeScript(e.data, compile, (kind, text) => postMessage({ printed: { kind, text } })));`;
         let port = null;
 
         // ---- experimental: the shown page's api (only when the app gives one: a page the user shows, in a build
@@ -199,33 +204,52 @@ onmessage = async (e) => postMessage(await nodeScript(e.data, compile));`;
 
         /** Workers running, by the id of their job: stopped by { type: 'stop', id } */
         const running = new Map();
-        // A job in a worker of its own, answered as `type`, stopped after timeoutMs
-        function inWorker(source, d, message, type) {
+        // A job in a worker of its own, answered as `type`, stopped after timeoutMs. What it prints as it runs goes to
+        // sofar, which gives it back in the answer's shape when the job does not end by itself
+        function inWorker(source, d, message, type, sofar) {
           const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
           const worker = new Worker(url);
           URL.revokeObjectURL(url);
           let done = false;
-          const end = () => {
+          const finish = (m) => {
+            if (done) return;
             done = true;
             clearTimeout(timer);
             running.delete(d.id);
             worker.terminate();
-          };
-          const finish = (m) => {
-            if (done) return;
-            end();
             port.postMessage({ ...m, type, id: d.id });
           };
-          running.set(d.id, end);
-          const timer = setTimeout(() => finish({ logs: [], error: 'Stopped: it ran longer than ' + d.timeoutMs + ' ms.' }), d.timeoutMs);
-          worker.onmessage = (m) => finish(m.data);
+          running.set(d.id, () => finish({ ...sofar.get(), stopped: 'user' }));
+          const timer = setTimeout(() => finish({ ...sofar.get(), stopped: 'time' }), d.timeoutMs);
+          worker.onmessage = (m) => (m.data && typeof m.data === 'object' && 'printed' in m.data ? sofar.add(m.data.printed) : finish(m.data));
           worker.onerror = (ev) => {
             ev.preventDefault();
-            finish({ logs: [], error: String(ev.message || 'Error') });
+            finish({ ...sofar.get(), error: String(ev.message || 'Error') });
           };
           worker.postMessage(message);
         }
-        const run = (d) => inWorker(WORKER, d, { code: d.code, files: d.files }, 'result');
+        // What a run has printed so far: its console lines (the last 1000, as runCode keeps them)
+        function logsSoFar() {
+          const logs = [];
+          return {
+            add(line) {
+              logs.push(String(line));
+              if (logs.length > 1000) logs.shift();
+            },
+            get: () => ({ logs })
+          };
+        }
+        // What a script has printed so far (nodeScript keeps each within its limit)
+        function outputSoFar() {
+          const out = { stdout: '', stderr: '' };
+          return {
+            add(p) {
+              if (p && (p.kind === 'stdout' || p.kind === 'stderr')) out[p.kind] += String(p.text);
+            },
+            get: () => ({ ...out })
+          };
+        }
+        const run = (d) => inWorker(WORKER, d, { code: d.code, files: d.files }, 'result', logsSoFar());
 
         // With dom: on this page, so the code has DOMParser (e.g. to try a scraper on a saved HTML file)
         async function runHere(d) {
@@ -351,7 +375,7 @@ onmessage = async (e) => postMessage(await nodeScript(e.data, compile));`;
             const files = d.files && typeof d.files === 'object' ? d.files : {};
             if (d.dom) void runHere({ id: d.id, code: d.code, files });
             else run({ id: d.id, code: d.code, files, timeoutMs: d.timeoutMs });
-          } else if (d.type === 'script' && d.job && typeof d.job === 'object') inWorker(NODE_WORKER, d, d.job, 'scriptResult');
+          } else if (d.type === 'script' && d.job && typeof d.job === 'object') inWorker(NODE_WORKER, d, d.job, 'scriptResult', outputSoFar());
           else if (d.type === 'stop') running.get(d.id)?.();
           else if (d.type === 'eval' && typeof d.code === 'string') void evalHere(d);
           else if (d.type === 'render' && typeof d.html === 'string') {

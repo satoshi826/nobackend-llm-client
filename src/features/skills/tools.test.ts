@@ -152,9 +152,21 @@ if (process.argv[3] === 'fail') { console.error('failing on purpose'); process.e
     expect(r.details).toMatchObject({ code: 2, stderr: 'failing on purpose\n' });
   });
 
-  it('says when a run did not finish (stopped), and saves nothing', async () => {
-    const r = await run(deps(['out.txt'], { run: async () => ({ code: 1, stdout: '', stderr: '', stdoutChars: 0, stderrChars: 0, written: {}, error: 'Stopped.' }) }), { skill: 'greeter', path: 'scripts/hello.js' });
-    expect(r).toMatchObject({ content: 'scripts/hello.js of the skill "greeter" did not finish: Stopped.', isError: true });
+  it('gives what a run printed until it was stopped, and saves nothing it wrote', async () => {
+    asked.length = saved.length = 0;
+    const stopped = { code: 1, stdout: 'started\n', stderr: 'warned\n', stdoutChars: 8, stderrChars: 7, written: {}, stopped: 'time' as const };
+    const r = await run(deps(['out.txt'], { run: async () => stopped }), { skill: 'greeter', path: 'scripts/hello.js' });
+    expect(r).toEqual({
+      content: 'scripts/hello.js of the skill "greeter" did not finish: Stopped after 10 s. What it printed until then:\nstdout:\nstarted\n\nstderr:\nwarned\n\nFiles it wrote, if any, were discarded.',
+      isError: true,
+      details: { stdout: 'started\n', stderr: 'warned\n', stopped: 'time' }
+    });
+    const byUser = await run(deps(null, { run: async () => ({ ...stopped, stdout: '', stderr: '', stopped: 'user' as const }) }), { skill: 'greeter', path: 'scripts/hello.js' });
+    expect(byUser.content).toBe('scripts/hello.js of the skill "greeter" did not finish: Stopped by the user. What it printed until then:\nstdout:\n(nothing)\nFiles it wrote, if any, were discarded.');
+    const failed = await run(deps(null, { run: async () => ({ ...stopped, stopped: undefined, error: 'Stopped: no answer within 12000 ms.' }) }), { skill: 'greeter', path: 'scripts/hello.js' });
+    expect(failed).toMatchObject({ isError: true, details: { error: 'Stopped: no answer within 12000 ms.' } });
+    expect(asked).toEqual([]);
+    expect(saved).toEqual([]);
   });
 
   it('cuts long output for the model: the start of stdout, the end of stderr', async () => {

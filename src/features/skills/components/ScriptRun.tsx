@@ -1,9 +1,10 @@
 // Under a run_skill_script card: what the script printed, and, once it ended having written files, the question which
-// of them to save in the working folder (then what was saved)
+// of them to save in the working folder (then what was saved); or that it was stopped before it ended
 import { useState } from 'preact/hooks';
 import type { ToolPart } from '../../../components/extensions';
 import { Button, Checkbox, Disclosure, Icon } from '../../../components/ui';
 import { formatBytes } from '../../../lib/i18n';
+import { RUN_TIMEOUT_MS } from '../../../lib/sandbox/client';
 import { saveQuestions, type SaveQuestion } from '../saving';
 import type { ScriptDetails } from '../tools';
 import { t } from '../messages';
@@ -58,6 +59,7 @@ export function ScriptRun({ p, live }: { p: ToolPart; live: boolean }) {
           {printed.stderr && <pre class="mt-1 max-h-60 overflow-auto rounded-lg bg-sunken p-2 font-mono whitespace-pre-wrap text-danger">{printed.stderr}</pre>}
         </Disclosure>
       )}
+      {d?.stopped && <p class="border-t border-line px-3 py-2 text-xs text-muted">{d.stopped === 'time' ? t('script.stoppedTime', { s: RUN_TIMEOUT_MS / 1000 }) : t('script.stoppedUser')}</p>}
       {q && <SaveFiles q={q} />}
       {!q && !!d?.saved?.length && <p class="border-t border-line px-3 py-2 text-xs text-muted">{t('script.saved', { paths: d.saved.join(', ') })}</p>}
       {!q && d?.declined && <p class="border-t border-line px-3 py-2 text-xs text-muted">{t('script.declined')}</p>}

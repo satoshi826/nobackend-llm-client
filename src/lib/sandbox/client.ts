@@ -356,37 +356,48 @@ function hiddenFrame(): Hidden {
 }
 
 export const RUN_TIMEOUT_MS = 10_000;
+/** A worker's run asked to stop is answered at once; one that is not by then is taken as stopped with nothing printed */
+const STOP_MS = 1000;
+
+/** Why a run did not end by itself: its time limit, or the user */
+export type Stopped = 'time' | 'user';
+/** A stop as the model reads it */
+export const stoppedText = (why: Stopped) => (why === 'time' ? `Stopped after ${RUN_TIMEOUT_MS / 1000} s.` : 'Stopped by the user.');
+const stoppedOf = (d: Record<string, unknown>): Stopped | undefined => (d.stopped === 'time' || d.stopped === 'user' ? d.stopped : undefined);
 
 /**
- * Send a job to the sandbox and wait for its answer: `stopped` when it does not answer in time (the frame is dropped)
- * or the signal stops it (the sandbox stops it at once)
+ * Send a job to the sandbox and wait for its answer, taken by `answer` in its own shape. A worker's job stopped by its
+ * time limit or the signal is answered by the sandbox with what it printed so far ({ stopped }); code on the page (dom)
+ * is stopped by dropping its frame, and what it printed is lost
  */
-async function sandboxJob<T>(message: Record<string, unknown>, { dom = false, signal }: { dom?: boolean; signal?: AbortSignal }, answer: (d: Record<string, unknown>) => T, stopped: (why: string) => T): Promise<T> {
+async function sandboxJob<T>(message: Record<string, unknown>, { dom = false, signal }: { dom?: boolean; signal?: AbortSignal }, answer: (d: Record<string, unknown>) => T): Promise<T> {
   const own = dom ? hiddenFrame() : null;
   const h = own ?? (shared ??= hiddenFrame());
   const port = await h.port;
   const id = crypto.randomUUID();
   return new Promise((resolve) => {
-    const end = (r: T) => {
+    const end = (d: Record<string, unknown>) => {
       clearTimeout(guard);
       pending.delete(id);
       signal?.removeEventListener('abort', onAbort);
       own?.frame.remove();
-      resolve(r);
+      resolve(answer(d));
     };
-    // A worker is stopped by the sandbox itself; code on the page (dom) is stopped by dropping the frame
+    // A worker is stopped by the sandbox itself, so no answer by then means the sandbox failed
     const limit = dom ? RUN_TIMEOUT_MS : RUN_TIMEOUT_MS + 2000;
-    const guard = setTimeout(() => {
+    let guard = setTimeout(() => {
       if (!own) resetShared();
-      end(stopped(`Stopped: no answer within ${limit} ms.`));
+      end(own ? { stopped: 'time' } : { error: `Stopped: no answer within ${limit} ms.` });
     }, limit);
     const onAbort = () => {
-      if (!own) port.postMessage({ type: 'stop', id });
-      end(stopped('Stopped.'));
+      if (own) return end({ stopped: 'user' });
+      port.postMessage({ type: 'stop', id });
+      clearTimeout(guard);
+      guard = setTimeout(() => end({ stopped: 'user' }), STOP_MS);
     };
-    if (signal?.aborted) return onAbort();
+    if (signal?.aborted) return end({ stopped: 'user' });
     signal?.addEventListener('abort', onAbort, { once: true });
-    pending.set(id, (d) => end(answer(d)));
+    pending.set(id, end);
     port.postMessage({ ...message, id, timeoutMs: RUN_TIMEOUT_MS });
   });
 }
@@ -400,18 +411,19 @@ export interface RunOptions {
   signal?: AbortSignal;
 }
 
-/** Run JavaScript in the sandbox: no requests, no access to the app, stopped after RUN_TIMEOUT_MS */
+/**
+ * Run JavaScript in the sandbox: no requests, no access to the app, stopped after RUN_TIMEOUT_MS. A run that is stopped
+ * gives what it logged until then (in a worker), and the stop as its error
+ */
 export function runJavaScript(code: string, { files = {}, dom = false, signal }: RunOptions = {}): Promise<RunResult> {
-  return sandboxJob(
-    { type: 'run', code, files, dom },
-    { dom, signal },
-    (d): RunResult => ({
+  return sandboxJob({ type: 'run', code, files, dom }, { dom, signal }, (d): RunResult => {
+    const stopped = stoppedOf(d);
+    return {
       logs: Array.isArray(d.logs) ? d.logs.map(String) : [],
-      result: typeof d.result === 'string' ? d.result : undefined,
-      error: typeof d.error === 'string' ? d.error : undefined
-    }),
-    (error) => ({ logs: [], error })
-  );
+      result: !stopped && typeof d.result === 'string' ? d.result : undefined,
+      error: stopped ? stoppedText(stopped) : typeof d.error === 'string' ? d.error : undefined
+    };
+  });
 }
 
 /** A run's output as plain text (console lines, then the returned value or the error) */
@@ -438,16 +450,21 @@ export interface ScriptJob {
 }
 
 export interface ScriptResult {
-  /** Its exit code (1 for an error nothing caught) */
+  /** Its exit code (1 for an error nothing caught, or when it did not end by itself) */
   code: number;
-  /** What it printed, each cut at a million characters; the *Chars say how much there was */
+  /**
+   * What it printed, each cut at a million characters; the *Chars say how much there was (for a run that did not end,
+   * what was printed until then, and as much as was kept)
+   */
   stdout: string;
   stderr: string;
   stdoutChars: number;
   stderrChars: number;
-  /** The files it wrote, by path, as they were when it ended */
+  /** The files it wrote, by path, as they were when it ended (none when it did not end by itself) */
   written: Record<string, string | Uint8Array>;
-  /** It did not end by itself: stopped (time limit, the user), or the sandbox failed */
+  /** It was stopped before it ended */
+  stopped?: Stopped;
+  /** The sandbox failed */
   error?: string;
 }
 
@@ -455,14 +472,17 @@ export interface ScriptResult {
 function cleanScriptResult(d: Record<string, unknown>): ScriptResult {
   const str = (k: string) => (typeof d[k] === 'string' ? (d[k] as string) : '');
   const num = (k: string, or: number) => (typeof d[k] === 'number' && Number.isFinite(d[k]) ? Math.round(d[k] as number) : or);
+  const printed = { stdout: str('stdout'), stderr: str('stderr'), stdoutChars: num('stdoutChars', str('stdout').length), stderrChars: num('stderrChars', str('stderr').length) };
+  const stopped = stoppedOf(d);
+  if (stopped) return { code: 1, ...printed, written: {}, stopped };
+  if (typeof d.error === 'string') return { code: 1, ...printed, written: {}, error: d.error };
   const written: Record<string, string | Uint8Array> = {};
   if (d.written && typeof d.written === 'object')
     for (const [path, v] of Object.entries(d.written)) if (path.startsWith('/') && (typeof v === 'string' || v instanceof Uint8Array)) written[path] = v;
-  if (typeof d.error === 'string') return { code: 1, stdout: '', stderr: '', stdoutChars: 0, stderrChars: 0, written: {}, error: d.error };
-  return { code: num('code', 1), stdout: str('stdout'), stderr: str('stderr'), stdoutChars: num('stdoutChars', str('stdout').length), stderrChars: num('stderrChars', str('stderr').length), written };
+  return { code: num('code', 1), ...printed, written };
 }
 
 /** Run a script in a sandbox worker of its own: no requests, no access to the app, stopped after RUN_TIMEOUT_MS */
 export function runScript(job: ScriptJob, signal?: AbortSignal): Promise<ScriptResult> {
-  return sandboxJob({ type: 'script', job }, { signal }, cleanScriptResult, (error) => cleanScriptResult({ error }));
+  return sandboxJob({ type: 'script', job }, { signal }, cleanScriptResult);
 }

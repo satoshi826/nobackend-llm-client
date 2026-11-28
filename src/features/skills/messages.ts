@@ -50,6 +50,8 @@ export const t = defineMessages(
     'script.dontSave': '保存しない',
     'script.saved': '作業フォルダに保存しました: {paths}',
     'script.declined': '書き出したファイルは保存しませんでした。',
+    'script.stoppedTime': '{s} 秒を過ぎたので止めました。出力は止めるまでの分です。書き出したファイルは保存しません。',
+    'script.stoppedUser': '途中で止めました。出力は止めるまでの分です。書き出したファイルは保存しません。',
 
     // saving and importing
     'state.builtinName': '「{name}」は組み込みスキルの名前なので使えません。別の名前にしてください。',
@@ -200,6 +202,8 @@ export const t = defineMessages(
       'script.dontSave': "Don't save",
       'script.saved': 'Saved in the working folder: {paths}',
       'script.declined': 'The files it wrote were not saved.',
+      'script.stoppedTime': 'Stopped after {s} seconds. The output is what it printed until then; the files it wrote are not saved.',
+      'script.stoppedUser': 'Stopped before it ended. The output is what it printed until then; the files it wrote are not saved.',
 
       'state.builtinName': '"{name}" is the name of a built-in skill. Use a different name.',
       'state.duplicate': 'A skill named "{name}" already exists. Use a different name.',
@@ -344,6 +348,8 @@ export const t = defineMessages(
       'script.dontSave': '不保存',
       'script.saved': '已保存到工作文件夹：{paths}',
       'script.declined': '写出的文件未保存。',
+      'script.stoppedTime': '运行超过 {s} 秒，已停止。输出为停止前的内容，写出的文件不会保存。',
+      'script.stoppedUser': '已在中途停止。输出为停止前的内容，写出的文件不会保存。',
 
       'state.builtinName': '“{name}”是内置技能的名称，无法使用。请使用其他名称。',
       'state.duplicate': '已存在名为“{name}”的技能。请使用其他名称。',

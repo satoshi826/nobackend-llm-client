@@ -16,7 +16,8 @@ export function ChatView() {
   const main = useRef<HTMLElement>(null);
   const top = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
-  const hasHeader = body !== 'choose' && body !== 'passphrase';
+  // A saved conversation keeps its header (and with it the way to the sidebar on a phone) while setup is asked for
+  const hasHeader = !isDraft.value || (body !== 'choose' && body !== 'passphrase');
   const hasComposer = body === 'chat';
   useLayoutEffect(() => {
     const el = main.current;

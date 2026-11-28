@@ -1,8 +1,8 @@
 # Danbooru tags for prompt autocomplete: name<TAB>category<TAB>post count<TAB>aliases (comma-separated)
 # Categories: 0 general, 1 artist, 3 copyright, 4 character, 5 meta
-# Source: dbr.csv of https://github.com/DraconicDragon/dbr-e621-lists-archive (downloaded 2026-11-28),
-# trimmed to tags with at least 50 posts (artists: 500). The source is released under the Unlicense
-# (public domain dedication): https://unlicense.org/
+# Source: https://github.com/DraconicDragon/dbr-e621-lists-archive, tag-lists/danbooru/danbooru_2026-10-01_pt20-ia-dd.csv
+# (downloaded 2026-11-28), trimmed by scripts/update-tags.ts to tags with at least 50 posts (artists: 500).
+# The source is released under the Unlicense (public domain dedication): https://unlicense.org/
 1girl	0	8483124	sole_female,1girls
 highres	5	8245053	high_resolution,high_res,hires
 solo	0	7121365	female_solo,solo_female

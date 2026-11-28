@@ -36,7 +36,7 @@ export async function exportAll(includeImages = false): Promise<ExportFile> {
     format: EXPORT_FORMAT,
     version: EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
-    // Data stored encrypted is decrypted on export too (backup files are not encrypted)
+    // Data stored encrypted is decrypted here; the caller may encrypt the whole file with a backup password (state/data.ts)
     conversations: await openAll(await d.conversations.toArray()),
     messages: await openAll(await d.messages.toArray()),
     prompts: await openAll(await d.prompts.toArray()),

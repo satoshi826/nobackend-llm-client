@@ -138,8 +138,11 @@ export function useDropTarget(folder: string, api: EntryApi) {
   };
 }
 
-/** An entry's "…" menu: shown under the pointer, while open, and always on touch screens */
-function EntryMenu({ entry, class: cls }: { entry: ReturnType<typeof useEntry>; class?: string }) {
+/**
+ * An entry's "…" menu: shown under the pointer, while open, and always on touch screens. A function, not a component,
+ * so an entry mounts and draws nothing more for it
+ */
+function entryMenu(entry: ReturnType<typeof useEntry>, cls?: string) {
   return (
     <ActionMenu
       compact
@@ -187,7 +190,7 @@ export const FolderTile = memo(function FolderTile({ f, picked, api }: { f: Fold
           <span class="block truncate text-xs text-muted tabular-nums">{f.count ? `${t('folder.count', { n: formatNumber(f.count) })} · ${formatDate(f.updatedAt)}` : t('folder.isEmpty')}</span>
         </span>
       </button>
-      <EntryMenu entry={entry} />
+      {entryMenu(entry)}
     </div>
   );
 });
@@ -243,7 +246,7 @@ export const Card = memo(function Card({ it, picked, api }: { it: FilerItem; pic
             </span>
           </span>
         </button>
-        <EntryMenu entry={entry} class="mt-1 mr-1" />
+        {entryMenu(entry, 'mt-1 mr-1')}
       </div>
     </div>
   );
@@ -294,7 +297,7 @@ function ListRow({
       <td class="py-1.5 text-xs text-muted tabular-nums">{details[2]}</td>
       <td class="hidden truncate py-1.5 text-xs text-muted lg:table-cell">{details[3]}</td>
       <td class="w-9 py-1 text-right">
-        <EntryMenu entry={entry} />
+        {entryMenu(entry)}
       </td>
     </tr>
   );

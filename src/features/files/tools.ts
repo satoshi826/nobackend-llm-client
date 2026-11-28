@@ -87,9 +87,10 @@ export interface FileToolDeps {
   folder(): string;
   /**
    * Write a file at `path` (relative to the working folder) and return it; replaced: the folder already had a file
-   * there, and this is its new text. folder: the working folder's name, used when this file makes it
+   * there, and this is its new text; unchanged: it had this text already, and nothing was saved (its text from before
+   * the last change stays). folder: the working folder's name, used when this file makes it
    */
-  create(path: string, text: string, folder?: string): Promise<{ file: FileRecord; replaced: boolean }>;
+  create(path: string, text: string, folder?: string): Promise<{ file: FileRecord; replaced: boolean; unchanged?: boolean }>;
   /** A file the model may read (in the working folder, or attached), by id or by path; undefined otherwise */
   get(ref: string): Promise<FileRecord | undefined>;
   /** A file's current text, or the one before its last change (previous; '' when there is none) */
@@ -377,8 +378,10 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
       return { name, content, ...folderOf(r, hasFolder) };
     },
     async execute(i) {
-      const { file: f, replaced } = await deps.create(i.name, i.content, i.folder);
-      const saved = replaced
+      const { file: f, replaced, unchanged } = await deps.create(i.name, i.content, i.folder);
+      const saved = unchanged
+        ? `${shown(f)} (id: ${f.id}, ${f.bytes} bytes) has this text already: nothing changed.`
+        : replaced
         ? `Replaced the text of ${shown(f)} (id: ${f.id}, ${f.bytes} bytes).`
         : `Created ${shown(f)} (id: ${f.id}, ${f.bytes} bytes) in the working folder ${JSON.stringify(deps.folder())}. The user sees it as a file card and can open it from the Files tab.`;
       const ignored = hasFolder ? ignoredFolder(i.folder, deps.folder()) : '';
@@ -428,12 +431,14 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
         const count = cur.split(i.old_string).length - 1;
         throw new TranslatedError(() => t('tool.findAmbiguous', { count, lines: lines.slice(0, 10).join(', ') + (lines.length > 10 ? ', …' : '') }));
       }
+      // Saving the same text would only push out the text from before the last change
+      if (i.new_string === i.old_string) return { content: `new_string is the same as old_string: nothing changed in ${shown(f)}.`, details: details(f) };
       const next = cur.split(i.old_string).join(i.new_string);
       if (next.length > MAX_FILE_CHARS) throw new TranslatedError(() => t('tool.fileTooBig'));
       const u = await deps.update(f.id, next);
       const view = editView(cur, next, at, i.old_string.length, i.new_string.length);
       return {
-        content: `Saved ${shown(u)} (${at.length === 1 ? '1 replacement' : `${at.length} replacements`}, ${u.bytes} bytes). ${view ? `The changed lines (numbers in the new text; - removed, + added):\n${view}` : 'new_string is the same as old_string: nothing changed.'}${await syntaxNote(deps, u, next)}`,
+        content: `Saved ${shown(u)} (${at.length === 1 ? '1 replacement' : `${at.length} replacements`}, ${u.bytes} bytes). The changed lines (numbers in the new text; - removed, + added):\n${view}${await syntaxNote(deps, u, next)}`,
         details: details(u)
       };
     }

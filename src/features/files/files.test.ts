@@ -188,7 +188,7 @@ describe('file tools', () => {
     // A deletion, at the start of the file
     const d = await run(deps, 'edit_file', { file_id: 'a.js', old_string: 'line 1\n', new_string: '' });
     expect(d.content).toContain('-     \tline 1\n     1\tline 2');
-    expect((await run(deps, 'edit_file', { file_id: 'a.js', old_string: 'line 5', new_string: 'line 5' })).content).toContain('nothing changed');
+    expect((await run(deps, 'edit_file', { file_id: 'a.js', old_string: 'line 5', new_string: 'line 5' })).content).toBe('new_string is the same as old_string: nothing changed in "a.js".');
   });
   it('shows changes that are close as one, and at most 40 lines of them', async () => {
     const { deps } = memDeps();

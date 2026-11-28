@@ -59,6 +59,9 @@ describe('working folder', () => {
     // The same path again is the same file
     const again = await next.run('write_file', { name: 'index.html', content: '<p>2</p>' });
     expect(again.content).toMatch(/^Replaced/);
+    // The same text again saves nothing: the text from before the last change stays for undoing it
+    expect((await next.run('write_file', { name: 'index.html', content: '<p>2</p>' })).content).toMatch(/^"index.html" \(id: [\w-]+, 8 bytes\) has this text already: nothing changed\.$/);
+    expect((await next.run('read_file', { file_id: 'index.html', previous: true })).content).toContain('<p>hi</p>');
   });
 
   it('gets a number when another conversation has a folder of that name, and must be named by the model', async () => {

@@ -154,7 +154,9 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
         return withTakenPaths(async (space) => {
           const full = d + path;
           const at = atPath(full);
-          // One file per path: writing to a path the folder has replaces that file's text
+          // One file per path: writing to a path the folder has replaces that file's text. The same text again saves
+          // nothing, so the text from before the last change stays
+          if (at?.kind === 'file' && (await fdb.readText(at.file.id)) === text) return { file: at.file, replaced: true, unchanged: true };
           if (at?.kind === 'file') return { file: await fdb.setText(at.file.id, text, 'model'), replaced: true };
           if (!pathFree(full, space)) throw new TranslatedError(() => t('tool.pathTaken', { name: path }));
           const f = fdb.newFile({ id: newId(), name: full, origin: { kind: 'made' }, text, by: 'model', conversationId: conv.id });

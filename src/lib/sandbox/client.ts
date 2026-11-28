@@ -251,14 +251,14 @@ function cleanLayout(raw: string | undefined): PageLayout | undefined {
 }
 
 /**
- * Show a page in a hidden sandbox frame (its localStorage only in memory, nothing saved), wait `waitMs`, run `script`
- * on it if given, and read back its log, the text it shows and, with layout, where its key elements are. The frame is
- * removed afterwards
+ * Show a page in a hidden sandbox frame (its localStorage only in memory, nothing saved; with freshStorage it starts
+ * empty instead of with the page's items), wait `waitMs`, run `script` on it if given, and read back its log, the text
+ * it shows and, with layout, where its key elements are. The frame is removed afterwards
  */
 export async function inspectPage(
   html: string,
   page: SandboxPage | undefined,
-  { waitMs, script, layout, signal }: { waitMs: number; script?: string; layout?: boolean; signal?: AbortSignal }
+  { waitMs, script, layout, freshStorage, signal }: { waitMs: number; script?: string; layout?: boolean; freshStorage?: boolean; signal?: AbortSignal }
 ): Promise<PageInspection> {
   const f = document.createElement('iframe');
   f.setAttribute('sandbox', SANDBOX_FLAGS);
@@ -294,7 +294,7 @@ export async function inspectPage(
         }),
         sleep(ms).then(() => null)
       ]);
-    port.postMessage({ type: 'render', html, ...(page ? { path: page.path, files: page.files, storage: page.storage?.items() } : {}) });
+    port.postMessage({ type: 'render', html, ...(page ? { path: page.path, files: page.files, storage: freshStorage ? undefined : page.storage?.items() } : {}) });
     await sleep(waitMs, signal);
     const ran = script ? await evalIn(script, 5000) : undefined;
     if (ran === null) return { logs, text: '', stuck: true };

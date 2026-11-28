@@ -187,6 +187,22 @@ describe('showing a page in the sandbox', () => {
   });
 });
 
+describe('trying a page in the sandbox', () => {
+  it('starts it with the page\'s localStorage, or an empty one with freshStorage, and reads back its text', async () => {
+    const { inspectPage } = await load();
+    respond = (m, s) => m.type === 'eval' && s.send({ type: 'evalResult', id: m.id, result: 'shown text' });
+    const page = { path: 'index.html', files: {}, storage: { items: () => ({ best: '9' }), save() {} } };
+    const kept = await inspectPage('<p>hi</p>', page, { waitMs: 0 });
+    const fresh = await inspectPage('<p>hi</p>', page, { waitMs: 0, freshStorage: true });
+    expect(kept.text).toBe('shown text');
+    expect(sandboxes[0].got[0]).toMatchObject({ type: 'render', storage: { best: '9' } });
+    expect(sandboxes[1].got[0].type).toBe('render');
+    expect(sandboxes[1].got[0].storage).toBeUndefined();
+    expect(fresh.text).toBe('shown text');
+    expect(frames.every((f) => f.removed)).toBe(true);
+  });
+});
+
 describe('running code in the sandbox', () => {
   it('sends the code and its files, and gives back the output in its own shape only', async () => {
     const { runJavaScript, runText } = await load();

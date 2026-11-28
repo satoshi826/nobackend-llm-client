@@ -21,6 +21,11 @@ if (perfMode) {
 // Uncaught errors are kept in memory for the diagnostics text (Settings → 情報)
 watchPageErrors(window);
 render(<App />, document.getElementById('app')!);
+// Nothing moves as the page opens: what fades in when the user switches something (styles.css .swap-in) waits for
+// their first press or key
+const touched = () => document.documentElement.setAttribute('data-touched', '');
+addEventListener('pointerdown', touched, { once: true, capture: true });
+addEventListener('keydown', touched, { once: true, capture: true });
 // The wheel eases scrolling areas instead of jumping (components/smooth-scroll.ts)
 installSmoothScroll();
 // The app's own tooltips: names of icon buttons, full texts of cut-off ones (components/tooltip.ts)

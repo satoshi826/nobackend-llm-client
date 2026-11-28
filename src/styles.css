@@ -588,3 +588,4 @@ details[open] > summary::before { rotate: 45deg; }
 @media (prefers-reduced-motion: reduce) {
   .swap-in { animation: none; }
 }
+:root:not([data-touched]) .swap-in { animation: none; }

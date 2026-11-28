@@ -395,5 +395,3 @@ export const t = defineMessages(
 
 /** "3 枚" / "3 images" */
 export const imageCount = (n: number) => t(n === 1 ? 'countOne' : 'countMany', { n: formatNumber(n) });
-
-/** "$0.040" (digits after the point fixed) */

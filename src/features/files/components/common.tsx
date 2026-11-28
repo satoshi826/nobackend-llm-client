@@ -110,7 +110,6 @@ export function typeLabel(f: Pick<FileRecord, 'name' | 'fromPdf'>): string {
   return (extOf(f.name) || 'txt').toUpperCase();
 }
 
-/** A file's name with its folders dimmed (a name is a path: site/css/style.css); from: a folder shown, left out of the name */
 /** One folder of a path, as a way back up to it ('' is the top); the Files tab's header and a file's header show paths with these */
 export function Crumb({ folder, highlight, children, ...rest }: { folder: string; highlight?: boolean; children: ComponentChildren } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'class' | 'onClick'>) {
   return (

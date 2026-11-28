@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// How much the file manager draws when one thing changes, counted as the perf runs count it (src/lib/perf/counter.ts):
+// How much the file manager draws when one thing changes, counted as the perf runs count it (src/perf/counter.ts):
 // picking an entry draws that entry again, and a new file draws its own card, not the others.
 import 'fake-indexeddb/auto';
 import { beforeAll, describe, expect, it } from 'vitest';

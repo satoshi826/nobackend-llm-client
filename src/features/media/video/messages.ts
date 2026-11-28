@@ -174,5 +174,3 @@ export const t = defineMessages(
     }
   }
 );
-
-/** "$0.40" */

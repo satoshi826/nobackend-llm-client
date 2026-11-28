@@ -1,4 +1,5 @@
-// load_skill: a tool that loads the body of a skill listed in the system prompt (runs entirely in the browser; nothing is sent out)
+// The skill tools: load_skill loads the body of a skill listed in the system prompt, save_skill creates or fixes one.
+// Both run entirely in the browser; nothing is sent out
 import type { Skill } from '../../lib/db/schema';
 import { skillBlock, validateSkill, type SkillDraft } from '../../lib/skills/skill';
 import type { Tool } from '../../lib/tools/types';

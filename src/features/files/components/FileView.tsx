@@ -290,10 +290,6 @@ function FileBody({ file, text, ext }: { file: FileRecord; text: string; ext: st
   return <pre class="font-mono text-sm break-words whitespace-pre-wrap">{text}</pre>;
 }
 
-/**
- * An HTML or SVG file: shown as a page in the sandbox (its scripts run there, without network), or as its code. The
- * page can start again (reload) and open over the whole window (its own run of the page)
- */
 /** How each kind of log line is labelled */
 const LOG_LABELS: Record<PageLog['level'], () => string> = {
   log: () => 'log',
@@ -306,6 +302,10 @@ const LOG_LABELS: Record<PageLog['level'], () => string> = {
   csp: () => t('file.logBlocked')
 };
 
+/**
+ * An HTML or SVG file: shown as a page in the sandbox (its scripts run there, without network), or as its code. The
+ * page can start again (reload) and open over the whole window (its own run of the page)
+ */
 function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: boolean }) {
   const [view, setView] = useState<'preview' | 'code'>(settings.value.htmlFilePreview ? 'preview' : 'code');
   const [run, setRun] = useState(0);
@@ -425,5 +425,3 @@ function FullPage({ html, page, onClose }: { html: string; page?: SandboxPage; o
     document.body
   );
 }
-
-/** The less frequent actions of a file, with delete set apart at the end */

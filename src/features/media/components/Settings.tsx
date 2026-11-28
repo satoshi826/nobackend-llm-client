@@ -51,7 +51,6 @@ function DefaultModelRow() {
   );
 }
 
-/** Settings → 画像 */
 export function ImageSettings() {
   const s = imageSettings.value.value;
   const saveImage = imageSettings.save;

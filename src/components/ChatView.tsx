@@ -58,6 +58,12 @@ export function ChatView() {
   const list = body === 'chat' && !isDraft.value;
   return (
     <main ref={main} class="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+      {/* Before the list, so Tab reaches it before the messages, as it is seen; z-20 draws it over them */}
+      {hasHeader && (
+        <div ref={top} class="pointer-events-none absolute inset-x-0 top-0 z-20 [&>*]:pointer-events-auto">
+          <Header />
+        </div>
+      )}
       {list ? (
         // The list scrolls under the header and the input box (its content is padded by their heights)
         // One list per conversation: opening a conversation starts at its bottom (no scroll state carried over)
@@ -65,11 +71,6 @@ export function ChatView() {
       ) : (
         <div class="flex min-h-0 flex-1 flex-col" style={{ paddingTop: 'var(--chat-top)', paddingBottom: 'var(--chat-bottom)' }}>
           {body === 'choose' ? <ProviderChooser /> : body === 'key' ? <KeySetup providerId={providerId} /> : body === 'passphrase' ? <PassphrasePrompt /> : <EmptyState />}
-        </div>
-      )}
-      {hasHeader && (
-        <div ref={top} class="pointer-events-none absolute inset-x-0 top-0 z-20 [&>*]:pointer-events-auto">
-          <Header />
         </div>
       )}
       {hasComposer && (

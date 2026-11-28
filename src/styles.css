@@ -451,9 +451,11 @@ details[open] > summary::before { rotate: 45deg; }
 
 /* The message list fades out under the input box: fully hidden behind the chip row, and the soft edge
    sits behind the (blurred) bottom of the input box. --chat-fade is measured in ChatView. The strip on the right
-   where the scrollbar is (8 px) is left out of the fade, so the bar shows down to the bottom of the screen. */
+   where the scrollbar is (8 px) is left out of the fade, so the bar shows down to the bottom of the screen.
+   What takes focus is scrolled clear of the header and the input box, which float over the list. */
 .chat-scroll {
   scrollbar-gutter: stable both-edges;
+  scroll-padding: var(--chat-top, 0px) 0 var(--chat-bottom, 0px);
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--chat-fade, 0px) - 28px), transparent calc(100% - var(--chat-fade, 0px))), linear-gradient(#000, #000);
   mask-image: linear-gradient(to bottom, #000 calc(100% - var(--chat-fade, 0px) - 28px), transparent calc(100% - var(--chat-fade, 0px))), linear-gradient(#000, #000);
   -webkit-mask-size: 100% 100%, 8px 100%;

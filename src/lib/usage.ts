@@ -79,57 +79,93 @@ function add(t: UsageTotals, r: UsageRecord) {
   if (r.costEstimated) t.estimated = true;
 }
 
-/** Date in the device's time zone (YYYY-MM-DD) */
-export function localDay(ms: number): string {
+/** How long each step of the period's series is */
+export type UsageBucket = 'hour' | 'day' | 'week' | 'month';
+
+/** The start of the step that holds a time, in the device's time zone (weeks start on Monday) */
+export function bucketStart(ms: number, bucket: UsageBucket): number {
   const d = new Date(ms);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  if (bucket === 'hour') d.setMinutes(0, 0, 0);
+  else {
+    d.setHours(0, 0, 0, 0);
+    if (bucket === 'week') d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    if (bucket === 'month') d.setDate(1);
+  }
+  return d.getTime();
+}
+
+function nextBucket(ms: number, bucket: UsageBucket): number {
+  const d = new Date(ms);
+  if (bucket === 'hour') d.setHours(d.getHours() + 1);
+  else if (bucket === 'day') d.setDate(d.getDate() + 1);
+  else if (bucket === 'week') d.setDate(d.getDate() + 7);
+  else d.setMonth(d.getMonth() + 1);
+  return d.getTime();
+}
+
+/** The step that keeps a period readable: hours for a day, days up to two months, weeks up to a year, then months */
+export function bucketFor(from: number, now: number): UsageBucket {
+  const days = (now - from) / 86_400_000;
+  return days <= 1 ? 'hour' : days <= 62 ? 'day' : days <= 400 ? 'week' : 'month';
 }
 
 export interface UsageSummary {
   total: UsageTotals;
-  /** Every day in the period (days without records are 0; oldest first) */
-  byDay: { day: string; totals: UsageTotals }[];
+  /** The period step by step, oldest first (steps without records are zero), each also by provider */
+  series: { at: number; totals: UsageTotals; byProvider: Record<string, UsageTotals> }[];
+  bucket: UsageBucket;
   byProvider: { providerId: string; totals: UsageTotals }[];
   byModel: { providerId: string; model: string; totals: UsageTotals }[];
+  byKind: { kind: UsageRecord['kind']; totals: UsageTotals }[];
+  /** Records of no conversation (e.g. a page's own model calls outside one) are left out */
+  byConversation: { conversationId: string; totals: UsageTotals }[];
 }
 
 /**
- * Aggregates from since to now. If since is null, from the first recorded day.
- * Sorted by cost, highest first (ties broken by request count).
+ * Aggregates from since to now in one pass. If since is null, from the first record. The step of the series follows
+ * the length of the period (bucketFor). Lists are sorted by cost, highest first (ties broken by request count)
  */
 export function summarizeUsage(records: UsageRecord[], since: number | null, now = Date.now()): UsageSummary {
   const list = records.filter((r) => (since === null || r.at >= since) && r.at <= now);
+  // A loop, not Math.min(...): spreading a very long list overflows the call stack
+  const from = since ?? list.reduce((min, r) => Math.min(min, r.at), now);
+  const bucket = bucketFor(from, now);
   const total = zero();
-  const days = new Map<string, UsageTotals>();
+  const steps = new Map<number, { totals: UsageTotals; byProvider: Record<string, UsageTotals> }>();
+  const group = <K>(map: Map<K, UsageTotals>, k: K, r: UsageRecord) => {
+    let t = map.get(k);
+    if (!t) map.set(k, (t = zero()));
+    add(t, r);
+  };
   const prov = new Map<string, UsageTotals>();
-  const mod = new Map<string, { providerId: string; model: string; totals: UsageTotals }>();
+  const mod = new Map<string, UsageTotals>();
+  const kinds = new Map<UsageRecord['kind'], UsageTotals>();
+  const convs = new Map<string, UsageTotals>();
   for (const r of list) {
     add(total, r);
-    const d = localDay(r.at);
-    if (!days.has(d)) days.set(d, zero());
-    add(days.get(d)!, r);
-    if (!prov.has(r.providerId)) prov.set(r.providerId, zero());
-    add(prov.get(r.providerId)!, r);
-    const k = `${r.providerId}\u0000${r.model}`;
-    if (!mod.has(k)) mod.set(k, { providerId: r.providerId, model: r.model, totals: zero() });
-    add(mod.get(k)!.totals, r);
+    const at = bucketStart(r.at, bucket);
+    let step = steps.get(at);
+    if (!step) steps.set(at, (step = { totals: zero(), byProvider: {} }));
+    add(step.totals, r);
+    add((step.byProvider[r.providerId] ??= zero()), r);
+    group(prov, r.providerId, r);
+    group(mod, `${r.providerId}\u0000${r.model}`, r);
+    group(kinds, r.kind, r);
+    if (r.conversationId) group(convs, r.conversationId, r);
   }
-  // List the days in the period, including days without records (for very long periods, only the range that has records)
-  // A loop, not Math.min(...): spreading a very long list overflows the call stack
-  const start = since ?? list.reduce((min, r) => Math.min(min, r.at), now);
-  const byDay: UsageSummary['byDay'] = [];
-  const cur = new Date(start);
-  cur.setHours(0, 0, 0, 0);
-  for (let i = 0; i < 400 && cur.getTime() <= now; i++) {
-    const d = localDay(cur.getTime());
-    byDay.push({ day: d, totals: days.get(d) ?? zero() });
-    cur.setDate(cur.getDate() + 1);
-  }
-  const order = (a: UsageTotals, b: UsageTotals) => b.costUsd - a.costUsd || b.requests - a.requests;
+  const series: UsageSummary['series'] = [];
+  for (let at = bucketStart(from, bucket); at <= now && series.length < 400; at = nextBucket(at, bucket)) series.push({ at, ...(steps.get(at) ?? { totals: zero(), byProvider: {} }) });
+  const order = (a: { totals: UsageTotals }, b: { totals: UsageTotals }) => b.totals.costUsd - a.totals.costUsd || b.totals.requests - a.totals.requests;
   return {
     total,
-    byDay,
-    byProvider: [...prov.entries()].map(([providerId, totals]) => ({ providerId, totals })).sort((a, b) => order(a.totals, b.totals)),
-    byModel: [...mod.values()].sort((a, b) => order(a.totals, b.totals))
+    series,
+    bucket,
+    byProvider: [...prov].map(([providerId, totals]) => ({ providerId, totals })).sort(order),
+    byModel: [...mod].map(([k, totals]) => {
+      const [providerId, model] = k.split('\u0000');
+      return { providerId, model, totals };
+    }).sort(order),
+    byKind: [...kinds].map(([kind, totals]) => ({ kind, totals })).sort(order),
+    byConversation: [...convs].map(([conversationId, totals]) => ({ conversationId, totals })).sort(order)
   };
 }

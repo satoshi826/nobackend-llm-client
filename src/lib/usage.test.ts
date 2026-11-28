@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
 import { describe, expect, it } from 'vitest';
-import { estimateCost, localDay, makeUsageRecord, summarizeUsage, type UsageRecord } from './usage';
+import { bucketFor, bucketStart, estimateCost, makeUsageRecord, summarizeUsage, type UsageRecord } from './usage';
 import { AppDB } from './db/schema';
 
 const DAY = 86_400_000;
@@ -24,17 +24,26 @@ describe('usage', () => {
     const records = Array.from({ length: 300_000 }, (_, i) => rec({ at: now - (i % 30) * DAY, providerId: 'venice', model: 'a', inputTokens: 1 }));
     const s = summarizeUsage(records, null, now);
     expect(s.total.requests).toBe(300_000);
-    expect(s.byDay).toHaveLength(30);
+    expect(s.bucket).toBe('day');
+    expect(s.series).toHaveLength(30);
   });
 
-  it('summarizes by day (including empty days), provider and model', () => {
+  it('picks a step that keeps the period readable, and starts weeks on Monday', () => {
+    const now = new Date(2026, 10, 25, 12).getTime();
+    expect([bucketFor(now - DAY / 2, now), bucketFor(now - 30 * DAY, now), bucketFor(now - 200 * DAY, now), bucketFor(now - 800 * DAY, now)]).toEqual(['hour', 'day', 'week', 'month']);
+    // 2026-11-25 is a Wednesday
+    expect(new Date(bucketStart(now, 'week'))).toEqual(new Date(2026, 10, 23));
+    expect(new Date(bucketStart(now, 'month'))).toEqual(new Date(2026, 10, 1));
+  });
+
+  it('summarizes by step (including empty ones, each by provider), provider, model, use and conversation', () => {
     const now = new Date(2026, 10, 25, 12).getTime();
     const since = new Date(2026, 10, 23).getTime();
     const s = summarizeUsage(
       [
-        rec({ at: now - 2 * DAY, providerId: 'venice', model: 'a', inputTokens: 100, outputTokens: 10, costUsd: 0.01 }),
-        rec({ at: now, providerId: 'venice', model: 'a', inputTokens: 50, cachedInputTokens: 40, outputTokens: 5, costUsd: 0.02 }),
-        rec({ at: now, providerId: 'anthropic', model: 'c', inputTokens: 10, outputTokens: 1 }),
+        rec({ at: now - 2 * DAY, providerId: 'venice', model: 'a', inputTokens: 100, outputTokens: 10, costUsd: 0.01, conversationId: 'c1' }),
+        rec({ at: now, providerId: 'venice', model: 'a', kind: 'summary', inputTokens: 50, cachedInputTokens: 40, outputTokens: 5, costUsd: 0.02, conversationId: 'c2' }),
+        rec({ at: now, providerId: 'anthropic', model: 'c', inputTokens: 10, outputTokens: 1, conversationId: 'c1' }),
         rec({ at: now - 10 * DAY, providerId: 'venice', model: 'old', inputTokens: 999, costUsd: 9 })
       ],
       since,
@@ -42,13 +51,17 @@ describe('usage', () => {
     );
     expect(s.total).toMatchObject({ requests: 3, inputTokens: 160, cachedInputTokens: 40, outputTokens: 16, unknownCost: 1 });
     expect(s.total.costUsd).toBeCloseTo(0.03);
-    expect(s.byDay.map((d) => [d.day, d.totals.requests])).toEqual([
-      [localDay(since), 1],
-      [localDay(since + DAY), 0],
-      [localDay(now), 2]
+    expect(s.bucket).toBe('day');
+    expect(s.series.map((d) => [d.at, d.totals.requests])).toEqual([
+      [since, 1],
+      [since + DAY, 0],
+      [bucketStart(now, 'day'), 2]
     ]);
+    expect(Object.keys(s.series[2].byProvider).sort()).toEqual(['anthropic', 'venice']);
     expect(s.byProvider.map((p) => p.providerId)).toEqual(['venice', 'anthropic']);
     expect(s.byModel[0]).toMatchObject({ providerId: 'venice', model: 'a' });
+    expect(s.byKind.map((k) => [k.kind, k.totals.requests])).toEqual([['summary', 1], ['chat', 2]]);
+    expect(s.byConversation.map((c) => c.conversationId)).toEqual(['c2', 'c1']);
   });
 
   it('backfills the usage log from existing replies when upgrading the database', async () => {

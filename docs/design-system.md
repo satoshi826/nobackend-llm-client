@@ -5,7 +5,7 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 ## 1. Principles
 
 1. **Quiet glass on a dark night.** A near-black ground, a few large, slow, desaturated light blobs behind, and translucent "glass" panels on top. The light sets the mood; it never competes with the text.
-2. **Color means something.** Silver is the only accent (focus, selection, the primary action). Green = protected / private, amber = relayed / caution, rose = danger / error. Features do not get their own colors (no violet skills, green attachments, fuchsia images, sky web search): they are told apart by icon and label.
+2. **Color means something.** Silver is the only accent (focus, selection, the primary action). Green = protected / private, amber = relayed / caution, rose = danger / error. Features do not get their own colors (no violet skills, green attachments, fuchsia images, sky web search): they are told apart by icon and label. Charts are the one place with more colours: their data series (each provider in Settings → 使用量) take the `--series-*` palette in its fixed order, keep their colour whatever the period shows, and always come with a legend or a label.
 3. **Consistent everywhere.** The same kind of thing looks, moves and reads the same wherever it appears, so what the user learns in one place holds in every other: the app's model is learned by using it. Before adding UI, find where the app already does the same thing and do it that way.
 4. **Shared components, not copies.** UI that should be the same is one component (`components/ui.tsx`, `components/settings-ui.tsx`), used everywhere; a screen never re-creates it with its own markup and classes. A continuous setting, for example, is always the shared `Slider`, never a bare range input. Copies drift apart, and a fix then reaches only one of them.
 5. **Icons carry meaning.** Actions, navigation and kinds of things get an icon, so they are recognized at a glance, in any of the three languages and in narrow space. One meaning has one icon everywhere; icon-only buttons always have `aria-label` and a tooltip.
@@ -62,6 +62,8 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 | `--warn` / `--warn-soft` | `#fcd34d` / `rgba(251,191,36,.14)` | relayed, caution |
 | `--danger` / `--danger-soft` | `#fda4af` / `rgba(244,63,94,.16)` | errors, destructive actions |
 | `--scrim` | `rgba(0,0,0,.5)` | Fields laid over an image |
+| `--series-1` … `--series-8` | `#3987e5` `#d95926` `#199e70` `#c98500` `#d55181` `#0ca30c` `#9085e9` `#e66767` | Data series in charts, in this order (validated for colour-blind separation on the dark surface); nothing else uses them |
+| `--series-other` | `#7d8196` | The series past the eighth, or no longer connected |
 
 **Dark only for now**: the light theme is not offered (`DARK_ONLY` in `state/settings.ts`; the theme picker is hidden and the stored setting is kept). When it comes back, it uses the same token names with light values (`:root` in `src/styles.css`): ground `#eceef4`, white glass, slate accent `#334155`.
 

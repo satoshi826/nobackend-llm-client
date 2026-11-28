@@ -178,7 +178,7 @@ export const SCENARIOS: Scenario[] = [
       await probe.page.goto(`${base}/#/c/perf-c0`);
       await probe.page.waitForFunction(shown('perf-c0-a'), undefined, { timeout: 60_000 });
       const out: Record<string, Metrics> = {};
-      const table = `document.querySelectorAll('[role="dialog"] tbody tr').length`;
+      const table = `document.querySelectorAll('[role="dialog"] [role="img"]').length`;
       out.open = await probe.action(() => probe.page.evaluate(() => (window as unknown as Tools).__perf.settingsTab('usage')), `${table} > 0`);
       out.all = await probe.action(() => probe.page.locator('[role="dialog"]').getByText('All', { exact: true }).first().click(), `${table} > 0 && !document.querySelector('[role="dialog"]')?.textContent?.includes('Loading')`);
       out.heap = { heap: await probe.heap() };

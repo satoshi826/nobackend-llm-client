@@ -99,14 +99,16 @@ const EXPECTED = [
 /**
  * Collects what must not happen in any page or frame of the context: console errors, which include every CSP and
  * Trusted Types violation (the sandbox's too), uncaught errors and rejections, and requests (fetches, navigations,
- * windows, workers' and the Service Worker's requests, web sockets) to an origin not in allowed. The violation
- * listener adds a plain line naming the directive and the page; the browser runs it before each document's own
- * scripts, out of the CSP's reach (not in the sandbox, which has no origin)
+ * windows, workers' and the Service Worker's requests, web sockets) to an origin not in allowed, or, for the sites a
+ * flow serves (reach), from anything but the fetch page (fetchPage). The violation listener adds a plain line naming
+ * the directive and the page; the browser runs it before each document's own scripts, out of the CSP's reach (not in
+ * the sandbox, which has no origin)
  */
-async function watch(context: BrowserContext, problems: Set<string>, allowed: Set<string>, expected: string[]) {
+async function watch(context: BrowserContext, problems: Set<string>, allowed: Set<string>, expected: string[], reach: { origins: string[]; fetchPage: string }) {
   const leaves = (url: string, from: string) => {
     const u = new URL(url);
-    if (/^(https?|wss?):$/.test(u.protocol) && !allowed.has(u.origin.replace(/^ws/, 'http'))) problems.add(`request to ${u.origin}${u.pathname} from ${from}`);
+    const origin = u.origin.replace(/^ws/, 'http');
+    if (/^(https?|wss?):$/.test(u.protocol) && !allowed.has(origin) && !(reach.origins.includes(origin) && from === reach.fetchPage)) problems.add(`request to ${u.origin}${u.pathname} from ${from}`);
   };
   const by = (r: Request) => {
     if (r.serviceWorker()) return 'the Service Worker';
@@ -128,10 +130,10 @@ async function watch(context: BrowserContext, problems: Set<string>, allowed: Se
 }
 
 /** A fresh, watched browser context. English, so the flows can find things by their labels */
-async function newContext(browser: Browser, problems: Set<string>, allowed: Set<string>, expected: string[]) {
+async function newContext(browser: Browser, problems: Set<string>, allowed: Set<string>, expected: string[], reach: { origins: string[]; fetchPage: string }) {
   const context = await browser.newContext({ locale: 'en-US', viewport: { width: 1280, height: 860 }, acceptDownloads: true });
   context.setDefaultTimeout(10_000);
-  await watch(context, problems, allowed, expected);
+  await watch(context, problems, allowed, expected, reach);
   return context;
 }
 
@@ -180,7 +182,7 @@ async function main() {
       const problems = new Set<string>();
       const contexts: BrowserContext[] = [];
       const open = async () => {
-        contexts.push(await newContext(browser, problems, allowed, flow.expected ?? []));
+        contexts.push(await newContext(browser, problems, allowed, flow.expected ?? [], { origins: flow.reach ?? [], fetchPage: `${url}fetch/` }));
         return contexts.at(-1)!;
       };
       const page = await (await open()).newPage();

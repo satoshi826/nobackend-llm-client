@@ -264,8 +264,11 @@ export async function inspectPage(
   f.setAttribute('sandbox', SANDBOX_FLAGS);
   f.setAttribute('aria-hidden', 'true');
   f.tabIndex = -1;
-  // Laid out at a desktop size, out of sight: what the page shows depends on its size
-  f.style.cssText = `position:fixed;left:-10000px;top:0;width:${INSPECT_VIEW.width}px;height:${INSPECT_VIEW.height}px;border:0;visibility:hidden`;
+  f.inert = true;
+  // Laid out at a desktop size and drawn, but unseen and beneath the app: what the page shows depends on its size, and
+  // a frame the browser does not draw (outside the window, visibility:hidden) gets no animation frames, so its
+  // requestAnimationFrame loops would never run
+  f.style.cssText = `position:fixed;left:0;top:0;width:${INSPECT_VIEW.width}px;height:${INSPECT_VIEW.height}px;border:0;opacity:0;pointer-events:none;z-index:-2147483648`;
   const giveUp = new AbortController();
   const ports = connect(f, giveUp.signal);
   f.src = SANDBOX_URL;

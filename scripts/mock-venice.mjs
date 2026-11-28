@@ -699,7 +699,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (toolNames.includes('edit_file') && lastMsg?.role === 'user' && userText.includes('結論を直して') && fileInSys) {
       await send({ content: '結論を書き直します。' });
-      return finishTools('edit_file', { file_id: fileInSys, find: '結論は未定です。', replace: '結論: 用途によっては A がおすすめです。', note: '結論を具体化' });
+      return finishTools('edit_file', { file_id: fileInSys, old_string: '結論は未定です。', new_string: '結論: 用途によっては A がおすすめです。' });
     }
     if (toolNames.includes('read_file') && lastMsg?.role === 'user' && userText.includes('全部読んで') && fileInSys) {
       await send({ content: 'ファイルを読みます。' });
@@ -716,6 +716,22 @@ const server = http.createServer(async (req, res) => {
     }
     if (lastMsg?.role === 'tool' && /スクリプトを(書いて|直して)/.test(userText)) {
       const ans = `結果:\n\n\`\`\`\n${String(lastMsg.content ?? '')}\n\`\`\``;
+      return finishText(ans, { prompt_tokens: 300, completion_tokens: ans.length }, COST);
+    }
+    // "ゲームを作って": write_file makes a page that counts its animation frames for a second, preview_page tries it,
+    // and the answer gives the count the page showed
+    if (toolNames.includes('write_file') && lastMsg?.role === 'user' && userText.includes('ゲームを作って')) {
+      await send({ content: 'ゲームを作って試します。' });
+      return finishTools('write_file', {
+        name: 'game.html',
+        ...newFolder('raf-game'),
+        content:
+          "<!doctype html>\n<html><body>\n<h1>Game</h1>\n<p id=\"n\">counting</p>\n<script>\nconst t0 = performance.now();\nlet frames = 0;\nfunction loop() {\n  if (performance.now() - t0 < 1000) {\n    frames++;\n    requestAnimationFrame(loop);\n  } else document.getElementById('n').textContent = 'frames: ' + frames;\n}\nrequestAnimationFrame(loop);\n</script>\n</body></html>\n"
+      });
+    }
+    if (lastMsg?.role === 'tool' && lastCallName === 'write_file' && userText.includes('ゲームを作って')) return finishTools('preview_page', { file_id: 'game.html', wait_ms: 1500 });
+    if (lastMsg?.role === 'tool' && lastCallName === 'preview_page') {
+      const ans = `ページを試しました。${/frames: \d+/.exec(String(lastMsg.content ?? ''))?.[0] ?? '描画されませんでした。'}`;
       return finishText(ans, { prompt_tokens: 300, completion_tokens: ans.length }, COST);
     }
     if (lastMsg?.role === 'tool' && ['write_file', 'append_file', 'edit_file', 'read_file'].includes(lastCallName)) {

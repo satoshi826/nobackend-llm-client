@@ -71,7 +71,7 @@ npm run dev
 - Skills: `スキル` loads the first skill.
 - Skill creator: `作って` / `直して` calls `save_skill` in a skill-creator conversation.
 - Files: `レポートにまとめて` calls `write_file`; with a file in the conversation, `追記して` / `結論を直して` / `全部読んで` call `append_file` / `edit_file` / `read_file`.
-- Sandbox: `実行できる例` answers with runnable JS and HTML code blocks, `計算して` calls `run_javascript`, `ページを作って` creates an HTML page and the script it loads.
+- Sandbox: `実行できる例` answers with runnable JS and HTML code blocks, `計算して` calls `run_javascript`, `ページを作って` creates an HTML page and the script it loads, `ゲームを作って` writes a page that counts its animation frames and tries it with `preview_page`.
 
 ### Check with production headers
 

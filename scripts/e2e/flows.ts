@@ -257,7 +257,7 @@ const backup: Flow = {
 
 const files: Flow = {
   name: 'files',
-  label: 'a model writes an HTML page and its script with a tool → open the page from the Files tab → it is shown in standards mode, and the script it loads by a relative path runs, logs, and keeps its count in localStorage.json for the next showing → a script with a syntax error is told, and its fix shows the changed line → an image is saved at the path the model gives → one made in a chat without a working folder is moved in by its id, making the folder, and the page next to it shows it',
+  label: 'a model writes an HTML page and its script with a tool → open the page from the Files tab → it is shown in standards mode, and the script it loads by a relative path runs, logs, and keeps its count in localStorage.json for the next showing → a script with a syntax error is told, and its fix shows the changed line → an image is saved at the path the model gives → one made in a chat without a working folder is moved in by its id, making the folder, and the page next to it shows it → a page the model tries with preview_page runs its animation frames',
   async run({ page, url, a11y }) {
     await page.goto(url);
     await addVenice(page);
@@ -318,6 +318,16 @@ const files: Flow = {
     const shown = page.frameLocator('iframe[src*="/sandbox/"]').getByRole('img', { name: 'A cat' });
     await shown.waitFor();
     await until('the moved image to load in the page', () => shown.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth > 0));
+    // A page tried with preview_page is drawn out of sight, so its requestAnimationFrame loop runs (a game's would
+    // otherwise stand still): the mock's page counts its frames for a second
+    await page.getByRole('tab', { name: 'Chats' }).click();
+    await send(page, 'ゲームを作って');
+    await page.getByRole('button', { name: 'Run', exact: true }).click();
+    const tried = page.locator('[data-message-id]').last().getByText(/ページを試しました。/);
+    await tried.waitFor();
+    await settled(page);
+    const frames = Number(/frames: (\d+)/.exec((await tried.textContent()) ?? '')?.[1] ?? 0);
+    if (frames <= 30) throw new Error(`The tried page drew ${frames} animation frames in a second, not more than 30`);
   }
 };
 

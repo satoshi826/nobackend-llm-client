@@ -225,7 +225,7 @@ function UserText({ text }: { text: string }) {
           aria-expanded={open}
           onClick={() => setOpen(!open)}
         >
-          {open ? t('msg.collapse') : t('msg.expand', { lines: formatNumber(lines), chars: formatNumber(text.length) })}
+          {t('msg.fullText', { lines: formatNumber(lines), chars: formatNumber(text.length) })}
           <Chevron open={open} />
         </button>
       )}

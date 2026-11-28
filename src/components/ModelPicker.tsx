@@ -249,7 +249,7 @@ export function ModelPicker() {
         <div class="flex items-center justify-between gap-2 text-xs text-muted">
           <span>{arranged.length === all.length ? t('picker.count', { n: all.length }) : t('picker.countFiltered', { shown: arranged.length, total: all.length })}</span>
           <Button class="text-xs" onClick={() => refreshAllModels()} disabled={anyLoading} aria-busy={anyLoading}>
-            <Icon name="refresh" class={cx('size-3.5', anyLoading && 'motion-safe:animate-spin')} />
+            {anyLoading ? <Spinner /> : <Icon name="refresh" class="size-3.5" />}
             {t('picker.refresh')}
           </Button>
         </div>

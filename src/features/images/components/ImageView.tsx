@@ -498,7 +498,8 @@ export function Lightbox() {
                 {x.text}
               </Button>
             ) : (
-              <IconButton key={x.id} class="text-white hover:bg-glass" label={x.label} onClick={x.run}>
+              // Delete is red under the pointer, as every icon-only delete
+              <IconButton key={x.id} variant={x.id === 'delete' ? 'remove' : undefined} class={cx('text-white', x.id !== 'delete' && 'hover:bg-glass')} label={x.label} onClick={x.run}>
                 <Icon name={x.icon} />
               </IconButton>
             )

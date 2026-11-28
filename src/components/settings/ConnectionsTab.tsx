@@ -6,6 +6,7 @@ import { connections, enabledProviders, hostOfProvider, providerById, providers,
 import { providerSettingsOf, saveSettings, setProviderSetting, settings } from '../../state/settings';
 import { vaultIsolated, VAULT_ORIGIN } from '../../lib/vault/client';
 import { getPreset } from '../../lib/providers/registry';
+import { accountById } from '../../lib/keys/accounts';
 import { KeyPanel, VaultSecurityPanel } from '../KeyPanel';
 import { Badge, Button, Icon, Select, cx } from '../ui';
 import { Group, Row, Switch, ToggleRow } from '../settings-ui';
@@ -35,7 +36,7 @@ function ConnectionDetails({ id }: { id: string }) {
           ))}
         </div>
       )}
-      <p class="text-xs text-muted">{preset.keyOptional ? t('conn.removeKeyless') : t('conn.removeHint')}</p>
+      <p class="text-xs text-muted">{accountById(id)?.keyOptional ? t('conn.removeKeyless') : t('conn.removeHint')}</p>
     </div>
   );
 }

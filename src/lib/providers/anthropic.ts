@@ -1,6 +1,6 @@
 // Adapter for the Anthropic Messages API (not OpenAI-compatible, so a separate implementation).
 // - the vault attaches the key in the x-api-key header (preset.keyHeader)
-// - calling directly from the browser needs the anthropic-dangerous-direct-browser-access header (preset extraHeaders)
+// - calling directly from the browser needs the anthropic-dangerous-direct-browser-access header (the connection's headers)
 // - extended thinking is not used (combined with tool calls it would require sending signed thinking blocks back)
 // - web search is Anthropic's server tool. The basic version is used:
 //   the dynamic-filtering versions add code execution blocks and a container to echo back.
@@ -8,8 +8,8 @@
 //   (required after pause_turn); later turns send only the answer text.
 import type { ChatMessage, ChatRequest, ModelInfo, ProviderAdapter, ProviderEvent, Part } from './types';
 import { parseSSE } from './sse';
-import { classifyError, errorFromFetchFailure, errorFromResponse, isAbort, ProviderFailure } from './errors';
-import { joinUrl } from './openai-compatible';
+import { classifyError, failureOf, isAbort } from './errors';
+import { send } from './openai-compatible';
 import { t as tp } from './messages';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
@@ -113,14 +113,7 @@ type Block =
 
 export const anthropicAdapter: ProviderAdapter = {
   async listModels(cfg, preset, transport, auth): Promise<ModelInfo[]> {
-    let res: Response;
-    try {
-      res = await transport.fetch(joinUrl(cfg.baseUrl, preset.modelsPath ?? 'models?limit=100'), { method: 'GET', headers: { Accept: 'application/json', ...cfg.extraHeaders } }, auth);
-    } catch (e) {
-      if (e instanceof ProviderFailure) throw e;
-      throw new ProviderFailure(errorFromFetchFailure(e, preset.corsHint));
-    }
-    if (!res.ok) throw new ProviderFailure(await errorFromResponse(res, preset.corsHint));
+    const res = await send(cfg, preset, transport, auth, preset.modelsPath ?? 'models?limit=100', { method: 'GET', headers: { Accept: 'application/json' } });
     const json = await res.json();
     const list: any[] = Array.isArray(json?.data) ? json.data : [];
     return list.map((raw) => preset.mapModel?.(raw, cfg.id)).filter((m): m is ModelInfo => !!m);
@@ -129,22 +122,14 @@ export const anthropicAdapter: ProviderAdapter = {
   async *chat(cfg, preset, auth, req, transport): AsyncGenerator<ProviderEvent> {
     let res: Response;
     try {
-      res = await transport.fetch(
-        joinUrl(cfg.baseUrl, 'messages'),
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...cfg.extraHeaders },
-          body: JSON.stringify(buildAnthropicBody(req)),
-          signal: req.signal
-        },
-        auth
-      );
+      res = await send(cfg, preset, transport, auth, 'messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify(buildAnthropicBody(req)),
+        signal: req.signal
+      });
     } catch (e) {
-      yield { type: 'error', error: e instanceof ProviderFailure ? e.error : errorFromFetchFailure(e, preset.corsHint) };
-      return;
-    }
-    if (!res.ok) {
-      yield { type: 'error', error: await errorFromResponse(res, preset.corsHint) };
+      yield { type: 'error', error: failureOf(e, preset.corsHint) };
       return;
     }
     if (!res.body) {

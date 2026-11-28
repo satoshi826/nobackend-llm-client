@@ -7,8 +7,8 @@
 // - Google Search grounding (tools: google_search) → sources; image output (responseModalities) → image events
 import type { ChatMessage, ChatRequest, ModelInfo, Part, ProviderAdapter, ProviderEvent } from './types';
 import { parseSSE } from './sse';
-import { errorFromFetchFailure, errorFromResponse, isAbort, ProviderFailure } from './errors';
-import { joinUrl } from './openai-compatible';
+import { failureOf, isAbort } from './errors';
+import { send } from './openai-compatible';
 import { t as tp } from './messages';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
@@ -98,14 +98,7 @@ export const geminiAdapter: ProviderAdapter = {
     let token = '';
     for (let page = 0; page < 5; page++) {
       const path = (preset.modelsPath ?? 'models?pageSize=200') + (token ? `&pageToken=${encodeURIComponent(token)}` : '');
-      let res: Response;
-      try {
-        res = await transport.fetch(joinUrl(cfg.baseUrl, path), { method: 'GET', headers: { Accept: 'application/json', ...cfg.extraHeaders } }, auth);
-      } catch (e) {
-        if (e instanceof ProviderFailure) throw e;
-        throw new ProviderFailure(errorFromFetchFailure(e, preset.corsHint));
-      }
-      if (!res.ok) throw new ProviderFailure(await errorFromResponse(res, preset.corsHint));
+      const res = await send(cfg, preset, transport, auth, path, { method: 'GET', headers: { Accept: 'application/json' } });
       const json = await res.json();
       for (const raw of Array.isArray(json?.models) ? json.models : []) {
         const m = preset.mapModel?.(raw, cfg.id);
@@ -120,22 +113,14 @@ export const geminiAdapter: ProviderAdapter = {
   async *chat(cfg, preset, auth, req, transport): AsyncGenerator<ProviderEvent> {
     let res: Response;
     try {
-      res = await transport.fetch(
-        joinUrl(cfg.baseUrl, `models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`),
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...cfg.extraHeaders },
-          body: JSON.stringify(buildGeminiBody(req)),
-          signal: req.signal
-        },
-        auth
-      );
+      res = await send(cfg, preset, transport, auth, `models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify(buildGeminiBody(req)),
+        signal: req.signal
+      });
     } catch (e) {
-      yield { type: 'error', error: e instanceof ProviderFailure ? e.error : errorFromFetchFailure(e, preset.corsHint) };
-      return;
-    }
-    if (!res.ok) {
-      yield { type: 'error', error: await errorFromResponse(res, preset.corsHint) };
+      yield { type: 'error', error: failureOf(e, preset.corsHint) };
       return;
     }
     if (!res.body) {

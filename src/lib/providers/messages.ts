@@ -1,22 +1,17 @@
-// Texts of lib/providers (errors, texts sent back to models, and the providers' descriptions and key guides)
+// Texts of lib/providers: errors, and texts sent back to models
 // (i18n/index named explicitly: endpoints.ts is also loaded by the Vite config)
 import { defineMessages } from '../i18n/index';
 
 export const t = defineMessages(
   {
-    // ---- Tool results sent back to the model ----
     'tool.denied': 'ユーザーがこのツールの実行を拒否しました。{reason}',
     'tool.failed': 'ツールの実行に失敗しました: {error}',
-
-    // ---- Streaming ----
     'stream.stopped': '停止しました。',
     'stream.emptyBody': '応答の本文が空でした。もう一度試してください。',
     'stream.error': 'ストリームの途中でエラーが発生しました: {message}',
     'stream.unknownError': '不明なエラー',
     'gemini.blocked': '入力が Gemini の安全フィルターで止められました（{reason}）。内容を変えて試してください。',
     'stream.disconnected': '受信中に接続が切れました。もう一度試してください。',
-
-    // ---- HTTP errors ----
     'error.proOnly': 'このモデルは有料プランでのみ利用できます。別のモデルを選んでください。',
     'error.auth': 'API キーが無効か、権限がありません。設定でキーを確認してください。',
     'error.balance': '残高が不足しています。接続先の管理画面で残高を確認してください。',
@@ -27,102 +22,24 @@ export const t = defineMessages(
     'error.server': '接続先でエラーが発生しました（{status}）。時間をおいて再試行してください。',
     'error.network': '接続できませんでした。ネットワークに問題があるか、接続先がブラウザからのアクセス（CORS）を許可していません。',
     'error.keyNeedsVault': 'キーを付ける通信はキー金庫を経由する必要があります。',
-
-    // ---- VITE_CUSTOM_PROVIDERS (build-time configuration) ----
     'custom.notJson': 'VITE_CUSTOM_PROVIDERS を JSON として読めません。書式を確認してください。',
     'custom.notArray': 'VITE_CUSTOM_PROVIDERS は配列で指定してください。',
     'custom.badId': '{where}.id は半角の小文字・数字・ハイフンで指定してください。',
     'custom.duplicateId': '{where}.id「{id}」は使えません（重複）。別の id にしてください。',
     'custom.badUrl': '{where}.baseUrl が URL ではありません。',
     'custom.insecureUrl': '{where}.baseUrl は https（ローカルなら http）にしてください。',
-    'custom.urlExtras': '{where}.baseUrl に認証情報やクエリは書けません。',
-
-    // ---- Provider descriptions (presets) ----
-    'cors.generic': 'ネットワーク接続、または拡張機能が {host} をブロックしていないか確認してください。',
-    'cors.direct': '{name} は通常ブラウザから直接接続できます。ネットワーク接続、または拡張機能が {host} をブロックしていないか確認してください。',
-    'cors.venice': 'Venice は通常ブラウザから直接接続できます。ネットワーク接続、または広告ブロッカー等の拡張機能が api.venice.ai をブロックしていないか確認してください。',
-
-    'venice.tagline': 'プロンプトを保存しない private モデルと、制限の少ないモデル。内蔵の Web 検索と残高の確認つき。',
-    'venice.keyGuide':
-      'Venice の管理画面（Settings → API）で「INFERENCE」タイプのキーを作り、1 日の利用上限（consumption limit）と有効期限を設定してください。モデルを Venice ホストのものに限る「PRIVATE_ONLY」もおすすめです。キーが万一漏れても被害額が上限で止まります。',
-    'venice.systemPrompt': 'Venice 既定のシステムプロンプトを付ける',
-    'venice.systemPromptDesc': 'オフ（既定）なら、あなたが書いた指示だけがモデルに渡ります。',
-    'venice.private': 'Venice がホストし、プロンプトを保存しないモデル',
-    'venice.relayed': 'Venice が匿名化して Claude・Gemini などの外部事業者に中継するモデル。各社の保持ポリシーに従います。',
-    'venice.relayedNote': '「外部中継」のモデルは、Venice が匿名化したうえで Claude・Gemini などの外部事業者に送ります。プロンプトの保持や検閲は各社の方針に従います。',
-    'venice.searchNote': '検索語は Venice 経由で検索事業者に送られます。',
-    'venice.searchProviders': 'Venice の検索提供元',
-    'venice.searchProvidersWhat': 'Venice 内蔵の Web 検索をオンにしたときの検索語（Venice 経由）',
-    'venice.thirdParties': '外部 AI 事業者',
-    'venice.thirdPartiesWhat': 'Venice の「外部中継」のモデルを使ったときの会話（Venice が匿名化して中継）',
-    'venice.videoShareWhat': '一部の動画モデルで、できた動画の受け取り（キーは送りません）',
-
-    'openrouter.tagline': '数百のモデルを 1 つのキーで。データを保存・学習に使う提供元は既定で経由しません。',
-    'openrouter.keyGuide': 'OpenRouter の管理画面（Keys）でキーを作り、クレジットの上限（credit limit）を設定してください。キーが万一漏れても被害額が上限で止まります。',
-    'openrouter.pickerNote': 'OpenRouter は複数の提供元に中継します。このアプリは既定で「データを保存・学習に使う提供元」を経由しない設定（data_collection: deny）で送信します。',
-    'openrouter.destinationNote': '実際に処理する提供元へ中継されます（データ収集する提供元は既定で除外）',
-
-    'anthropic.tagline': 'Anthropic の Claude を直接使う。',
-    'anthropic.searchNote': '検索は Anthropic が行います。1,000 回あたり 10 ドルが追加でかかります（1 回の返答で最大 5 回）。',
-    'anthropic.keyGuide':
-      'Anthropic Console（console.anthropic.com）の API Keys でキーを作り、Limits でワークスペースの利用上限（spend limit）を設定してください。キーが万一漏れても被害額が上限で止まります。',
-
-    'openrouter.searchNote': '検索は OpenRouter が行います（既定は Exa。モデルの提供元が検索を持つ場合はそれを使用）。1 回あたり約 0.7 セントが追加でかかります。',
-    'openrouter.noLowBits': '4 ビットに軽量化した版を使わない',
-    'openrouter.noLowBitsDesc': '安い提供元は、モデルを 4 ビットに軽量化（量子化）して動かしていることがあり、答えの質が落ちることがあります。オン（既定）なら、6 ビット以上の提供元と、軽量化の程度を公表していない提供元だけを使います。',
-    'openrouter.cheapest': 'いちばん安い提供元から使う',
-    'openrouter.cheapestDesc': 'オフ（既定）でも、OpenRouter は安い提供元を多めに使います。オンなら、毎回いちばん安い提供元から順に試します。速さは劣ることがあります。',
-    'flex.label': '安さを優先する（flex）',
-    'flex.desc': '空いているときに処理される安い枠で送ります。料金は {percent}% 安くなりますが、返事が遅くなることがあります。使えないときや対応していないモデルでは、通常の枠で送り直します。',
-    'gemini.tagline': 'Google の Gemini。無料枠あり（無料枠では、送った内容が Google のサービス改善に使われることがあります）。',
-    'gemini.keyGuide':
-      'Google AI Studio（aistudio.google.com）でキーを作ってください。無料枠のキーでは、送った内容が Google のサービス改善に使われ、人が読むこともあります（有料枠では使われません）。有料にする場合は Google Cloud の請求設定で予算を設定してください。',
-    'gemini.searchNote': 'Gemini 3 以降のモデルで Google 検索を使います。無料枠（月 5,000 回）を超えると 1,000 回あたり 14 ドルかかります。',
-    'gemini.destinationNote': '無料枠のキーでは、送った内容が Google のサービス改善に使われることがあります',
-
-    'openai.tagline': 'OpenAI の GPT と画像生成（GPT Image）を直接使う。',
-    'openai.keyGuide': 'OpenAI Platform（platform.openai.com）の API keys でキーを作り、Limits で月の利用上限（budget）を設定してください。キーを「Restricted」にして必要な権限だけにするとさらに安全です。',
-    'openai.destinationNote': 'API の送信内容は不正利用の監視のため最大 30 日保持されます（学習には使われません）',
-    'deepseek.tagline': 'DeepSeek のモデル。安価。データは中国の事業者のサーバーで処理されます。',
-    'deepseek.keyGuide': 'DeepSeek Platform（platform.deepseek.com）でキーを作ってください。プリペイド式なので、チャージした額が使える上限になります。',
-    'deepseek.destinationNote': '中国の事業者（DeepSeek）のサーバーで処理されます',
-
-    'groq.tagline': '高速な推論。Llama・Qwen・gpt-oss などのオープンなモデル。無料枠あり（回数とトークン数に上限）。',
-    'groq.keyGuide': 'GroqCloud（console.groq.com）でキーを作ってください。無料枠には回数とトークン数の上限があります。有料にする場合は利用上限を設定してください。',
-
-    'groq.searchNote': 'gpt-oss のモデルで、Groq のブラウザ検索（Exa）を使います。',
-    'nanogpt.tagline': '多数のモデルを 1 つのキーで使えます。既定では記録を残さず、データを保持しない経路（ZDR）のモデルもあります。',
-    'nanogpt.keyGuide': 'NanoGPT（nano-gpt.com）の API 設定でキーを作ってください。キーごとに利用額の上限（日・週・月）を設定できるので、必ず設定してください。',
-    'nanogpt.private': 'データを保持しない経路（ZDR）で処理されるモデル',
-    'deepinfra.tagline': 'オープンなモデルを安価に使えます。入力はメモリ上でだけ扱われ、記録や学習には使われないとしています。',
-    'deepinfra.keyGuide': 'DeepInfra（deepinfra.com）の Dashboard → API Keys でキーを作ってください。キーごとに月の利用額の上限を設定できるので、必ず設定してください。',
-    'cerebras.tagline': '非常に高速な推論。gpt-oss などのオープンなモデル。入力は保持しないとしています。',
-    'cerebras.keyGuide': 'Cerebras Cloud（cloud.cerebras.ai）でキーを作ってください。プリペイドのクレジット制なので、チャージした額が使える上限になります。',
-    'novita.tagline': 'オープンなモデルを安価に使えます。既定ではデータを保持しないとしています。',
-    'novita.keyGuide': 'Novita AI（novita.ai）の Key Management でキーを作ってください。キーごとに予算（利用額の上限）を設定できるので、必ず設定してください。',
-    'chutes.tagline': '分散型の推論。機密計算（TEE）の中で動くモデルを選べます。',
-    'chutes.keyGuide': 'Chutes（chutes.ai）でキーを作ってください。利用額の上限の設定方法は確認できていないので、少額のチャージで使ってください。',
-    'chutes.private': '機密計算（TEE）の中で処理されるモデル',
-    'together.tagline': 'オープンなモデルを幅広く。既定でデータを保持せず、学習にも使わないとしています。',
-    'together.keyGuide': 'Together AI（api.together.ai）の Settings → API Keys でキーを作ってください。プリペイド式で、キーごとの利用額の上限はないので、少額のチャージで使ってください。',
-    'custom.tagline': '{host} の OpenAI 互換 API（ビルド時に追加した接続先）',
-    'custom.keyGuideOptional': 'キーなしでも使えます。キーが必要な場合だけ設定してください。',
-    'custom.keyGuide': '{name} の管理画面でキーを作り、可能なら利用上限を設定してください。',
-    'custom.corsHint': '{host} がこのサイトからの接続を許可しているか（CORS）確認してください。Ollama なら環境変数 OLLAMA_ORIGINS にこのサイトのオリジンを入れて起動します。',
-    'custom.checkConnection': '{host} への接続を確認してください。'
+    'custom.urlExtras': '{where}.baseUrl に認証情報やクエリは書けません。'
   },
   {
     en: {
       'tool.denied': 'The user denied running this tool. {reason}',
       'tool.failed': 'The tool failed: {error}',
-
       'stream.stopped': 'Stopped.',
       'stream.emptyBody': 'The response body was empty. Try again.',
       'stream.error': 'An error occurred during the stream: {message}',
       'stream.unknownError': 'Unknown error',
       'gemini.blocked': "Gemini's safety filter stopped the input ({reason}). Change it and try again.",
       'stream.disconnected': 'The connection was lost while receiving. Try again.',
-
       'error.proOnly': 'This model is only available on a paid plan. Choose another model.',
       'error.auth': 'The API key is invalid or does not have permission. Check the key in settings.',
       'error.balance': "Your balance is too low. Check your balance in the provider's dashboard.",
@@ -133,99 +50,23 @@ export const t = defineMessages(
       'error.server': 'The provider returned an error ({status}). Try again later.',
       'error.network': 'Could not connect. There may be a network problem, or the provider does not allow access from browsers (CORS).',
       'error.keyNeedsVault': 'Requests that carry a key must go through the key vault.',
-
       'custom.notJson': 'VITE_CUSTOM_PROVIDERS is not valid JSON. Check its syntax.',
       'custom.notArray': 'VITE_CUSTOM_PROVIDERS must be an array.',
       'custom.badId': '{where}.id must use only lowercase letters, digits and hyphens.',
       'custom.duplicateId': '{where}.id "{id}" cannot be used (duplicate). Use another id.',
       'custom.badUrl': '{where}.baseUrl is not a URL.',
       'custom.insecureUrl': '{where}.baseUrl must use https (http only for local hosts).',
-      'custom.urlExtras': '{where}.baseUrl cannot contain credentials or a query.',
-
-      'cors.generic': 'Check your network connection, and whether an extension is blocking {host}.',
-      'cors.direct': '{name} normally accepts direct connections from browsers. Check your network connection, and whether an extension is blocking {host}.',
-      'cors.venice': 'Venice normally accepts direct connections from browsers. Check your network connection, and whether an extension such as an ad blocker is blocking api.venice.ai.',
-
-      'venice.tagline': 'Models that never store your prompts (private) and models with fewer restrictions. Built-in web search and balance check.',
-      'venice.keyGuide':
-        'In the Venice dashboard (Settings → API), create a key of type "INFERENCE" and set a daily consumption limit and an expiry date. "PRIVATE_ONLY", which limits the key to models Venice hosts, is also recommended. If the key ever leaks, the damage stops at the limit.',
-      'venice.systemPrompt': "Add Venice's default system prompt",
-      'venice.systemPromptDesc': 'When off (the default), only the instructions you write are passed to the model.',
-      'venice.private': "Models hosted by Venice that don't store prompts",
-      'venice.relayed': "Models that Venice anonymizes and relays to third parties such as Claude and Gemini. Each company's retention policy applies.",
-      'venice.relayedNote': "Venice anonymizes requests to relayed models and sends them to third parties such as Claude and Gemini. Prompt retention and censorship follow each company's policy.",
-      'venice.searchNote': 'Queries go to a search company through Venice.',
-      'venice.searchProviders': "Venice's search providers",
-      'venice.searchProvidersWhat': "Search terms when Venice's built-in web search is on (via Venice)",
-      'venice.thirdParties': 'Third-party AI companies',
-      'venice.thirdPartiesWhat': "Conversations with Venice's relayed models (anonymized and relayed by Venice)",
-      'venice.videoShareWhat': 'Receiving finished videos of some video models (no key is sent)',
-
-      'openrouter.tagline': 'Hundreds of models with one key. By default, skips upstream providers that store or train on your data.',
-      'openrouter.keyGuide': 'In the OpenRouter dashboard (Keys), create a key and set a credit limit. If the key ever leaks, the damage stops at the limit.',
-      'openrouter.pickerNote': 'OpenRouter relays to multiple upstream providers. By default this app sends requests with a setting that avoids providers that store or train on data (data_collection: deny).',
-      'openrouter.destinationNote': 'Relayed to the upstream provider that processes the request (providers that collect data are excluded by default)',
-
-      'anthropic.tagline': "Use Anthropic's Claude directly.",
-      'anthropic.searchNote': 'Anthropic runs the search. It adds $10 per 1,000 searches (at most 5 per reply).',
-      'anthropic.keyGuide':
-        'In the Anthropic Console (console.anthropic.com), create a key under API Keys and set a workspace spend limit under Limits. If the key ever leaks, the damage stops at the limit.',
-
-      'openrouter.searchNote': "OpenRouter runs the search (Exa by default, or the model provider's own search when it has one). Each search adds about 0.7 cents.",
-      'openrouter.noLowBits': 'Skip 4-bit versions',
-      'openrouter.noLowBitsDesc': 'Cheap providers sometimes run a model shrunk to 4 bits (quantized), which can lower answer quality. When on (the default), only providers at 6 bits or more, and those that do not say, are used.',
-      'openrouter.cheapest': 'Use the cheapest provider first',
-      'openrouter.cheapestDesc': 'Even when off (the default), OpenRouter favors cheaper providers. When on, it tries them cheapest first every time, which can be slower.',
-      'flex.label': 'Prefer lower cost (flex)',
-      'flex.desc': 'Sends requests in a cheaper tier served when capacity is free: {percent}% less, but replies can be slower. When it is unavailable, or the model does not offer it, the request is sent again in the standard tier.',
-      'gemini.tagline': "Google's Gemini. Free tier (on it, what you send may be used to improve Google's services).",
-      'gemini.keyGuide':
-        "Create a key in Google AI Studio (aistudio.google.com). With a free-tier key, what you send is used to improve Google's services and may be read by people (not on the paid tier). If you switch to paid, set a budget in Google Cloud billing.",
-      'gemini.searchNote': 'Uses Google Search on Gemini 3 and later models. Beyond the free allowance (5,000 per month) it costs $14 per 1,000 searches.',
-      'gemini.destinationNote': "With a free-tier key, what you send may be used to improve Google's services",
-
-      'openai.tagline': "Use OpenAI's GPT models and image generation (GPT Image) directly.",
-      'openai.keyGuide': 'In the OpenAI Platform (platform.openai.com), create a key under API keys and set a monthly budget under Limits. A "Restricted" key with only the permissions you need is safer still.',
-      'openai.destinationNote': 'What you send to the API is kept for up to 30 days for abuse monitoring (not used for training)',
-      'deepseek.tagline': "DeepSeek's models. Low cost. Data is processed on servers of a company in China.",
-      'deepseek.keyGuide': 'Create a key on the DeepSeek Platform (platform.deepseek.com). It is prepaid, so the amount you top up is your spending limit.',
-      'deepseek.destinationNote': 'Processed on servers of a company in China (DeepSeek)',
-
-      'groq.tagline': 'Fast inference. Open models such as Llama, Qwen and gpt-oss. Free tier (with rate and token limits).',
-      'groq.keyGuide': 'Create a key in GroqCloud (console.groq.com). The free tier limits requests and tokens. If you switch to paid, set a spending limit.',
-
-      'groq.searchNote': "Uses Groq's browser search (Exa) on the gpt-oss models.",
-      'nanogpt.tagline': 'Many models behind one key. No logging by default, and some models run on zero-data-retention routes.',
-      'nanogpt.keyGuide': "Create a key in NanoGPT's API settings (nano-gpt.com). Each key can have a daily, weekly or monthly spending limit: set one.",
-      'nanogpt.private': 'Runs on a zero-data-retention route',
-      'deepinfra.tagline': 'Open models at low cost. Inputs are said to be handled in memory only, not logged or used for training.',
-      'deepinfra.keyGuide': "Create a key in DeepInfra's Dashboard → API Keys (deepinfra.com). Each key can have a monthly spending limit: set one.",
-      'cerebras.tagline': 'Very fast inference on open models such as gpt-oss. Inputs are said not to be kept.',
-      'cerebras.keyGuide': 'Create a key in Cerebras Cloud (cloud.cerebras.ai). It runs on prepaid credits, so what you top up is your spending limit.',
-      'novita.tagline': 'Open models at low cost. Data is said not to be kept by default.',
-      'novita.keyGuide': "Create a key in Novita AI's Key Management (novita.ai). Each key can have a budget (spending limit): set one.",
-      'chutes.tagline': 'Decentralized inference. Some models run in confidential computing (TEE).',
-      'chutes.keyGuide': 'Create a key on Chutes (chutes.ai). How to set a spending limit could not be confirmed, so top up small amounts.',
-      'chutes.private': 'Runs in confidential computing (TEE)',
-      'together.tagline': 'A wide range of open models. Data is said to be kept zero days by default and not used for training.',
-      'together.keyGuide': "Create a key in Together AI's Settings → API Keys (api.together.ai). It is prepaid with no per-key spending limit, so top up small amounts.",
-      'custom.tagline': 'OpenAI-compatible API at {host} (provider added at build time)',
-      'custom.keyGuideOptional': 'Works without a key. Set one only if it is required.',
-      'custom.keyGuide': 'Create a key in the {name} dashboard and set a spending limit if you can.',
-      'custom.corsHint': "Check that {host} allows connections from this site (CORS). For Ollama, start it with this site's origin in the OLLAMA_ORIGINS environment variable.",
-      'custom.checkConnection': 'Check the connection to {host}.'
+      'custom.urlExtras': '{where}.baseUrl cannot contain credentials or a query.'
     },
     zh: {
       'tool.denied': '用户拒绝运行此工具。{reason}',
       'tool.failed': '工具运行失败：{error}',
-
       'stream.stopped': '已停止。',
       'stream.emptyBody': '响应正文为空。请重试。',
       'stream.error': '流式传输过程中发生错误：{message}',
       'stream.unknownError': '未知错误',
       'gemini.blocked': '输入被 Gemini 的安全过滤器拦截（{reason}）。请修改内容后重试。',
       'stream.disconnected': '接收过程中连接中断。请重试。',
-
       'error.proOnly': '此模型仅限付费套餐使用。请选择其他模型。',
       'error.auth': 'API 密钥无效或没有权限。请在设置中检查密钥。',
       'error.balance': '余额不足。请在服务商的管理后台查看余额。',
@@ -236,87 +77,13 @@ export const t = defineMessages(
       'error.server': '服务商出错（{status}）。请稍后重试。',
       'error.network': '无法连接。可能是网络有问题，或者服务商不允许从浏览器访问（CORS）。',
       'error.keyNeedsVault': '携带密钥的请求必须经过密钥保险库。',
-
       'custom.notJson': 'VITE_CUSTOM_PROVIDERS 不是有效的 JSON。请检查格式。',
       'custom.notArray': 'VITE_CUSTOM_PROVIDERS 必须是数组。',
       'custom.badId': '{where}.id 只能使用小写字母、数字和连字符。',
       'custom.duplicateId': '{where}.id“{id}”不可用（重复）。请换一个 id。',
       'custom.badUrl': '{where}.baseUrl 不是 URL。',
       'custom.insecureUrl': '{where}.baseUrl 必须使用 https（本地地址可用 http）。',
-      'custom.urlExtras': '{where}.baseUrl 不能包含凭据或查询参数。',
-
-      'cors.generic': '请检查网络连接，以及扩展程序是否屏蔽了 {host}。',
-      'cors.direct': '{name} 通常可以从浏览器直接连接。请检查网络连接，以及扩展程序是否屏蔽了 {host}。',
-      'cors.venice': 'Venice 通常可以从浏览器直接连接。请检查网络连接，以及广告拦截器等扩展程序是否屏蔽了 api.venice.ai。',
-
-      'venice.tagline': '不保存提示词的 private 模型，以及限制较少的模型。内置网页搜索和余额查询。',
-      'venice.keyGuide':
-        '请在 Venice 管理后台（Settings → API）创建“INFERENCE”类型的密钥，并设置每日用量上限（consumption limit）和有效期。也推荐使用“PRIVATE_ONLY”，将模型限制为 Venice 托管的模型。即使密钥泄露，损失也会止于上限。',
-      'venice.systemPrompt': '附加 Venice 默认的系统提示词',
-      'venice.systemPromptDesc': '关闭时（默认），只有你写的指令会传给模型。',
-      'venice.private': '由 Venice 托管、不保存提示词的模型',
-      'venice.relayed': '由 Venice 匿名化后中转给 Claude、Gemini 等外部厂商的模型。遵循各厂商的数据保留政策。',
-      'venice.relayedNote': '“外部中转”模型会由 Venice 匿名化后发送给 Claude、Gemini 等外部厂商。提示词的保留和审查遵循各厂商的政策。',
-      'venice.searchNote': '搜索词会经由 Venice 发送给搜索服务商。',
-      'venice.searchProviders': 'Venice 的搜索提供方',
-      'venice.searchProvidersWhat': '开启 Venice 内置网页搜索时的搜索词（经由 Venice）',
-      'venice.thirdParties': '外部 AI 厂商',
-      'venice.thirdPartiesWhat': '使用 Venice“外部中转”模型时的对话（由 Venice 匿名化后中转）',
-      'venice.videoShareWhat': '部分视频模型下载生成的视频（不发送密钥）',
-
-      'openrouter.tagline': '一个密钥即可使用数百个模型。默认不经过会存储数据或用数据训练的提供方。',
-      'openrouter.keyGuide': '请在 OpenRouter 管理后台（Keys）创建密钥，并设置额度上限（credit limit）。即使密钥泄露，损失也会止于上限。',
-      'openrouter.pickerNote': 'OpenRouter 会中转给多个提供方。本应用默认以不经过“会存储数据或用数据训练的提供方”的设置（data_collection: deny）发送。',
-      'openrouter.destinationNote': '会中转给实际处理请求的提供方（默认排除收集数据的提供方）',
-
-      'anthropic.tagline': '直接使用 Anthropic 的 Claude。',
-      'anthropic.searchNote': '搜索由 Anthropic 执行。每 1,000 次搜索额外收费 10 美元（每次回复最多 5 次）。',
-      'anthropic.keyGuide':
-        '请在 Anthropic Console（console.anthropic.com）的 API Keys 中创建密钥，并在 Limits 中设置工作区的用量上限（spend limit）。即使密钥泄露，损失也会止于上限。',
-
-      'openrouter.searchNote': '搜索由 OpenRouter 执行（默认使用 Exa；模型的提供方有自带搜索时使用其搜索）。每次搜索约额外收费 0.7 美分。',
-      'openrouter.noLowBits': '不使用 4 位轻量化版本',
-      'openrouter.noLowBitsDesc': '便宜的提供方有时以 4 位轻量化（量化）运行模型，回答质量可能下降。开启时（默认），只使用 6 位及以上的提供方和未公开量化程度的提供方。',
-      'openrouter.cheapest': '优先使用最便宜的提供方',
-      'openrouter.cheapestDesc': '关闭时（默认），OpenRouter 也会更多地使用便宜的提供方。开启后，每次都从最便宜的提供方开始尝试，速度可能较慢。',
-      'flex.label': '优先低价（flex）',
-      'flex.desc': '以空闲时处理的低价档位发送：费用降低 {percent}%，但回复可能变慢。该档位不可用或模型不支持时，会以标准档位重新发送。',
-      'gemini.tagline': 'Google 的 Gemini。有免费额度（使用免费额度时，发送的内容可能会被用于改进 Google 的服务）。',
-      'gemini.keyGuide':
-        '请在 Google AI Studio（aistudio.google.com）创建密钥。使用免费额度的密钥时，发送的内容会被用于改进 Google 的服务，也可能被人工查看（付费额度不会）。如改为付费，请在 Google Cloud 的结算设置中设置预算。',
-      'gemini.searchNote': '在 Gemini 3 及更新的模型上使用 Google 搜索。超出免费额度（每月 5,000 次）后，每 1,000 次收费 14 美元。',
-      'gemini.destinationNote': '使用免费额度的密钥时，发送的内容可能会被用于改进 Google 的服务',
-
-      'openai.tagline': '直接使用 OpenAI 的 GPT 模型和图像生成（GPT Image）。',
-      'openai.keyGuide': '请在 OpenAI Platform（platform.openai.com）的 API keys 中创建密钥，并在 Limits 中设置每月预算。使用仅含所需权限的“Restricted”密钥更安全。',
-      'openai.destinationNote': '发送给 API 的内容会为监控滥用保留最多 30 天（不会用于训练）',
-      'deepseek.tagline': 'DeepSeek 的模型。价格低廉。数据在中国企业的服务器上处理。',
-      'deepseek.keyGuide': '请在 DeepSeek Platform（platform.deepseek.com）创建密钥。采用预付费方式，充值金额即为可用上限。',
-      'deepseek.destinationNote': '在中国企业（DeepSeek）的服务器上处理',
-
-      'groq.tagline': '高速推理。提供 Llama、Qwen、gpt-oss 等开放模型。有免费额度（次数和 token 数有上限）。',
-      'groq.keyGuide': '请在 GroqCloud（console.groq.com）创建密钥。免费额度对请求次数和 token 数有上限。如改为付费，请设置用量上限。',
-
-      'groq.searchNote': '在 gpt-oss 模型上使用 Groq 的浏览器搜索（Exa）。',
-      'nanogpt.tagline': '一个密钥使用众多模型。默认不记录，部分模型走零数据保留（ZDR）通道。',
-      'nanogpt.keyGuide': '请在 NanoGPT（nano-gpt.com）的 API 设置中创建密钥。每个密钥都可设置每日、每周或每月的用量上限，请务必设置。',
-      'nanogpt.private': '通过零数据保留（ZDR）通道处理的模型',
-      'deepinfra.tagline': '以低价使用开放模型。官方称输入仅在内存中处理，不记录也不用于训练。',
-      'deepinfra.keyGuide': '请在 DeepInfra（deepinfra.com）的 Dashboard → API Keys 创建密钥。每个密钥都可设置每月用量上限，请务必设置。',
-      'cerebras.tagline': '极快的推理，提供 gpt-oss 等开放模型。官方称不保留输入。',
-      'cerebras.keyGuide': '请在 Cerebras Cloud（cloud.cerebras.ai）创建密钥。采用预付费额度，充值金额即为可用上限。',
-      'novita.tagline': '以低价使用开放模型。官方称默认不保留数据。',
-      'novita.keyGuide': '请在 Novita AI（novita.ai）的 Key Management 创建密钥。每个密钥都可设置预算（用量上限），请务必设置。',
-      'chutes.tagline': '去中心化推理。可选择在机密计算（TEE）中运行的模型。',
-      'chutes.keyGuide': '请在 Chutes（chutes.ai）创建密钥。尚未确认如何设置用量上限，请小额充值使用。',
-      'chutes.private': '在机密计算（TEE）中处理的模型',
-      'together.tagline': '丰富的开放模型。官方称默认零数据保留，也不用于训练。',
-      'together.keyGuide': '请在 Together AI（api.together.ai）的 Settings → API Keys 创建密钥。采用预付费，没有按密钥的用量上限，请小额充值使用。',
-      'custom.tagline': '{host} 的 OpenAI 兼容 API（构建时添加的服务商）',
-      'custom.keyGuideOptional': '无需密钥即可使用。仅在需要时设置密钥。',
-      'custom.keyGuide': '请在 {name} 的管理后台创建密钥，并尽量设置用量上限。',
-      'custom.corsHint': '请确认 {host} 是否允许来自本站的连接（CORS）。如果是 Ollama，请在环境变量 OLLAMA_ORIGINS 中加入本站的源后再启动。',
-      'custom.checkConnection': '请检查与 {host} 的连接。'
+      'custom.urlExtras': '{where}.baseUrl 不能包含凭据或查询参数。'
     }
   }
 );

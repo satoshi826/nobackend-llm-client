@@ -2,7 +2,7 @@
 // The app never holds API keys; it only asks "attach this provider's key and send to this URL".
 
 import type { KeyStatus, VaultState } from '../keys/accounts';
-import { PRESETS } from '../providers/registry';
+import { ENDPOINTS } from '../providers/endpoints';
 
 export const VAULT_PROTOCOL = 'nbl-vault/1';
 
@@ -33,5 +33,5 @@ export type FromVault =
 
 /** Response headers the vault may relay (nothing related to keys or cookies) */
 export const PASSTHROUGH_HEADERS = [
-  ...new Set(['content-type', 'retry-after', 'x-ratelimit-remaining-requests', 'x-ratelimit-remaining-tokens', ...Object.values(PRESETS).flatMap((p) => p.responseHeaders ?? [])].map((h) => h.toLowerCase()))
+  ...new Set(['content-type', 'retry-after', 'x-ratelimit-remaining-requests', 'x-ratelimit-remaining-tokens', ...Object.values(ENDPOINTS).flatMap((e) => e.responseHeaders ?? [])].map((h) => h.toLowerCase()))
 ];

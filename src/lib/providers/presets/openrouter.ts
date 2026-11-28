@@ -1,10 +1,9 @@
-import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
-import { checkKey, joinUrl, numberOf } from '../openai-compatible';
-import { builtinBaseUrl } from '../endpoints';
+import type { ModelInfo, ProviderEvent } from '../types';
+import { numberOf } from '../openai-compatible';
+import { ENDPOINTS } from '../endpoints';
+import { definePreset } from './define';
 import { timeOf } from './hosts';
-import { t as tp } from '../messages';
-
-const BASE_URL = builtinBaseUrl('openrouter', (import.meta as any).env ?? {});
+import { t as tp } from './messages';
 
 /** Search results per search (OpenRouter bills per search request) */
 const MAX_RESULTS = 5;
@@ -51,15 +50,10 @@ function perMTok(v: unknown): number | undefined {
   return Number.isFinite(n) && n >= 0 ? n * 1_000_000 : undefined;
 }
 
-export const openrouterPreset: ProviderPreset = {
-  id: 'openrouter',
-  label: 'OpenRouter',
+export const openrouterPreset = definePreset(ENDPOINTS.openrouter, {
   // The account's credits need a management key; a normal key sees only its own limit (none when unlimited)
   balanceApi: { path: 'key', scope: 'key', read: (j) => numberOf(j?.data?.limit_remaining) },
   // Texts are getters so they follow the current language
-  get tagline() {
-    return tp('openrouter.tagline');
-  },
   copy: {
     get pickerNote() {
       return tp('openrouter.pickerNote');
@@ -67,20 +61,6 @@ export const openrouterPreset: ProviderPreset = {
     get destinationNote() {
       return tp('openrouter.destinationNote');
     }
-  },
-  defaults: {
-    name: 'OpenRouter',
-    kind: 'openai-compatible',
-    preset: 'openrouter',
-    baseUrl: BASE_URL,
-    // By default, do not route through providers that store or train on data
-    extraBody: { provider: { data_collection: 'deny' }, usage: { include: true } },
-    modelListMode: 'fetch',
-    enabled: false
-  },
-  browserAccess: 'direct',
-  get keyGuide() {
-    return tp('openrouter.keyGuide');
   },
   // All output kinds, so models that also output images are listed (image-only models are skipped in mapModel)
   modelsPath: 'models?output_modalities=all',
@@ -159,9 +139,8 @@ export const openrouterPreset: ProviderPreset = {
   }),
 
   transformRequest(body, req) {
-    const out = { ...body };
-    const routing = req.providerOptions?.openrouter;
-    if (routing && Object.keys(routing).length) out.provider = { ...out.provider, ...routing };
+    // By default, do not route through providers that store or train on data; the routing settings go next to it
+    const out: Record<string, any> = { ...body, provider: { data_collection: 'deny', ...req.providerOptions?.openrouter }, usage: { include: true } };
     if (req.webSearch) out.tools = [...(out.tools ?? []), { type: 'openrouter:web_search', parameters: { max_results: MAX_RESULTS } }];
     if (req.imageOutput) out.modalities = ['image', 'text'];
     // OpenRouter uses the reasoning: { effort } format
@@ -170,7 +149,5 @@ export const openrouterPreset: ProviderPreset = {
       delete out.reasoning_effort;
     }
     return out;
-  },
-
-  validateKey: (cfg, fetchWithKey) => checkKey(joinUrl(cfg.baseUrl, 'key'), fetchWithKey, openrouterPreset.corsHint)
-};
+  }
+});

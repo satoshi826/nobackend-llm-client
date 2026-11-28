@@ -3,32 +3,17 @@ import type {
   ChatMessage,
   ChatRequest,
   AuthRef,
-  KeyedFetch,
   ModelInfo,
   ProviderAdapter,
   ProviderConfig,
-  ProviderError,
   ProviderEvent,
   ProviderPreset,
   Transport
 } from './types';
 import { parseSSE } from './sse';
 import { ThinkSplitter } from './think-splitter';
-import { errorFromFetchFailure, errorFromResponse, isAbort, ProviderFailure } from './errors';
+import { failureOf, isAbort, ProviderFailure, sendOrFail } from './errors';
 import { t as tp } from './messages';
-
-/** Key check: GET with the key; 2xx means valid */
-export async function checkKey(url: string, fetchWithKey: KeyedFetch, corsHint?: string, headers: Record<string, string> = {}): Promise<{ ok: boolean; error?: ProviderError }> {
-  let res: Response;
-  try {
-    res = await fetchWithKey(url, { method: 'GET', headers: { Accept: 'application/json', ...headers } });
-  } catch (e) {
-    if (e instanceof ProviderFailure) return { ok: false, error: e.error };
-    return { ok: false, error: errorFromFetchFailure(e, corsHint) };
-  }
-  if (!res.ok) return { ok: false, error: await errorFromResponse(res) };
-  return { ok: true };
-}
 
 /** A number from a JSON number or numeric string */
 export function numberOf(x: unknown): number | undefined {
@@ -42,9 +27,12 @@ export function joinUrl(base: string, path: string): string {
   return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
 }
 
-function effectiveBase(cfg: ProviderConfig): string {
-  // With a proxy, send to "proxy URL + path of the original base" (the proxy is expected to forward upstream)
-  return cfg.proxyUrl ? cfg.proxyUrl : cfg.baseUrl;
+/**
+ * Send a request to a provider (its connection's headers added). Not reaching it, or an error answer, throws a
+ * ProviderFailure with the common error
+ */
+export function send(cfg: ProviderConfig, preset: ProviderPreset, transport: Transport, auth: AuthRef | undefined, path: string, init: RequestInit & { headers: Record<string, string> }): Promise<Response> {
+  return sendOrFail(() => transport.fetch(joinUrl(cfg.baseUrl, path), { ...init, headers: { ...init.headers, ...cfg.headers } }, auth), preset.corsHint);
 }
 
 /** Normalized messages → OpenAI format */
@@ -98,10 +86,9 @@ function limitReasoning(msgs: any[], mode: 'always' | 'tool-turns' | 'never'): a
   });
 }
 
-export function buildChatBody(cfg: ProviderConfig, preset: ProviderPreset, req: ChatRequest): Record<string, any> {
+export function buildChatBody(preset: ProviderPreset, req: ChatRequest): Record<string, any> {
   const p = req.params ?? {};
   let body: Record<string, any> = {
-    ...cfg.extraBody,
     model: req.model,
     messages: limitReasoning(toOpenAIMessages(req.messages), preset.reasoningResend ?? 'always'),
     stream: true,
@@ -121,40 +108,9 @@ export function buildChatBody(cfg: ProviderConfig, preset: ProviderPreset, req: 
   return body;
 }
 
-/**
- * A provider's cheaper, lower-priority tier as a setting of the connection (off by default). A request it refuses is
- * sent again in the standard tier (streamChat), and an answer it served is priced at `priceFactor` of the list price
- */
-export function flexTier(priceFactor: number): Pick<ProviderPreset, 'flex' | 'settings' | 'requestOptions'> {
-  return {
-    flex: { priceFactor },
-    settings: [
-      {
-        key: 'flex',
-        get label() {
-          return tp('flex.label');
-        },
-        get desc() {
-          return tp('flex.desc', { percent: Math.round((1 - priceFactor) * 100) });
-        },
-        default: false
-      }
-    ],
-    requestOptions: ({ settings }) => (settings.flex ? { service_tier: 'flex' } : undefined)
-  };
-}
-
 export const openAICompatibleAdapter: ProviderAdapter = {
   async listModels(cfg, preset, transport, auth): Promise<ModelInfo[]> {
-    const url = joinUrl(effectiveBase(cfg), preset.modelsPath ?? 'models');
-    let res: Response;
-    try {
-      res = await transport.fetch(url, { method: 'GET', headers: { Accept: 'application/json', ...cfg.extraHeaders } }, auth);
-    } catch (e) {
-      if (e instanceof ProviderFailure) throw e;
-      throw new ProviderFailure(errorFromFetchFailure(e, preset.corsHint));
-    }
-    if (!res.ok) throw new ProviderFailure(await errorFromResponse(res, preset.corsHint));
+    const res = await send(cfg, preset, transport, auth, preset.modelsPath ?? 'models', { method: 'GET', headers: { Accept: 'application/json' } });
     const json = await res.json();
     const list: any[] = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
     const mapped: ModelInfo[] = [];
@@ -182,38 +138,20 @@ async function* streamChat(
   req: ChatRequest,
   transport: Transport
 ): AsyncGenerator<ProviderEvent> {
-  const url = joinUrl(effectiveBase(cfg), 'chat/completions');
-  const body = buildChatBody(cfg, preset, req);
-  const send = (b: Record<string, any>) =>
-    transport.fetch(
-      url,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...cfg.extraHeaders },
-        body: JSON.stringify(b),
-        signal: req.signal
-      },
-      auth
-    );
+  const body = buildChatBody(preset, req);
+  const post = (b: Record<string, any>) =>
+    send(cfg, preset, transport, auth, 'chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify(b), signal: req.signal });
   let res: Response;
   try {
-    res = await send(body);
-    // The flex tier can refuse a request (busy, or not offered for this model): once more in the standard tier
-    if (body.service_tier === 'flex' && !res.ok && res.status !== 401 && res.status !== 403) {
-      void res.body?.cancel();
+    res = await post(body).catch((e) => {
+      // The flex tier can refuse a request (busy, or not offered for this model): once more in the standard tier
+      const status = e instanceof ProviderFailure ? e.error.status : undefined;
+      if (body.service_tier !== 'flex' || status === undefined || status === 401 || status === 403) throw e;
       const { service_tier: _flex, ...standard } = body;
-      res = await send(standard);
-    }
+      return post(standard);
+    });
   } catch (e) {
-    if (e instanceof ProviderFailure) {
-      yield { type: 'error', error: e.error };
-      return;
-    }
-    yield { type: 'error', error: errorFromFetchFailure(e, preset.corsHint) };
-    return;
-  }
-  if (!res.ok) {
-    yield { type: 'error', error: await errorFromResponse(res, preset.corsHint) };
+    yield { type: 'error', error: failureOf(e, preset.corsHint) };
     return;
   }
   if (!res.body) {

@@ -1,19 +1,12 @@
-import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
-import { checkKey, joinUrl, numberOf } from '../openai-compatible';
-import { builtinBaseUrl } from '../endpoints';
+import type { ModelInfo, ProviderEvent } from '../types';
+import { numberOf } from '../openai-compatible';
+import { ENDPOINTS } from '../endpoints';
+import { definePreset } from './define';
 import { timeOf } from './hosts';
-import { t as tp } from '../messages';
-
-// In development it can point at the mock (scripts/mock-venice.mjs) via VITE_VENICE_BASE_URL
-const BASE_URL = builtinBaseUrl('venice', (import.meta as any).env ?? {});
+import { t as tp } from './messages';
 
 // Texts are getters so they follow the current language
-export const venicePreset: ProviderPreset = {
-  id: 'venice',
-  label: 'Venice.ai',
-  get tagline() {
-    return tp('venice.tagline');
-  },
+export const venicePreset = definePreset(ENDPOINTS.venice, {
   // Also sent in response headers; this reads it before the first message
   balanceApi: { path: 'api_keys/rate_limits', read: (j) => numberOf(j?.data?.balances?.USD) },
   // Venice's own web search (venice_parameters.enable_web_search, set in requestOptions)
@@ -39,7 +32,6 @@ export const venicePreset: ProviderPreset = {
     purpose === 'summary'
       ? { include_venice_system_prompt: false, strip_thinking_response: true }
       : { include_venice_system_prompt: !!settings.includeSystemPrompt, ...(webSearch !== 'off' ? { enable_web_search: webSearch } : {}) },
-  responseHeaders: ['x-venice-balance-usd', 'x-venice-balance-diem', 'x-venice-is-blurred', 'x-venice-is-content-violation', 'x-venice-content-violation-count', 'x-venice-enhanced-prompt'],
   copy: {
     get private() {
       return tp('venice.private');
@@ -57,20 +49,6 @@ export const venicePreset: ProviderPreset = {
         ['private-share.venice.ai', tp('venice.videoShareWhat')]
       ];
     }
-  },
-  defaults: {
-    name: 'Venice',
-    kind: 'openai-compatible',
-    preset: 'venice',
-    baseUrl: BASE_URL,
-    // Do not add Venice's default system prompt (can be toggled in settings)
-    extraBody: { venice_parameters: { include_venice_system_prompt: false } },
-    modelListMode: 'fetch',
-    enabled: true
-  },
-  browserAccess: 'direct',
-  get keyGuide() {
-    return tp('venice.keyGuide');
   },
   modelsPath: 'models?type=text',
   get corsHint() {
@@ -109,8 +87,8 @@ export const venicePreset: ProviderPreset = {
   },
 
   transformRequest(body, req) {
-    const opts = (req.providerOptions?.venice ?? {}) as Record<string, unknown>;
-    const vp = { ...body.venice_parameters, ...opts };
+    // Venice's default system prompt is not added unless the setting asks for it (requestOptions)
+    const vp: Record<string, unknown> = { include_venice_system_prompt: false, ...req.providerOptions?.venice };
     if (vp.enable_web_search && vp.enable_web_search !== 'off') {
       vp.enable_web_citations = vp.enable_web_citations ?? true;
       vp.include_search_results_in_stream = vp.include_search_results_in_stream ?? true;
@@ -142,7 +120,5 @@ export const venicePreset: ProviderPreset = {
     const diem = parseFloat(headers.get('x-venice-balance-diem') ?? '');
     if (!Number.isFinite(usd) && !Number.isFinite(diem)) return [];
     return [{ type: 'account', balanceUsd: Number.isFinite(usd) ? usd : undefined, balanceDiem: Number.isFinite(diem) ? diem : undefined }];
-  },
-
-  validateKey: (cfg, fetchWithKey) => checkKey(joinUrl(cfg.baseUrl, 'api_keys/rate_limits'), fetchWithKey, venicePreset.corsHint)
-};
+  }
+});

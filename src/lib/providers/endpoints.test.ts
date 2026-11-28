@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { appDirectOrigins, BUILTIN_BASE_URLS, builtinBaseUrl, keyedProviderOrigins, parseCustomProviders } from './endpoints';
+import { appDirectOrigins, endpointsOf, keyedProviderOrigins, parseCustomProviders } from './endpoints';
 
 const one = (def: object) => JSON.stringify([def]);
 
-describe('built-in base URLs', () => {
-  it('take an override from the environment, else the default', () => {
-    expect(builtinBaseUrl('venice', {})).toBe(BUILTIN_BASE_URLS.venice.url);
-    expect(builtinBaseUrl('venice', { VITE_VENICE_BASE_URL: 'http://localhost:8787/api/v1' })).toBe('http://localhost:8787/api/v1');
-    expect(builtinBaseUrl('nope', {})).toBe('');
+const venice = (env: Record<string, string>) => endpointsOf(env).find((e) => e.id === 'venice')!;
+
+describe('built-in endpoints', () => {
+  it('take a base URL override from the environment, else the default', () => {
+    expect(venice({}).baseUrl).toBe('https://api.venice.ai/api/v1');
+    expect(venice({ VITE_VENICE_BASE_URL: 'http://localhost:8787/api/v1' }).baseUrl).toBe('http://localhost:8787/api/v1');
+  });
+
+  it('decide in one place which model lists need a key, and how a key is checked', () => {
+    const all = Object.fromEntries(endpointsOf({}).map((e) => [e.id, e]));
+    expect(all.venice).toMatchObject({ publicModels: true, keyCheck: 'api_keys/rate_limits' });
+    expect(all.anthropic).toMatchObject({ publicModels: false, kind: 'anthropic', keyHeader: { name: 'x-api-key' }, keyCheck: 'models?limit=1' });
+    for (const id of ['nanogpt', 'deepinfra', 'novita', 'chutes']) expect(all[id].keyCheck).toBeUndefined();
   });
 });
 
@@ -19,7 +27,7 @@ describe('parseCustomProviders', () => {
 
   it('normalizes the label and the base URL', () => {
     const [p] = parseCustomProviders(one({ id: 'my-llm', label: `  ${'L'.repeat(60)}  `, baseUrl: 'https://llm.example.com/v1///' }));
-    expect(p).toEqual({ id: 'my-llm', label: 'L'.repeat(40), baseUrl: 'https://llm.example.com/v1', keyOptional: false, publicModels: false });
+    expect(p).toMatchObject({ id: 'my-llm', label: 'L'.repeat(40), name: 'L'.repeat(40), baseUrl: 'https://llm.example.com/v1', keyOptional: false, publicModels: false, keyCheck: 'models' });
     expect(parseCustomProviders(one({ id: 'x', label: '   ', baseUrl: 'https://x.example.com' }))[0].label).toBe('x');
   });
 

@@ -3,11 +3,10 @@
 // Their model lists carry prices, context and capabilities; each has its own shape, read here.
 // Reasoning comes as `reasoning` / `reasoning_content` or inline <think> (all handled by the adapter); it is never sent back.
 import type { ModelInfo, ProviderPreset } from '../types';
-import { checkKey, flexTier, joinUrl, numberOf as num } from '../openai-compatible';
-import { builtinBaseUrl } from '../endpoints';
-import { t as tp } from '../messages';
-
-const env = ((import.meta as any).env ?? {}) as Record<string, string | undefined>;
+import { numberOf as num } from '../openai-compatible';
+import { ENDPOINTS } from '../endpoints';
+import { definePreset, flexTier } from './define';
+import { t as tp } from './messages';
 
 const str = (x: unknown): string | undefined => (typeof x === 'string' && x ? x : undefined);
 
@@ -26,61 +25,35 @@ function pricing(input: number | undefined, output: number | undefined, cached?:
   return { inputPerMTok: input, outputPerMTok: output, ...(cached !== undefined ? { cachedInputPerMTok: cached } : {}), currency: 'USD' };
 }
 
-/** The shared parts of these presets: OpenAI-compatible, direct from the browser, reasoning never sent back */
-function host(o: {
-  id: string;
-  label: string;
-  /** Model list without a key (fetched by the app directly) */
-  publicModels: boolean;
-  modelsPath?: string;
-  mapModel: ProviderPreset['mapModel'];
-  /** A request that fails without a valid key (none for hosts whose only cheap GET needs no key) */
-  keyCheckPath?: string;
-  hasPrivateModels?: boolean;
-  balanceApi?: ProviderPreset['balanceApi'];
-  /** Its cheaper flex tier, as the part of the list price it costs */
-  flexPriceFactor?: number;
-}): ProviderPreset {
-  const corsHost = new URL(builtinBaseUrl(o.id, env) || 'https://invalid').host;
-  const preset: ProviderPreset = {
-    id: o.id,
-    label: o.label,
-    get tagline() {
-      return tp(`${o.id}.tagline` as Parameters<typeof tp>[0]);
-    },
-    modelsNeedKey: !o.publicModels,
+/** The shared parts of these presets: OpenAI-compatible, reasoning never sent back */
+function host(
+  id: string,
+  o: Pick<ProviderPreset, 'mapModel' | 'modelsPath' | 'balanceApi'> & {
+    hasPrivateModels?: boolean;
+    /** Its cheaper flex tier, as the part of the list price it costs */
+    flexPriceFactor?: number;
+  }
+): ProviderPreset {
+  return definePreset(ENDPOINTS[id], {
     reasoningResend: 'never',
-    get keyGuide() {
-      return tp(`${o.id}.keyGuide` as Parameters<typeof tp>[0]);
-    },
-    get corsHint() {
-      return tp('cors.generic', { host: corsHost });
-    },
+    modelsPath: o.modelsPath ?? 'models',
+    mapModel: o.mapModel,
     ...(o.hasPrivateModels
       ? {
           copy: {
             get private() {
-              return tp(`${o.id}.private` as Parameters<typeof tp>[0]);
+              return tp(`${id}.private` as Parameters<typeof tp>[0]);
             }
           }
         }
       : {}),
-    defaults: { name: o.label, kind: 'openai-compatible', preset: o.id, baseUrl: builtinBaseUrl(o.id, env), modelListMode: 'fetch', enabled: false },
-    browserAccess: 'direct',
-    modelsPath: o.modelsPath ?? 'models',
-    mapModel: o.mapModel,
     ...(o.balanceApi ? { balanceApi: o.balanceApi } : {}),
-    ...(o.flexPriceFactor !== undefined ? flexTier(o.flexPriceFactor) : {}),
-    ...(o.keyCheckPath ? { validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, o.keyCheckPath!), f, preset.corsHint) } : {})
-  };
-  return preset;
+    ...(o.flexPriceFactor !== undefined ? flexTier(o.flexPriceFactor) : {})
+  });
 }
 
 // ---- NanoGPT: many models behind one key; per-key spend limits; zero-data-retention routes on some models ----
-export const nanogptPreset = host({
-  id: 'nanogpt',
-  label: 'NanoGPT',
-  publicModels: true,
+export const nanogptPreset = host('nanogpt', {
   modelsPath: 'models?detailed=true',
   hasPrivateModels: true,
   balanceApi: { path: '../check-balance', method: 'POST', read: (j) => num(j?.usd_balance) },
@@ -111,10 +84,7 @@ export const nanogptPreset = host({
 });
 
 // ---- DeepInfra: open models; per-key monthly spend limits; prompts kept in memory only ----
-export const deepinfraPreset = host({
-  id: 'deepinfra',
-  label: 'DeepInfra',
-  publicModels: true,
+export const deepinfraPreset = host('deepinfra', {
   // Flex is billed at 0.8 of the standard price, on the models that offer it
   flexPriceFactor: 0.8,
   mapModel(raw, providerId) {
@@ -134,12 +104,8 @@ export const deepinfraPreset = host({
 });
 
 // ---- Cerebras: very fast inference; its public model list sits outside /v1 ----
-export const cerebrasPreset = host({
-  id: 'cerebras',
-  label: 'Cerebras',
-  publicModels: true,
+export const cerebrasPreset = host('cerebras', {
   modelsPath: '../public/v1/models',
-  keyCheckPath: 'models',
   mapModel(raw, providerId) {
     const id = str(raw?.id);
     if (!id) return null;
@@ -162,10 +128,7 @@ export const cerebrasPreset = host({
 });
 
 // ---- Novita: open models; per-key budgets; no data kept by default ----
-export const novitaPreset = host({
-  id: 'novita',
-  label: 'Novita',
-  publicModels: true,
+export const novitaPreset = host('novita', {
   mapModel(raw, providerId) {
     const id = str(raw?.id);
     if (!id || raw.model_type !== 'chat' || (raw.status !== undefined && raw.status !== 1)) return null;
@@ -183,10 +146,7 @@ export const novitaPreset = host({
 });
 
 // ---- Chutes: decentralized inference; some models run in confidential computing (TEE) ----
-export const chutesPreset = host({
-  id: 'chutes',
-  label: 'Chutes',
-  publicModels: true,
+export const chutesPreset = host('chutes', {
   hasPrivateModels: true,
   mapModel(raw, providerId) {
     const id = str(raw?.id);
@@ -213,11 +173,7 @@ export const chutesPreset = host({
 
 // ---- Together: open models; zero data retention by default; the model list needs a key ----
 // Its list is a plain array (not { data }); `type` tells chat models apart and prices are per 1M tokens
-export const togetherPreset = host({
-  id: 'together',
-  label: 'Together',
-  publicModels: false,
-  keyCheckPath: 'models',
+export const togetherPreset = host('together', {
   mapModel(raw, providerId) {
     const id = str(raw?.id);
     if (!id || (raw.type !== undefined && raw.type !== 'chat')) return null;

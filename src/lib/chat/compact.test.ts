@@ -4,6 +4,7 @@ import { estimateTokens } from './context';
 import type { MessageRecord } from '../db/schema';
 import type { Part, ProviderConfig, Transport } from '../providers/types';
 import { venicePreset } from '../providers/presets/venice';
+import { providerConfigOf } from '../keys/accounts';
 
 function rec(id: string, role: MessageRecord['role'], parts: Part[], extra: Partial<MessageRecord> = {}): MessageRecord {
   return { id, conversationId: 'c', parentId: null, role, parts, createdAt: 0, status: 'done', ...extra };
@@ -28,7 +29,7 @@ function streamTransport(chunks: string[], capture: { body?: any } = {}): Transp
     }
   };
 }
-const cfg: ProviderConfig = { id: 'venice', ...venicePreset.defaults };
+const cfg: ProviderConfig = providerConfigOf('venice')!;
 const opts = (transport: Transport, extra: object = {}) => ({ provider: cfg, preset: venicePreset, auth: undefined, transport, model: 'm', signal: new AbortController().signal, ...extra });
 
 describe('planCompaction', () => {

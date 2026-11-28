@@ -2,7 +2,7 @@
 // usage tab
 import { signal } from '@preact/signals';
 import { PRESETS } from '../lib/providers/registry';
-import { joinUrl } from '../lib/providers/openai-compatible';
+import { send } from '../lib/providers/openai-compatible';
 import { vaultTransport as transport } from '../lib/vault/client';
 import { authFor, keyReady } from './keys';
 import { providerById, providers } from './models';
@@ -22,11 +22,11 @@ export function observeProviderBalance(providerId: string, usd: number) {
 /** Ask a provider's balance API (through the key vault); failures are ignored, the balance is optional */
 export async function fetchBalance(providerId: string): Promise<void> {
   const cfg = providerById(providerId);
-  const api = cfg && PRESETS[cfg.preset]?.balanceApi;
+  const preset = cfg && PRESETS[cfg.id];
+  const api = preset?.balanceApi;
   if (!cfg || !api || !keyReady(providerId)) return;
   try {
-    const res = await transport.fetch(joinUrl(cfg.baseUrl, api.path), { method: api.method ?? 'GET', headers: { Accept: 'application/json' } }, authFor(providerId));
-    if (!res.ok) return;
+    const res = await send(cfg, preset, transport, authFor(providerId), api.path, { method: api.method ?? 'GET', headers: { Accept: 'application/json' } });
     const usd = api.read(await res.json());
     if (usd !== undefined) observeProviderBalance(providerId, usd);
   } catch {

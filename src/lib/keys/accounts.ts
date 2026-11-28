@@ -1,9 +1,9 @@
 // Accounts whose API keys we hold (LLM providers + external services used by tools).
 // The key vault attaches keys only for accounts listed here, and only to the hosts listed here.
-// The app cannot change this (fixed at build time).
-import { PRESETS } from '../providers/registry';
+// The app cannot change this (fixed at build time). Built from data alone (no provider code), so the vault page stays small.
+import { ENDPOINTS } from '../providers/endpoints';
 import { SERVICES } from '../tools/services';
-import type { ProviderConfig, ProviderPreset } from '../providers/types';
+import type { ProviderConfig } from '../providers/types';
 
 export interface Account {
   id: string;
@@ -13,11 +13,10 @@ export interface Account {
   kind: 'llm' | 'tool';
   /** Usable without a key (with limits) */
   keyOptional: boolean;
-  keyGuide: string;
-  /** How to verify the key (LLM providers only) */
-  preset?: ProviderPreset;
   /** Header the key goes in (default: Authorization: Bearer) */
   keyHeader: { name: string; prefix: string };
+  /** A request that fails without a valid key: the vault tries a new key with it before saving it (LLM providers only) */
+  keyCheck?: { url: string; headers: Record<string, string> };
 }
 
 const BEARER = { name: 'Authorization', prefix: 'Bearer ' };
@@ -27,19 +26,15 @@ function hostOf(url: string): string {
 }
 
 export const ACCOUNTS: Record<string, Account> = {};
-for (const [id, p] of Object.entries(PRESETS)) {
-  ACCOUNTS[id] = {
-    id,
-    label: p.label,
-    host: hostOf(p.defaults.baseUrl),
+for (const e of Object.values(ENDPOINTS)) {
+  ACCOUNTS[e.id] = {
+    id: e.id,
+    label: e.label,
+    host: hostOf(e.baseUrl),
     kind: 'llm',
-    keyOptional: !!p.keyOptional,
-    // Read through so it follows the current language
-    get keyGuide() {
-      return p.keyGuide ?? '';
-    },
-    preset: p,
-    keyHeader: p.keyHeader ? { name: p.keyHeader.name, prefix: p.keyHeader.prefix ?? '' } : BEARER
+    keyOptional: e.keyOptional,
+    keyHeader: e.keyHeader ? { name: e.keyHeader.name, prefix: e.keyHeader.prefix ?? '' } : BEARER,
+    ...(e.keyCheck ? { keyCheck: { url: new URL(e.keyCheck, `${e.baseUrl}/`).toString(), headers: e.headers ?? {} } } : {})
   };
 }
 for (const [id, s] of Object.entries(SERVICES)) {
@@ -51,9 +46,6 @@ for (const [id, s] of Object.entries(SERVICES)) {
     host: hostOf(s.baseUrl),
     kind: 'tool',
     keyOptional: s.keyOptional,
-    get keyGuide() {
-      return s.keyGuide;
-    },
     keyHeader: BEARER
   };
 }
@@ -65,9 +57,10 @@ export function accountById(id: string): Account | undefined {
   return Object.hasOwn(ACCOUNTS, id) ? ACCOUNTS[id] : undefined;
 }
 
+/** A provider's connection (nothing for tool services) */
 export function providerConfigOf(id: string): ProviderConfig | undefined {
-  const p = PRESETS[id];
-  return p ? { id, ...p.defaults } : undefined;
+  const e = Object.hasOwn(ENDPOINTS, id) ? ENDPOINTS[id] : undefined;
+  return e && { id, name: e.name, kind: e.kind, baseUrl: e.baseUrl, headers: e.headers, preset: id };
 }
 
 /** Key status (what the vault tells the app; never the key itself) */

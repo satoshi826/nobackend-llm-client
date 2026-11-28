@@ -8,6 +8,7 @@ import { buildChatBody } from './openai-compatible';
 import { runAssistant } from '../chat/runner';
 import type { MessageRecord } from '../db/schema';
 import type { ChatMessage, ChatRequest, ProviderConfig, ProviderEvent, Transport } from './types';
+import { accountById, providerConfigOf } from '../keys/accounts';
 
 const enc = new TextEncoder();
 function sse(events: unknown[]): Response {
@@ -48,7 +49,7 @@ describe('Anthropic web search', () => {
     expect(buildAnthropicBody(req({ webSearch: 'auto' })).tools).toEqual([{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }]);
   });
   it('turns server tool blocks and citations into events, and keeps the blocks verbatim', async () => {
-    const cfg: ProviderConfig = { id: 'anthropic', ...anthropicPreset.defaults };
+    const cfg: ProviderConfig = providerConfigOf('anthropic')!;
     const evs = await collect(anthropicAdapter.chat(cfg, anthropicPreset, undefined, req({ webSearch: 'auto' }), once(searchTurn)));
     expect(evs.filter((e) => e.type === 'server-tool').at(-1)).toMatchObject({ id: 'srv1', state: 'done', resultCount: 1 });
     expect(evs.find((e) => e.type === 'server-tool' && e.query)).toMatchObject({ query: '天気' });
@@ -61,7 +62,7 @@ describe('Anthropic web search', () => {
   });
   it('maps pause_turn and sends a paused step back exactly as received', async () => {
     const paused = [...searchTurn.slice(0, -1), { type: 'message_delta', delta: { stop_reason: 'pause_turn' }, usage: { output_tokens: 3 } }];
-    const evs = await collect(anthropicAdapter.chat({ id: 'anthropic', ...anthropicPreset.defaults }, anthropicPreset, undefined, req({ webSearch: 'auto' }), once(paused)));
+    const evs = await collect(anthropicAdapter.chat(providerConfigOf('anthropic')!, anthropicPreset, undefined, req({ webSearch: 'auto' }), once(paused)));
     expect(evs.at(-1)).toEqual({ type: 'done', reason: 'pause' });
     const raw = (evs.find((e) => e.type === 'provider-content') as any).content;
     const r = toAnthropic([msg('user', [{ type: 'text', text: 'q' }]), { ...msg('assistant', [{ type: 'text', text: '晴れ' }]), vendorState: { providerContent: { provider: 'anthropic', content: raw } } }]);
@@ -84,7 +85,7 @@ describe('Anthropic web search', () => {
     };
     const draft = { id: 'a', conversationId: 'c', parentId: 'u', role: 'assistant', parts: [], createdAt: 0, status: 'streaming' } as MessageRecord;
     const out = await runAssistant({
-      provider: { id: 'anthropic', ...anthropicPreset.defaults },
+      provider: providerConfigOf('anthropic')!,
       preset: anthropicPreset,
       auth: undefined,
       transport: t,
@@ -111,11 +112,11 @@ describe('Anthropic web search', () => {
 
 // ---- Gemini ----
 describe('Gemini native adapter', () => {
-  const cfg: ProviderConfig = { id: 'gemini', ...geminiPreset.defaults };
+  const cfg: ProviderConfig = providerConfigOf('gemini')!;
   it('uses the native API with the key in x-goog-api-key', () => {
     expect(cfg.kind).toBe('gemini');
     expect(cfg.baseUrl).toBe('https://generativelanguage.googleapis.com/v1beta');
-    expect(geminiPreset.keyHeader).toEqual({ name: 'x-goog-api-key' });
+    expect(accountById('gemini')!.keyHeader).toEqual({ name: 'x-goog-api-key', prefix: '' });
   });
   it('builds contents, system instruction, tools, search and image output', () => {
     const b = buildGeminiBody(
@@ -191,13 +192,12 @@ describe('Gemini native adapter', () => {
 
 // ---- OpenRouter ----
 describe('OpenRouter web search and image output', () => {
-  const cfg: ProviderConfig = { id: 'openrouter', ...openrouterPreset.defaults };
   it('adds the server tool and image modalities when asked', () => {
-    const b = buildChatBody(cfg, openrouterPreset, req({ webSearch: 'auto', imageOutput: true, tools: [{ name: 'echo', description: 'd', parameters: {} }] }));
+    const b = buildChatBody(openrouterPreset, req({ webSearch: 'auto', imageOutput: true, tools: [{ name: 'echo', description: 'd', parameters: {} }] }));
     expect(b.tools.at(-1)).toEqual({ type: 'openrouter:web_search', parameters: { max_results: 5 } });
     expect(b.tools[0].function.name).toBe('echo');
     expect(b.modalities).toEqual(['image', 'text']);
-    expect(buildChatBody(cfg, openrouterPreset, req()).modalities).toBeUndefined();
+    expect(buildChatBody(openrouterPreset, req()).modalities).toBeUndefined();
   });
   it('reads citations, images and search counts', () => {
     const seen = new Set<string>();
@@ -226,10 +226,9 @@ describe('OpenRouter web search and image output', () => {
 
 // ---- Groq ----
 describe('Groq browser search', () => {
-  const cfg: ProviderConfig = { id: 'groq', ...groqPreset.defaults };
   it('adds browser_search only for gpt-oss models', () => {
-    expect(buildChatBody(cfg, groqPreset, req({ model: 'openai/gpt-oss-120b', webSearch: 'auto' })).tools).toEqual([{ type: 'browser_search' }]);
-    expect(buildChatBody(cfg, groqPreset, req({ model: 'llama-3.3-70b', webSearch: 'auto' })).tools).toBeUndefined();
+    expect(buildChatBody(groqPreset, req({ model: 'openai/gpt-oss-120b', webSearch: 'auto' })).tools).toEqual([{ type: 'browser_search' }]);
+    expect(buildChatBody(groqPreset, req({ model: 'llama-3.3-70b', webSearch: 'auto' })).tools).toBeUndefined();
     expect(groqPreset.nativeWebSearch?.supports('openai/gpt-oss-20b')).toBe(true);
     expect(groqPreset.mapModel!({ id: 'groq/compound' }, 'groq')).toBeNull();
   });
@@ -247,7 +246,7 @@ describe('images in replies', () => {
   it('stores image events through saveImage and adds file parts', async () => {
     const saved: string[] = [];
     const out = await runAssistant({
-      provider: { id: 'gemini', ...geminiPreset.defaults },
+      provider: providerConfigOf('gemini')!,
       preset: geminiPreset,
       auth: undefined,
       transport: once([{ candidates: [{ content: { parts: [{ text: 'どうぞ' }, { inlineData: { mimeType: 'image/png', data: 'iVBO' } }] }, finishReason: 'STOP' }] }]),

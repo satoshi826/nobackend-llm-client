@@ -2,6 +2,7 @@
 // key is stored (a provider that needs no key, at once). Used on the first screen and in Settings → 接続とキー
 import { useEffect, useState } from 'preact/hooks';
 import { getPreset } from '../lib/providers/registry';
+import { accountById } from '../lib/keys/accounts';
 import { keyStatus } from '../state/keys';
 import { connections, hostOfProvider, providerById, providers, setProviderEnabled } from '../state/models';
 import { KeyPanel } from './KeyPanel';
@@ -10,7 +11,7 @@ import { t } from './messages';
 
 export function AddConnection({ onAdded, heading = true }: { onAdded(id: string): void; heading?: boolean }) {
   const [chosen, setChosen] = useState<string | null>(null);
-  const keyless = chosen ? !!getPreset(providerById(chosen)!.preset).keyOptional : false;
+  const keyless = chosen ? !!accountById(chosen)?.keyOptional : false;
   const saved = chosen !== null && (keyless || keyStatus(chosen).present);
   useEffect(() => {
     if (!chosen || !saved) return;

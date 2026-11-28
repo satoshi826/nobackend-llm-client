@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { PRESETS } from './registry';
 import { parseSSE } from './sse';
 import { ThinkSplitter } from './think-splitter';
-import { flexTier, openAICompatibleAdapter, toOpenAIMessages } from './openai-compatible';
+import { openAICompatibleAdapter, toOpenAIMessages } from './openai-compatible';
+import { flexTier } from './presets/define';
 import { estimateCost } from '../usage';
 import { venicePreset } from './presets/venice';
 import { plainTransport } from './transport';
 import { classifyError } from './errors';
 import type { ProviderConfig, ProviderEvent, Transport } from './types';
+import { providerConfigOf } from '../keys/accounts';
 
 function streamOf(chunks: string[]): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
@@ -92,7 +94,7 @@ describe('ThinkSplitter', () => {
   });
 });
 
-const cfg: ProviderConfig = { id: 'p1', ...venicePreset.defaults, baseUrl: 'https://api.venice.ai/api/v1' };
+const cfg: ProviderConfig = { ...providerConfigOf('venice')!, id: 'p1', baseUrl: 'https://api.venice.ai/api/v1' };
 const cred = { keyId: 'venice' };
 
 function fakeTransport(body: string[] | (() => Response), capture?: { url?: string; init?: RequestInit }): Transport {

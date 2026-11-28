@@ -7,6 +7,7 @@ import { summarizeUsage, USAGE_SPLITS, type UsageBucket, type UsageRecord, type 
 import { enabledProviders, modelOf, providerById } from '../../../state/models';
 import { conversations, openConversation } from '../../../state/conversations';
 import { PRESETS } from '../../../lib/providers/registry';
+import { ENDPOINTS } from '../../../lib/providers/endpoints';
 import { modal, showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { Button, Chip, Collapse, EmptyState, Icon, IconButton, Segmented, cx } from '../../../components/ui';
@@ -377,7 +378,7 @@ function BalanceSection() {
     <section class="space-y-2">
       <h3 class="text-sm font-semibold">{t('balance.title')}</h3>
       {list.length === 0 ? (
-        <p class="text-xs text-muted">{t('balance.none', { providers: formatList(Object.values(PRESETS).flatMap((p) => (p.balanceApi ? [p.defaults.name] : [])).sort((a, b) => a.localeCompare(b))) })}</p>
+        <p class="text-xs text-muted">{t('balance.none', { providers: formatList(Object.values(PRESETS).flatMap((p) => (p.balanceApi ? [ENDPOINTS[p.id].name] : [])).sort((a, b) => a.localeCompare(b))) })}</p>
       ) : (
         <ul class="grid gap-2 sm:grid-cols-2">
           {list.map(([pid, b]) => (

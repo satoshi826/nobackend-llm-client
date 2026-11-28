@@ -11,6 +11,7 @@ import { modal, modelPickerTarget } from '../state/ui';
 import type { ModelInfo, ProviderConfig } from '../lib/providers/types';
 import { arrangeModels, FILTER_ORDER, matchesFilter, type ModelFilter, type ModelSort } from '../lib/model-list';
 import { PRESETS } from '../lib/providers/registry';
+import { accountById } from '../lib/keys/accounts';
 import { Badge, Button, Chevron, Collapse, EmptyState, Icon, Modal, MoreMark, ScrollArea, SearchField, Select, Spinner, cx, formatCtx, useBatches } from './ui';
 import { t } from './messages';
 import { formatDate, formatDateTime, formatUsd } from '../lib/i18n';
@@ -388,7 +389,7 @@ function ModelSections({
         const list = arranged.filter((m) => m.providerId === p.id);
         const st = modelsStates.value[p.id] ?? { loading: false, error: null, fetchedAt: null };
         const copy = copyOf(p.id);
-        const noKey = !keyInfos.value[p.id]?.present && !PRESETS[p.preset]?.keyOptional;
+        const noKey = !keyInfos.value[p.id]?.present && !accountById(p.id)?.keyOptional;
         // While searching or filtering, hide providers with no matching models
         if ((searching || filtering) && list.length === 0) return null;
         return (

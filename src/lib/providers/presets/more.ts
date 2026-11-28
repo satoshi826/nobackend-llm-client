@@ -1,43 +1,18 @@
-// Built-in providers other than Venice / OpenRouter, and OpenAI-compatible providers added at build time.
-// All of them need a key to fetch the model list, so it is fetched through the key vault (modelsNeedKey).
+// Built-in providers other than Venice / OpenRouter and the open-model hosts, and OpenAI-compatible providers added
+// at build time.
 import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
-import { checkKey, flexTier, joinUrl, numberOf } from '../openai-compatible';
-import { builtinBaseUrl, parseCustomProviders, type CustomProviderDef } from '../endpoints';
-import { t as tp } from '../messages';
+import { numberOf } from '../openai-compatible';
+import { ENDPOINTS, type Endpoint } from '../endpoints';
+import { definePreset, flexTier } from './define';
+import { t as tp } from './messages';
 import { timeOf } from './hosts';
-
-const env = ((import.meta as any).env ?? {}) as Record<string, string | undefined>;
 
 function model(providerId: string, id: string, name: string, extra: Partial<ModelInfo> = {}): ModelInfo {
   return { providerId, id, name, capabilities: {}, privacy: 'unknown', source: 'fetched', ...extra };
 }
 
 // ---- Anthropic (native Messages API) ----
-export const anthropicPreset: ProviderPreset = {
-  id: 'anthropic',
-  label: 'Anthropic',
-  // Texts are getters so they follow the current language
-  get tagline() {
-    return tp('anthropic.tagline');
-  },
-  keyHeader: { name: 'x-api-key' },
-  modelsNeedKey: true,
-  get keyGuide() {
-    return tp('anthropic.keyGuide');
-  },
-  get corsHint() {
-    return tp('cors.generic', { host: 'api.anthropic.com' });
-  },
-  defaults: {
-    name: 'Anthropic',
-    kind: 'anthropic',
-    preset: 'anthropic',
-    baseUrl: builtinBaseUrl('anthropic', env),
-    extraHeaders: { 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-    modelListMode: 'fetch',
-    enabled: false
-  },
-  browserAccess: 'needs-header',
+export const anthropicPreset = definePreset(ENDPOINTS.anthropic, {
   modelsPath: 'models?limit=100',
   // Anthropic's web search server tool (added by the adapter when ChatRequest.webSearch is set)
   nativeWebSearch: {
@@ -59,9 +34,8 @@ export const anthropicPreset: ProviderPreset = {
       capabilities: { tools: true, vision: has(cap?.image_input), webSearch: has(cap?.server_tools?.web_search), jsonSchema: cap ? has(cap.structured_outputs) : undefined },
       deprecated: raw.lifecycle === 'deprecated' || ends ? { date: ends } : undefined
     });
-  },
-  validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models?limit=1'), f, anthropicPreset.corsHint, cfg.extraHeaders as Record<string, string>)
-};
+  }
+});
 
 // ---- Google Gemini (native generateContent API; lib/providers/gemini.ts) ----
 const GEMINI_SKIP = /embedding|tts|imagen|veo|live|native-audio|aqa|learnlm|robotics|computer-use/;
@@ -69,17 +43,7 @@ const GEMINI_SKIP = /embedding|tts|imagen|veo|live|native-audio|aqa|learnlm|robo
 const geminiImageOut = (id: string) => /-image(-|$)|nano-banana/.test(id);
 /** Google Search together with function calling: Gemini 3 and later (text models) */
 const geminiSearches = (id: string) => /^gemini-([3-9]|\d{2})/.test(id) && !geminiImageOut(id);
-export const geminiPreset: ProviderPreset = {
-  id: 'gemini',
-  label: 'Google Gemini',
-  get tagline() {
-    return tp('gemini.tagline');
-  },
-  keyHeader: { name: 'x-goog-api-key' },
-  modelsNeedKey: true,
-  get keyGuide() {
-    return tp('gemini.keyGuide');
-  },
+export const geminiPreset = definePreset(ENDPOINTS.gemini, {
   // Google Search grounding (added by the adapter when ChatRequest.webSearch is set)
   nativeWebSearch: {
     supports: (id) => geminiSearches(id),
@@ -87,16 +51,11 @@ export const geminiPreset: ProviderPreset = {
       return tp('gemini.searchNote');
     }
   },
-  get corsHint() {
-    return tp('cors.generic', { host: 'generativelanguage.googleapis.com' });
-  },
   copy: {
     get destinationNote() {
       return tp('gemini.destinationNote');
     }
   },
-  defaults: { name: 'Gemini', kind: 'gemini', preset: 'gemini', baseUrl: builtinBaseUrl('gemini', env), modelListMode: 'fetch', enabled: false },
-  browserAccess: 'direct',
   modelsPath: 'models?pageSize=200',
   mapModel(raw, providerId) {
     const id = String(raw?.name ?? raw?.id ?? '').replace(/^models\//, '');
@@ -116,27 +75,14 @@ export const geminiPreset: ProviderPreset = {
         imageOutput
       }
     });
-  },
-  validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models?pageSize=1'), f, geminiPreset.corsHint)
-};
+  }
+});
 
 // ---- OpenAI (Chat Completions; images go through the images feature with the same key) ----
 const OPENAI_SKIP = /image|audio|realtime|tts|transcribe|embedding|moderation|search|instruct|dall-e|whisper|babbage|davinci|codex|computer-use|deep-research/;
-export const openaiPreset: ProviderPreset = {
-  id: 'openai',
-  label: 'OpenAI',
-  get tagline() {
-    return tp('openai.tagline');
-  },
-  modelsNeedKey: true,
+export const openaiPreset = definePreset(ENDPOINTS.openai, {
   // Chat Completions does not take earlier reasoning back
   reasoningResend: 'never',
-  get keyGuide() {
-    return tp('openai.keyGuide');
-  },
-  get corsHint() {
-    return tp('cors.generic', { host: 'api.openai.com' });
-  },
   copy: {
     get destinationNote() {
       return tp('openai.destinationNote');
@@ -144,8 +90,6 @@ export const openaiPreset: ProviderPreset = {
   },
   // Flex is billed at Batch API rates, half the standard price
   ...flexTier(0.5),
-  defaults: { name: 'OpenAI', kind: 'openai-compatible', preset: 'openai', baseUrl: builtinBaseUrl('openai', env), modelListMode: 'fetch', enabled: false },
-  browserAccess: 'direct',
   modelsPath: 'models',
   mapModel(raw, providerId) {
     const id = String(raw?.id ?? '');
@@ -156,35 +100,20 @@ export const openaiPreset: ProviderPreset = {
       capabilities: { tools: true, vision: /gpt-4o|gpt-4\.1|gpt-5|^o[34]|chatgpt/.test(id), reasoning, reasoningEffort: reasoning ? ['low', 'medium', 'high'] : undefined },
       deprecated: typeof raw.shutdown_date === 'string' ? { date: raw.shutdown_date } : undefined
     });
-  },
-  validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models'), f, openaiPreset.corsHint)
-};
+  }
+});
 
 // ---- DeepSeek ----
-export const deepseekPreset: ProviderPreset = {
-  id: 'deepseek',
-  label: 'DeepSeek',
+export const deepseekPreset = definePreset(ENDPOINTS.deepseek, {
   // Accounts topped up in CNY have no USD entry
   balanceApi: { path: 'user/balance', read: (j) => numberOf((Array.isArray(j?.balance_infos) ? j.balance_infos : []).find((b: any) => b?.currency === 'USD')?.total_balance) },
-  get tagline() {
-    return tp('deepseek.tagline');
-  },
-  modelsNeedKey: true,
   // Sending reasoning back on a different message is rejected, so send it back only in the middle of tool calls
   reasoningResend: 'tool-turns',
-  get keyGuide() {
-    return tp('deepseek.keyGuide');
-  },
-  get corsHint() {
-    return tp('cors.generic', { host: 'api.deepseek.com' });
-  },
   copy: {
     get destinationNote() {
       return tp('deepseek.destinationNote');
     }
   },
-  defaults: { name: 'DeepSeek', kind: 'openai-compatible', preset: 'deepseek', baseUrl: builtinBaseUrl('deepseek', env), modelListMode: 'fetch', enabled: false },
-  browserAccess: 'direct',
   modelsPath: 'models',
   mapModel(raw, providerId) {
     if (!raw?.id) return null;
@@ -196,9 +125,8 @@ export const deepseekPreset: ProviderPreset = {
       // Thinking models list their effort levels; which request field takes a level is not documented, so none is offered
       capabilities: { tools: true, vision: inputs.includes('image'), reasoning: raw.effort ? true : id.includes('reasoner') }
     });
-  },
-  validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models'), f, deepseekPreset.corsHint)
-};
+  }
+});
 
 // ---- Groq ----
 const GROQ_SKIP = /whisper|tts|guard|playai|orpheus|distil|compound/;
@@ -234,22 +162,8 @@ export function groqExtras(chunk: any, seen: Set<string>): ProviderEvent[] {
   }
   return out;
 }
-export const groqPreset: ProviderPreset = {
-  id: 'groq',
-  label: 'Groq',
-  get tagline() {
-    return tp('groq.tagline');
-  },
-  modelsNeedKey: true,
+export const groqPreset = definePreset(ENDPOINTS.groq, {
   reasoningResend: 'never',
-  get keyGuide() {
-    return tp('groq.keyGuide');
-  },
-  get corsHint() {
-    return tp('cors.generic', { host: 'api.groq.com' });
-  },
-  defaults: { name: 'Groq', kind: 'openai-compatible', preset: 'groq', baseUrl: builtinBaseUrl('groq', env), modelListMode: 'fetch', enabled: false },
-  browserAccess: 'direct',
   modelsPath: 'models',
   // Groq's browser search on the gpt-oss models
   nativeWebSearch: {
@@ -273,33 +187,23 @@ export const groqPreset: ProviderPreset = {
       maxOutputTokens: typeof raw.max_completion_tokens === 'number' ? raw.max_completion_tokens : undefined,
       capabilities: { tools: true, reasoning: /gpt-oss|qwen3|deepseek-r1|qwq/.test(id), webSearch: groqSearches(id) }
     });
-  },
-  validateKey: (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models'), f, groqPreset.corsHint)
-};
+  }
+});
 
 // ---- OpenAI-compatible providers added at build time (VITE_CUSTOM_PROVIDERS) ----
-export function customPreset(c: CustomProviderDef): ProviderPreset {
-  const host = new URL(c.baseUrl).host;
-  return {
-    id: c.id,
-    label: c.label,
+export function customPreset(e: Endpoint): ProviderPreset {
+  const host = new URL(e.baseUrl).host;
+  return definePreset(e, {
     get tagline() {
       return tp('custom.tagline', { host });
     },
-    keyOptional: c.keyOptional,
-    modelsNeedKey: !c.publicModels,
     reasoningResend: 'never',
     get keyGuide() {
-      return c.keyOptional ? tp('custom.keyGuideOptional') : tp('custom.keyGuide', { name: c.label });
+      return e.keyOptional ? tp('custom.keyGuideOptional') : tp('custom.keyGuide', { name: e.label });
     },
     get corsHint() {
       return tp('custom.corsHint', { host });
     },
-    defaults: { name: c.label, kind: 'openai-compatible', preset: c.id, baseUrl: c.baseUrl, modelListMode: 'fetch', enabled: false },
-    browserAccess: 'unknown',
-    modelsPath: 'models',
-    validateKey: c.keyOptional ? undefined : (cfg, f) => checkKey(joinUrl(cfg.baseUrl, 'models'), f, tp('custom.checkConnection', { host }))
-  };
+    modelsPath: 'models'
+  });
 }
-
-export const customPresets: ProviderPreset[] = parseCustomProviders(env.VITE_CUSTOM_PROVIDERS).map(customPreset);

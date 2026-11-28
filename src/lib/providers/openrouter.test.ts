@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { openrouterPreset } from './presets/openrouter';
 import { buildChatBody } from './openai-compatible';
-import type { ProviderConfig } from './types';
-
-const cfg: ProviderConfig = { id: 'openrouter', ...openrouterPreset.defaults };
 
 describe('OpenRouter preset', () => {
   it('maps model info (prices converted to per million tokens)', () => {
@@ -28,7 +25,7 @@ describe('OpenRouter preset', () => {
     expect(openrouterPreset.mapModel!({ id: 'x/img', architecture: { output_modalities: ['image'] } }, 'openrouter')).toBeNull();
   });
   it('denies data collection by default and converts reasoning_effort to reasoning.effort', () => {
-    const body = buildChatBody(cfg, openrouterPreset, {
+    const body = buildChatBody(openrouterPreset, {
       model: 'm',
       messages: [],
       params: { reasoningEffort: 'high' },
@@ -41,7 +38,7 @@ describe('OpenRouter preset', () => {
   });
   it('routes by the connection settings: 4-bit versions skipped by default, cheapest first when asked', () => {
     const request = (settings: Record<string, boolean>) =>
-      buildChatBody(cfg, openrouterPreset, {
+      buildChatBody(openrouterPreset, {
         model: 'm',
         messages: [],
         providerOptions: { openrouter: openrouterPreset.requestOptions!({ purpose: 'chat', webSearch: 'off', settings })! },

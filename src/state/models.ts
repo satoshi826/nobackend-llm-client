@@ -2,12 +2,13 @@
 import { batch, computed, signal } from '@preact/signals';
 import * as repo from '../lib/db/repo';
 import type { ModelInfo, ProviderConfig, ProviderError } from '../lib/providers/types';
-import { getAdapter, getPreset, PRESET_ORDER, PRESETS } from '../lib/providers/registry';
+import { getAdapter, getPreset, PRESET_ORDER } from '../lib/providers/registry';
 import { plainTransport } from '../lib/providers/transport';
 import { vaultTransport } from '../lib/vault/client';
 import { authFor, keyReady, keyStatus } from './keys';
 import { ProviderFailure } from '../lib/providers/errors';
 import { providerConfigOf } from '../lib/keys/accounts';
+import { ENDPOINTS } from '../lib/providers/endpoints';
 import { compareModels } from '../lib/model-list';
 import { saveSettings, settings } from './settings';
 import { withListPrices } from '../lib/providers/prices';
@@ -20,7 +21,7 @@ export const providers = signal<ProviderConfig[]>(PRESET_ORDER.map((id) => provi
 export const models = signal<ModelInfo[]>([]);
 export const modelsStates = signal<Record<string, ModelsState>>({});
 
-const needsNoKey = (p: ProviderConfig) => !!PRESETS[p.preset]?.keyOptional;
+const needsNoKey = (p: ProviderConfig) => ENDPOINTS[p.id].keyOptional;
 
 /**
  * Connections the user added (on or off), in on-screen order: a provider is one while its key is stored (locked or

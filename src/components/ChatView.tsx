@@ -5,9 +5,9 @@
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import { currentConv, isDraft } from '../state/conversations';
 import { keyStatus, vaultState } from '../state/keys';
-import { enabledProviders, providerById } from '../state/models';
+import { enabledProviders } from '../state/models';
 import { settings } from '../state/settings';
-import { PRESETS } from '../lib/providers/registry';
+import { accountById } from '../lib/keys/accounts';
 import { Header } from './chat/Header';
 import { Composer } from './chat/Composer';
 import { MessageList } from './chat/MessageList';
@@ -19,7 +19,7 @@ export function ChatView() {
   // The conversation's provider (for a draft whose model list has not arrived yet, the first enabled provider)
   const providerId = provs.some((p) => p.id === conv.providerId) || !isDraft.value ? conv.providerId : (provs[0]?.id ?? '');
   const st = keyStatus(providerId);
-  const keyOptional = !!PRESETS[providerById(providerId)?.preset ?? '']?.keyOptional;
+  const keyOptional = !!accountById(providerId)?.keyOptional;
   const vs = vaultState.value;
   const body =
     provs.length === 0

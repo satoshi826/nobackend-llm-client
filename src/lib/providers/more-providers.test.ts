@@ -5,6 +5,7 @@ import { buildChatBody } from './openai-compatible';
 import { appDirectOrigins, keyedProviderOrigins, parseCustomProviders } from './endpoints';
 import { appCsp, vaultCsp } from '../../../csp.config';
 import type { ChatMessage, ProviderConfig, ProviderEvent, Transport } from './types';
+import { accountById, providerConfigOf } from '../keys/accounts';
 
 const enc = new TextEncoder();
 function sse(events: { event?: string; data: unknown }[]): Response {
@@ -69,7 +70,7 @@ describe('Anthropic adapter', () => {
         ]);
       }
     };
-    const cfg: ProviderConfig = { id: 'anthropic', ...anthropicPreset.defaults };
+    const cfg: ProviderConfig = providerConfigOf('anthropic')!;
     const evs: ProviderEvent[] = [];
     for await (const ev of anthropicAdapter.chat(cfg, anthropicPreset, { keyId: 'anthropic' }, { model: 'm', messages: [msg('user', [{ type: 'text', text: 'x' }])], signal: new AbortController().signal }, t)) evs.push(ev);
     expect(sent!.url).toBe('https://api.anthropic.com/v1/messages');
@@ -82,13 +83,12 @@ describe('Anthropic adapter', () => {
   });
 
   it('sends the key as x-api-key', () => {
-    expect(anthropicPreset.keyHeader).toEqual({ name: 'x-api-key' });
+    expect(accountById('anthropic')!.keyHeader).toEqual({ name: 'x-api-key', prefix: '' });
     expect(anthropicPreset.modelsNeedKey).toBe(true);
   });
 });
 
 describe('OpenAI-compatible presets', () => {
-  const cfg = (p: typeof geminiPreset): ProviderConfig => ({ id: p.id, ...p.defaults });
   const withReasoning = [
     msg('user', [{ type: 'text', text: 'q' }]),
     { ...msg('assistant', [{ type: 'text', text: 'a' }]), vendorState: { reasoning_content: 'thought' } },
@@ -96,10 +96,10 @@ describe('OpenAI-compatible presets', () => {
   ];
   const req = { model: 'm', messages: withReasoning, signal: new AbortController().signal };
   it('DeepSeek keeps reasoning only for tool-call turns; Groq never resends it', () => {
-    const ds = buildChatBody(cfg(deepseekPreset), deepseekPreset, req).messages;
+    const ds = buildChatBody(deepseekPreset, req).messages;
     expect(ds[1].reasoning_content).toBeUndefined();
     expect(ds[2].reasoning_content).toBe('tool thought');
-    expect(buildChatBody(cfg(groqPreset), groqPreset, req).messages.some((m: any) => 'reasoning_content' in m)).toBe(false);
+    expect(buildChatBody(groqPreset, req).messages.some((m: any) => 'reasoning_content' in m)).toBe(false);
   });
   it('map only chat models', () => {
     expect(geminiPreset.mapModel!({ id: 'models/gemini-2.5-flash' }, 'gemini')?.id).toBe('gemini-2.5-flash');
@@ -114,8 +114,8 @@ describe('build-time custom providers', () => {
   it('parses and validates', () => {
     const list = parseCustomProviders(json);
     expect(list).toEqual([
-      { id: 'ollama', label: 'Ollama', baseUrl: 'http://localhost:11434/v1', keyOptional: true, publicModels: true },
-      { id: 'lab', label: 'lab', baseUrl: 'https://llm.example.com/v1', keyOptional: false, publicModels: false }
+      { id: 'ollama', label: 'Ollama', name: 'Ollama', kind: 'openai-compatible', baseUrl: 'http://localhost:11434/v1', keyOptional: true, publicModels: true },
+      { id: 'lab', label: 'lab', name: 'lab', kind: 'openai-compatible', baseUrl: 'https://llm.example.com/v1', keyOptional: false, publicModels: false, keyCheck: 'models' }
     ]);
     expect(() => parseCustomProviders('[{"id":"venice","baseUrl":"https://x"}]')).toThrow();
     expect(() => parseCustomProviders('[{"id":"x","baseUrl":"http://evil.example.com"}]')).toThrow();
@@ -131,11 +131,11 @@ describe('build-time custom providers', () => {
     expect(appCsp(env)).not.toContain('api.anthropic.com');
     expect(vaultCsp(env, ["'self'"])).toContain('https://api.groq.com');
   });
-  it('makes a key-optional preset', () => {
-    const p = customPreset(parseCustomProviders(json)[0]);
-    expect(p.keyOptional).toBe(true);
-    expect(p.modelsNeedKey).toBe(false);
-    expect(p.validateKey).toBeUndefined();
+  it('makes a key-optional preset, whose key is not checked', () => {
+    const [ollama, lab] = parseCustomProviders(json);
+    expect(customPreset(ollama).modelsNeedKey).toBe(false);
+    expect(customPreset(lab).modelsNeedKey).toBe(true);
+    expect(ollama.keyCheck).toBeUndefined();
   });
 });
 

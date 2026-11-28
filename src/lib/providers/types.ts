@@ -1,20 +1,14 @@
 // Type definitions for the provider layer
 // This layer does not depend on UI or DB.
+import type { Endpoint } from './endpoints';
 
-export type AdapterKind = 'openai-compatible' | 'anthropic' | 'gemini';
+export type { AdapterKind } from './endpoints';
 
-export interface ProviderConfig {
-  id: string;
-  name: string;
-  kind: AdapterKind;
-  preset: string; // preset ID (registry.ts)
-  baseUrl: string;
-  extraHeaders?: Record<string, string>;
-  extraBody?: Record<string, unknown>;
-  proxyUrl?: string;
-  modelListMode: 'fetch' | 'manual' | 'both';
-  enabled: boolean;
-}
+/**
+ * A provider's connection as the adapters use it (fixed at build time: endpoints.ts). `preset` repeats the id, and
+ * `modelListMode` / `enabled` are read nowhere: they stay while the image feature (its code and tests) still uses them
+ */
+export type ProviderConfig = Pick<Endpoint, 'id' | 'name' | 'kind' | 'baseUrl' | 'headers'> & { preset: string; modelListMode?: string; enabled?: boolean };
 
 export interface ModelCapabilities {
   vision?: boolean;
@@ -200,9 +194,6 @@ export interface Transport {
   fetch(url: string, init: RequestInit, auth?: AuthRef): Promise<Response>;
 }
 
-/** Function that sends with the key attached (only created inside the key vault; used to verify keys) */
-export type KeyedFetch = (url: string, init?: RequestInit) => Promise<Response>;
-
 /** Provider-specific setting (boolean; shown under Settings > Connections and keys) */
 export interface ProviderSetting {
   key: string;
@@ -219,17 +210,17 @@ export interface RequestOptionsContext {
   settings: Record<string, boolean>;
 }
 
+/** What a provider does differently (presets/define.ts builds one per connection) */
 export interface ProviderPreset {
   id: string;
   label: string;
   /** One-liner shown on the provider picker */
   tagline?: string;
-  /** Header the key goes in (default: Authorization: Bearer <key>). Used by the key vault */
-  keyHeader?: { name: string; prefix?: string };
-  /** Usable without a key (e.g. local Ollama) */
-  keyOptional?: boolean;
-  /** Fetching the model list needs a key (fetched through the vault) */
-  modelsNeedKey?: boolean;
+  /** Guide on creating a key and configuring it safely */
+  keyGuide?: string;
+  corsHint?: string;
+  /** Fetching the model list needs a key (fetched through the vault); decided by the connection (publicModels) */
+  modelsNeedKey: boolean;
   /**
    * Whether earlier reasoning (reasoning_content) may be sent back.
    * always: per the setting / tool-turns: only messages that contain tool calls / never: not sent (API rejects it)
@@ -247,13 +238,11 @@ export interface ProviderPreset {
   settings?: ProviderSetting[];
   /**
    * The provider's cheaper, lower-priority tier (service_tier: 'flex'), offered as the setting `flex` (flexTier in
-   * openai-compatible.ts). priceFactor: the part of the list price it costs
+   * presets/define.ts). priceFactor: the part of the list price it costs
    */
   flex?: { priceFactor: number };
   /** Provider-specific request options (passed to transformRequest as req.providerOptions[preset.id]) */
   requestOptions?(ctx: RequestOptionsContext): Record<string, unknown> | undefined;
-  /** Response headers the key vault may return to the app (balance etc.) */
-  responseHeaders?: string[];
   /** Descriptive text for the UI */
   copy?: {
     /** Description of privacy: 'private' models */
@@ -269,21 +258,14 @@ export interface ProviderPreset {
     /** Rows added to the list of destinations */
     extraDestinations?: [string, string][];
   };
-  defaults: Omit<ProviderConfig, 'id'>;
-  browserAccess: 'direct' | 'needs-header' | 'needs-proxy' | 'unknown';
   modelsPath?: string;
   mapModel?(raw: any, providerId: string): ModelInfo | null;
   transformRequest?(body: Record<string, any>, req: ChatRequest): Record<string, any>;
   parseExtra?(chunk: any, seen: Set<string>): ProviderEvent[];
-  /** Read the balance etc. from response headers (headers to return are listed in responseHeaders) */
+  /** Read the balance etc. from response headers (the vault passes back the connection's responseHeaders) */
   readHeaders?(headers: Headers): ProviderEvent[];
   /** Balance API that takes the normal key (called through the key vault, on the provider's own host) */
   balanceApi?: BalanceApi;
-  /** Verify a key (called inside the key vault with a fetch that attaches the candidate key) */
-  validateKey?(cfg: ProviderConfig, fetchWithKey: KeyedFetch): Promise<{ ok: boolean; error?: ProviderError }>;
-  /** Guide on creating a key and configuring it safely */
-  keyGuide?: string;
-  corsHint?: string;
 }
 
 export interface BalanceApi {

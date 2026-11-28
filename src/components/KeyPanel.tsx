@@ -3,7 +3,8 @@
 // - VaultSecurityPanel: the vault-wide passphrase, and deleting all keys
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { VAULT_ORIGIN, vaultViewUrl } from '../lib/vault/client';
-import { accountById } from '../lib/keys/accounts';
+import { PRESETS } from '../lib/providers/registry';
+import { SERVICES } from '../lib/tools/services';
 import { connectKeys } from '../state/keys';
 import { modal } from '../state/ui';
 import { Icon } from './ui';
@@ -46,7 +47,7 @@ function VaultFrame({ params, title }: { params: Record<string, string>; title: 
  * compact: for places such as inside settings, where the storage location is explained elsewhere
  */
 export function KeyPanel({ accountId, showGuide = true, compact }: { accountId: string; showGuide?: boolean; compact?: boolean }) {
-  const guide = accountById(accountId)?.keyGuide;
+  const guide = (PRESETS[accountId] ?? SERVICES[accountId])?.keyGuide;
   return (
     <div class="space-y-3">
       <VaultFrame params={{ view: 'keys', provider: accountId, ...(compact ? { compact: '1' } : {}) }} title={t('keys.frameKeys')} />

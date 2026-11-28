@@ -6,7 +6,8 @@
 //   - with a passphrase, all keys are stored encrypted (setting one later re-encrypts the stored keys)
 //   - unlocking happens once for the whole vault. If the passphrase is forgotten, "delete all keys" and enter them again
 import { decryptSecret, encryptSecret, MIN_PASSPHRASE_LENGTH, WrongPassphraseError, type EncryptedBlob } from '../src/lib/crypto/passphrase';
-import { ACCOUNT_IDS, accountById, providerConfigOf, type KeyStatus, type VaultState } from '../src/lib/keys/accounts';
+import { ACCOUNT_IDS, accountById, type KeyStatus, type VaultState } from '../src/lib/keys/accounts';
+import { failureOf, sendOrFail } from '../src/lib/providers/errors';
 import { formatList, formatNumber } from '../src/lib/i18n';
 import { t } from './messages';
 import { b64, b64url, openWithPrf, randomBytes, sealWithPrf, unb64, unb64url, type SealedPassphrase } from './passkey';
@@ -191,10 +192,13 @@ export async function saveKey(id: string, key: string): Promise<Result> {
   if (!k) return { ok: false, message: t('store.enterKey') };
   const vs = await vaultState();
   if (vs.locked) return { ok: false, message: t('store.unlockFirst') };
-  const cfg = providerConfigOf(id);
-  if (cfg && account.preset?.validateKey) {
-    const r = await account.preset.validateKey(cfg, (url, init) => keyedFetch(id, url, init ?? {}, k));
-    if (!r.ok) return { ok: false, message: r.error?.message ?? t('store.keyCheckFailed') };
+  if (account.keyCheck) {
+    const { url, headers } = account.keyCheck;
+    try {
+      await sendOrFail(() => keyedFetch(id, url, { method: 'GET', headers: { Accept: 'application/json', ...headers } }, k));
+    } catch (e) {
+      return { ok: false, message: failureOf(e).message };
+    }
   }
   const base = { id, createdAt: Date.now() };
   if (passphrase !== null) {

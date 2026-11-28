@@ -7,6 +7,7 @@ import { venicePreset } from '../providers/presets/venice';
 import type { ProviderConfig, Transport } from '../providers/types';
 import { exportAll, importAll, validate } from '../db/export';
 import { putConversation, putMessage, listMessages, listConversations, deleteConversation } from '../db/repo';
+import { providerConfigOf } from '../keys/accounts';
 
 function rec(id: string, parentId: string | null, role: 'user' | 'assistant', text: string, t: number, extra: Partial<MessageRecord> = {}): MessageRecord {
   return { id, conversationId: 'c', parentId, role, parts: [{ type: 'text', text }], createdAt: t, status: 'done', ...extra };
@@ -63,7 +64,7 @@ describe('buildRequestMessages', () => {
 });
 
 describe('runAssistant', () => {
-  const cfg: ProviderConfig = { id: 'p', ...venicePreset.defaults };
+  const cfg: ProviderConfig = { ...providerConfigOf('venice')!, id: 'p' };
   const enc = new TextEncoder();
   it('applies the stream to the end and saves it', async () => {
     const t: Transport = {
@@ -228,7 +229,7 @@ describe('resending reasoning', () => {
 
 import type { Tool } from '../tools/types';
 describe('tool execution loop', () => {
-  const cfg: ProviderConfig = { id: 'p', ...venicePreset.defaults };
+  const cfg: ProviderConfig = { ...providerConfigOf('venice')!, id: 'p' };
   const enc = new TextEncoder();
   const sseBody = (chunks: unknown[]) =>
     new Response(

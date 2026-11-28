@@ -60,6 +60,21 @@ export function errorFromFetchFailure(err: unknown, corsHint?: string): Provider
   };
 }
 
+/** Send a request: not reaching the provider, or an error answer, throws a ProviderFailure (the common error) */
+export async function sendOrFail(send: () => Promise<Response>, corsHint?: string): Promise<Response> {
+  let res: Response;
+  try {
+    res = await send();
+  } catch (e) {
+    throw e instanceof ProviderFailure ? e : new ProviderFailure(errorFromFetchFailure(e, corsHint));
+  }
+  if (!res.ok) throw new ProviderFailure(await errorFromResponse(res, corsHint));
+  return res;
+}
+
+/** The common error of what sending threw */
+export const failureOf = (e: unknown, corsHint?: string): ProviderError => (e instanceof ProviderFailure ? e.error : errorFromFetchFailure(e, corsHint));
+
 export function isAbort(err: unknown): boolean {
   return (err as any)?.name === 'AbortError';
 }

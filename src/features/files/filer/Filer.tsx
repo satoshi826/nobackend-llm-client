@@ -42,7 +42,7 @@ import {
   type FilerView
 } from '../state';
 import { ActionMenu, Crumb, SubBar, type MenuAction } from '../components/common';
-import { formatNumber } from '../../../lib/i18n';
+import { formatList, formatNumber } from '../../../lib/i18n';
 import { convTitle, useFilerItems, viewLabel, VIEW_ICONS } from './use-items';
 import { Card, folderKey, FolderTile, ListView, useDropTarget, type EntryApi } from './entries';
 import { MoveDialog, RenameDialog } from './dialogs';
@@ -178,7 +178,7 @@ export function Filer() {
       const ok = await askConfirm({
         title: entryKeys.length === 1 ? t('filer.deleteTitleOne') : t('filer.deleteTitle', { n: formatNumber(entryKeys.length) }),
         message: fs.length
-          ? t('filer.confirmFolders', { folders: fs.map((f) => `「${f.name}」`).join(''), files: formatNumber(r.fileIds.length), images: formatNumber(r.imageIds.length) })
+          ? t('filer.confirmFolders', { folders: formatList(fs.map((f) => t('filer.folderName', { name: f.name }))), files: formatNumber(r.fileIds.length), images: formatNumber(r.imageIds.length) })
           : r.imageIds.length
             ? t('filer.confirmFilesImages', { files: formatNumber(r.fileIds.length), images: formatNumber(r.imageIds.length) })
             : t('filer.confirmFiles', { files: formatNumber(r.fileIds.length) }),

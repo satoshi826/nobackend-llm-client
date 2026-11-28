@@ -14,6 +14,7 @@ export const t = defineMessages(
     'card.read': '{title}を読みました',
     'card.readJina': '{title}を読みました（Jina Reader 経由）',
     'card.prompt': '知りたいこと',
+    'card.title': '「{title}」',
     // settings
     'settings.enabled': 'Web 検索を使う',
     'settings.routeNative': 'モデル内蔵の検索',
@@ -59,6 +60,7 @@ export const t = defineMessages(
       'card.read': 'Read {title}',
       'card.readJina': 'Read {title} (via Jina Reader)',
       'card.prompt': 'Looking for',
+      'card.title': '"{title}"',
       'settings.enabled': 'Use web search',
       'settings.routeNative': "Model's built-in search",
       'settings.readToggle': 'Let models read pages',
@@ -101,6 +103,7 @@ export const t = defineMessages(
       'card.read': '已读取{title}',
       'card.readJina': '已读取{title}（经由 Jina Reader）',
       'card.prompt': '想了解的内容',
+      'card.title': '“{title}”',
       'settings.enabled': '使用网页搜索',
       'settings.routeNative': '模型内置的搜索',
       'settings.readToggle': '允许模型读取网页',

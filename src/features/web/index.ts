@@ -38,7 +38,7 @@ registerToolView({
   doneStatus: (p) => {
     const d = p.uiDetails as { title?: string; url?: string; via?: string } | undefined;
     if (!d?.url) return undefined;
-    return t(d.via === 'jina' ? 'card.readJina' : 'card.read', { title: d.title ? `「${d.title}」` : new URL(d.url).host });
+    return t(d.via === 'jina' ? 'card.readJina' : 'card.read', { title: d.title ? t('card.title', { title: d.title }) : new URL(d.url).host });
   }
 });
 registerSettingsTab({

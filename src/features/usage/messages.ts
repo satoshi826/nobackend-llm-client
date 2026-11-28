@@ -6,7 +6,7 @@ export const t = defineMessages(
     tab: '使用量',
     'balance.title': '残高',
     'balance.none': '残高を確認できる接続先（{providers}）のキーを設定すると、ここに最新の残高が表示されます。',
-    'balance.keyLimit': 'このキーの上限の残り',
+    'balance.keyRow': 'このキーの上限の残り（{time} 時点）',
     'balance.row': '{time} 時点',
     intro:
       'このブラウザで送った分のトークン数と費用です。記録はこの端末の中だけにあり、会話を消しても残ります（一時チャットは記録しません）。費用を返さない接続先は、モデルの単価から推定して「約」を付けます。単価も分からないものは「—」です。',
@@ -78,7 +78,7 @@ export const t = defineMessages(
       tab: 'Usage',
       'balance.title': 'Balance',
       'balance.none': 'Set a key for a provider that reports its balance ({providers}) to see the latest balance here.',
-      'balance.keyLimit': "left on this key's limit",
+      'balance.keyRow': "left on this key's limit, as of {time}",
       'balance.row': 'as of {time}',
       intro:
         'Tokens and cost of what you sent from this browser. The records stay on this device and remain after you delete conversations (temporary chats are not recorded). For providers that do not report cost, it is estimated from model prices and marked "~". "—" means the price is unknown too.',
@@ -144,7 +144,7 @@ export const t = defineMessages(
       tab: '用量',
       'balance.title': '余额',
       'balance.none': '为可查询余额的服务商（{providers}）设置密钥后，这里会显示最新余额。',
-      'balance.keyLimit': '此密钥额度的剩余',
+      'balance.keyRow': '此密钥额度的剩余（截至 {time}）',
       'balance.row': '截至 {time}',
       intro:
         '这是从此浏览器发送的 token 数和费用。记录只保存在此设备上，删除对话后仍会保留（临时对话不记录）。对于不返回费用的服务商，会根据模型单价估算并标注“约”。连单价也未知的显示为“—”。',

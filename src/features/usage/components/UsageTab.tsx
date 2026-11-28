@@ -386,8 +386,7 @@ function BalanceSection() {
               <p class="text-xs text-muted">{providerById(pid)?.name ?? pid}</p>
               <p class="text-lg font-semibold tabular-nums">{formatUsd(b.usd)}</p>
               <p class="text-[11px] text-muted">
-                {PRESETS[pid]?.balanceApi?.scope === 'key' && `${t('balance.keyLimit')} ・ `}
-                {t('balance.row', { time: formatDateTime(b.at) })}
+                {t(PRESETS[pid]?.balanceApi?.scope === 'key' ? 'balance.keyRow' : 'balance.row', { time: formatDateTime(b.at) })}
               </p>
             </li>
           ))}

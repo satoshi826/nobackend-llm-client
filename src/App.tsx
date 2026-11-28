@@ -11,14 +11,14 @@ import { LockScreen } from './components/LockScreen';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { lazyComponent } from './components/lazy';
-import { SystemPromptModal } from './components/SystemPromptModal';
 import { FetchDialog, PageFetcher } from './components/FetchDialog';
 import { PAGE_WEB } from './lib/fetcher/config';
 import { Button, cx, Icon, Spinner } from './components/ui';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { mainViews } from './components/extensions';
-import { Lightbox } from './components/media/Viewer';
 import { mainView } from './state/ui';
+import { lightbox } from './state/media';
+import { markdownSettled } from './components/Markdown';
 import { t } from './components/messages';
 import { t as ts } from './components/settings/messages';
 
@@ -26,6 +26,8 @@ import { t as ts } from './components/settings/messages';
 const closeModal = () => (modal.value = null);
 const ModelPicker = lazyComponent(() => import('./components/ModelPicker').then((m) => m.ModelPicker), { overlay: true, onDismiss: closeModal });
 const SettingsModal = lazyComponent(() => import('./components/SettingsModal').then((m) => m.SettingsModal), { overlay: true, onDismiss: closeModal });
+const SystemPromptModal = lazyComponent(() => import('./components/SystemPromptModal').then((m) => m.SystemPromptModal), { overlay: true, onDismiss: closeModal });
+const Lightbox = lazyComponent(() => import('./components/media/Viewer').then((m) => m.Lightbox), { overlay: true, onDismiss: () => (lightbox.value = null) });
 
 /** The chat, or a screen a feature registered (e.g. a file) */
 function MainArea() {
@@ -186,7 +188,8 @@ export function App() {
     );
   if (tabState.value !== 'active') return <OtherTab left={tabState.value === 'left'} />;
   if (startFailed.value !== null) return <StartFailed message={startFailed.value} />;
-  if (!ready.value) {
+  // The Markdown renderer too, so answers never show before they can be rendered (components/Markdown.tsx)
+  if (!ready.value || !markdownSettled.value) {
     return <div class="grid h-full place-items-center text-sm text-muted">{t('app.loading')}</div>;
   }
   if (dataLock.value === 'locked' || dataLock.value === 'lost') {
@@ -205,7 +208,7 @@ export function App() {
       <Sidebar />
       <MainArea />
       <Modals />
-      <Lightbox />
+      {lightbox.value && <Lightbox />}
       <FetchDialog />
       {PAGE_WEB && <PageFetcher />}
       <ConfirmDialog />

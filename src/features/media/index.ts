@@ -9,13 +9,13 @@ import {
   registerToolView,
   registerUserMessageExtra
 } from '../../components/extensions';
+import { lazyComponent } from '../../components/lazy';
 import { registerMessageTransform } from '../../lib/chat/request';
 import type { MessageRecord } from '../../lib/db/schema';
 import type { Part } from '../../lib/providers/types';
 import { MediaAbove, MediaChips, mediaMode } from './components/Composer';
 import { ImageAnswer, ImageFooter, ReplyImages, UserMediaRequest, VideoAnswer, VideoFooter } from './components/Answer';
 import { ImageToolDetail, imageToolNote } from './components/ToolDetail';
-import { ImageSettings } from './components/Settings';
 import { tagKeys } from './components/TagSuggestions';
 import { registerMediaActions } from './actions';
 import { imageNote } from './image/transform';
@@ -47,7 +47,7 @@ registerToolView({
   doneStatus: (p) => imageCount((p.uiDetails as { blobIds?: string[] } | undefined)?.blobIds?.length ?? 0),
   Detail: ImageToolDetail
 });
-registerSettingsTab({ id: 'images', label: () => ti('settings.title'), icon: 'image', Component: ImageSettings });
+registerSettingsTab({ id: 'images', label: () => ti('settings.title'), icon: 'image', Component: lazyComponent(() => import('./components/Settings').then((m) => m.ImageSettings)) });
 registerConnectionFeature({ id: 'images', label: () => ti('settings.title'), icon: 'image', offeredBy: (id) => imageProviderList().some((p) => p.account === id) });
 registerConnectionFeature({ id: 'video', label: () => tv('mode.button'), icon: 'video', offeredBy: (id) => videoProviderList().some((p) => p.account === id) });
 registerMediaActions();

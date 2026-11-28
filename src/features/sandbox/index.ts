@@ -1,8 +1,8 @@
 // Sandbox feature: the run_javascript tool for chat models. Importing this module registers it with the core.
 // (Showing HTML / SVG and running code blocks are in the core: components/SandboxFrame, components/CodeRun.)
 import { registerSettingsTab, registerToolView } from '../../components/extensions';
+import { lazyComponent } from '../../components/lazy';
 import { settings } from '../../state/settings';
-import { SandboxSettings } from './Settings';
 import { registerToolProvider } from '../../state/tool-registry';
 import { RunOutput } from './RunOutput';
 import { conversationFile } from '../files';
@@ -17,7 +17,7 @@ registerToolProvider({
     model?.capabilities.tools && settings.value.toolPermissions[RUN_JAVASCRIPT] !== 'deny' ? [makeRunJavaScriptTool((id) => conversationFile(conv, history, id))] : []
 });
 // Its own tab: the sandbox serves both chat (code blocks, the tool) and files (HTML / SVG previews)
-registerSettingsTab({ id: 'sandbox', label: () => t('tabLabel'), icon: 'code', Component: SandboxSettings });
+registerSettingsTab({ id: 'sandbox', label: () => t('tabLabel'), icon: 'code', Component: lazyComponent(() => import('./Settings').then((m) => m.SandboxSettings)) });
 
 registerToolView({
   names: [RUN_JAVASCRIPT],

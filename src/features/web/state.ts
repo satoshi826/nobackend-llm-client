@@ -3,7 +3,6 @@
 import * as repo from '../../lib/db/repo';
 import type { Conversation } from '../../lib/db/schema';
 import { getPreset } from '../../lib/providers/registry';
-import { pageText } from '../../lib/fetcher/page-text';
 import { extractFromPage } from '../../lib/chat/extract';
 import type { ToolResult } from '../../lib/tools/types';
 import { vaultTransport as transport } from '../../lib/vault/client';
@@ -68,6 +67,8 @@ function pageReader(conv: Conversation) {
   return async (url: string, prompt: string, signal: AbortSignal): Promise<ToolResult> => {
     const got = await fetchFromWeb(url, 'read', signal);
     if (!got) return { content: 'The user declined to fetch this page.', isError: true, details: { url, declined: true } };
+    // Its own chunk (with DOMPurify), loaded when a page is first read
+    const { pageText } = await import('../../lib/fetcher/page-text');
     const page = await pageText(got, async (f) => (await extractText(f)).text);
     // The model sees the address it asked for; where a redirect ended is the site's choice, so only its host is named
     const finalHost = new URL(got.url).host;

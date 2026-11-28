@@ -1,4 +1,3 @@
-// User settings
 import { signal } from '@preact/signals';
 import * as repo from '../lib/db/repo';
 import { defineFeatureSettings, pickLegacy } from './feature-settings';

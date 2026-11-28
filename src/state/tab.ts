@@ -12,7 +12,7 @@ const TAKE = 'nbl-take-over';
 
 /** Hold the data for this tab, taking it over when the user chose so. false: another tab holds it */
 export function holdData(): Promise<boolean> {
-  // Browsers without Web Locks work as before (every tab writes)
+  // Browsers without Web Locks: every tab uses the data (and writes it)
   if (!navigator.locks) return Promise.resolve(true);
   const steal = sessionStorage.getItem(TAKE) === '1';
   sessionStorage.removeItem(TAKE);

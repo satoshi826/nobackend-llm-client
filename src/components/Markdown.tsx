@@ -68,7 +68,6 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
     }
     if (!streaming) {
       settled.current = null;
-      // Do not highlight while streaming (expensive, and the code is incomplete)
       el.replaceChildren(md.renderMarkdownCached(text, { highlight: hlReady, citations: cited }));
       return;
     }
@@ -77,6 +76,7 @@ export function Markdown({ text, streaming, citations, class: className }: { tex
       el.textContent = '';
       s = settled.current = { src: '', cites, nodes: 0 };
     }
+    // No highlighting while streaming (expensive, and the code is incomplete)
     const render = (src: string) => md.renderMarkdown(src, { highlight: false, citations: cited });
     while (el.childNodes.length > s.nodes) el.lastChild!.remove();
     const end = md.settledEnd(text, s.src.length);

@@ -32,7 +32,7 @@ export function MessageList() {
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [path.length, lastLen]);
   // Content can grow after rendering (images loading, code highlighting): keep following the bottom. Not while a
-  // message is edited in the list: its box grows where it is, and following the bottom pushed it under the header
+  // message is edited in the list: its box grows where it is, and following the bottom would push it under the header
   useEffect(() => {
     const el = scroller.current;
     const inner = el?.firstElementChild;

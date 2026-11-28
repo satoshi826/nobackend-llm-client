@@ -19,7 +19,6 @@ import { t } from './messages';
 
 export const compactingConv = signal<string | null>(null);
 
-// ---- Context usage and compaction ----
 export const contextUsage = computed<RequestEstimate & { limit: number | null; ratio: number | null }>(() => {
   const conv = currentConv.value;
   const model = modelOf(conv.providerId, conv.modelId);

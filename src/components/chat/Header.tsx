@@ -1,4 +1,4 @@
-// Chat header: conversation title, temporary chat, context meter, instructions
+// Chat header: conversation title, temporary chat, cost, context meter, tools and output, instructions
 // (the model is chosen in the input box: see Composer)
 import { currentConv, isDraft, startNewChat } from '../../state/conversations';
 import { compactConversation, compactingConv, compactionPreview, contextUsage, lastCompaction } from '../../state/compaction';

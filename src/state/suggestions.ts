@@ -11,7 +11,6 @@ import { accountInUse, providerById } from './models';
 import { messages, saveMessage } from './conversations';
 import { parseModelRef, providerOptionsFor, recordUsage } from './request-helpers';
 
-// ---- Reply suggestions ----
 /** ID of the answer whose reply suggestions are being generated */
 export const suggestingFor = signal<string | null>(null);
 let suggestCtrl: AbortController | null = null;

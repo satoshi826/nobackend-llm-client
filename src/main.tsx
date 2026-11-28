@@ -32,11 +32,11 @@ if ((import.meta.env.DEV || import.meta.env.VITE_PERF === '1') && perfMode) void
 preloadLazyComponents();
 void init();
 
-// PWA: register the Service Worker only in production builds (it caches only the app itself)
 // Learn about newer builds (told in the sidebar and Settings → 情報; applied on reload)
 watchForUpdates();
 
-// Not in perf mode: each run starts from a clean browser and caches nothing
+// PWA: register the Service Worker only in production builds (it caches only the app itself), and not in perf mode:
+// each run starts from a clean browser and caches nothing
 if (import.meta.env.PROD && !perfMode && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     // Under Trusted Types, register() needs a TrustedScriptURL. Use a dedicated policy that allows nothing but sw.js.

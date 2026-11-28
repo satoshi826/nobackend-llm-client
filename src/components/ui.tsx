@@ -581,7 +581,7 @@ const fieldSize = (compact?: boolean) => (compact ? 'px-2.5 py-1 text-xs' : 'px-
 
 /**
  * A ref whose element takes focus when it is drawn with `on`, or when `on` turns true: autoFocus for what is drawn
- * after the page loaded (the browser's own autofocus works once per page, so a second rename in place got none)
+ * after the page loaded (the browser's own autofocus works once per page, so a second rename in place would get none)
  */
 export function useFocusWhen<T extends HTMLElement>(on: unknown) {
   const ref = useRef<T>(null);
@@ -618,12 +618,10 @@ export function useInPlace<T extends HTMLElement>() {
   return { open, control, show: () => setOpen(true), close };
 }
 
-/** Multi-line text input */
 export function TextArea({ compact, class: className, autoFocus, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement> & { compact?: boolean }) {
   return <textarea ref={useFocusWhen(autoFocus)} class={cx(FIELD, fieldSize(compact), className as string)} {...rest} />;
 }
 
-/** Drop-down choice */
 export function Select({ compact, class: className, children, title, ...rest }: SelectHTMLAttributes<HTMLSelectElement> & { compact?: boolean }) {
   return (
     <select class={cx(SELECT, compact ? 'px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-sm', className as string)} data-tip={title} {...rest}>
@@ -632,8 +630,10 @@ export function Select({ compact, class: className, children, title, ...rest }: 
   );
 }
 
-/** Search box: a field with the search icon; `label` is its accessible name */
-/** autoFocus: only where opening the field is the user's own step toward typing (a search opened from its icon) */
+/**
+ * Search box: a field with the search icon; `label` is its accessible name. autoFocus: only where opening the field is
+ * the user's own step toward typing (a search opened from its icon)
+ */
 export function SearchField({ value, onInput, placeholder, label, autoFocus, class: className }: { value: string; onInput(v: string): void; placeholder: string; label: string; autoFocus?: boolean; class?: string }) {
   return (
     <label class={cx(FIELD, 'flex items-center gap-2 px-2.5 py-1.5 text-sm focus-within:border-line-strong', className)}>

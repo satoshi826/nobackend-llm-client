@@ -4,7 +4,6 @@ import { type ApprovalDecision, type ApprovalRequest } from '../lib/chat/runner'
 import { saveSettings, settings } from './settings';
 import { t } from './messages';
 
-// ---- Pending tool approvals ----
 export const pendingApprovals = signal<Record<string, { toolName: string; canAlwaysAllow: boolean }>>({});
 const approvalResolvers = new Map<string, (d: ApprovalDecision) => void>();
 

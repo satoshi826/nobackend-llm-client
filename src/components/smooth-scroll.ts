@@ -1,6 +1,6 @@
 // Inertial wheel scrolling, for screens with a mouse or trackpad. A turn of the wheel does not move a scrolling area
 // at once: it moves the area's target, and the area eases toward it a little each frame. The area's own scroll
-// position is what moves, so sticky headers, IntersectionObserver and the app's own scroll handlers work as before.
+// position is what moves, so sticky headers, IntersectionObserver and the app's own scroll handlers still work.
 //
 // - Only the wheel is taken over. Touch, keys and the scrollbar stay the browser's; a turn of the wheel starts from
 //   wherever they left the area.

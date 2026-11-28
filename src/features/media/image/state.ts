@@ -30,6 +30,7 @@ import { extOfMime } from '../../../lib/paths';
 import { TAG_PRESETS, isPresetNegative, qualityTagsAdded, qualityTagsText, sentPrompt, withQualityTags, type QualityTagsByFamily } from './presets';
 import { formatNumber, TranslatedError } from '../../../lib/i18n';
 import { modelLists } from '../models';
+import { suggestsTags, type TagSuggestions } from './tags';
 import { t } from './messages';
 
 // Image providers in menu order. A provider is offered once its key is set.
@@ -65,7 +66,9 @@ const DEFAULT_IMAGE_SETTINGS = {
   /** Last-used options (image mode starts from these) */
   imageDefaults: { providerId: '', model: '', size: '', aspectRatio: '1:1', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '', qualityTags: true, qualityTagsByFamily: {} } as ImageDefaults,
   /** Let chat models create images with the generate_image tool */
-  imageTool: true
+  imageTool: true,
+  /** Tag suggestions while an image prompt is typed */
+  tagSuggestions: 'auto' as TagSuggestions
 };
 // Sealed: image mode's last options hold the user's own text (the negative prompt)
 export const imageSettings = defineFeatureSettings('images', DEFAULT_IMAGE_SETTINGS, {
@@ -185,6 +188,9 @@ export function imageModelFor(conv: Conversation | undefined): ImageModelInfo | 
 
 /** The model image mode (and the tool, in the current conversation) uses */
 export const currentImageModel = computed(() => imageModelFor(currentConv.value));
+
+/** Tag suggestions show in image mode, by the setting and the current model */
+export const tagSuggestionsOn = computed(() => !!currentConv.value.imageMode && suggestsTags(imageSettings.value.value.tagSuggestions, currentImageModel.value?.promptStyle));
 
 export async function setImageDefaults(patch: Partial<ImageDefaults>) {
   await imageSettings.save({ imageDefaults: { ...imageDefaults.value, ...patch } });

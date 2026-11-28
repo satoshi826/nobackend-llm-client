@@ -1,20 +1,17 @@
-// Danbooru tag suggestions while a tag model's prompt is typed: a list above the input box, picked with Tab or Enter
+// Danbooru tag suggestions while an image prompt is typed (for tag models, or as the image options say): a list above the input box, picked with Tab or Enter
 // (arrow keys move, Esc closes) or a tap. Typing goes on in the input box, which keeps the focus.
-import { computed, signal } from '@preact/signals';
+import { signal } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 import type { ComposerApi } from '../../../components/extensions';
 import { MenuItem, Popover } from '../../../components/menu';
 import { cx } from '../../../components/ui';
 import { touchDevice } from '../../../components/device';
-import { currentConv } from '../../../state/conversations';
 import { composerText } from '../../../state/ui';
 import { formatNumber } from '../../../lib/i18n';
-import { currentImageModel } from '../image/state';
+import { tagSuggestionsOn as offered } from '../image/state';
 import { completeTag, loadTags, searchTags, tagLabel, tagList, tagQuery, tagText, type TagMatch } from '../image/tags';
 import { t } from '../image/messages';
 
-/** Tag suggestions are offered: image mode with a model prompted by tags */
-const offered = computed(() => !!currentConv.value.imageMode && currentImageModel.value?.promptStyle === 'tags');
 /** The text the list was closed for (Esc or a press outside): it opens again once the text changes */
 const closedFor = signal<string | null>(null);
 export const closeTagSuggestions = (text: string) => (closedFor.value = text);

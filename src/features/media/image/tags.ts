@@ -8,6 +8,11 @@ import listUrl from './tags/danbooru.txt?url';
 export type TagCategory = 'general' | 'artist' | 'copyright' | 'character' | 'meta';
 const CATEGORIES: Record<string, TagCategory> = { 0: 'general', 1: 'artist', 3: 'copyright', 4: 'character', 5: 'meta' };
 
+/** When tag suggestions show in image mode: 'auto' for models prompted with tags */
+export type TagSuggestions = 'auto' | 'always' | 'off';
+
+export const suggestsTags = (when: TagSuggestions, promptStyle: 'tags' | 'natural' | undefined) => when === 'always' || (when === 'auto' && promptStyle === 'tags');
+
 /** Tags in Danbooru's form (underscores), most posts first */
 export interface TagList {
   names: string[];

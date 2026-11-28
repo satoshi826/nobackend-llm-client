@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { completeTag, parseTags, searchTags, tagQuery, tagText } from './tags';
+import { completeTag, parseTags, searchTags, suggestsTags, tagQuery, tagText } from './tags';
 import { cleanTags } from './to-tags';
 
 const list = parseTags(
@@ -18,6 +18,13 @@ const list = parseTags(
 );
 
 describe('Danbooru tags', () => {
+  it('are suggested by the setting: for tag models only, always, or never', () => {
+    expect(suggestsTags('auto', 'tags')).toBe(true);
+    expect(suggestsTags('auto', 'natural')).toBe(false);
+    expect(suggestsTags('auto', undefined)).toBe(false);
+    expect(suggestsTags('always', 'natural')).toBe(true);
+    expect(suggestsTags('off', 'tags')).toBe(false);
+  });
   it('find tags by their start, a word in them or an alias, most posts first, after the one typed in full', () => {
     expect(searchTags(list, 'lo').map((m) => m.name)).toEqual(['long_hair', 'oppai_loli']);
     expect(searchTags(list, 'oppai')[0]).toEqual({ name: 'breasts', category: 'general', count: 5022234, alias: 'oppai' });

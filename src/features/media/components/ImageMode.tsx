@@ -14,6 +14,7 @@ import {
   estimateCost,
   generationModels,
   imageDefaults,
+  imageSettings,
   imageModelsError,
   imageReady,
   imageStyles,
@@ -176,6 +177,19 @@ export function ImageOptions() {
         </OptionRow>
       )}
       {m.family && <QualityTags family={m.family} />}
+      <OptionRow label={ti('tags.label')} hint={ti('bar.suggestHint')} wide>
+        <Segmented
+          size="sm"
+          label={ti('tags.label')}
+          value={imageSettings.value.value.tagSuggestions}
+          items={[
+            { id: 'auto', label: ti('bar.suggestAuto') },
+            { id: 'always', label: ti('bar.suggestAlways') },
+            { id: 'off', label: ti('bar.suggestOff') }
+          ]}
+          onChange={(v) => void imageSettings.save({ tagSuggestions: v })}
+        />
+      </OptionRow>
       {hasOption(m, 'enhance') && <SwitchRow label={ti('bar.enhance')} checked={d.enhancePrompt} onChange={(v) => void setImageDefaults({ enhancePrompt: v })} />}
     </OptionsChip>
   );

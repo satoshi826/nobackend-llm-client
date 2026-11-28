@@ -5,7 +5,7 @@ import { folderOf } from '../../../lib/paths';
 import { Button, Icon, IconButton, Spinner, TextField, cx, useSwipeStep } from '../../../components/ui';
 import { useImageViewer, ViewerStage, type LightboxItem, type ViewerTool } from '../../images';
 import { closeFileView, fileReturnsToChat, imagesToStep, openFolder, openImage } from '../state';
-import { useFilerItems } from './filer-items';
+import { useFilerItems } from '../filer/use-items';
 import { ActionMenu, FolderCrumbs, SourceChat, SubBar, type MenuAction } from './common';
 import { FilesHeader } from './FilesHeader';
 import { t } from '../messages';

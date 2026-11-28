@@ -4,9 +4,9 @@ import { useMemo, useRef } from 'preact/hooks';
 import { conversationTitles } from '../../../state/conversations';
 import { mainView } from '../../../state/ui';
 import { Icon, MoreMark, RowHighlight, cx, useBatches, useSelectedBox } from '../../../components/ui';
-import { conversationsWithItems, foldersWithItems, inView } from '../filer';
+import { conversationsWithItems, foldersWithItems, inView } from '../filer/items';
 import { filerConversation, filerFolder, filerView, openFiler, openFolder, type FilerView } from '../state';
-import { useFilerItems, viewLabel, VIEW_ICONS } from './filer-items';
+import { useFilerItems, viewLabel, VIEW_ICONS } from '../filer/use-items';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 

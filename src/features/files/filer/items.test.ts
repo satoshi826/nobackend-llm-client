@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { newFile } from '../../lib/db/files';
-import { conversationsWithItems, filterItems, previewText, sortItems, toItems } from './filer';
-import type { ImageEntry } from '../../lib/db/catalog';
+import { newFile } from '../../../lib/db/files';
+import { conversationsWithItems, filterItems, previewText, sortItems, toItems } from './items';
+import type { ImageEntry } from '../../../lib/db/catalog';
 
 const now = Date.UTC(2026, 10, 25, 12);
 const day = 86400_000;

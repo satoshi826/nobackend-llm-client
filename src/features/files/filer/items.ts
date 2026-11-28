@@ -1,9 +1,9 @@
 // The file manager's items: files and images in one list, with filtering and sorting (pure)
-import { extOf, extOfMime, isInside } from '../../lib/paths';
-import type { FileRecord, Origin } from '../../lib/db/schema';
-import type { ImageEntry } from '../../lib/db/catalog';
-import type { FilerOrder, FilerSort, FilerView } from './state';
-import { locale } from '../../lib/i18n';
+import { extOf, extOfMime, isInside } from '../../../lib/paths';
+import type { FileRecord, Origin } from '../../../lib/db/schema';
+import type { ImageEntry } from '../../../lib/db/catalog';
+import type { FilerOrder, FilerSort, FilerView } from '../state';
+import { locale } from '../../../lib/i18n';
 
 /** Made in a chat ('document'), or brought in by the user ('upload': from the device or the web) */
 export type ItemKind = 'document' | 'upload';

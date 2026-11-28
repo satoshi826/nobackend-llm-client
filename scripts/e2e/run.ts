@@ -1,19 +1,21 @@
 // End-to-end tests on the production build: builds the app against the mock providers, serves it with the real
 // security headers (CSP, Trusted Types), and runs each flow in a fresh browser with no CSP violation, console error or
-// uncaught error allowed in any of its pages (the app, the key vault, the fetch page, the sandbox).
+// uncaught error allowed in any of its pages (the app, the key vault, the fetch page, the sandbox), and accessibility
+// checks on the screens they reach (a11y.ts).
 //
 //   npm run e2e                       every flow
 //   npm run e2e -- --flows chat,lock  some of them
 //   npm run e2e -- --headed           in a visible browser
 //
 // Starts its own mock server (scripts/mock-venice.mjs, on a free port: one already running may be an older version) and
-// stops everything it started. A screenshot at the end of each flow (and of a failing one) goes to
-// .claude/artifacts/branches/<branch>/screens/e2e/.
+// stops everything it started. A screenshot at the end of each flow (and of a failing one), and the accessibility report
+// (a11y-report.json), go to .claude/artifacts/branches/<branch>/screens/e2e/.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, renameSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { chromium, type Browser, type BrowserContext } from 'playwright';
+import { check, describe, failing, report, type Finding } from './a11y.ts';
 import { FLOWS } from './flows.ts';
 
 const ROOT = resolve(import.meta.dirname, '../..');
@@ -130,6 +132,7 @@ async function main() {
     const screens = screensDir();
     const browser = await chromium.launch({ headless: !o.headed });
     const failed: string[] = [];
+    const findings: Finding[] = [];
     for (const flow of flows) {
       const t0 = Date.now();
       const problems = new Set<string>();
@@ -139,8 +142,13 @@ async function main() {
         return contexts.at(-1)!;
       };
       const page = await (await open()).newPage();
+      const a11y = async (screen: string) => {
+        const found = await check(page, screen);
+        findings.push(...found);
+        for (const f of found.filter(failing)) problems.add(`accessibility: ${describe(f)}`);
+      };
       try {
-        await flow.run({ page, url, newContext: open, tmp: TMP, deploy });
+        await flow.run({ page, url, newContext: open, tmp: TMP, deploy, a11y });
         // Off any tooltip
         await page.mouse.move(0, 0);
         await page.screenshot({ path: join(screens, `${flow.name}.png`), animations: 'disabled' });
@@ -161,6 +169,7 @@ async function main() {
       }
     }
     await browser.close();
+    for (const line of report(findings, join(screens, 'a11y-report.json'), flows.length === FLOWS.length)) console.error(line);
     console.error(`${flows.length - failed.length}/${flows.length} flows passed in ${Math.round((Date.now() - started) / 1000)} s. Screenshots: ${screens}`);
     if (failed.length) process.exitCode = 1;
   } finally {

@@ -30,6 +30,7 @@
     "preact": "^11.2.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@preact/preset-vite": "^2.10.6",
     "@tailwindcss/vite": "^4.3.5",
     "fake-indexeddb": "^6.2.8",

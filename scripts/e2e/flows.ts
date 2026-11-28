@@ -15,6 +15,8 @@ export interface FlowContext {
   tmp: string;
   /** Serves a new release in place of the one served: the same app with every file under assets/ renamed */
   deploy(): void;
+  /** Runs the accessibility checks on what the page shows now (a11y.ts) */
+  a11y(screen: string): Promise<void>;
 }
 
 export interface Flow {
@@ -36,12 +38,16 @@ async function until<T>(what: string, check: () => Promise<T> | T, timeout = 10_
 
 const vault = (page: Page, title: string) => page.frameLocator(`iframe[title="${title}"]`);
 
-/** First run: choose Venice, save the mock key in the key vault, and skip the passphrase */
-async function addVenice(page: Page) {
+/** First run: choose Venice, save the mock key in the key vault, and skip the passphrase; a11y, when given, checks each step */
+async function addVenice(page: Page, a11y?: FlowContext['a11y']) {
   await page.getByRole('button', { name: /Venice\.ai/ }).click();
   const keys = vault(page, 'Key settings');
+  await keys.getByRole('textbox').waitFor();
+  await a11y?.('key entry');
   await keys.getByRole('textbox').fill('mock-key');
   await keys.getByRole('button', { name: /save/i }).click();
+  await page.getByRole('button', { name: 'Later' }).waitFor();
+  await a11y?.('passphrase offer');
   await page.getByRole('button', { name: 'Later' }).click();
 }
 
@@ -63,9 +69,11 @@ const answer = (page: Page, message: string) => page.locator('[data-message-id]'
 const chat: Flow = {
   name: 'chat',
   label: 'first run → Venice key in the vault → a streamed answer → still there after a reload',
-  async run({ page, url }) {
+  async run({ page, url, a11y }) {
     await page.goto(url);
-    await addVenice(page);
+    await page.getByRole('button', { name: /Venice\.ai/ }).waitFor();
+    await a11y('first run');
+    await addVenice(page, a11y);
     const message = 'Hello from the e2e test';
     await send(page, message);
     // Streamed: the answer is seen growing before it is complete
@@ -78,6 +86,7 @@ const chat: Flow = {
     });
     if (lengths.size < 3) throw new Error(`The answer did not stream (seen at ${lengths.size} lengths)`);
     await settled(page);
+    await a11y('chat with an answer');
     await page.reload();
     await answer(page, message).waitFor();
   }
@@ -121,7 +130,7 @@ async function openSettings(page: Page, tab: string) {
 const lock: Flow = {
   name: 'lock',
   label: 'set a passphrase → reload → locked → unlock → the conversation is readable',
-  async run({ page, url }) {
+  async run({ page, url, a11y }) {
     const message = 'A conversation to encrypt';
     await conversation(page, url, message);
     // So that not finding it later means it is encrypted
@@ -135,6 +144,8 @@ const lock: Flow = {
     await security.getByText('encrypted with your passphrase (unlocked)').waitFor();
     await page.reload();
     await page.getByRole('heading', { name: 'Locked' }).waitFor();
+    await vault(page, 'Unlock').getByLabel('Passphrase').waitFor();
+    await a11y('locked');
     if (await page.getByText(message).count()) throw new Error('The conversation shows while locked');
     const plain = await stored(page, message);
     if (plain) throw new Error(`The conversation is stored unencrypted (${plain})`);
@@ -213,7 +224,7 @@ const backup: Flow = {
 const files: Flow = {
   name: 'files',
   label: 'a model writes an HTML page with a tool → open it from the Files tab → its script runs in the sandbox',
-  async run({ page, url }) {
+  async run({ page, url, a11y }) {
     await page.goto(url);
     await addVenice(page);
     // The mock answers this with write_file: a counter page
@@ -221,6 +232,8 @@ const files: Flow = {
     await page.getByText('counter-page/counter.html').first().waitFor();
     await settled(page);
     await page.getByRole('tab', { name: 'Files' }).click();
+    await page.getByRole('main').getByText('counter-page').waitFor();
+    await a11y('files tab');
     await page.getByRole('main').getByText('counter-page').dblclick();
     await page.getByRole('main').getByText('counter.html').dblclick();
     const preview = page.frameLocator('iframe[src*="/sandbox/"]');
@@ -228,13 +241,14 @@ const files: Flow = {
     await preview.getByRole('button', { name: '+1' }).click();
     await preview.getByRole('button', { name: '+1' }).click();
     await preview.getByText('2', { exact: true }).waitFor();
+    await a11y('file view');
   }
 };
 
 const images: Flow = {
   name: 'images',
-  label: 'image mode with the mock image model → the generated image shows',
-  async run({ page, url }) {
+  label: 'image mode with the mock image model → the generated image shows → it opens in the viewer',
+  async run({ page, url, a11y }) {
     await page.goto(url);
     await addVenice(page);
     await page.getByRole('button', { name: 'Image', exact: true }).click();
@@ -246,19 +260,40 @@ const images: Flow = {
     const image = page.locator('[data-message-id] img').first();
     await image.waitFor();
     await until('the image to load', () => image.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth > 0));
+    await settled(page);
+    await a11y('image answer');
+    await image.click();
+    await page.getByRole('dialog').waitFor();
+    await a11y('image view');
+  }
+};
+
+const settings: Flow = {
+  name: 'settings',
+  label: 'each Settings tab opens and passes the accessibility checks',
+  async run({ page, url, a11y }) {
+    await page.goto(url);
+    await addVenice(page);
+    await page.getByRole('button', { name: 'Settings' }).click();
+    const dialog = page.getByRole('dialog');
+    for (const name of await dialog.getByRole('tab').allInnerTexts()) {
+      await dialog.getByRole('tab', { name, exact: true }).click();
+      await a11y(`settings: ${name}`);
+    }
   }
 };
 
 const fetchPage: Flow = {
   name: 'fetch-page',
   label: 'the fetch page (its own page and CSP) opens from Settings → Web and closes',
-  async run({ page, url }) {
+  async run({ page, url, a11y }) {
     await page.goto(url);
     await addVenice(page);
     await openSettings(page, 'Web');
     await page.getByRole('button', { name: 'Open', exact: true }).click();
     const fetchSettings = page.frameLocator('iframe[title="Fetch page settings"]');
     await fetchSettings.getByText('Jina Reader', { exact: true }).waitFor();
+    await a11y('fetch page settings');
     await fetchSettings.getByRole('button', { name: 'Close' }).click();
     await page.locator('iframe[title="Fetch page settings"]').waitFor({ state: 'detached' });
   }
@@ -371,4 +406,4 @@ const update: Flow = {
   }
 };
 
-export const FLOWS: Flow[] = [chat, lock, backup, files, images, fetchPage, pdf, update];
+export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update];

@@ -1,5 +1,5 @@
 // JSON export / import. API keys are not included by default.
-import { db, SCHEMA_VERSION, type Conversation, type ImageParams, type MessageRecord, type SavedPrompt, type Skill, type VideoParams } from './schema';
+import { db, type Conversation, type ImageParams, type MessageRecord, type SavedPrompt, type Skill, type VideoParams } from './schema';
 import { validateSkill } from '../skills/skill';
 import { openValue, seal, unseal } from './sealed';
 import { dataTables } from './data-tables';
@@ -10,6 +10,11 @@ import { cleanFolderName } from '../paths';
 const openAll = <T extends object>(rows: T[]) => Promise.all(rows.map((r) => unseal(r)));
 
 export const EXPORT_FORMAT = 'nobackend-llm-client/export';
+/**
+ * The backup format's version. Raise it when what a backup holds changes, and add a backup of the new version to
+ * backups/ (backups.test.ts): every version the app has written stays readable
+ */
+export const EXPORT_VERSION = 6;
 
 export interface ExportFile {
   format: typeof EXPORT_FORMAT;
@@ -29,7 +34,7 @@ export async function exportAll(includeImages = false): Promise<ExportFile> {
   const d = db();
   return {
     format: EXPORT_FORMAT,
-    version: SCHEMA_VERSION,
+    version: EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
     // Data stored encrypted is decrypted on export too (backup files are not encrypted)
     conversations: await openAll(await d.conversations.toArray()),
@@ -167,7 +172,7 @@ function isStr(x: unknown): x is string {
 export function validate(raw: unknown): ExportFile {
   const f = raw as ExportFile;
   if (!f || typeof f !== 'object' || f.format !== EXPORT_FORMAT) throw new Error(t('export.notBackup'));
-  if (typeof f.version !== 'number' || f.version > SCHEMA_VERSION) throw new Error(t('export.tooNew'));
+  if (typeof f.version !== 'number' || f.version > EXPORT_VERSION) throw new Error(t('export.tooNew'));
   if (!Array.isArray(f.conversations) || !Array.isArray(f.messages)) throw new Error(t('export.badFormat'));
   const conversations = f.conversations.filter(
     (c) => c && isStr(c.id) && isStr(c.title) && typeof c.createdAt === 'number' && typeof c.updatedAt === 'number'

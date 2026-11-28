@@ -1,0 +1,252 @@
+{
+  "format": "nobackend-llm-client/export",
+  "version": 6,
+  "exportedAt": "2026-11-28T03:00:10.000Z",
+  "conversations": [
+    {
+      "id": "conv-1",
+      "title": "Trip plan",
+      "createdAt": 1795834800000,
+      "updatedAt": 1795834809000,
+      "currentLeafId": "m-7",
+      "providerId": "venice",
+      "modelId": "venice-uncensored",
+      "systemPrompt": "Answer briefly.",
+      "webSearch": "off",
+      "pinned": 1,
+      "tags": [
+        "travel"
+      ],
+      "workDir": "trip/"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m-1",
+      "conversationId": "conv-1",
+      "parentId": null,
+      "role": "user",
+      "createdAt": 1795834801000,
+      "status": "done",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Plan two days in Kyoto."
+        }
+      ],
+      "skills": [
+        {
+          "name": "planner",
+          "body": "Plan day by day."
+        }
+      ],
+      "attachments": [
+        {
+          "fileId": "file-1",
+          "name": "trip/notes.md",
+          "mime": "text/markdown",
+          "text": "# Notes\nTemples",
+          "totalChars": 16
+        }
+      ]
+    },
+    {
+      "id": "m-2",
+      "conversationId": "conv-1",
+      "parentId": "m-1",
+      "role": "assistant",
+      "createdAt": 1795834802000,
+      "status": "done",
+      "parts": [
+        {
+          "type": "reasoning",
+          "text": "Two days: east, then west.",
+          "state": "done"
+        },
+        {
+          "type": "text",
+          "text": "Day 1: Higashiyama. Day 2: Arashiyama.",
+          "state": "done"
+        }
+      ],
+      "meta": {
+        "providerId": "venice",
+        "model": "venice-uncensored",
+        "costUsd": 0.0012
+      }
+    },
+    {
+      "id": "m-3",
+      "conversationId": "conv-1",
+      "parentId": "m-2",
+      "role": "system",
+      "createdAt": 1795834803000,
+      "status": "done",
+      "parts": [],
+      "compaction": {
+        "summary": "Asked for a two-day Kyoto plan; got east then west.",
+        "coversUntilId": "m-2",
+        "count": 2
+      }
+    },
+    {
+      "id": "m-4",
+      "conversationId": "conv-1",
+      "parentId": "m-3",
+      "role": "user",
+      "createdAt": 1795834804000,
+      "status": "done",
+      "parts": [
+        {
+          "type": "text",
+          "text": "A picture of a temple"
+        }
+      ],
+      "imageRequest": {
+        "op": "generate",
+        "providerId": "venice",
+        "model": "flux",
+        "prompt": "A temple at dusk",
+        "variants": 1,
+        "safeMode": true,
+        "format": "png",
+        "aspectRatio": "1:1",
+        "seed": 42
+      }
+    },
+    {
+      "id": "m-5",
+      "conversationId": "conv-1",
+      "parentId": "m-4",
+      "role": "assistant",
+      "createdAt": 1795834805000,
+      "status": "done",
+      "parts": [
+        {
+          "type": "file",
+          "blobId": "img-1",
+          "name": "trip/temple.png",
+          "mimeType": "image/png",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "image": {
+        "params": {
+          "op": "generate",
+          "providerId": "venice",
+          "model": "flux",
+          "prompt": "A temple at dusk",
+          "variants": 1,
+          "safeMode": true,
+          "format": "png",
+          "aspectRatio": "1:1",
+          "seed": 42
+        },
+        "seed": 42
+      }
+    },
+    {
+      "id": "m-6",
+      "conversationId": "conv-1",
+      "parentId": "m-5",
+      "role": "user",
+      "createdAt": 1795834806000,
+      "status": "done",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Make it move"
+        }
+      ],
+      "videoRequest": {
+        "providerId": "venice",
+        "model": "wan",
+        "prompt": "Leaves falling",
+        "duration": 5,
+        "startBlobId": "img-1"
+      }
+    },
+    {
+      "id": "m-7",
+      "conversationId": "conv-1",
+      "parentId": "m-6",
+      "role": "assistant",
+      "createdAt": 1795834807000,
+      "status": "done",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The video was deleted."
+        }
+      ],
+      "video": {
+        "params": {
+          "providerId": "venice",
+          "model": "wan",
+          "prompt": "Leaves falling",
+          "duration": 5,
+          "startBlobId": "img-1"
+        },
+        "costUsd": 0.25,
+        "costEstimated": true
+      }
+    }
+  ],
+  "prompts": [
+    {
+      "id": "p-1",
+      "name": "Short",
+      "content": "Answer in one line.",
+      "updatedAt": 1795834800000
+    }
+  ],
+  "skills": [
+    {
+      "id": "s-1",
+      "name": "planner",
+      "description": "Plans trips day by day.",
+      "body": "Plan day by day.",
+      "modelInvocable": true,
+      "createdBy": "model",
+      "createdAt": 1795834800000,
+      "updatedAt": 1795834800000
+    }
+  ],
+  "files": [
+    {
+      "id": "file-1",
+      "name": "trip/notes.md",
+      "mime": "text/markdown",
+      "origin": {
+        "kind": "made"
+      },
+      "conversationId": "conv-1",
+      "createdAt": 1795834800000,
+      "updatedAt": 1795834800000,
+      "versions": [
+        {
+          "at": 1795834630245,
+          "by": "model",
+          "text": "# Notes\nTemples",
+          "v": 1
+        }
+      ]
+    }
+  ],
+  "images": [
+    {
+      "id": "img-1",
+      "info": {
+        "path": "trip/temple.png",
+        "origin": {
+          "kind": "upload"
+        }
+      },
+      "createdAt": 1795834630247,
+      "mime": "image/png",
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    }
+  ],
+  "settings": []
+}

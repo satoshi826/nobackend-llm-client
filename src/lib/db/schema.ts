@@ -3,8 +3,6 @@ import type { ChatMessage, ModelInfo } from '../providers/types';
 import type { UsageRecord } from '../usage';
 import { bytesFromBase64, sealedFromBase64, type Sealed } from '../crypto/data';
 
-export const SCHEMA_VERSION = 6;
-
 export interface Conversation {
   id: string;
   title: string;

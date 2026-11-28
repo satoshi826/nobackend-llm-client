@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EXPORT_FORMAT, validate } from './export';
-import { SCHEMA_VERSION } from './schema';
+import { EXPORT_FORMAT, EXPORT_VERSION, validate } from './export';
 
 const conv = (extra: object = {}) => ({ id: 'c', title: 't', createdAt: 1, updatedAt: 2, ...extra });
 const msg = (extra: object = {}) => ({ id: 'm', conversationId: 'c', role: 'user', parts: [{ type: 'text', text: 'hi' }], ...extra });
@@ -10,10 +9,10 @@ describe('validate (backup files)', () => {
   it('rejects files that are not backups, are from a newer version, or lack the core lists', () => {
     expect(() => validate(null)).toThrow();
     expect(() => validate({ ...file(), format: 'other' })).toThrow();
-    expect(() => validate(file({ version: SCHEMA_VERSION + 1 }))).toThrow();
+    expect(() => validate(file({ version: EXPORT_VERSION + 1 }))).toThrow();
     expect(() => validate(file({ version: '1' }))).toThrow();
     expect(() => validate(file({ messages: undefined }))).toThrow();
-    expect(validate(file({ version: SCHEMA_VERSION })).version).toBe(SCHEMA_VERSION);
+    expect(validate(file({ version: EXPORT_VERSION })).version).toBe(EXPORT_VERSION);
   });
 
   it('keeps only the known fields of a conversation, with safe defaults', () => {

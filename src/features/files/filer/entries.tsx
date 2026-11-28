@@ -180,7 +180,7 @@ export const FolderTile = memo(function FolderTile({ f, picked, api }: { f: Fold
         // In place of the folder's icon, inside the tile (the scroll area would clip it outside)
         class={cx('absolute top-1/2 left-2.5 z-10 -translate-y-1/2', hoverCheck(picked))}
       />
-      <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={entry.click} aria-label={t('folder.open', { name: f.name })}>
+      <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={entry.click}>
         <Icon
           name="folder"
           class={cx('size-5 shrink-0 text-muted', picked ? 'opacity-0' : '[@media(hover:hover)]:group-focus-within:opacity-0 [@media(hover:hover)]:group-hover:opacity-0 [.selecting_&]:opacity-0')}

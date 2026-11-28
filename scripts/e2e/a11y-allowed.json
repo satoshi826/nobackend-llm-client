@@ -1,42 +1,7 @@
 [
   {
     "rule": "label-content-name-mismatch",
-    "element": "aria-label=\"Tools and output for this chat\"",
-    "reason": "The chat header button shows \"Tools & output\", which its name does not contain: voice control cannot reach it by what it shows"
-  },
-  {
-    "rule": "label-content-name-mismatch",
-    "element": "aria-label=\"System prompt\"",
-    "reason": "The chat header button shows \"Instructions\" but is named \"System prompt\""
-  },
-  {
-    "rule": "label-content-name-mismatch",
-    "element": "aria-label=\"Open ",
-    "reason": "A folder row in the Files tab is named \"Open <folder>\"; the file count and date it also shows are not in the name"
-  },
-  {
-    "rule": "label-content-name-mismatch",
     "element": "aria-label=\"Image\"",
     "reason": "The image mode chip shows \"Image: on\" while on; its name stays \"Image\""
-  },
-  {
-    "rule": "label-content-name-mismatch",
-    "element": "aria-label=\"Image model: ",
-    "reason": "A search choice (the image model in Settings → Images) also shows the choice's second line, which its name \"<label>: <choice>\" leaves out"
-  },
-  {
-    "rule": "button-name",
-    "element": "data-tip=\"Edit (after saving",
-    "reason": "File view tool bar on phones: the button shows only its icon and has no name (data-tip is not a name)"
-  },
-  {
-    "rule": "button-name",
-    "element": "data-tip=\"Attach to the input",
-    "reason": "File view tool bar on phones: the button shows only its icon and has no name (data-tip is not a name)"
-  },
-  {
-    "rule": "color-contrast",
-    "element": "text-faint\">as of",
-    "reason": "The \"as of <time>\" line of a balance in Settings → Usage: 11 px faint text, 4.2:1 on phones (design system: 4.5:1)"
   }
 ]

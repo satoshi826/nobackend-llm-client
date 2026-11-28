@@ -45,7 +45,7 @@ export function ChatOptionsButton() {
   const o = chatOptionsOf(conv.id);
   return (
     <>
-      <Button ref={ref} aria-label={t('opts.label')} aria-expanded={open} onClick={() => setOpen(!open)} class={cx('text-xs', changed(o) && 'text-ink-strong')}>
+      <Button ref={ref} aria-label={t('opts.button')} aria-expanded={open} onClick={() => setOpen(!open)} class={cx('text-xs', changed(o) && 'text-ink-strong')}>
         <Icon name="wrench" class="size-4" />
         <span class="hidden sm:inline">{t('opts.button')}</span>
         {changed(o) && <span class="size-1.5 rounded-full bg-accent" aria-hidden="true" />}

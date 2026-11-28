@@ -105,6 +105,7 @@ export function FileView({ id = '' }: { id?: string }) {
             {!editing && (
               <Button
                 class="text-sm"
+                aria-label={t('file.edit')}
                 title={t('file.editTitle')}
                 onClick={() => {
                   setDraft(shown.text);
@@ -117,6 +118,7 @@ export function FileView({ id = '' }: { id?: string }) {
             )}
             <Button
               class="text-sm"
+              aria-label={t('useInChat')}
               title={t('useInChatTitle')}
               onClick={() => {
                 void attachExisting(f.id);

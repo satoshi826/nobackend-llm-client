@@ -184,7 +184,7 @@ export function Header() {
         {!draft && <ConversationCost />}
         {!draft && <ContextMeter />}
         <ChatOptionsButton />
-        <Button aria-label={t('header.systemPrompt')} title={t('header.systemPromptTitle')} onClick={() => (modal.value = 'system')} class={cx('text-xs', conv.systemPrompt && 'text-ink-strong')}>
+        <Button aria-label={t('header.instructions')} title={t('header.systemPromptTitle')} onClick={() => (modal.value = 'system')} class={cx('text-xs', conv.systemPrompt && 'text-ink-strong')}>
           <Icon name="sliders" class="size-4" />
           <span class="hidden sm:inline">{t('header.instructions')}</span>
           {conv.systemPrompt && <span class="size-1.5 rounded-full bg-accent" aria-hidden="true" />}

@@ -9,7 +9,8 @@ import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { lazyComponent } from './components/lazy';
 import { SystemPromptModal } from './components/SystemPromptModal';
-import { FetchDialog } from './components/FetchDialog';
+import { FetchDialog, PageFetcher } from './components/FetchDialog';
+import { PAGE_WEB } from './lib/fetcher/config';
 import { Button, cx, Icon, Spinner } from './components/ui';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { mainViews, overlays } from './components/extensions';
@@ -145,6 +146,7 @@ export function App() {
         <O key={i} />
       ))}
       <FetchDialog />
+      {PAGE_WEB && <PageFetcher />}
       <ConfirmDialog />
       <Toast />
     </div>

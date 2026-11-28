@@ -144,6 +144,20 @@ VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<アカウント>.workers.dev
 
 中継は公開された https のアドレスにだけ接続し、あなたのヘッダや Cookie を送らず、何も記録せず、許可したオリジンにだけ応答し、リダイレクト先も同じ基準で確かめ、1 つの IP から 1 分に 30 回までという制限を Cloudflare に指定しています（オリジンはスクリプトなら偽れ、中継のアドレスはアプリのコードから読めるため）。ただし Cloudflare はこの制限を大まかにしか適用せず、試したときはすべて通りました。中継を通したアドレスは中継（自分の Worker）にも見えます。
 
+### 実験的機能: ページから Web・ファイル・モデルを使う（自己責任）
+
+自分用のビルドに限ります。`VITE_EXPERIMENTAL_PAGE_API=1` を付けてビルドすると、ファイルタブで表示した、フォルダー内の HTML のページ（モデルが試すページは除く）で次が使えます。
+
+- `nbl.files.list()`・`nbl.files.read(path)`・`nbl.files.write(path, text)`: そのページのサイトのファイル（パスはサイトの一番上から。書き込みはテキストだけ）。
+- `nbl.chat(prompt, { system })`: 新しいチャットで使うモデルの答えの本文（ツールなし。1 分 20 回まで。費用はほかと同じく記録されます）。
+- `VITE_FETCH_RELAY_URL` も設定したとき: https のアドレスへの `fetch(url)`（GET だけ）。取得用ページを通し、1 件ごとに確認します（サイトごとに「今後確認しない」も選べ、ページを読む・取り込むとは別に覚えます）。https のアドレスの `<img>` も同じように取得します。
+
+```bash
+VITE_EXPERIMENTAL_PAGE_API=1 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<アカウント>.workers.dev npm run build
+```
+
+ページがアドレスに入れたもの（サイトのファイルも含む）はそのサイトに送られ、確認しないと選んだサイトには確認なしで送られます。ページからのモデルの呼び出しには費用がかかります。このビルドを他人向けに公開しないでください。
+
 ### ビルド時に接続先を足す
 
 `VITE_CUSTOM_PROVIDERS` に、OpenAI 互換の接続先を JSON の配列で指定します。接続先の一覧・金庫の送り先・CSP に自動で入ります。

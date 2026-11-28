@@ -11,7 +11,7 @@ export const t = defineMessages(
     save: '保存',
     delete: '削除',
     sitesTitle: '確認しないサイト',
-    sitesDesc: '取得の確認で「今後確認せずに」を選んだサイトです。ページを読むときと、ファイルを取り込むときで別々に覚えます。これらのサイトへは、アドレスに会話の内容が入っていても確認なしで送られます。',
+    sitesDesc: '取得の確認で「今後確認せずに」を選んだサイトです。ページを読むとき、ファイルを取り込むとき、表示中のページからの取得で別々に覚えます。これらのサイトへは、アドレスに会話の内容が入っていても確認なしで送られます。',
     siteRead: 'Web ページを読む',
     siteSave: 'ファイルを取り込む',
     noSites: 'ありません。',
@@ -38,6 +38,13 @@ export const t = defineMessages(
     blockedRelay: '取得できませんでした。中継サーバーを通しても {host} に接続できません。',
     status: '取得できませんでした（{host} の応答: {status}）。',
     tooBig: 'ファイルが大きすぎます（上限 {max} MB）。',
+    sitePage: 'ページから取得（実験的）',
+    titlePage: '表示中のページが Web から取得しようとしています',
+    rememberPage: '{host} への取得は、今後ページから確認せずに行う',
+    rememberPageNote: '選ぶと、ページがアドレスに入れた内容（そのサイトのファイルなど）も、確認なしで {host} に送られます。',
+    moreWaiting: 'ほかに {n} 件が確認を待っています。',
+    declined: '取得は断られました。',
+    pageOff: 'このビルドでは、ページから Web を取得できません（VITE_EXPERIMENTAL_PAGE_API と中継サーバーが必要です）。',
     embedOnly: 'このページはアプリに埋め込まれて使われます。直接開いても操作できません。'
   },
   {
@@ -50,7 +57,7 @@ export const t = defineMessages(
       save: 'Save',
       delete: 'Delete',
       sitesTitle: 'Sites not asked about',
-      sitesDesc: 'Sites you chose “without asking” for when fetching. Reading pages and fetching files are remembered apart. Addresses on these sites are sent without asking, even when they contain parts of the conversation.',
+      sitesDesc: 'Sites you chose “without asking” for when fetching. Reading pages, fetching files and fetches from pages you view are remembered apart. Addresses on these sites are sent without asking, even when they contain parts of the conversation.',
       siteRead: 'Read web pages',
       siteSave: 'Fetch files',
       noSites: 'None.',
@@ -77,6 +84,13 @@ export const t = defineMessages(
       blockedRelay: 'Couldn’t fetch it. {host} can’t be reached through the relay server either.',
       status: 'Couldn’t fetch it ({host} answered {status}).',
       tooBig: 'The file is too large (up to {max} MB).',
+      sitePage: 'Fetch from pages (experimental)',
+      titlePage: 'The page you’re viewing wants to fetch from the web',
+      rememberPage: 'Let pages fetch from {host} without asking from now on',
+      rememberPageNote: 'If you do, whatever a page puts in an address (its site’s files, say) is sent to {host} without asking.',
+      moreWaiting: '{n} more are waiting to be asked about.',
+      declined: 'The fetch was declined.',
+      pageOff: 'Pages can’t fetch from the web in this build (it needs VITE_EXPERIMENTAL_PAGE_API and a relay server).',
       embedOnly: 'This page is used inside the app. Opening it directly does nothing.'
     },
     zh: {
@@ -88,7 +102,7 @@ export const t = defineMessages(
       save: '保存',
       delete: '删除',
       sitesTitle: '不再询问的网站',
-      sitesDesc: '获取时选择了“不再询问”的网站。读取网页和获取文件分别记住。即使地址中含有对话内容，也会不经确认发送给这些网站。',
+      sitesDesc: '获取时选择了“不再询问”的网站。读取网页、获取文件和正在查看的页面的获取分别记住。即使地址中含有对话内容，也会不经确认发送给这些网站。',
       siteRead: '读取网页',
       siteSave: '获取文件',
       noSites: '无。',
@@ -115,6 +129,13 @@ export const t = defineMessages(
       blockedRelay: '无法获取。通过中转服务器也无法连接 {host}。',
       status: '无法获取（{host} 的响应：{status}）。',
       tooBig: '文件太大（上限 {max} MB）。',
+      sitePage: '从页面获取（实验性）',
+      titlePage: '正在查看的页面想从网络获取内容',
+      rememberPage: '今后页面向 {host} 获取时不再确认',
+      rememberPageNote: '选择后，页面放进地址的内容（例如其站点的文件）也会不经确认发送给 {host}。',
+      moreWaiting: '还有 {n} 个请求在等待确认。',
+      declined: '已拒绝获取。',
+      pageOff: '此版本的页面无法从网络获取（需要 VITE_EXPERIMENTAL_PAGE_API 和中继服务器）。',
       embedOnly: '此页面在应用内使用。直接打开无法操作。'
     }
   }

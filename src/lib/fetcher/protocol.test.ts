@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { fetchableUrl, nameFor } from './protocol';
+import { fetchableUrl, nameFor, pageApiOn, pagesReachWeb } from './protocol';
 import { appCsp, appHeadersFile, appPagePolicies, cspMetaTag, fetchCsp, sandboxCsp } from '../../../csp.config';
 
 describe('fetch page', () => {
+  it('takes pages\' requests only in a build with the experimental flag and a relay', () => {
+    const relay = 'https://relay.example';
+    expect(pageApiOn({})).toBe(false);
+    expect(pageApiOn({ VITE_EXPERIMENTAL_PAGE_API: '1' })).toBe(true);
+    expect(pagesReachWeb({ VITE_EXPERIMENTAL_PAGE_API: '1' })).toBe(false);
+    expect(pagesReachWeb({ VITE_FETCH_RELAY_URL: relay })).toBe(false);
+    expect(pagesReachWeb({ VITE_EXPERIMENTAL_PAGE_API: '1', VITE_FETCH_RELAY_URL: relay })).toBe(true);
+  });
   it('fetches only plain https addresses', () => {
     expect(fetchableUrl('https://example.com/a.pdf')?.host).toBe('example.com');
     expect(fetchableUrl('http://example.com/a.pdf')).toBeNull();

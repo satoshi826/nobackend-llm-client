@@ -144,6 +144,20 @@ VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<账户>.workers.dev npm run 
 
 中转只连接公开的 https 地址，不转发你的请求头或 Cookie，不保存任何内容，只响应允许的源，对重定向目标做同样的检查，并向 Cloudflare 指定每个 IP 每分钟最多 30 次请求（源可以被脚本伪造，中转的地址也能从应用代码中读到）。不过 Cloudflare 只是粗略地执行这个限制，测试时所有请求都通过了。通过中转获取的地址中转（你自己的 Worker）也能看到。
 
+### 实验性功能：页面使用网络、文件和模型（风险自负）
+
+仅限自用的构建。使用 `VITE_EXPERIMENTAL_PAGE_API=1` 构建后，在“文件”标签页中显示的、位于文件夹内的 HTML 页面（模型试用的页面除外）可以使用：
+
+- `nbl.files.list()`、`nbl.files.read(path)`、`nbl.files.write(path, text)`：该页面所在站点的文件（路径从站点顶层算起；写入仅限文本）。
+- `nbl.chat(prompt, { system })`：新对话所用模型的回答文本（无工具，每分钟最多 20 次；费用照常记录）。
+- 同时设置了 `VITE_FETCH_RELAY_URL` 时：对 https 地址的 `fetch(url)`（仅 GET），经由获取页面，每次都会确认（可按站点选择今后不再确认，与读取网页、导入文件分开记录）；https 地址的 `<img>` 也以同样方式获取。
+
+```bash
+VITE_EXPERIMENTAL_PAGE_API=1 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<账户>.workers.dev npm run build
+```
+
+页面放进地址的内容（包括其站点的文件）会发送给该站点，选择不再确认的站点会不经确认收到。页面调用模型会产生费用。请勿将这种构建提供给他人使用。
+
 ### 在构建时添加提供商
 
 `VITE_CUSTOM_PROVIDERS` 接收一个 OpenAI 兼容端点的 JSON 数组。它们会自动加入提供商列表、保管库的允许主机以及 CSP。

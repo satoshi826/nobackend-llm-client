@@ -440,6 +440,18 @@ const server = http.createServer(async (req, res) => {
       }))
     });
   }
+  // The fetch page's relay (relay/worker.js), with VITE_FETCH_RELAY_URL=http://localhost:8787/relay: a made-up page for
+  // any address, and a PNG for addresses ending in .png
+  if (url.pathname === '/relay' && req.method === 'GET') {
+    const target = url.searchParams.get('url') ?? '';
+    console.log(`relay ${target}`);
+    if (/\.png($|\?)/.test(target)) {
+      res.writeHead(200, { 'Content-Type': 'image/png' });
+      return res.end(makePng(160, 100, colourFor(target.length)));
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(`<!doctype html><title>モックのページ</title><h1>${target.replace(/[<>&"]/g, '')}</h1><ul>${[1, 2, 3].map((i) => `<li><a href="https://example.com/item-${i}">記事 ${i}</a> <img src="https://example.com/img-${i}.png"></li>`).join('')}</ul>`);
+  }
   if (url.pathname.startsWith('/jina/') && req.method === 'GET') {
     const target = decodeURIComponent(url.pathname.slice('/jina/'.length)) + url.search;
     console.log(`jina ${target} (${req.headers.authorization ? 'with a key' : 'no key'})`);

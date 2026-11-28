@@ -10,7 +10,9 @@ import { putConversation } from '../../lib/db/repo';
 import { conversations } from '../../state/conversations';
 import { contributedTools } from '../../state/tool-registry';
 import type { ModelInfo } from '../../lib/providers/types';
-import { moveItems, planRemoval, refreshFiles, refreshImages, siteOf, workDirOf } from './state';
+import { moveItems, planRemoval, refreshFiles, refreshImages, siteOf, siteSignature, workDirOf, writeAsPage } from './state';
+import { pageApi } from './state/page-api';
+import { setText } from '../../lib/db/files';
 
 const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
 const model = { capabilities: { tools: true } } as ModelInfo;
@@ -167,5 +169,36 @@ describe('moving into folders', () => {
     await refreshImages();
     const r = planRemoval(['pics/'], [{ id: 'a', type: 'file' }, { id: 'c', type: 'file' }]);
     expect([r.fileIds.sort(), r.imageIds]).toEqual([['a', 'b', 'c'], ['i']]);
+  });
+});
+
+describe('pages\' own files (experimental page api)', () => {
+  it('reads, writes and lists only its site, and never reloads the page for its own writes', async () => {
+    await make({ id: 'p', name: 'site/index.html', origin: { kind: 'made' }, text: '<p>hi</p>', by: 'user' });
+    await make({ id: 'o', name: 'other/secret.txt', origin: { kind: 'made' }, text: 'no', by: 'user' });
+    await refreshFiles();
+    await refreshImages();
+    const page = (await getFile('p'))!;
+    const api = pageApi(page, 'site/', (path, text) => writeAsPage(path, text, page)).files!;
+    const before = siteSignature(page);
+
+    await api.write('/data/a.json', '{"a":1}');
+    await refreshFiles();
+    expect(await api.read('data/a.json')).toBe('{"a":1}');
+    expect(await api.list()).toEqual(['data/a.json', 'index.html']);
+    // A file the page made, and a change it made, leave the page as it is
+    await api.write('data/a.json', '{"a":2}');
+    await refreshFiles();
+    expect(siteSignature(page)).toBe(before);
+
+    // Someone else's change shows it again
+    const made = (await listFiles()).find((f) => f.name === 'site/data/a.json')!;
+    await setText(made.id, '{"a":3}', 'user', true, Date.now() + 1000);
+    await refreshFiles();
+    expect(siteSignature(page)).not.toBe(before);
+
+    for (const bad of ['../other/secret.txt', 'a/../../other/secret.txt', 'a//b', '', 'localStorage.json']) await expect(api.write(bad, 'x')).rejects.toThrow();
+    await expect(api.read('../other/secret.txt')).rejects.toThrow();
+    expect(await api.read('nothing.txt')).toBeNull();
   });
 });

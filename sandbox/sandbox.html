@@ -7,12 +7,16 @@
   Talking to the app: this page says { type: 'sandbox-ready' } to its parent once; the parent answers with
   { type: 'connect' } and a MessagePort, and everything after goes over that port, which the HTML shown here cannot
   reach (so a page that replaced this one cannot talk to the app):
-    { type: 'render', html, path?, files?, storage? }
+    { type: 'render', html, path?, files?, storage?, api? }
                                            replace this page with the html (its scripts run under the same CSP); with
                                            files ({ path: text or Blob } of its site) and path (the page's own), its
                                            references to those files use them (sandbox/rewrite.js); with storage
                                            ({ key: value }) its localStorage starts with those items, and its changes
-                                           go back as { type: 'storage', items }, at most every 0.5 s
+                                           go back as { type: 'storage', items }, at most every 0.5 s; with api
+                                           (experimental: names of calls the app answers) the page gets them, see
+                                           installApi
+    { type: 'call', id, name, args }       (sent) a call of the shown page's api, answered with
+                                           { type: 'callResult', id, value?, error? }
     { type: 'storage', items }             (sent) the shown page's localStorage after it changed
     { type: 'log', entries }               (sent) the shown page's console output and errors, as { level, text }
                                            ('log', 'info', 'warn', 'error', 'debug'; 'exception' for an error not
@@ -85,6 +89,94 @@
         }
         const WORKER = `const runCode = ${runCode};\nonmessage = async (e) => postMessage(await runCode(e.data.code, e.data.files));`;
         let port = null;
+
+        // ---- experimental: the shown page's api (only when the app gives one: a page the user shows, in a build
+        // with VITE_EXPERIMENTAL_PAGE_API). Every call goes to the app over the port; nothing here reaches the network
+        const calls = new Map();
+        let lastCall = 0;
+        function call(name, args) {
+          return new Promise((resolve, reject) => {
+            const id = ++lastCall;
+            calls.set(id, { resolve, reject });
+            port.postMessage({ type: 'call', id, name, args });
+          });
+        }
+        function onCallResult(d) {
+          const c = calls.get(d.id);
+          if (!c) return;
+          calls.delete(d.id);
+          if (typeof d.error === 'string') c.reject(new Error(d.error));
+          else c.resolve(d.value);
+        }
+        const plainFetch = window.fetch;
+        /** https addresses fetched from the image elements, by address: their blob: URLs */
+        const proxied = new Map();
+        // nbl.files.list() / read(path) / write(path, text): the files of the page's site; nbl.chat(prompt, { system })
+        // the text of a model's answer; with fetch, fetch(url) of an https address (GET only) through the fetch page,
+        // and images from https addresses fetched the same way
+        function installApi(names) {
+          const has = (n) => names.includes(n);
+          const nbl = {};
+          if (has('files.list'))
+            nbl.files = Object.freeze({
+              list: () => call('files.list', {}),
+              read: (path) => call('files.read', { path: String(path) }),
+              write: (path, text) => call('files.write', { path: String(path), text: String(text) })
+            });
+          if (has('chat')) nbl.chat = (prompt, o) => call('chat', { prompt: String(prompt), system: o && o.system != null ? String(o.system) : undefined });
+          if (has('fetch')) {
+            nbl.fetch = async (input, init) => {
+              const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input && input.url;
+              const method = ((init && init.method) || (input && typeof input === 'object' && input.method) || 'GET').toUpperCase();
+              if (method !== 'GET') throw new TypeError('Only GET requests can be made from the sandbox.');
+              if (!/^https:/i.test(String(url))) throw new TypeError('Only https addresses can be fetched from the sandbox: ' + url);
+              const r = await call('fetch', { url: String(url) });
+              const res = new Response(r.data, { status: 200, headers: { 'content-type': r.mime } });
+              Object.defineProperty(res, 'url', { value: r.url });
+              return res;
+            };
+            // Everything else (relative addresses) goes to the browser as before, where the CSP blocks it
+            window.fetch = (input, init) => {
+              const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input && input.url;
+              return /^https:/i.test(String(url)) ? nbl.fetch(input, init) : plainFetch.call(window, input, init);
+            };
+          }
+          window.nbl = Object.freeze(nbl);
+        }
+        /** An image element's https address becomes a blob: URL of what the fetch page got (asked once per address) */
+        function proxyImage(img) {
+          const src = img.getAttribute('src');
+          if (img.hasAttribute('srcset') && /https:/i.test(img.getAttribute('srcset'))) img.removeAttribute('srcset');
+          if (!src || !/^https:/i.test(src)) return;
+          if (!proxied.has(src))
+            proxied.set(
+              src,
+              call('fetch', { url: src }).then(
+                (r) => URL.createObjectURL(new Blob([r.data], { type: r.mime })),
+                (err) => {
+                  console.warn('Image did not load: ' + src + ' (' + err.message + ')');
+                  return null;
+                }
+              )
+            );
+          img.dataset.nblSrc = src;
+          proxied.get(src).then((u) => u && img.getAttribute('src') === src && img.setAttribute('src', u));
+        }
+        function watchImages() {
+          new MutationObserver((records) => {
+            for (const r of records) {
+              if (r.type === 'attributes') {
+                if (r.target.tagName === 'IMG') proxyImage(r.target);
+                continue;
+              }
+              for (const n of r.addedNodes) {
+                if (n.nodeType !== 1) continue;
+                if (n.tagName === 'IMG') proxyImage(n);
+                for (const img of n.querySelectorAll('img')) proxyImage(img);
+              }
+            }
+          }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['src', 'srcset'] });
+        }
 
         function run(d) {
           const url = URL.createObjectURL(new Blob([WORKER], { type: 'text/javascript' }));
@@ -191,6 +283,8 @@
             'error',
             (e) => {
               const el = e.target;
+              // An image fetched through the app (proxyImage) tells its own failure
+              if (el && el.dataset && el.dataset.nblSrc) return;
               if (el && el !== window && el.nodeType === 1) notLoaded(el.getAttribute('src') || el.getAttribute('href') || el.tagName.toLowerCase());
               else note('exception', (e.message || 'Error') + (e.filename ? ' (' + (e.filename === location.href ? 'inline script' : e.filename) + ', line ' + e.lineno + ')' : ''));
             },
@@ -199,6 +293,8 @@
           addEventListener('unhandledrejection', (e) => note('exception', 'Unhandled rejection: ' + showValue(e.reason && e.reason.stack ? e.reason.stack : e.reason)));
           // A file the page asked for and did not get, with why: from the network, or not a file of its site
           const notLoaded = (raw) => {
+            // An image fetched through the app instead: told only if that fails
+            if (proxied.has(raw)) return;
             const ref = named(raw);
             note('resource', 'Did not load: ' + ref + (/^(https?:)?\/\//i.test(ref) ? ' (the sandbox has no network)' : /^(data|blob):/i.test(ref) ? '' : ' (no such file in the site)'));
           };
@@ -222,6 +318,7 @@
         function onPortMessage(e) {
           const d = e.data || {};
           if (d.type === 'ping') port.postMessage({ type: 'pong', n: d.n });
+          else if (d.type === 'callResult') onCallResult(d);
           else if (d.type === 'run' && typeof d.code === 'string') {
             const files = d.files && typeof d.files === 'object' ? d.files : {};
             if (d.dom) void runHere({ id: d.id, code: d.code, files });
@@ -233,8 +330,11 @@
             const html = d.files && typeof d.files === 'object' && typeof d.path === 'string' ? rewritePage(d.html, d.path, d.files, names) : d.html;
             const kept = d.storage && typeof d.storage === 'object' ? d.storage : null;
             installStorage(makeStorage(kept, kept && keepStorage), makeStorage());
+            const api = Array.isArray(d.api) ? d.api.filter((n) => typeof n === 'string') : [];
+            if (api.length) installApi(api);
             document.open();
             watchPage(names);
+            if (api.includes('fetch')) watchImages();
             // DNS prefetch hints could carry data in host names: asked off again for the new page
             document.write('<meta http-equiv="x-dns-prefetch-control" content="off">' + html);
             document.close();

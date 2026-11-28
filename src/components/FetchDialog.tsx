@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { FETCH_ORIGIN, fetchPageUrl } from '../lib/fetcher/config';
 import { FETCH_HELLO, type Fetched, type FromFetcher } from '../lib/fetcher/protocol';
-import { fetchRequest, fetchSettingsOpen } from '../state/fetch-page';
-import { Modal } from './ui';
+import { fetchRequest, fetchSettingsOpen, pageFetcher, pageFetcherAnswer, pageFetcherAsking, pageFetcherReady } from '../state/fetch-page';
+import { Modal, cx } from './ui';
 import { t } from './messages';
 
 /** A fetch in progress, else the fetch page's settings (the Jina Reader key, the sites not asked about) when open */
@@ -45,5 +45,66 @@ function FetchFrame({ title, src, done }: { title: string; src: string; done(r: 
         onLoad={() => ref.current?.contentWindow?.postMessage(FETCH_HELLO, FETCH_ORIGIN)}
       />
     </Modal>
+  );
+}
+
+/**
+ * The fetch page that takes the shown pages' requests (experimental, PAGE_WEB): it stays open while any waits, out of
+ * sight until it asks the user. Never remounted while open, so its queue and its questions stay
+ */
+export function PageFetcher() {
+  const state = pageFetcher.value;
+  return state ? <PageFetchFrame asking={state.asking} /> : null;
+}
+
+function PageFetchFrame({ asking }: { asking: boolean }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(220);
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== FETCH_ORIGIN || e.source !== ref.current?.contentWindow) return;
+      const m = e.data as FromFetcher;
+      if (m?.type === 'fetch-resize' && typeof m.height === 'number') setHeight(Math.min(800, Math.max(120, m.height + 4)));
+      else if (m?.type === 'page-asking') pageFetcherAsking(!!m.asking);
+      else if (m?.type === 'page-result' && typeof m.id === 'string') {
+        const { type: _type, id, ...r } = m;
+        pageFetcherAnswer(id, r);
+      } else if (m?.type === 'page-error' && typeof m.id === 'string') pageFetcherAnswer(m.id, { error: String(m.message) });
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+  // Keys go to the question (Esc declines it there)
+  useEffect(() => {
+    if (asking) ref.current?.focus();
+  }, [asking]);
+  const title = t('fetchPage.title');
+  return (
+    <div class={asking ? 'backdrop fixed inset-0 z-40 flex items-end justify-center sm:items-center sm:p-4' : 'invisible fixed size-0 overflow-hidden'}>
+      {/* Laid out like Modal, which cannot be used: it would remount the frame each time it shows */}
+      <div role="dialog" aria-modal={asking} aria-label={title} class={cx(asking && 'frosted rise-glass flex max-h-[92dvh] w-full flex-col rounded-t-[22px] sm:max-w-lg sm:rounded-[22px]')}>
+        {asking && (
+          <div class="border-b border-line px-5 py-3">
+            <h2 class="font-semibold text-ink-strong">{title}</h2>
+          </div>
+        )}
+        <div class={cx(asking && 'scroll-thin min-h-0 flex-1 overflow-y-auto p-5')}>
+          <iframe
+            ref={ref}
+            src={fetchPageUrl({ mode: 'page' })}
+            title={title}
+            referrerpolicy="no-referrer"
+            class="block w-full border-0"
+            style={{ height: `${height}px` }}
+            onLoad={() => {
+              const win = ref.current?.contentWindow;
+              if (!win) return;
+              win.postMessage(FETCH_HELLO, FETCH_ORIGIN);
+              pageFetcherReady((m) => win.postMessage(m, FETCH_ORIGIN));
+            }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }

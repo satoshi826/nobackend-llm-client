@@ -4,8 +4,11 @@
 /** Largest file the fetch page passes on */
 export const MAX_FETCH_BYTES = 20 * 1024 * 1024;
 
-/** read: a page's text for a model to read (may fall back to Jina Reader); save: a file kept as it is */
-export type FetchMode = 'read' | 'save';
+/**
+ * read: a page's text for a model to read (may fall back to Jina Reader); save: a file kept as it is; page: what a
+ * page shown in the sandbox asks for (experimental, pagesReachWeb)
+ */
+export type FetchMode = 'read' | 'save' | 'page';
 /** How it was fetched: straight from the site, through the user's relay, or as text from Jina Reader (read only) */
 export type FetchVia = 'direct' | 'relay' | 'jina';
 
@@ -13,6 +16,14 @@ export type FetchVia = 'direct' | 'relay' | 'jina';
 export function fetchRoutes(env: Record<string, string | undefined>): { relay: string; jina: string } {
   return { relay: env.VITE_FETCH_RELAY_URL || '', jina: (env.VITE_JINA_BASE_URL || 'https://r.jina.ai').replace(/\/+$/, '') };
 }
+
+/**
+ * Experimental, off unless the build sets VITE_EXPERIMENTAL_PAGE_API=1: pages the user shows from the sandbox may use
+ * their site's files and the model (nbl.files, nbl.chat)
+ */
+export const pageApiOn = (env: Record<string, string | undefined>) => env.VITE_EXPERIMENTAL_PAGE_API === '1';
+/** ...and fetch from the web (GET, through the fetch page), only with a relay: without one most sites refuse browsers */
+export const pagesReachWeb = (env: Record<string, string | undefined>) => pageApiOn(env) && !!fetchRoutes(env).relay;
 
 /** The app's proof that it framed the page (sent once the page has loaded); the page shows nothing until then */
 export const FETCH_HELLO = { type: 'fetch-hello' } as const;
@@ -27,8 +38,15 @@ export interface Fetched {
   via: FetchVia;
 }
 
+/** The app to a fetch page opened with mode=page, which stays open and takes the shown pages' requests in turn */
+export type ToPageFetcher = { type: 'page-get'; id: string; url: string } | { type: 'page-cancel'; id: string };
+
 export type FromFetcher =
   | { type: 'fetch-resize'; height: number }
+  /** mode=page: it is asking the user (show it), or no longer (hide it) */
+  | { type: 'page-asking'; asking: boolean }
+  | ({ type: 'page-result'; id: string } & Fetched)
+  | { type: 'page-error'; id: string; message: string }
   | ({ type: 'fetch-result' } & Fetched)
   /** Cancelled, or the settings view closed: nothing was fetched */
   | { type: 'fetch-close' };

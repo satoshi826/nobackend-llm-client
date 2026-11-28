@@ -1,7 +1,7 @@
 // Reading a web page for a model, the way Claude Code's WebFetch does: the page goes to a separate call with no tools,
 // which answers the request from it; only that answer reaches the model in the conversation. Instructions planted in
 // the page can at worst bend the answer, never call a tool.
-import type { AuthRef, ChatMessage, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
+import type { AuthRef, ChatMessage, ChatParams, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
 import { getAdapter } from '../providers/registry';
 import type { PageText } from '../fetcher/page-text';
 
@@ -25,17 +25,25 @@ export interface ExtractOptions {
 
 /** The answer to a request about one page (text only; reasoning dropped) */
 export async function extractFromPage(page: PageText & { url: string }, request: string, o: ExtractOptions): Promise<string> {
-  const messages: ChatMessage[] = [
-    { id: 's', role: 'system', parts: [{ type: 'text', text: INSTRUCTION }] },
-    { id: 'u', role: 'user', parts: [{ type: 'text', text: `Request: ${request}\n\nURL: ${page.url}\nTitle: ${page.title || '(none)'}\n\n<page>\n${page.text}\n</page>` }] }
-  ];
+  const out = await completeText(
+    [
+      { id: 's', role: 'system', parts: [{ type: 'text', text: INSTRUCTION }] },
+      { id: 'u', role: 'user', parts: [{ type: 'text', text: `Request: ${request}\n\nURL: ${page.url}\nTitle: ${page.title || '(none)'}\n\n<page>\n${page.text}\n</page>` }] }
+    ],
+    { maxTokens: 2048, temperature: 0.2 },
+    o
+  );
+  if (!out) throw new Error('The page reader returned nothing.');
+  return out;
+}
+
+/** One call with no tools: the text of its answer, trimmed (reasoning dropped) */
+export async function completeText(messages: ChatMessage[], params: ChatParams, o: ExtractOptions): Promise<string> {
   let out = '';
-  for await (const ev of getAdapter(o.provider).chat(o.provider, o.preset, o.auth, { model: o.model, messages, params: { maxTokens: 2048, temperature: 0.2 }, providerOptions: o.providerOptions, signal: o.signal }, o.transport)) {
+  for await (const ev of getAdapter(o.provider).chat(o.provider, o.preset, o.auth, { model: o.model, messages, params, providerOptions: o.providerOptions, signal: o.signal }, o.transport)) {
     if (ev.type === 'text-delta') out += ev.delta;
     else if (ev.type === 'usage') o.onUsage?.(ev.usage, ev.costUsd);
     else if (ev.type === 'error') throw new Error(ev.error.message);
   }
-  out = out.trim();
-  if (!out) throw new Error('The page reader returned nothing.');
-  return out;
+  return out.trim();
 }

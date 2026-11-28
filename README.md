@@ -144,6 +144,20 @@ VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<account>.workers.dev npm run
 
 The relay only takes public https addresses, passes on none of your headers or cookies, keeps nothing, answers only to the allowed origins, checks every redirect the same way, and asks Cloudflare to cap each IP at 30 requests a minute (the allowed origin is a header any script can fake, and the relay's address is readable in the app). Cloudflare applies this cap loosely: in a test it let every request through. Addresses you fetch through it are seen by it (your own Worker).
 
+### Experimental: pages that reach the web, their files and the model (at your own risk)
+
+For your own builds only. With `VITE_EXPERIMENTAL_PAGE_API=1`, an HTML page in a folder that you show from the Files tab (not one a model tries) gets:
+
+- `nbl.files.list()`, `nbl.files.read(path)`, `nbl.files.write(path, text)`: the files of its site (paths from the site's top; text only for writing).
+- `nbl.chat(prompt, { system })`: the text of an answer from the model a new chat would use (no tools, at most 20 a minute; the cost counts like any other).
+- With `VITE_FETCH_RELAY_URL` set too: `fetch(url)` of https addresses, GET only, through the fetch page, which asks about each (or not again for a site you choose; kept apart from reading and saving), and `<img>` from https addresses fetched the same way.
+
+```bash
+VITE_EXPERIMENTAL_PAGE_API=1 VITE_FETCH_RELAY_URL=https://nobackend-fetch-relay.<account>.workers.dev npm run build
+```
+
+A page sends whatever it puts in an address to the site, its site's files included, and a site you chose not to be asked about gets it without asking. Model calls from a page cost money. Don't serve such a build to others.
+
 ### Adding providers at build time
 
 `VITE_CUSTOM_PROVIDERS` takes a JSON array of OpenAI-compatible endpoints. They're added to the provider list, the vault's allowed hosts, and the CSP.

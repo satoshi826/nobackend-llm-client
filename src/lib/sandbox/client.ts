@@ -43,6 +43,52 @@ export interface SandboxPage {
   files: Record<string, string | Blob>;
   /** Its localStorage: the items it starts with (asked at each showing), and where its changes go (checked: STORAGE_LIMIT) */
   storage?: { items(): Record<string, string>; save(items: Record<string, string>): void };
+  /** Experimental: what it may ask the app for (only a page the user shows; the page gets each as nbl.* or fetch) */
+  api?: PageApi;
+}
+
+/**
+ * Experimental (VITE_EXPERIMENTAL_PAGE_API): what a shown page may ask the app for. Each throws an Error whose
+ * message the page gets. paths are inside the page's site ('data/a.json')
+ */
+export interface PageApi {
+  /** A GET of an https address, through the fetch page (fetch(url) on the page) */
+  fetch?(url: string, signal: AbortSignal): Promise<{ url: string; mime: string; data: ArrayBuffer }>;
+  files?: {
+    list(): Promise<string[]>;
+    /** Text, a Blob for an image, null when there is no such file */
+    read(path: string): Promise<string | Blob | null>;
+    write(path: string, text: string): Promise<void>;
+  };
+  /** One answer of a model, with no tools */
+  chat?(prompt: string, system: string | undefined, signal: AbortSignal): Promise<string>;
+}
+
+/** The calls a page with this api gets (sandbox/sandbox.html builds nbl from them) */
+const apiNames = (api: PageApi) => [...(api.fetch ? ['fetch'] : []), ...(api.files ? ['files.list', 'files.read', 'files.write'] : []), ...(api.chat ? ['chat'] : [])];
+
+/** Answer a page's call, checking what it sent before using it */
+async function answerCall(port: MessagePort, api: PageApi, d: { id: number; name?: unknown; args?: unknown }, signal: AbortSignal) {
+  const args = (d.args && typeof d.args === 'object' ? d.args : {}) as Record<string, unknown>;
+  const str = (k: string) => {
+    if (typeof args[k] !== 'string') throw new Error(`${k} must be a string`);
+    return args[k] as string;
+  };
+  try {
+    if (d.name === 'fetch' && api.fetch) {
+      const r = await api.fetch(str('url'), signal);
+      return port.postMessage({ type: 'callResult', id: d.id, value: r }, [r.data]);
+    }
+    let value: unknown;
+    if (d.name === 'files.list' && api.files) value = await api.files.list();
+    else if (d.name === 'files.read' && api.files) value = await api.files.read(str('path'));
+    else if (d.name === 'files.write' && api.files) value = await api.files.write(str('path'), str('text'));
+    else if (d.name === 'chat' && api.chat) value = await api.chat(str('prompt'), typeof args.system === 'string' ? args.system : undefined, signal);
+    else throw new Error(`${String(d.name)} is not available to this page`);
+    port.postMessage({ type: 'callResult', id: d.id, value });
+  } catch (e) {
+    port.postMessage({ type: 'callResult', id: d.id, error: (e as Error).message || String(e) });
+  }
 }
 
 /** A line of a shown page's console, or something that went wrong on it (sandbox/sandbox.html, watchPage) */
@@ -96,8 +142,9 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
     let last = Date.now();
     let n = 0;
     port.onmessage = (e) => {
-      const d = e.data as { type?: string; items?: unknown; entries?: unknown };
+      const d = e.data as { type?: string; items?: unknown; entries?: unknown; id?: unknown };
       if (d?.type === 'pong') last = Date.now();
+      else if (d?.type === 'call' && typeof d.id === 'number' && page?.api) void answerCall(port, page.api, d as { id: number }, ctrl.signal);
       else if (d?.type === 'log') onLog?.(cleanLogs(d.entries));
       else if (d?.type === 'storage' && page?.storage) {
         // What the shown page sent: kept only in the shape storage has
@@ -105,8 +152,9 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
         if (items) page.storage.save(items);
       }
     };
-    // With page: path and files (Blobs go across without copying their bytes), and the localStorage it starts with
-    port.postMessage({ type: 'render', html, ...(page ? { path: page.path, files: page.files, storage: page.storage?.items() } : {}) });
+    // With page: path and files (Blobs go across without copying their bytes), the localStorage it starts with, and
+    // the calls it may make
+    port.postMessage({ type: 'render', html, ...(page ? { path: page.path, files: page.files, storage: page.storage?.items(), api: page.api && apiNames(page.api) } : {}) });
     timer = setInterval(() => {
       if (Date.now() - last <= STUCK_MS) return port.postMessage({ type: 'ping', n: ++n });
       clearInterval(timer);

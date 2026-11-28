@@ -3,11 +3,13 @@
 // unless they chose not to be asked again for that site and mode (kept in this page's storage).
 // read: a page for a model to read. Straight from the site, then through the user's relay, and as text from Jina
 // Reader when neither works or the HTML holds almost no text (a page drawn by scripts). save: a file, kept as it is.
+// page (experimental, only in builds where pagesReachWeb): no address; it stays open, takes GET requests from the
+// pages the user shows in the sandbox (ToPageFetcher), asks about each in turn, and answers each by its id.
 // The question lives here, out of the app's reach: neither a prompt-injected model nor a script running in the
 // app can fetch without the user (fully so when this page is on its own origin, VITE_FETCH_URL).
 // No dependencies on the app. The DOM is built with createElement and textContent only (no innerHTML).
 import { detectLang, formatNumber, getLang, setLang } from '../src/lib/i18n';
-import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, type FetchMode, type FetchVia, type FromFetcher } from '../src/lib/fetcher/protocol';
+import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, pagesReachWeb, type FetchMode, type FetchVia, type FromFetcher, type ToPageFetcher } from '../src/lib/fetcher/protocol';
 import '../vault/style.css';
 import { t } from './messages';
 
@@ -36,7 +38,7 @@ document.documentElement.classList.toggle('dark', params.get('theme') !== 'light
 const appOrigin = params.get('app') ?? '';
 const target = window.parent !== window && APP_ORIGINS.includes(appOrigin) ? appOrigin : null;
 const url = fetchableUrl(params.get('url') ?? '');
-const mode: FetchMode = params.get('mode') === 'read' ? 'read' : 'save';
+const mode: FetchMode = params.get('mode') === 'read' ? 'read' : params.get('mode') === 'page' ? 'page' : 'save';
 /** Opened from the app's settings to manage what this page keeps, instead of to fetch */
 const settingsView = params.get('view') === 'settings';
 
@@ -59,7 +61,7 @@ function store(key: string, value: string | null) {
     /* storage unavailable: nothing is kept (the user is asked each time, Jina is used without a key) */
   }
 }
-/** Sites not asked about again, for reading pages and for saving files apart */
+/** Sites not asked about again, for reading pages, saving files and the shown pages' requests apart */
 type Sites = Record<FetchMode, string[]>;
 function allowedSites(): Sites {
   let v: unknown;
@@ -70,13 +72,13 @@ function allowedSites(): Sites {
   }
   const hosts = (x: unknown) => (Array.isArray(x) ? x.filter((h): h is string => typeof h === 'string') : []);
   // A plain list, kept before reading and saving were remembered apart: it stands for both
-  if (Array.isArray(v)) return { read: hosts(v), save: hosts(v) };
+  if (Array.isArray(v)) return { read: hosts(v), save: hosts(v), page: [] };
   const o = (v ?? {}) as Partial<Sites>;
-  return { read: hosts(o.read), save: hosts(o.save) };
+  return { read: hosts(o.read), save: hosts(o.save), page: hosts(o.page) };
 }
 function setAllowed(m: FetchMode, hosts: string[]) {
   const s = { ...allowedSites(), [m]: [...new Set(hosts)].sort() };
-  store(ALLOWED_KEY, s.read.length || s.save.length ? JSON.stringify(s) : null);
+  store(ALLOWED_KEY, s.read.length || s.save.length || s.page.length ? JSON.stringify(s) : null);
 }
 const MAX_MB = formatNumber(MAX_FETCH_BYTES / 1024 / 1024);
 
@@ -236,12 +238,12 @@ function renderSettings() {
     jina = h('div', { class: 'card stack', role: 'alert' }, h('p', {}, t('jinaKeyDeleteWarning')), h('div', { class: 'btns' }, yes, no));
   }
   const allowed = allowedSites();
-  const rows = (['read', 'save'] as const).flatMap((m) =>
+  const rows = (['read', 'save', 'page'] as const).flatMap((m) =>
     allowed[m].map((host) =>
       h(
         'div',
         { class: 'card row' },
-        h('div', { class: 'fill' }, h('div', { class: 'mono' }, host), h('div', { class: 'muted' }, t(m === 'read' ? 'siteRead' : 'siteSave'))),
+        h('div', { class: 'fill' }, h('div', { class: 'mono' }, host), h('div', { class: 'muted' }, t(m === 'read' ? 'siteRead' : m === 'save' ? 'siteSave' : 'sitePage'))),
         h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: () => (setAllowed(m, allowedSites()[m].filter((x) => x !== host)), renderSettings()) }, t('forget')))
       )
     )
@@ -263,12 +265,117 @@ function renderSettings() {
   );
 }
 
+// ---- mode=page: the shown pages' requests, asked about one at a time, fetched at most PAGE_PARALLEL at once ----
+const PAGE_FETCH = pagesReachWeb(env);
+const PAGE_PARALLEL = 4;
+interface Job {
+  id: string;
+  url: URL;
+}
+/** Waiting for the user, in order; the one asked about now */
+const toAsk: Job[] = [];
+let asking: Job | null = null;
+/** Allowed, waiting for a free place; how many run */
+const toRun: Job[] = [];
+let running = 0;
+
+const fail = (id: string, message: string) => post({ type: 'page-error', id, message });
+
+function allow(job: Job) {
+  toRun.push(job);
+  pump();
+}
+function pump() {
+  while (running < PAGE_PARALLEL && toRun.length) {
+    const j = toRun.shift()!;
+    running++;
+    download(j.url, () => {})
+      .then(({ res, body, relayed }) => {
+        const mime = (res.headers.get('content-type') ?? 'application/octet-stream').split(';')[0].trim().toLowerCase();
+        const finalUrl = fetchableUrl(relayed ? j.url.href : res.url || j.url.href) ?? j.url;
+        post({ type: 'page-result', id: j.id, name: nameFor(finalUrl, res.headers.get('content-disposition'), mime), mime, data: body, url: finalUrl.href, via: relayed ? 'relay' : 'direct' }, [body]);
+      })
+      .catch((e: Error) => fail(j.id, e.message))
+      .finally(() => {
+        running--;
+        pump();
+      });
+  }
+}
+
+function onPageRequest(d: ToPageFetcher) {
+  if (d.type === 'page-cancel') {
+    const i = toAsk.findIndex((j) => j.id === d.id);
+    if (i >= 0) toAsk.splice(i, 1);
+    if (asking?.id === d.id) {
+      asking = null;
+      askNext();
+    }
+    return;
+  }
+  if (!PAGE_FETCH) return fail(d.id, t('pageOff'));
+  const u = fetchableUrl(d.url);
+  if (!u) return fail(d.id, t('badUrl'));
+  const job = { id: d.id, url: u };
+  if (allowedSites().page.includes(u.host)) return allow(job);
+  toAsk.push(job);
+  if (!asking) askNext();
+}
+
+/** The user answered about the job asked now: remembering its site lets the others waiting for that site go too */
+function answer(yes: boolean, remember: boolean) {
+  const job = asking;
+  if (!job) return;
+  asking = null;
+  if (yes && remember) {
+    setAllowed('page', [...allowedSites().page, job.url.host]);
+    for (let i = toAsk.length - 1; i >= 0; i--) if (toAsk[i].url.host === job.url.host) allow(toAsk.splice(i, 1)[0]);
+  }
+  if (yes) allow(job);
+  else fail(job.id, t('declined'));
+  askNext();
+}
+
+function askNext() {
+  asking = toAsk.shift() ?? null;
+  post({ type: 'page-asking', asking: !!asking });
+  if (!asking) return root.replaceChildren();
+  const u = asking.url;
+  const remember = h('input', { type: 'checkbox' });
+  const go = h('button', { type: 'button', class: 'btn primary', onClick: () => answer(true, remember.checked) }, t('fetch'));
+  root.replaceChildren(
+    h(
+      'div',
+      { class: 'card stack' },
+      h('strong', {}, t('titlePage')),
+      h('div', {}, h('span', { class: 'muted' }, `${t('from')}: `), h('strong', {}, u.host)),
+      h('p', { class: 'mono secret' }, u.href),
+      h('p', { class: 'muted' }, t('noteDirect', { host: u.host })),
+      RELAY && h('p', { class: 'muted' }, t('noteRelay', { host: u.host, relay: new URL(RELAY).host })),
+      h('label', { class: 'check' }, remember, t('rememberPage', { host: u.host })),
+      h('p', { class: 'muted' }, t('rememberPageNote', { host: u.host })),
+      toAsk.length > 0 && h('p', { class: 'muted' }, t('moreWaiting', { n: formatNumber(toAsk.length) })),
+      h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: () => answer(false, false) }, t('cancel')), go)
+    )
+  );
+  if (!matchMedia('(pointer: coarse)').matches) go.focus();
+}
+
+function startPageMode() {
+  addEventListener('message', (e) => {
+    if (e.source !== window.parent || e.origin !== target) return;
+    const d = e.data as ToPageFetcher | null;
+    if ((d?.type === 'page-get' && typeof d.url === 'string' && typeof d.id === 'string') || (d?.type === 'page-cancel' && typeof d.id === 'string')) onPageRequest(d);
+  });
+}
+
 function render() {
   if (!target) {
     root.replaceChildren(h('p', { class: 'muted' }, t('embedOnly')));
     return;
   }
   if (settingsView) return renderSettings();
+  if (mode === 'page') return startPageMode();
   if (!url) {
     root.replaceChildren(
       h('div', { class: 'card stack' }, h('p', { role: 'alert' }, t('badUrl')), h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onClick: close }, t('close'))))
@@ -345,6 +452,8 @@ else
     render();
   });
 addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') close();
+  if (e.key !== 'Escape') return;
+  if (mode === 'page') answer(false, false);
+  else close();
 });
 new ResizeObserver(() => post({ type: 'fetch-resize', height: root.scrollHeight })).observe(root);

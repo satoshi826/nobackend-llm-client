@@ -9,6 +9,8 @@ import type {  FileRecord } from '../../../lib/db/schema';
 import {  showToast } from '../../../state/ui';
 import { t } from '../messages';
 import { cleanStorage, type SandboxPage } from '../../../lib/sandbox/client';
+import { PAGE_API } from '../../../lib/fetcher/config';
+import { pageApi } from './page-api';
 import { fileList, imageList } from './lists';
 
 /** Text a page's preview receives from its site at most (characters) */
@@ -30,20 +32,52 @@ export function siteOf(pagePath: string, paths: string[]): string {
 /** The file a site's pages keep their localStorage in, at the site's top */
 export const STORAGE_FILE = 'localStorage.json';
 
-/** What the app knows about each storage file it writes (by path key) */
-interface StorageState {
-  /** The items it saved last (a page shown again starts from them) */
-  items: Record<string, string> | null;
-  /** The updatedAt of each of its own writes: a different one is someone else's change */
+/**
+ * Files the shown pages wrote themselves (their localStorage, and nbl.files with the experimental page api), by path
+ * key: such a write does not load the page again (siteSignature)
+ */
+interface OwnWrites {
+  /** The updatedAt of each of the pages' writes: a different one is someone else's change */
   stamps: Set<number>;
+  /** The file's updatedAt before the pages' writes since someone else's last change; null for a file a page made */
+  before: number | null;
 }
-const storageStates = new Map<string, StorageState>();
-const storageState = (path: string) => {
-  const k = pathKey(path);
-  let st = storageStates.get(k);
-  if (!st) storageStates.set(k, (st = { items: null, stamps: new Set() }));
-  return st;
+const ownWrites = new Map<string, OwnWrites>();
+const ownWrite = (path: string, f: FileRecord) => {
+  const w = ownWrites.get(pathKey(path));
+  return w?.stamps.has(f.updatedAt) ? w : undefined;
 };
+
+/** The items each storage file's pages saved last, by path key (a page shown again starts from them) */
+const storageItems = new Map<string, Record<string, string> | null>();
+
+/**
+ * Write a text file of a site as its pages do (made when missing, keeping no previous text). false when the path is
+ * taken by an image or a folder
+ */
+export async function writeAsPage(path: string, text: string, page: FileRecord): Promise<boolean> {
+  return withTakenPaths(async (space) => {
+    const at = atPath(path);
+    const k = pathKey(path);
+    const w = ownWrites.get(k) ?? { stamps: new Set<number>(), before: null };
+    if (at?.kind === 'file') {
+      if (!w.stamps.has(at.file.updatedAt)) w.before = at.file.updatedAt;
+      // Known as its own before the change is heard of, so the page showing it is not loaded again
+      const now = Date.now();
+      w.stamps.add(now);
+      ownWrites.set(k, w);
+      await fdb.setText(at.file.id, text, 'user', true, now);
+      return true;
+    }
+    if (at || !pathFree(path, space)) return false;
+    const f = fdb.newFile({ id: newId(), name: path, origin: { kind: 'made' }, text, by: 'user', conversationId: page.conversationId });
+    w.before = null;
+    w.stamps.add(f.updatedAt);
+    ownWrites.set(k, w);
+    await fdb.createFile(f, text, fdb.isTemporaryFile(page.id));
+    return true;
+  });
+}
 
 /** A storage file's items; anything else than an object of strings (a broken edit, say) counts as empty */
 function parseStorage(text: string): Record<string, string> {
@@ -80,61 +114,50 @@ export async function pageOf(page: FileRecord, within?: string): Promise<Sandbox
     if (blob) out[im.path.slice(site.length)] = blob;
   }
   const storagePath = `${site}${STORAGE_FILE}`;
-  const st = storageState(storagePath);
-  const stored = files.find((f) => pathKey(f.name) === pathKey(storagePath));
-  const first = st.items ?? (stored ? parseStorage(await fdb.readText(stored.id)) : {});
+  const storageKey = pathKey(storagePath);
+  const stored = files.find((f) => pathKey(f.name) === storageKey);
+  const first = storageItems.get(storageKey) ?? (stored ? parseStorage(await fdb.readText(stored.id)) : {});
   return {
     path: page.name.slice(site.length),
     files: out,
     storage: {
       // What it saved last, so showing the page again (or over the whole window) starts from its latest data
-      items: () => st.items ?? first,
+      items: () => storageItems.get(storageKey) ?? first,
       save: (items) => void saveStorage(storagePath, items, page)
-    }
+    },
+    // Only for a page the user shows, never one a model tries
+    ...(PAGE_API && within === undefined ? { api: pageApi(page, site, (path, text) => writeAsPage(path, text, page)) } : {})
   };
 }
 
-/** Keep a page's localStorage in its site's storage file (made on the first write; it keeps no previous text) */
+/** Keep a page's localStorage in its site's storage file (made on the first write) */
 async function saveStorage(path: string, items: Record<string, string>, page: FileRecord) {
-  const st = storageState(path);
-  st.items = items;
+  storageItems.set(pathKey(path), items);
   const text = JSON.stringify(items);
   // Escapes can make the JSON longer than the items: what a file cannot hold is not saved (and said so)
   if (text.length > fdb.MAX_FILE_CHARS) return showToast(t('storage.tooBig'), 'error');
   try {
-    await withTakenPaths(async (space) => {
-      const at = atPath(path);
-      if (at?.kind === 'file') {
-        // Known as its own before the change is heard of, so the page showing it is not loaded again
-        const now = Date.now();
-        st.stamps.add(now);
-        await fdb.setText(at.file.id, text, 'user', true, now);
-      } else if (!at && pathFree(path, space)) {
-        const f = fdb.newFile({ id: newId(), name: path, origin: { kind: 'made' }, text, by: 'user', conversationId: page.conversationId });
-        st.stamps.add(f.updatedAt);
-        await fdb.createFile(f, text, fdb.isTemporaryFile(page.id));
-      }
-    });
+    await writeAsPage(path, text, page);
   } catch (e) {
     showToast(t('storage.failed', { message: (e as Error).message }), 'error');
   }
 }
 
 /**
- * What a page's preview depends on, as a short text: the site's files and images as they are now. Its storage file
- * counts only when someone else changed it (a page's own saves never reload it). The preview loads again when this
- * changes
+ * What a page's preview depends on, as a short text: the site's files and images as they are now. A file the pages
+ * wrote themselves counts as it was before (one they made, not at all), so their own writes never reload them. The
+ * preview loads again when this changes
  */
 export function siteSignature(page: FileRecord): string {
   const files = fileList.value ?? [];
   const site = siteOf(page.name, allPaths());
   if (!site) return '';
-  const storageKey = pathKey(`${site}${STORAGE_FILE}`);
   const parts: string[] = [site];
   for (const f of files) {
     if (!isInside(f.name, site)) continue;
-    if (pathKey(f.name) !== storageKey) parts.push(`${f.id}:${f.name}:${f.updatedAt}`);
-    else if (!storageState(f.name).stamps.has(f.updatedAt)) parts.push(`storage:${f.updatedAt}`);
+    const own = ownWrite(f.name, f);
+    if (!own) parts.push(`${f.id}:${f.name}:${f.updatedAt}`);
+    else if (own.before !== null) parts.push(`${f.id}:${f.name}:${own.before}`);
   }
   for (const im of imageList.value ?? []) if (isInside(im.path, site)) parts.push(`${im.id}:${im.path}`);
   return parts.sort().join('|');
@@ -143,12 +166,12 @@ export function siteSignature(page: FileRecord): string {
 /** Someone else changed a storage file: pages start from it again, not from what they saved last */
 effect(() => {
   for (const f of fileList.value ?? []) {
-    const st = storageStates.get(pathKey(f.name));
-    if (st && !st.stamps.has(f.updatedAt)) st.items = null;
+    const k = pathKey(f.name);
+    if (storageItems.get(k) && !ownWrite(f.name, f)) storageItems.set(k, null);
   }
 });
 // A deleted storage file: what the pages saved is gone too
 effect(() => {
   const names = new Set((fileList.value ?? []).map((f) => pathKey(f.name)));
-  for (const [k, st] of storageStates) if (!names.has(k)) st.items = null;
+  for (const k of storageItems.keys()) if (!names.has(k)) storageItems.set(k, null);
 });

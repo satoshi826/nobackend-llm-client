@@ -16,7 +16,7 @@ import { accountInUse } from '../../state/models';
 import { defineFeatureSettings, pickLegacy } from '../../state/feature-settings';
 import { openSettings, showToast } from '../../state/ui';
 import { recordUsage } from '../../state/request-helpers';
-import { conversations, currentConv, currentId, messages, openConversation, persistDraft, putMessage, startNewChat, updateConversation } from '../../state/conversations';
+import { conversations, currentConv, currentId, liveMessages, messages, openConversation, persistDraft, putMessage, startNewChat, updateConversation } from '../../state/conversations';
 import { beginRun, endRun } from '../../state/runs';
 import { cancelSuggestions } from '../../state/suggestions';
 import { resetProviderBalanceBaseline } from '../../state/balance';
@@ -520,6 +520,8 @@ export async function runImageJob(convId: string, userMsgId: string, override: P
     image: { params: p }
   };
   messages.value = [...messages.value, draft];
+  // Kept in memory while it is made, so opening the conversation again shows it as still being made
+  liveMessages.set(draft.id, draft);
   await putMessage(draft, conv);
   await updateConversation({ currentLeafId: draft.id, updatedAt: Date.now() }, conv.id);
   const ctrl = beginRun(conv.id);
@@ -546,6 +548,7 @@ export async function runImageJob(convId: string, userMsgId: string, override: P
     endRun(conv.id);
   }
   await putMessage(final, conv);
+  liveMessages.delete(final.id);
   if (messages.value.some((m) => m.id === final.id)) messages.value = messages.value.map((m) => (m.id === final.id ? final : m));
   await updateConversation({ updatedAt: Date.now() }, conv.id);
 }

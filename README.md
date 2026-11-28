@@ -29,7 +29,7 @@ What the security design protects, and where it stops: [docs/security.md](docs/s
 - **Skills**: SKILL.md-compatible instruction files. The model loads a skill's body only when it needs it, or you can attach one with `/name`. Ask it to "turn this into a skill" and it drafts one, which is saved after you approve it.
 - **Long conversations**: compaction (manual or automatic), prompt caching, and a context-length safeguard.
 - **Usage**: cost and tokens over time, by model, provider, use and conversation, recorded only in this browser. The balance of DeepSeek, NanoGPT, OpenRouter (the key's limit left) and Venice.
-- **Data**: full-text search, JSON backup/import (optionally password-encrypted), image deletion, wipe everything, PWA, dark mode, mobile layout.
+- **Data**: full-text search, backup/import (JSON, or zip with images and videos; optionally password-encrypted), image deletion, wipe everything, PWA, dark mode, mobile layout.
 - **For developers**: each reply can show the requests (JSON) sent to the provider (Settings → About → "Show the requests sent").
 
 ## Quick start
@@ -206,7 +206,7 @@ There's no storage mode to choose.
   - You can lock with the sidebar button, or set an idle auto-lock.
 - **Setup**: right after you save your first key, the app offers to set one (you can skip). You can also set, change or remove it under Settings → Connections and keys. Changing or removing it requires the current passphrase.
 - **If you forget it**, nothing can be recovered. The lock screen can only wipe everything so you can start over.
-- **Backups are plain JSON unless you set a password when exporting** (on by default once a passphrase is set). Store plain backups carefully.
+- **Backups are plain JSON (zip with images and videos) unless you set a password when exporting** (on by default once a passphrase is set). Store plain backups carefully.
 
 ## API key safety
 

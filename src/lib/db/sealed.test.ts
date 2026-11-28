@@ -4,7 +4,7 @@ import { generateDataKey, importDataKey } from '../crypto/data';
 import { DataLockedError, seal, setDataKey, unseal } from './sealed';
 import { db, type Conversation, type MessageRecord } from './schema';
 import * as repo from './repo';
-import { exportAll, importAll } from './export';
+import { exportBackup, type ExportFile, importAll } from './export';
 
 const conv = (id: string): Conversation => ({
   id,
@@ -69,7 +69,7 @@ describe('sealed storage', () => {
     expect(stored?.enc).toBeDefined();
     expect(JSON.stringify(stored)).not.toContain('秘密');
     expect(await repo.getSealedSetting('settings:test-text', null)).toEqual({ defaultSystemPrompt: '秘密の指示' });
-    expect((await exportAll(false)).settings.find((x) => x.key === 'settings:test-text')?.value).toEqual({ defaultSystemPrompt: '秘密の指示' });
+    expect((JSON.parse(await (await exportBackup(false)).text()) as ExportFile).settings.find((x) => x.key === 'settings:test-text')?.value).toEqual({ defaultSystemPrompt: '秘密の指示' });
     // Passphrase removed: back to plain text
     await repo.resealAll(k, null);
     setDataKey(null);
@@ -99,7 +99,7 @@ describe('sealed storage', () => {
     // Simulate an interruption: running it again does not break anything
     await repo.resealAll(k, k);
     setDataKey(k);
-    const ex = await exportAll();
+    const ex: ExportFile = JSON.parse(await (await exportBackup()).text());
     expect(ex.messages[0].parts).toEqual([{ type: 'text', text: 'こんにちは' }]);
     await db().messages.clear();
     await db().conversations.clear();

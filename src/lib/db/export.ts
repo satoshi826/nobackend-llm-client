@@ -1,4 +1,7 @@
-// JSON export / import. API keys are not included by default.
+// Backups: export and import. A backup is one JSON document, or, when it holds images or videos, a zip of that
+// document (backup.json) and their bytes, each an entry of its own. Neither side builds the whole file as one
+// string: the JSON is written a row at a time into a Blob, and the bytes of images and videos stay Blobs throughout.
+// API keys are never included.
 import { db, type Conversation, type ImageParams, type MessageRecord, type SavedPrompt, type Skill, type VideoParams } from './schema';
 import { validateSkill } from '../skills/skill';
 import { openValue, seal, unseal } from './sealed';
@@ -6,7 +9,8 @@ import { DATA_TABLES } from './data-tables';
 import type { Attachment } from './schema';
 import type { Part } from '../providers/types';
 import { t } from './messages';
-import { cleanFolderName } from '../paths';
+import { cleanFolderName, extOfMime } from '../paths';
+import { isZip, unzip, zip, ZipError, type ZipEntry } from '../zip';
 
 const openAll = <T extends object>(rows: T[]) => Promise.all(rows.map((r) => unseal(r)));
 
@@ -15,7 +19,9 @@ export const EXPORT_FORMAT = 'nobackend-llm-client/export';
  * The backup format's version. Raise it when what a backup holds changes, and add a backup of the new version to
  * backups/ (backups.test.ts): every version the app has written stays readable
  */
-export const EXPORT_VERSION = 6;
+export const EXPORT_VERSION = 7;
+/** The JSON document's name in a zip backup */
+export const BACKUP_ENTRY = 'backup.json';
 
 export interface ExportFile {
   format: typeof EXPORT_FORMAT;
@@ -31,30 +37,81 @@ export interface ExportFile {
   settings: { key: string; value: unknown }[];
 }
 
-export async function exportAll(includeImages = false): Promise<ExportFile> {
-  const d = db();
-  return {
-    format: EXPORT_FORMAT,
-    version: EXPORT_VERSION,
-    exportedAt: new Date().toISOString(),
-    // Data stored encrypted is decrypted here; the caller may encrypt the whole file with a backup password (state/data.ts)
-    conversations: await openAll(await d.conversations.toArray()),
-    messages: await openAll(await d.messages.toArray()),
-    prompts: await openAll(await d.prompts.toArray()),
-    skills: await openAll(await d.skills.toArray()),
-    ...(await tableRows(includeImages)),
-    // Connection settings and keys are excluded (avoids attacks that swap baseUrl via import); encrypted ones opened
-    settings: await Promise.all((await d.settings.toArray()).filter((s) => !String(s.key).startsWith('secret')).map(async (s) => ({ key: s.key, value: s.enc ? await openValue(s) : s.value })))
-  };
+/** Text gathered into a Blob a part at a time (the browser may keep a large Blob out of memory; a string it cannot) */
+class TextBlob {
+  private parts: Blob[] = [];
+  private pending: string[] = [];
+  private chars = 0;
+  write(s: string) {
+    this.pending.push(s);
+    this.chars += s.length;
+    if (this.chars >= 1 << 22) this.flush();
+  }
+  private flush() {
+    this.parts.push(new Blob(this.pending));
+    this.pending = [];
+    this.chars = 0;
+  }
+  blob(type: string): Blob {
+    this.flush();
+    return new Blob(this.parts, { type });
+  }
 }
 
-async function tableRows(includeImages: boolean): Promise<Record<string, unknown[]>> {
-  const out: Record<string, unknown[]> = {};
-  for (const t of DATA_TABLES) {
-    const rows = await t.exportRows({ includeImages });
-    if (rows) out[t.key] = rows;
+/** A backup file of everything in this browser: JSON (application/json), or a zip (application/zip) when it holds images or videos */
+export async function exportBackup(includeImages = false): Promise<Blob> {
+  const d = db();
+  const media: ZipEntry[] = [];
+  // A Blob in a row (an image's bytes) becomes an entry of the zip, named in the row
+  const replacer = (_key: string, v: unknown) => {
+    if (!(v instanceof Blob)) return v;
+    const file = `media/${media.length + 1}.${extOfMime(v.type)}`;
+    media.push({ name: file, data: v });
+    return { file };
+  };
+  const json = new TextBlob();
+  json.write(`{"format":${JSON.stringify(EXPORT_FORMAT)},"version":${EXPORT_VERSION},"exportedAt":${JSON.stringify(new Date().toISOString())}`);
+  const list = (key: string, rows: unknown[]) => {
+    json.write(`,${JSON.stringify(key)}:[`);
+    rows.forEach((r, i) => json.write((i ? ',' : '') + JSON.stringify(r, replacer)));
+    json.write(']');
+  };
+  // Data stored encrypted is decrypted here; the caller may encrypt the whole file with a backup password (state/data.ts)
+  list('conversations', await openAll(await d.conversations.toArray()));
+  list('messages', await openAll(await d.messages.toArray()));
+  list('prompts', await openAll(await d.prompts.toArray()));
+  list('skills', await openAll(await d.skills.toArray()));
+  for (const table of DATA_TABLES) {
+    const rows = await table.exportRows({ includeImages });
+    if (rows) list(table.key, rows);
   }
-  return out;
+  // Connection settings and keys are excluded (avoids attacks that swap baseUrl via import); encrypted ones opened
+  list('settings', await Promise.all((await d.settings.toArray()).filter((s) => !String(s.key).startsWith('secret')).map(async (s) => ({ key: s.key, value: s.enc ? await openValue(s) : s.value }))));
+  json.write('}');
+  const doc = json.blob('application/json');
+  return media.length ? zip([{ name: BACKUP_ENTRY, data: doc }, ...media]) : doc;
+}
+
+/** Read a backup file (JSON or zip), validate it, and merge it in (see importAll) */
+export async function importBackup(file: Blob): Promise<ImportResult> {
+  let files = new Map<string, Blob>();
+  let doc: Blob | undefined = file;
+  if (await isZip(file)) {
+    try {
+      files = await unzip(file);
+    } catch (e) {
+      throw e instanceof ZipError ? new Error(t('export.badFormat')) : e;
+    }
+    doc = files.get(BACKUP_ENTRY);
+    if (!doc) throw new Error(t('export.notBackup'));
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await doc.text());
+  } catch (e) {
+    throw e instanceof SyntaxError ? new Error(t('export.notBackup')) : e;
+  }
+  return importAll(raw, files);
 }
 
 export interface ImportResult {
@@ -67,9 +124,9 @@ export interface ImportResult {
   tables: Record<string, number>;
 }
 
-/** Validate the format, then merge (existing IDs are not overwritten, i.e. skipped). */
-export async function importAll(raw: unknown): Promise<ImportResult> {
-  const f = validate(raw);
+/** Validate the format, then merge (existing IDs are not overwritten, i.e. skipped). files: the zip's entries by name */
+export async function importAll(raw: unknown, files: ReadonlyMap<string, Blob> = new Map()): Promise<ImportResult> {
+  const f = validate(raw, files);
   const d = db();
   const res: ImportResult = { conversations: 0, messages: 0, prompts: 0, skills: 0, skipped: 0, tables: {} };
   // Encrypt up front, outside the transaction (awaiting inside would close the transaction)
@@ -218,7 +275,7 @@ function cleanMeta(x: any): MessageRecord['meta'] {
   };
 }
 
-export function validate(raw: unknown): ExportFile {
+export function validate(raw: unknown, files: ReadonlyMap<string, Blob> = new Map()): ExportFile {
   const f = raw as ExportFile;
   if (!f || typeof f !== 'object' || f.format !== EXPORT_FORMAT) throw new Error(t('export.notBackup'));
   if (typeof f.version !== 'number' || f.version > EXPORT_VERSION) throw new Error(t('export.tooNew'));
@@ -307,6 +364,6 @@ export function validate(raw: unknown): ExportFile {
     }))
     .filter((s) => !validateSkill(s));
   const conversationIds = new Set(conversations.map((c) => c.id));
-  const tables = Object.fromEntries(DATA_TABLES.map((t) => [t.key, t.clean(f[t.key], { conversationIds })]));
+  const tables = Object.fromEntries(DATA_TABLES.map((t) => [t.key, t.clean(f[t.key], { conversationIds, files })]));
   return { format: EXPORT_FORMAT, version: f.version, exportedAt: String(f.exportedAt ?? ''), conversations, messages, prompts, skills, ...tables, settings: [] };
 }

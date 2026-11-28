@@ -10,8 +10,11 @@ export interface DataTable<Row = unknown> {
   key: string;
   /** Rows for a backup; undefined leaves the property out (e.g. images unless the user asked for them) */
   exportRows(opts: { includeImages: boolean }): Promise<Row[] | undefined>;
-  /** Keep only well-formed rows from a backup file */
-  clean(raw: unknown, ctx: { conversationIds: Set<string> }): Row[];
+  /**
+   * Keep only well-formed rows from a backup file. A Blob in an exported row is written apart, as an entry of the
+   * backup's zip, and the row holds { file: <entry name> } in its place: files has the entries by name
+   */
+  clean(raw: unknown, ctx: { conversationIds: Set<string>; files: ReadonlyMap<string, Blob> }): Row[];
   /** Add rows that do not exist yet; returns how many were added */
   importRows(rows: Row[]): Promise<number>;
   /** Encrypt (to: a key) or decrypt (to: null) every row; safe to re-run after an interruption */

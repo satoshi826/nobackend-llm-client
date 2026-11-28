@@ -1,5 +1,10 @@
+import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { EXPORT_FORMAT, EXPORT_VERSION, validate } from './export';
+import { BACKUP_ENTRY, EXPORT_FORMAT, EXPORT_VERSION, exportBackup, importBackup, validate } from './export';
+import { getImage, putImage } from './images';
+import { t } from './messages';
+import { db } from './schema';
+import { unzip, zip } from '../zip';
 
 const conv = (extra: object = {}) => ({ id: 'c', title: 't', createdAt: 1, updatedAt: 2, ...extra });
 const msg = (extra: object = {}) => ({ id: 'm', conversationId: 'c', role: 'user', parts: [{ type: 'text', text: 'hi' }], ...extra });
@@ -138,5 +143,38 @@ describe('validate (backup files)', () => {
     expect(v.skills![0].createdBy).toBeUndefined();
     expect(v.skills![1]).toMatchObject({ modelInvocable: false, createdBy: 'model' });
     expect(v.settings).toEqual([]);
+  });
+
+  it('takes an image\'s bytes from base64 (before v7) or from the zip entry its row names', async () => {
+    const im = (data: unknown, id = 'i') => ({ id, mime: 'image/png', createdAt: 1, data });
+    const png = new Blob(['png']);
+    const v = validate(file({ images: [im(btoa('old'), 'a'), im({ file: 'media/1.png' }, 'b'), im({ file: 'media/9.png' }, 'c'), im(5, 'd')] }), new Map([['media/1.png', png]]));
+    const images = v.images as { id: string; data: Blob }[];
+    expect(images.map((x) => x.id)).toEqual(['a', 'b']);
+    expect(await images[0].data.text()).toBe('old');
+    expect(await images[1].data.text()).toBe('png');
+  });
+});
+
+describe('exportBackup', () => {
+  it('writes JSON without images and videos, and a zip of the JSON and their bytes with them', async () => {
+    await db().conversations.put({ ...conv(), id: 'c1', currentLeafId: null, providerId: 'p', modelId: 'm', systemPrompt: '', webSearch: 'off', pinned: 0, tags: [] });
+    await putImage({ id: 'i1', mime: 'image/webp', conversationId: 'c1' }, new Blob(['webp'], { type: 'image/webp' }), false);
+    const json = await exportBackup(false);
+    expect(json.type).toBe('application/json');
+    expect(JSON.parse(await json.text())).toMatchObject({ format: EXPORT_FORMAT, version: EXPORT_VERSION, conversations: [{ id: 'c1' }] });
+    const zipped = await exportBackup(true);
+    expect(zipped.type).toBe('application/zip');
+    const files = await unzip(zipped);
+    expect([...files.keys()]).toEqual([BACKUP_ENTRY, 'media/1.webp']);
+    expect(JSON.parse(await files.get(BACKUP_ENTRY)!.text()).images).toMatchObject([{ id: 'i1', mime: 'image/webp', data: { file: 'media/1.webp' } }]);
+    await Promise.all(db().tables.map((t) => t.clear()));
+    expect(await importBackup(zipped)).toMatchObject({ conversations: 1, tables: { images: 1 } });
+    expect(await (await getImage('i1'))!.text()).toBe('webp');
+  });
+
+  it('refuses files that are not backups, zipped or not', async () => {
+    await expect(importBackup(new Blob(['not json']))).rejects.toThrow(t('export.notBackup'));
+    await expect(importBackup(await zip([{ name: 'other.json', data: new Blob(['{}']) }]))).rejects.toThrow(t('export.notBackup'));
   });
 });

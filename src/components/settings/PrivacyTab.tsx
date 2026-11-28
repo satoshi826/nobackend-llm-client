@@ -140,7 +140,7 @@ export function PrivacyTab() {
           checked={s.backupIncludeImages}
           onChange={(v) => void saveSettings({ backupIncludeImages: v })}
           label={t('privacy.includeImages')}
-          hint={sentences(t('privacy.includeImagesSize'), imgUsage && t('privacy.includeImagesNow', { count: formatNumber(imgUsage.count), size: formatBytes(imgUsage.bytes) }))}
+          hint={sentences(t('privacy.includeImagesZip'), imgUsage && t('privacy.includeImagesNow', { count: formatNumber(imgUsage.count), size: formatBytes(imgUsage.bytes) }))}
         />
         <Row
           below={
@@ -192,7 +192,6 @@ export function PrivacyTab() {
               <input
                 ref={fileRef}
                 type="file"
-                accept="application/json,.json"
                 class="hidden"
                 onChange={async (e) => {
                   const f = (e.target as HTMLInputElement).files?.[0];

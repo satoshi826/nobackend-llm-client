@@ -5,7 +5,7 @@ import { deepestLatestLeaf, pathToLeaf, resolveLeaf } from './tree';
 import type { MessageRecord } from '../db/schema';
 import { venicePreset } from '../providers/presets/venice';
 import type { ProviderConfig, Transport } from '../providers/types';
-import { exportAll, importAll, validate } from '../db/export';
+import { exportBackup, type ExportFile, importAll, validate } from '../db/export';
 import { putConversation, putMessage, listMessages, listConversations, deleteConversation } from '../db/repo';
 import { providerConfigOf } from '../keys/accounts';
 import { setLang } from '../i18n';
@@ -113,7 +113,7 @@ describe('repo + export', () => {
     await putMessage({ ...rec('m2', null, 'user', 'y', 1), conversationId: 'perm' });
     expect((await listConversations()).map((c) => c.id).sort()).toEqual(['perm', 'temp']);
     expect((await listMessages('temp')).length).toBe(1);
-    const ex = await exportAll();
+    const ex: ExportFile = JSON.parse(await (await exportBackup()).text());
     expect(ex.conversations.map((c) => c.id)).toEqual(['perm']);
     await deleteConversation('perm');
     const r = await importAll(ex);

@@ -10,7 +10,7 @@ import { cleanFileName, extOfMime, freePath, timeName } from '../paths';
 import type { DataTable } from './data-tables';
 import { storeChanged } from './changes';
 import { t } from './messages';
-import { base64ToBlob, toBase64 } from '../base64';
+import { base64ToBlob } from '../base64';
 
 const mem = new Map<string, BlobRecord>();
 
@@ -218,25 +218,25 @@ export interface ExportedImage {
   info?: ImageInfo;
   createdAt: number;
   mime: string;
-  /** base64 */
-  data: string;
+  /** The bytes (in a backup file: an entry of its zip, or base64 in backups before v7) */
+  data: Blob;
 }
 
 export async function exportImages(): Promise<ExportedImage[]> {
   const out: ExportedImage[] = [];
   for (const rec of await db().blobs.toArray()) {
     const blob = await toBlob(rec);
-    out.push({ id: rec.id, conversationId: rec.conversationId, messageId: rec.messageId, info: await infoOf(rec), createdAt: rec.createdAt, mime: rec.mime, data: toBase64(await blob.arrayBuffer()) });
+    out.push({ id: rec.id, conversationId: rec.conversationId, messageId: rec.messageId, info: await infoOf(rec), createdAt: rec.createdAt, mime: rec.mime, data: blob.slice(0, blob.size, rec.mime) });
   }
   return out;
 }
 
-/** Import images; existing ids are skipped. Returns how many were added */
+/** Import images and videos; existing ids are skipped. Returns how many were added */
 export async function importImages(list: ExportedImage[]): Promise<number> {
   let n = 0;
   for (const im of list) {
-    if (!im.mime.startsWith('image/') || (await db().blobs.get(im.id))) continue;
-    const blob = base64ToBlob(im.data, im.mime);
+    if (!/^(image|video)\//.test(im.mime) || (await db().blobs.get(im.id))) continue;
+    const blob = im.data.slice(0, im.data.size, im.mime);
     const key = currentDataKey();
     const base = { id: im.id, conversationId: im.conversationId, messageId: im.messageId, createdAt: im.createdAt, mime: im.mime, size: blob.size };
     // One from a backup made before images had paths comes without; it gets one when the catalog loads: convert.ts
@@ -279,19 +279,21 @@ function cleanImageInfo(raw: any): ImageInfo | undefined {
 export const imagesTable: DataTable<ExportedImage> = {
   key: 'images',
   exportRows: async ({ includeImages }) => (includeImages ? exportImages() : undefined),
-  clean: (raw) =>
-    (Array.isArray(raw) ? raw : [])
-      .filter(
-        (im: any) =>
-          !!im &&
-          typeof im.id === 'string' &&
-          (im.conversationId === undefined || typeof im.conversationId === 'string') &&
-          (im.messageId === undefined || typeof im.messageId === 'string') &&
-          typeof im.mime === 'string' &&
-          typeof im.data === 'string' &&
-          typeof im.createdAt === 'number'
+  clean: (raw, { files }) =>
+    (Array.isArray(raw) ? raw : []).flatMap((im: any): ExportedImage[] => {
+      if (
+        !im ||
+        typeof im.id !== 'string' ||
+        (im.conversationId !== undefined && typeof im.conversationId !== 'string') ||
+        (im.messageId !== undefined && typeof im.messageId !== 'string') ||
+        typeof im.mime !== 'string' ||
+        typeof im.createdAt !== 'number'
       )
-      .map((im: any): ExportedImage => ({ ...im, info: cleanImageInfo(im.info) })),
+        return [];
+      // The bytes: base64 in the JSON (backups before v7), or the zip entry the row names
+      const data = typeof im.data === 'string' ? base64ToBlob(im.data, im.mime) : typeof im.data?.file === 'string' ? files.get(im.data.file) : undefined;
+      return data ? [{ id: im.id, conversationId: im.conversationId, messageId: im.messageId, info: cleanImageInfo(im.info), createdAt: im.createdAt, mime: im.mime, data }] : [];
+    }),
   importRows: (rows) => importImages(rows),
   reseal: resealImages,
   countMadeIn: (id) => db().blobs.where('conversationId').equals(id).count(),

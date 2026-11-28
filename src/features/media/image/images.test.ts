@@ -96,7 +96,7 @@ describe('image storage', () => {
     expect((await imageUsage()).count).toBe(1);
     expect((await listImages())[0]).toMatchObject({ id: 'i1', conversationId: 'c1' });
     const ex = await exportImages();
-    expect(atob(ex[0].data)).toBe('hello');
+    expect(await ex[0].data.text()).toBe('hello');
     await db().blobs.clear();
     expect(await importImages(ex)).toBe(1);
     expect(await importImages(ex)).toBe(0);

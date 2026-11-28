@@ -1,16 +1,21 @@
-// Every backup version the app has written stays readable: backups/v<N>.json holds one of each, made by that version's
-// export, and each is imported into an empty app here
+// Every backup version the app has written stays readable: backups/v<N>.json (or .zip, from v7 when it holds images
+// or videos) holds one of each, made by that version's export, and each is imported into an empty app here
 import 'fake-indexeddb/auto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as repo from './repo';
 import { listFiles, readText } from './files';
 import { getImage, listImages } from './images';
-import { EXPORT_VERSION, importAll } from './export';
+import { EXPORT_VERSION, importBackup } from './export';
 import { db } from './schema';
 
 const dir = new URL('./backups/', import.meta.url);
-const versions = readdirSync(dir).map((f) => /^v(\d+)\.json$/.exec(f)?.[1]).filter(Boolean).map(Number);
+/** File name by version */
+const backups = new Map(readdirSync(dir).flatMap((f) => {
+  const v = /^v(\d+)\.(json|zip)$/.exec(f)?.[1];
+  return v ? [[Number(v), f] as const] : [];
+}));
+const versions = [...backups.keys()];
 
 describe('backups of every released version', () => {
   beforeEach(async () => {
@@ -22,8 +27,9 @@ describe('backups of every released version', () => {
   });
 
   it.each(versions)('reads a version %i backup whole', async (v) => {
-    const r = await importAll(JSON.parse(readFileSync(new URL(`v${v}.json`, dir), 'utf8')));
-    expect(r).toMatchObject({ conversations: 1, messages: 7, prompts: 1, skills: 1, skipped: 0, tables: { files: 1, images: 1 } });
+    const r = await importBackup(new Blob([readFileSync(new URL(backups.get(v)!, dir))]));
+    // From v7 videos come back too (the v7 backup has one)
+    expect(r).toMatchObject({ conversations: 1, messages: 7, prompts: 1, skills: 1, skipped: 0, tables: { files: 1, images: v >= 7 ? 2 : 1 } });
     expect(await repo.getConversation('conv-1')).toMatchObject({ title: 'Trip plan', pinned: 1, tags: ['travel'], workDir: 'trip/', currentLeafId: 'm-7' });
     const byId = new Map((await repo.listMessages('conv-1')).map((m) => [m.id, m]));
     expect(byId.get('m-1')).toMatchObject({ skills: [{ name: 'planner' }], attachments: [{ fileId: 'file-1', name: 'trip/notes.md' }] });
@@ -38,7 +44,8 @@ describe('backups of every released version', () => {
     const [file] = await listFiles();
     expect(file.name).toBe('trip/notes.md');
     expect(await readText(file.id)).toBe('# Notes\nTemples');
-    expect((await listImages()).map((im) => im.path)).toEqual(['trip/temple.png']);
+    expect((await listImages()).map((im) => im.path)).toEqual(v >= 7 ? ['trip/leaves.mp4', 'trip/temple.png'] : ['trip/temple.png']);
     expect((await getImage('img-1'))?.size).toBeGreaterThan(0);
+    if (v >= 7) expect(await getImage('vid-1')).toMatchObject({ size: 8, type: 'video/mp4' });
   });
 });

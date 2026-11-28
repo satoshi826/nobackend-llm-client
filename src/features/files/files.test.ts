@@ -5,7 +5,7 @@ import { baseName, cleanFileName, folderOf } from '../../lib/paths';
 import { resetCatalog } from '../../lib/db/catalog';
 import { seal, setDataKey, unseal } from '../../lib/db/sealed';
 import { generateDataKey } from '../../lib/crypto/data';
-import { exportAll, importAll } from '../../lib/db/export';
+import { exportBackup, type ExportFile, importAll } from '../../lib/db/export';
 import { db } from '../../lib/db/schema';
 import { textBytes, type FileRecord, type MessageRecord } from '../../lib/db/schema';
 import { buildRequestMessages } from '../../lib/chat/request';
@@ -309,7 +309,7 @@ describe('file storage and backups', () => {
     expect(await readText('file-1', 'previous')).toBe('one');
     // Records carry no texts
     expect(JSON.stringify(await db().files.get('file-1'))).not.toContain('"text"');
-    const dump = await exportAll();
+    const dump: ExportFile = JSON.parse(await (await exportBackup()).text());
     expect((dump.files as { id: string }[] | undefined)?.map((x) => x.id)).toContain('file-1');
     await db().files.clear();
     await db().fileTexts.clear();

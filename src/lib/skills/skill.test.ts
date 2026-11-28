@@ -9,7 +9,7 @@ import { skillsTransform } from '../../features/skills/transform';
 registerMessageTransform(skillsTransform);
 import type { MessageRecord, Skill } from '../db/schema';
 import { db } from '../db/schema';
-import { exportAll, importAll, validate } from '../db/export';
+import { exportBackup, type ExportFile, importAll, validate } from '../db/export';
 
 const ctx = { signal: new AbortController().signal, transport: { fetch: () => Promise.reject(new Error('no network')) }, authFor: () => undefined } as any;
 
@@ -89,7 +89,7 @@ describe('skills in backups', () => {
   const skill = (id: string, name: string): Skill => ({ id, name, description: 'd', body: 'b', modelInvocable: true, createdAt: 1, updatedAt: 1 });
   it('exports skills and skips same-name ones on import', async () => {
     await db().skills.put(skill('s1', 'alpha'));
-    const ex = await exportAll();
+    const ex: ExportFile = JSON.parse(await (await exportBackup()).text());
     expect(ex.skills?.map((s) => s.name)).toEqual(['alpha']);
     await db().skills.clear();
     await db().skills.put(skill('other', 'alpha'));

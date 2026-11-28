@@ -23,8 +23,9 @@ export function numberOf(x: unknown): number | undefined {
 }
 
 /**
- * What the model reads for a tool call that failed or was denied (undefined for one that ran): in English, whatever
- * the UI language. The app's own texts come as modelError; a tool's raw error and the user's reason as they are
+ * What the model reads for a tool call that failed, was denied or never ended, its answer stopped first (undefined for
+ * one that ran): in English, whatever the UI language. The app's own texts come as modelError; a tool's raw error and
+ * the user's reason as they are
  */
 export function toolFailureText(t: Extract<Part, { type: 'tool' }>): string | undefined {
   if (t.state === 'output-denied') {
@@ -32,6 +33,8 @@ export function toolFailureText(t: Extract<Part, { type: 'tool' }>): string | un
     return reason ? `The user denied running this tool. ${reason}` : 'The user denied running this tool.';
   }
   if (t.state === 'output-error') return `The tool failed: ${t.modelError ?? t.error ?? ''}`;
+  if (t.state === 'input-available') return 'The answer was stopped before this call finished, so whether it ran is unknown.';
+  if (t.state === 'input-streaming' || t.state === 'approval-requested') return 'The tool did not run: the answer was stopped before it did.';
   return undefined;
 }
 
@@ -69,11 +72,10 @@ export function toOpenAIMessages(messages: ChatMessage[]): any[] {
         }));
       }
       out.push(msg);
+      // Every call gets its result (one a stopped answer left unfinished says so): a call without one is refused
       for (const t of toolParts) {
-        if (t.state === 'output-available' || t.state === 'output-error' || t.state === 'output-denied') {
-          const content = toolFailureText(t) ?? (typeof t.modelOutput === 'string' ? t.modelOutput : JSON.stringify(t.modelOutput ?? null));
-          out.push({ role: 'tool', tool_call_id: t.toolCallId, content });
-        }
+        const content = toolFailureText(t) ?? (typeof t.modelOutput === 'string' ? t.modelOutput : JSON.stringify(t.modelOutput ?? null));
+        out.push({ role: 'tool', tool_call_id: t.toolCallId, content });
       }
     } else {
       out.push({ role: m.role, content: text });

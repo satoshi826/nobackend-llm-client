@@ -55,9 +55,8 @@ export function toAnthropic(messages: ChatMessage[]): { system: string; messages
       for (const t of tools) blocks.push({ type: 'tool_use', id: t.toolCallId, name: t.name, input: t.input && typeof t.input === 'object' ? t.input : {} });
       push('assistant', blocks);
     }
-    const results = tools
-      .filter((t) => t.state === 'output-available' || t.state === 'output-error' || t.state === 'output-denied')
-      .map((t) => ({ type: 'tool_result', tool_use_id: t.toolCallId, content: toolResultText(t), ...(t.state !== 'output-available' ? { is_error: true } : {}) }));
+    // Every call gets its result (one a stopped answer left unfinished says so): a call without one is refused
+    const results = tools.map((t) => ({ type: 'tool_result', tool_use_id: t.toolCallId, content: toolResultText(t), ...(t.state !== 'output-available' ? { is_error: true } : {}) }));
     push('user', results);
   }
   return { system: system.join('\n\n'), messages: out };

@@ -52,9 +52,8 @@ export function toGemini(messages: ChatMessage[]): { systemInstruction?: any; co
       for (const t of tools) parts.push({ functionCall: { name: t.name, args: t.input && typeof t.input === 'object' ? t.input : {} } });
       push('model', parts);
     }
-    const results = tools
-      .filter((t) => t.state === 'output-available' || t.state === 'output-error' || t.state === 'output-denied')
-      .map((t) => ({ functionResponse: { ...(t.toolCallId.startsWith('gemini-') ? {} : { id: t.toolCallId }), name: t.name, response: toolResult(t) } }));
+    // Every call gets its result (one a stopped answer left unfinished says so): a call without one is refused
+    const results = tools.map((t) => ({ functionResponse: { ...(t.toolCallId.startsWith('gemini-') ? {} : { id: t.toolCallId }), name: t.name, response: toolResult(t) } }));
     push('user', results);
   }
   return { ...(system.length ? { systemInstruction: { parts: [{ text: system.join('\n\n') }] } } : {}), contents };

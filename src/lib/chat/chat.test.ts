@@ -10,6 +10,8 @@ import { putConversation, putMessage, listMessages, listConversations, deleteCon
 import { providerConfigOf } from '../keys/accounts';
 import { setLang } from '../i18n';
 import { toOpenAIMessages } from '../providers/openai-compatible';
+import { toAnthropic } from '../providers/anthropic';
+import { toGemini } from '../providers/gemini';
 
 function rec(id: string, parentId: string | null, role: 'user' | 'assistant', text: string, t: number, extra: Partial<MessageRecord> = {}): MessageRecord {
   return { id, conversationId: 'c', parentId, role, parts: [{ type: 'text', text }], createdAt: t, status: 'done', ...extra };
@@ -405,6 +407,23 @@ describe('tool execution loop', () => {
       ''
     );
     expect(toOpenAIMessages(msgs).find((m: any) => m.role === 'tool').content).toBe('The tool failed: 失敗');
+  });
+
+  it('gives every call of a stopped answer a result in a later turn: it did not run, or did not finish', () => {
+    const call = (id: string, state: string) => ({ type: 'tool', toolCallId: id, name: 'echo', argsText: '{}', input: {}, state });
+    const msgs = buildRequestMessages(
+      [
+        rec('u', null, 'user', 'q', 0),
+        rec('a', 'u', 'assistant', '', 1, { status: 'aborted', parts: [call('c1', 'input-available'), call('c2', 'approval-requested')] as never }),
+        rec('u2', 'a', 'user', 'go on', 2)
+      ],
+      ''
+    );
+    const said = ['The answer was stopped before this call finished, so whether it ran is unknown.', 'The tool did not run: the answer was stopped before it did.'];
+    // Each provider refuses a call without a result, so every call gets one
+    expect(toOpenAIMessages(msgs).filter((m: any) => m.role === 'tool').map((m: any) => m.content)).toEqual(said);
+    expect(toAnthropic(msgs).messages[2].content.filter((b: any) => b.type === 'tool_result').map((b: any) => [b.tool_use_id, b.content, b.is_error])).toEqual([['c1', said[0], true], ['c2', said[1], true]]);
+    expect(toGemini(msgs).contents[2].parts.flatMap((p: any) => (p.functionResponse ? [p.functionResponse.response] : []))).toEqual([{ error: said[0] }, { error: said[1] }]);
   });
 
   it('stops when the same call repeats', async () => {

@@ -38,7 +38,8 @@ export function PrivacyTab() {
       if (r.skills) items.push(t('privacy.importItemSkills', { n: formatNumber(r.skills) }));
       if (r.tables.files) items.push(t('privacy.importItemFiles', { n: formatNumber(r.tables.files) }));
       if (r.tables.images) items.push(t('privacy.importItemImages', { n: formatNumber(r.tables.images) }));
-      showToast(t('privacy.imported', { items: items.join(t('privacy.importItemSep')), skipped: formatNumber(r.skipped) }));
+      const list = items.join(t('privacy.importItemSep'));
+      showToast(r.skipped ? t('privacy.importedSkipped', { items: list, skipped: formatNumber(r.skipped) }) : t('privacy.imported', { items: list }));
     } catch (err) {
       if (err instanceof BackupPasswordNeeded) setPendingFile(f);
       else showToast((err as Error).message, 'error');

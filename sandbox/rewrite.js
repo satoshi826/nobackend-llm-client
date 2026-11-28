@@ -6,8 +6,8 @@
 //   paths (no leading slash, e.g. 'site/css/style.css') to text or a Blob. Returns the html to write. names (a Map,
 //   optional) gets each blob: URL made, with the path it stands for, so messages about it can name the file.
 // A reference resolves from the folder of the file it is in ('/' is the project root), and matches a path whatever its
-// case. Absolute URLs ('https:',
-// 'data:', '//host', '#top'), bare module specifiers ('react') and paths not in files are left as they are.
+// case. Absolute URLs ('https:', 'data:', '//host', '#top'), bare module specifiers ('react') and paths not in files
+// are left as they are.
 // - A stylesheet becomes a <style> with its text (the CSP allows no blob: styles). Its url()s resolve from the
 //   stylesheet's own path, and an @import of a project stylesheet without conditions is inlined in its place (one with
 //   a media list or other conditions is not, and fails).

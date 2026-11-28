@@ -112,7 +112,6 @@ async function conversation(page: Page, url: string, message: string) {
 
 const modelButton = (page: Page) => page.getByRole('button', { name: /^Choose a model:/ });
 
-/** Chooses a model in the picker by its name */
 async function pickModel(page: Page, name: string) {
   await modelButton(page).click();
   const picker = page.getByRole('dialog', { name: 'Choose a model' });

@@ -281,7 +281,6 @@ export async function removePassphrase(current: string): Promise<Result> {
   return { ok: true, message: t('store.removed') };
 }
 
-/** Unlock all keys */
 export async function unlock(pass: string): Promise<Result> {
   const meta = await getMeta();
   const recs = await allRecs();

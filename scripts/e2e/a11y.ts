@@ -146,7 +146,6 @@ export async function check(page: Page, screen: string): Promise<Finding[]> {
 const matches = (a: Allowed, f: Finding) => a.rule === f.rule && (f.target.includes(a.element) || f.html.includes(a.element));
 const allowance = (f: Finding) => allowedList.find((a) => matches(a, f));
 
-/** Whether the finding fails its flow */
 export const failing = (f: Finding) => !f.undecided && FAILING.has(f.impact) && !allowance(f);
 
 export const describe = (f: Finding) => `${f.impact} ${f.rule} on ${f.target} (${f.screen}, ${f.width} px): ${f.summary}`;

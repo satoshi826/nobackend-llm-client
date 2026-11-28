@@ -135,7 +135,7 @@
               Object.defineProperty(res, 'url', { value: r.url });
               return res;
             };
-            // Everything else (relative addresses) goes to the browser as before, where the CSP blocks it
+            // Everything else (relative addresses) goes to the browser's own fetch, where the CSP blocks it
             window.fetch = (input, init) => {
               const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input && input.url;
               return /^https:/i.test(String(url)) ? nbl.fetch(input, init) : plainFetch.call(window, input, init);
@@ -298,8 +298,8 @@
             const ref = named(raw);
             note('resource', 'Did not load: ' + ref + (/^(https?:)?\/\//i.test(ref) ? ' (the sandbox has no network)' : /^(data|blob):/i.test(ref) ? '' : ' (no such file in the site)'));
           };
-          // What the CSP blocks: a file (a script, a stylesheet's image or font) is told as one that did not load
           addEventListener('pagehide', sendStorage);
+          // What the CSP blocks: a file (a script, a stylesheet's image or font) is told as one that did not load
           document.addEventListener('securitypolicyviolation', (e) => {
             if (/^(script|style|img|media|font)-src/.test(e.effectiveDirective) && /^(https?|blob|data):/i.test(e.blockedURI)) notLoaded(e.blockedURI);
             else note('csp', 'Blocked by the sandbox: ' + e.effectiveDirective + (e.blockedURI ? ' ' + e.blockedURI : ''));

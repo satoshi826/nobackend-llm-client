@@ -1,6 +1,6 @@
 import type { ComponentChildren, ButtonHTMLAttributes, InputHTMLAttributes, RefObject, SelectHTMLAttributes, TextareaHTMLAttributes } from 'preact';
 import { createContext } from 'preact';
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { useDialog } from './dialog';
 import { t } from './messages';
 
@@ -203,6 +203,23 @@ export function Collapse({ open, class: className, children }: { open: boolean; 
 }
 
 /**
+ * A tab of a tab list: the list is one stop for Tab (on the selected tab), and the arrow keys along it choose the
+ * previous or next tab and keep focus on it
+ */
+function tabKeys<T extends string>(list: RefObject<HTMLElement | null>, tabs: { id: T }[], id: T, value: T, onChange: (id: T) => void, prev: string, next: string) {
+  return {
+    tabIndex: id === value ? 0 : -1,
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.key !== prev && e.key !== next) return;
+      e.preventDefault();
+      const i = tabs.findIndex((x) => x.id === value);
+      onChange(tabs[(i + (e.key === next ? 1 : tabs.length - 1)) % tabs.length].id);
+      requestAnimationFrame(() => list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
+    }
+  };
+}
+
+/**
  * Segmented control (a few mutually exclusive choices: sidebar tabs, layouts, ranges): a sunken track whose
  * selected segment slides to the chosen item. Arrow keys move the choice. `stretch` makes the items share the width.
  * An item with `iconOnly` shows just its icon; its label is the accessible name and the tooltip.
@@ -241,17 +258,9 @@ export function Segmented<T extends string>({
           type="button"
           role="tab"
           aria-selected={value === x.id}
-          tabIndex={value === x.id ? 0 : -1}
           aria-label={x.iconOnly ? x.label : undefined}
           onClick={() => onChange(x.id)}
-          onKeyDown={(e) => {
-            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-            e.preventDefault();
-            const i = items.findIndex((y) => y.id === value);
-            const next = items[(i + (e.key === 'ArrowRight' ? 1 : items.length - 1)) % items.length];
-            onChange(next.id);
-            requestAnimationFrame(() => ref.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
-          }}
+          {...tabKeys(ref, items, x.id, value, onChange, 'ArrowLeft', 'ArrowRight')}
           class={cx(
             'relative z-10 flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px]',
             size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1.5 text-sm',
@@ -498,14 +507,7 @@ export function SideTabs<T extends string>({ tabs, value, onChange, label, class
           role="tab"
           aria-selected={value === x.id}
           onClick={() => onChange(x.id)}
-          onKeyDown={(e) => {
-            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-            e.preventDefault();
-            const i = tabs.findIndex((t) => t.id === value);
-            const next = tabs[(i + (e.key === 'ArrowDown' ? 1 : tabs.length - 1)) % tabs.length];
-            onChange(next.id);
-            requestAnimationFrame(() => ref.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
-          }}
+          {...tabKeys(ref, tabs, x.id, value, onChange, 'ArrowUp', 'ArrowDown')}
           class={cx('relative z-10 flex items-center gap-2 rounded-[10px] px-3 py-2 text-left text-sm', value === x.id ? 'text-ink-strong' : 'text-muted hover:text-ink')}
         >
           {x.icon && <Icon name={x.icon} class="size-4 shrink-0" />}
@@ -532,6 +534,7 @@ export function TabStrip<T extends string>({ tabs, value, onChange, label, class
           role="tab"
           aria-selected={value === x.id}
           onClick={() => onChange(x.id)}
+          {...tabKeys(ref, tabs, x.id, value, onChange, 'ArrowLeft', 'ArrowRight')}
           class={cx('shrink-0 rounded-t-lg px-3 py-2 text-sm', value === x.id ? 'text-ink-strong' : 'text-muted hover:bg-glass hover:text-ink')}
         >
           {x.label}
@@ -564,14 +567,48 @@ const FIELD =
 const SELECT = 'rounded-[10px] border border-line bg-sunken text-ink transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-50';
 const fieldSize = (compact?: boolean) => (compact ? 'px-2.5 py-1 text-xs' : 'px-3 py-2 text-sm');
 
+/**
+ * A ref whose element takes focus when it is drawn with `on`, or when `on` turns true: autoFocus for what is drawn
+ * after the page loaded (the browser's own autofocus works once per page, so a second rename in place got none)
+ */
+export function useFocusWhen<T extends HTMLElement>(on: unknown) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (on) ref.current?.focus();
+  }, [on]);
+  return ref;
+}
+
 /** Text input. `compact` for dense rows (toolbars, cards) */
-export function TextField({ compact, class: className, ...rest }: InputHTMLAttributes<HTMLInputElement> & { compact?: boolean }) {
-  return <input class={cx(FIELD, fieldSize(compact), className as string)} {...rest} />;
+export function TextField({ compact, class: className, autoFocus, ...rest }: InputHTMLAttributes<HTMLInputElement> & { compact?: boolean }) {
+  return <input ref={useFocusWhen(autoFocus)} class={cx(FIELD, fieldSize(compact), className as string)} {...rest} />;
+}
+
+/**
+ * A field shown in place of a control while it is open (a name renamed in place, a text edited in place of its view).
+ * close(true), for Enter, Esc and the field's own buttons, puts focus back on the control (`control`): the field took
+ * it away with it
+ */
+export function useInPlace<T extends HTMLElement>() {
+  const [open, setOpen] = useState(false);
+  const control = useRef<T>(null);
+  const back = useRef(false);
+  useEffect(() => {
+    if (open || !back.current) return;
+    back.current = false;
+    control.current?.focus();
+  }, [open]);
+  const close = useCallback((focusBack?: boolean) => {
+    // A later close without it (the field's blur as it goes) keeps the request
+    if (focusBack) back.current = true;
+    setOpen(false);
+  }, []);
+  return { open, control, show: () => setOpen(true), close };
 }
 
 /** Multi-line text input */
-export function TextArea({ compact, class: className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement> & { compact?: boolean }) {
-  return <textarea class={cx(FIELD, fieldSize(compact), className as string)} {...rest} />;
+export function TextArea({ compact, class: className, autoFocus, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement> & { compact?: boolean }) {
+  return <textarea ref={useFocusWhen(autoFocus)} class={cx(FIELD, fieldSize(compact), className as string)} {...rest} />;
 }
 
 /** Drop-down choice */
@@ -589,7 +626,7 @@ export function SearchField({ value, onInput, placeholder, label, autoFocus, cla
   return (
     <label class={cx(FIELD, 'flex items-center gap-2 px-2.5 py-1.5 text-sm focus-within:border-line-strong', className)}>
       <Icon name="search" class="size-3.5 shrink-0 text-faint" />
-      <input class="w-full min-w-0 bg-transparent outline-none placeholder:text-faint" placeholder={placeholder} value={value} onInput={(e) => onInput((e.target as HTMLInputElement).value)} aria-label={label} autoFocus={autoFocus} />
+      <input ref={useFocusWhen(autoFocus)} class="w-full min-w-0 bg-transparent outline-none placeholder:text-faint" placeholder={placeholder} value={value} onInput={(e) => onInput((e.target as HTMLInputElement).value)} aria-label={label} />
     </label>
   );
 }

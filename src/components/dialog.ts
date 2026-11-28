@@ -3,19 +3,25 @@
 // - Tab / Shift+Tab stay inside the dialog
 // - everything outside the dialog is made inert while it is open (except live regions such as toasts)
 // - focus moves into the dialog ([data-autofocus] first, then the first field, then the first control)
-//   and returns to the previously focused element when it closes. On touch devices it skips unmarked fields
-//   (focusing one would bring up the on-screen keyboard)
+//   and returns to the previously focused element when it closes (through the nearest shown control when that one
+//   is hidden). On touch devices it skips unmarked fields (focusing one would bring up the on-screen keyboard)
 import { useEffect } from 'preact/hooks';
 import type { RefObject } from 'preact';
 import { touchDevice } from './device';
 
 const stack: HTMLElement[] = [];
 
+/** The element that last lost focus */
+let lastBlurred: EventTarget | null = null;
+if (typeof document !== 'undefined') document.addEventListener('focusout', (e) => (lastBlurred = e.target), true);
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
 
-function focusables(el: HTMLElement): HTMLElement[] {
-  return [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => !x.closest('[inert]') && x.getClientRects().length > 0);
+/** The controls inside el that can take focus now, in Tab order */
+export function focusables(el: HTMLElement): HTMLElement[] {
+  // Not the tabs of a tab list other than its selected one (tabindex -1: the arrow keys reach them)
+  return [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => x.tabIndex >= 0 && !x.closest('[inert]') && x.getClientRects().length > 0);
 }
 
 const FIELD = 'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])';
@@ -50,12 +56,28 @@ function inertOutside(el: HTMLElement): () => void {
   };
 }
 
+/**
+ * Focus el; one shown only while focus is near it (a row's buttons) is hidden once the dialog took focus, so the
+ * nearest control that is shown takes it first, and el, now shown, after it
+ */
+function refocus(el: HTMLElement) {
+  el.focus();
+  for (let near = el.parentElement; document.activeElement !== el && near && near !== document.body; near = near.parentElement) {
+    const first = focusables(near)[0];
+    if (!first) continue;
+    first.focus();
+    el.focus();
+    return;
+  }
+}
+
 export function useDialog(ref: RefObject<HTMLElement | null>, opts: { onClose(): void; active?: boolean }) {
   const active = opts.active ?? true;
   useEffect(() => {
     const el = ref.current;
     if (!active || !el) return;
-    const previous = document.activeElement as HTMLElement | null;
+    // A field inside may have focused itself already (autoFocus): then the opener is what had focus before it
+    const previous = (el.contains(document.activeElement) ? lastBlurred : document.activeElement) as HTMLElement | null;
     stack.push(el);
     const undoInert = inertOutside(el);
     // Focus after the content has rendered
@@ -94,7 +116,7 @@ export function useDialog(ref: RefObject<HTMLElement | null>, opts: { onClose():
       const i = stack.lastIndexOf(el);
       if (i >= 0) stack.splice(i, 1);
       undoInert();
-      if (previous && previous.isConnected && !previous.closest('[inert]')) previous.focus();
+      if (previous && previous.isConnected && !previous.closest('[inert]')) refocus(previous);
     };
     // opts.onClose may change identity every render; the latest one is read through the closure on each key press
   }, [active]);

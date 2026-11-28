@@ -17,7 +17,7 @@ import { composerFocus, composerText, openModelPicker } from '../state/ui';
 import { Markdown } from './Markdown';
 import { ToolCallCard } from './ToolCallCard';
 import { assistantExtras, toolViewFor, userMessageExtras } from './extensions';
-import { Button, Chevron, Collapse, Dots, Icon, IconButton, Shimmer, Spinner, TextArea, cx } from './ui';
+import { Button, Chevron, Collapse, Dots, Icon, IconButton, Shimmer, Spinner, TextArea, cx, useInPlace } from './ui';
 import { t } from './messages';
 import { formatNumber, formatUsd } from '../lib/i18n';
 import { estimateCost } from '../lib/usage';
@@ -140,29 +140,31 @@ function Sources({ parts }: { parts: Extract<Part, { type: 'source' }>[] }) {
 }
 
 function UserMessage({ m }: { m: MessageRecord }) {
-  const [editing, setEditing] = useState(false);
+  // Edited in place of the message; the keyboard comes back to its Edit button
+  const edit = useInPlace<HTMLButtonElement>();
   const [draft, setDraft] = useState(textOf(m));
   // A request a feature answers (images, videos) can be edited only when its text means something and it can run now
   const handler = requestHandlerFor(m);
   const editable = !handler || (handler.ready(m) && !!handler.edit?.(m, textOf(m)));
-  if (editing) {
+  if (edit.open) {
     return (
       <div class="ml-auto w-full max-w-[85%]">
         <TextArea
+          autoFocus
           class="w-full"
           rows={Math.min(12, draft.split('\n').length + 1)}
           value={draft}
           onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)}
         />
         <div class="mt-2 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setEditing(false)}>
+          <Button variant="outline" onClick={() => edit.close(true)}>
             {t('msg.cancel')}
           </Button>
           <IdleButton
             variant="primary"
             disabled={!draft.trim()}
             onClick={() => {
-              setEditing(false);
+              edit.close(true);
               void editUserMessage(m.id, draft);
             }}
           >
@@ -188,10 +190,11 @@ function UserMessage({ m }: { m: MessageRecord }) {
         )}
         {editable && (
           <IdleIconButton
+            ref={edit.control}
             label={t('msg.edit')}
             onClick={() => {
               setDraft(textOf(m));
-              setEditing(true);
+              edit.show();
             }}
           >
             <Icon name="edit" class="size-3.5" />

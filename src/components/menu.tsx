@@ -2,11 +2,14 @@
 // - Rendered in a portal on <body>, positioned from its anchor with fixed coordinates. Inside the composer
 //   (which is glass) a backdrop-filter only blurs the composer itself, so menus must not live inside it.
 // - Opaque panel + strong blur (styles.css .panel), opens with the "pop" animation from its anchor.
-// - Closes on Escape (focus goes back to the anchor) and on a press outside the menu and its anchor.
+// - Opening a menu focuses its first item, a dialog its first control; a suggestion list leaves focus in the input.
+// - Closes on Escape, on Tab out of a menu and on a press outside the menu and its anchor; focus that was inside goes
+//   back to the anchor. Tab stays inside a dialog.
 // - Arrow keys move between items (role menuitem / menuitemcheckbox / option).
 import { createPortal } from 'preact/compat';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { focusables } from './dialog';
 import { cx } from './ui';
 
 export type Placement = 'top-start' | 'top-end' | 'bottom-start' | 'bottom-end';
@@ -42,27 +45,32 @@ function place(anchor: DOMRect, size: { w: number; h: number }, placement: Place
 
 export function Popover({
   anchor,
+  opener,
   onClose,
   placement = 'top-start',
   role = 'menu',
   label,
-  autoFocus = role === 'menu',
+  autoFocus = role !== 'listbox',
   class: className,
   children
 }: {
   /** The element the popover is attached to (also counts as "inside" for outside presses) */
   anchor: HTMLElement | null;
+  /** The control that opened it, when the popover is placed against another element: focus goes back to it, and a press on it is not outside */
+  opener?: HTMLElement | null;
   onClose(): void;
   placement?: Placement;
   role?: 'menu' | 'listbox' | 'dialog';
   label?: string;
-  /** Focus the first item when opened (menus; not suggestion lists, where typing goes on) */
+  /** Focus the first item or control when opened (menus, dialogs; not suggestion lists, where typing goes on) */
   autoFocus?: boolean;
   class?: string;
   children: ComponentChildren;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<Position | null>(null);
+  // Whether focus is inside; by the time it closes, it is gone from the page and focus with it
+  const focused = useRef(false);
 
   useLayoutEffect(() => {
     const update = () => {
@@ -82,32 +90,47 @@ export function Popover({
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
-      if (!ref.current?.contains(t) && !anchor?.contains(t)) onClose();
+      if (!ref.current?.contains(t) && !anchor?.contains(t) && !opener?.contains(t)) onClose();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       onClose();
-      // A menu or dialog hands focus back to the control that opened it (a suggestion list leaves focus in the input)
-      if (role !== 'listbox') {
-        e.stopPropagation();
-        (anchor?.matches('button') ? anchor : anchor?.querySelector<HTMLElement>('button'))?.focus();
-      }
+      // Only the menu or dialog closes, not a dialog it is in (a suggestion list lets the input see the key)
+      if (role !== 'listbox') e.stopPropagation();
     };
     document.addEventListener('pointerdown', onDown, true);
     document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('pointerdown', onDown, true);
       document.removeEventListener('keydown', onKey, true);
+      // Focus inside (on an item, a dialog's control) is lost with it: back to the control that opened it
+      const back = opener ?? anchor;
+      if (focused.current) (back?.matches('button') ? back : back?.querySelector<HTMLElement>('button'))?.focus();
     };
-  }, [anchor]);
+  }, [anchor, opener]);
 
-  // Focus the first item once the menu is placed (it is hidden, and cannot take focus, until then)
+  // Focus the first item (a dialog's first control) once placed: it is hidden, and cannot take focus, until then
   const placed = !!pos;
   useEffect(() => {
-    if (placed && autoFocus) ref.current?.querySelector<HTMLElement>(ITEM)?.focus();
-  }, [placed]);
+    const el = ref.current;
+    if (placed && autoFocus && el) (role === 'dialog' ? focusables(el)[0] : el.querySelector<HTMLElement>(ITEM))?.focus();
+  }, [placed, autoFocus, role]);
 
   const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Tab' && role === 'menu') {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+    if (e.key === 'Tab' && role === 'dialog') {
+      const list = focusables(ref.current!);
+      const at = list.indexOf(document.activeElement as HTMLElement);
+      if (e.shiftKey ? at <= 0 : at === list.length - 1) {
+        e.preventDefault();
+        list.at(e.shiftKey ? -1 : 0)?.focus();
+      }
+      return;
+    }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
     const items = [...(ref.current?.querySelectorAll<HTMLElement>(ITEM) ?? [])];
     if (!items.length) return;
@@ -123,6 +146,9 @@ export function Popover({
       role={role}
       aria-label={label}
       onKeyDown={onKeyDown}
+      onFocusIn={() => (focused.current = true)}
+      // Not when focus goes nowhere: that is the popover going
+      onFocusOut={(e) => e.relatedTarget && (focused.current = !!ref.current?.contains(e.relatedTarget as Node))}
       class={cx('panel pop scroll-thin fixed z-50 overflow-y-auto rounded-2xl p-1.5 text-sm', !pos && 'invisible', className)}
       style={pos ? { left: `${pos.left}px`, top: pos.top !== undefined ? `${pos.top}px` : undefined, bottom: pos.bottom !== undefined ? `${pos.bottom}px` : undefined, maxHeight: `${pos.maxHeight}px`, transformOrigin: pos.origin } : undefined}
     >

@@ -11,7 +11,7 @@ import { copyText } from '../../../components/clipboard';
 import { Markdown } from '../../../components/Markdown';
 import { useDialog } from '../../../components/dialog';
 import { FilesHeader } from './FilesHeader';
-import { Badge, Button, Icon, IconButton, Modal, Segmented, Spinner, TextField, cx } from '../../../components/ui';
+import { Badge, Button, Icon, IconButton, Modal, Segmented, Spinner, TextField, cx, useFocusWhen, useInPlace } from '../../../components/ui';
 import { SandboxFrame, svgPage } from '../../../components/SandboxFrame';
 import { isProblem, type PageLog, type SandboxPage } from '../../../lib/sandbox/client';
 import { settings } from '../../../state/settings';
@@ -25,9 +25,11 @@ export function FileView({ id = '' }: { id?: string }) {
   const [f, setF] = useState<FileRecord | null | undefined>(undefined);
   // Its text, read with it (records carry no texts); the record's date tells whether it is the text read
   const [text, setText] = useState<{ at: number; text: string } | null>(null);
-  const [editing, setEditing] = useState(false);
+  // The text edited in place of its view, the name in place of its button; the keyboard comes back to each button
+  const edit = useInPlace<HTMLButtonElement>();
   const [draft, setDraft] = useState('');
-  const [renaming, setRenaming] = useState(false);
+  const rename = useInPlace<HTMLButtonElement>();
+  const editor = useFocusWhen<HTMLTextAreaElement>(edit.open);
   const [name, setName] = useState('');
   const body = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -42,10 +44,12 @@ export function FileView({ id = '' }: { id?: string }) {
       alive = false;
     };
   }, [id, filesVersion.value]);
+  const { close: endEdit } = edit;
+  const { close: endRename } = rename;
   useEffect(() => {
-    setEditing(false);
-    setRenaming(false);
-  }, [id]);
+    endEdit();
+    endRename();
+  }, [id, endEdit, endRename]);
 
   if (f === undefined || (f && text?.at !== f.updatedAt))
     return (
@@ -102,14 +106,15 @@ export function FileView({ id = '' }: { id?: string }) {
         start={
           <>
             {/* The same order as on an image's page: edit, (use), download, delete, the rest in the menu */}
-            {!editing && (
+            {!edit.open && (
               <Button
+                ref={edit.control}
                 class="text-sm"
                 aria-label={t('file.edit')}
                 title={t('file.editTitle')}
                 onClick={() => {
                   setDraft(shown.text);
-                  setEditing(true);
+                  edit.show();
                 }}
               >
                 <Icon name="edit" />
@@ -151,12 +156,12 @@ export function FileView({ id = '' }: { id?: string }) {
         }
         center={
           <>
-            {renaming ? (
+            {rename.open ? (
               <form
                 class="min-w-0 flex-1"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  setRenaming(false);
+                  rename.close(true);
                   if (name.trim() && name.trim() !== baseName(f.name)) void renameFile(f.id, folderOf(f.name) + name.trim());
                 }}
               >
@@ -166,18 +171,19 @@ export function FileView({ id = '' }: { id?: string }) {
                   autoFocus
                   aria-label={t('file.name')}
                   onInput={(e) => setName((e.target as HTMLInputElement).value)}
-                  onBlur={() => setRenaming(false)}
-                  onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
+                  onBlur={() => rename.close()}
+                  onKeyDown={(e) => e.key === 'Escape' && rename.close(true)}
                 />
               </form>
             ) : (
               <button
+                ref={rename.control}
                 type="button"
                 class="flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left hover:bg-glass-strong"
                 data-tip={t('file.rename')}
                 onClick={() => {
                   setName(baseName(f.name));
-                  setRenaming(true);
+                  rename.show();
                 }}
               >
                 <FileIcon f={f} class="size-4 shrink-0 text-muted" />
@@ -205,16 +211,17 @@ export function FileView({ id = '' }: { id?: string }) {
         </p>
       )}
       {f.fromPdf && <p class="border-b border-line px-4 py-1.5 text-xs text-muted">{t('file.pdfNote')}</p>}
-      {editing ? (
+      {edit.open ? (
         <div class="flex min-h-0 flex-1 flex-col gap-2 p-3">
           <textarea
             class="glass min-h-0 w-full flex-1 resize-none rounded-[18px] p-4 font-mono text-sm text-ink-strong outline-none focus:border-line-strong"
+            ref={editor}
             value={draft}
             aria-label={t('file.content')}
             onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)}
           />
           <div class="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setEditing(false)}>
+            <Button variant="outline" onClick={() => edit.close(true)}>
               {t('cancel')}
             </Button>
             <Button
@@ -222,7 +229,7 @@ export function FileView({ id = '' }: { id?: string }) {
               disabled={draft === shown.text}
               onClick={async () => {
                 await saveUserText(f.id, draft);
-                setEditing(false);
+                edit.close(true);
                 showToast(t('file.savedNew'));
               }}
             >

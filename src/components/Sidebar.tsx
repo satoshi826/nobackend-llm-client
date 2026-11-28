@@ -11,7 +11,7 @@ import { dataLock, lockNow } from '../state/lock';
 import { newerBuild } from '../state/version';
 import { openSettings, showToast, sidebarOpen, sidebarTab } from '../state/ui';
 import { DEFAULT_SETTINGS, SIDEBAR_WIDTH, saveSettings, settings } from '../state/settings';
-import { Button, EmptyState, Icon, IconButton, MoreMark, RowHighlight, SearchField, Segmented, TextField, cx, useBatches, useSelectedBox } from './ui';
+import { Button, EmptyState, Icon, IconButton, MoreMark, RowHighlight, SearchField, Segmented, TextField, cx, useBatches, useInPlace, useSelectedBox } from './ui';
 import { askConfirm, askConfirmWithCheck } from './ConfirmDialog';
 import { sidebarTabs, textOf } from './extensions';
 import { t } from './messages';
@@ -40,17 +40,18 @@ const BATCH = 100;
 
 /** A conversation in the list; drawn again only when it, its being open, or its being answered changes */
 const Row = memo(function Row({ c, active, snippet }: { c: Conversation; active: boolean; snippet?: string }) {
-  const [renaming, setRenaming] = useState(false);
+  // Renamed in place of the row; the keyboard comes back to the row's button
+  const rename = useInPlace<HTMLButtonElement>();
   const [title, setTitle] = useState(c.title);
   // Whether this one is being answered (not the whole set: another conversation's answer does not draw this row)
   const live = useComputed(() => runs.value.has(c.id)).value;
-  if (renaming) {
+  if (rename.open) {
     return (
       <form
         class="px-2 py-1"
         onSubmit={(e) => {
           e.preventDefault();
-          setRenaming(false);
+          rename.close(true);
           if (title.trim()) void updateConversation({ title: title.trim() }, c.id);
         }}
       >
@@ -60,15 +61,15 @@ const Row = memo(function Row({ c, active, snippet }: { c: Conversation; active:
           autoFocus
           aria-label={t('side.renameLabel')}
           onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
-          onBlur={() => setRenaming(false)}
-          onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
+          onBlur={() => rename.close()}
+          onKeyDown={(e) => e.key === 'Escape' && rename.close(true)}
         />
       </form>
     );
   }
   return (
     <div class={cx('group flex items-center rounded-lg', !active && 'hover:bg-glass-strong')}>
-      <button type="button" class="flex min-w-0 flex-1 items-center gap-1.5 px-2.5 py-2 text-left text-sm" onClick={() => openConversation(c.id)} aria-current={active}>
+      <button ref={rename.control} type="button" class="flex min-w-0 flex-1 items-center gap-1.5 px-2.5 py-2 text-left text-sm" onClick={() => openConversation(c.id)} aria-current={active}>
         {c.temporary && <Icon name="ghost" class="size-3.5 shrink-0 text-accent-text" />}
         {c.pinned ? <Icon name="pin" class="size-3.5 shrink-0 text-faint" /> : null}
         <span class="min-w-0">
@@ -86,7 +87,7 @@ const Row = memo(function Row({ c, active, snippet }: { c: Conversation; active:
           label={t('side.rename')}
           onClick={() => {
             setTitle(c.title);
-            setRenaming(true);
+            rename.show();
           }}
           class="px-1!"
         >

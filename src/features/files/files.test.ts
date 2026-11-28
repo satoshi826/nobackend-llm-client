@@ -47,6 +47,8 @@ function memDeps(scope = new Set<string>()) {
       return next;
     },
     pathOf: (f) => f.name,
+    // As the sandbox would find it: a .js file whose text has "oops" fails at its first line
+    syntax: async (path, text) => (path.endsWith('.js') && text.includes('oops') ? { line: 1, col: 5, message: "Unexpected identifier 'oops'" } : undefined),
     // As the sandbox would report a page that throws while it starts
     inspect: async (_f, _wait, script) => ({
       logs: [{ level: 'exception', text: 'ReferenceError: x is not defined (js/app.js:3)' }],
@@ -190,6 +192,14 @@ describe('file tools', () => {
     await expect(near).rejects.toMatchObject({ english: expect.stringContaining('lines 1-3 differ from it only in spaces') });
     await expect(near).rejects.toMatchObject({ english: expect.stringContaining('     2\t    return 1;') });
     await expect(run(deps, 'edit_file', { file_id: 'g.js', old_string: 'f();', new_string: 'g();' })).rejects.toMatchObject({ english: expect.stringContaining('occurs 2 times in the file (lines 4, 5)') });
+  });
+  it('tells a syntax error in what was written, and keeps the file as written', async () => {
+    const { deps, files, texts } = memDeps();
+    const w = await run(deps, 'write_file', { name: 'js/game.js', content: 'let oops' });
+    expect(w.content).toContain("\nSyntax error at js/game.js:1:5: Unexpected identifier 'oops'. The file is saved as written");
+    expect(texts.get([...files.values()][0].id)).toBe('let oops');
+    expect((await run(deps, 'edit_file', { file_id: 'js/game.js', old_string: 'oops', new_string: 'ok' })).content).not.toContain('Syntax error');
+    expect((await run(deps, 'append_file', { file_id: 'js/game.js', content: ' = oops' })).content).toContain('Syntax error at js/game.js:1:5');
   });
   it('cannot touch files outside the conversation', async () => {
     const scope = new Set<string>();

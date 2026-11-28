@@ -11,6 +11,7 @@ import { formatNumber, TranslatedError } from '../../lib/i18n';
 import { t } from './messages';
 import { fileBlock } from './transform';
 import { editView, nearMatch, occurrenceLines } from './edit-view';
+import type { SyntaxProblem } from './syntax';
 
 export const LIST_FILES = 'list_files';
 export const SEARCH_FILES = 'search_files';
@@ -98,6 +99,8 @@ export interface FileToolDeps {
   fetch(url: string, signal: AbortSignal): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null>;
   /** How the model sees a file's path: relative to the working folder (whole for a file outside it) */
   pathOf(f: FileRecord): string;
+  /** The first syntax error in a file's text, for the kinds checked (syntax.ts); undefined when none */
+  syntax(path: string, text: string): Promise<SyntaxProblem | undefined>;
 }
 
 /** What the tool card shows */
@@ -119,6 +122,14 @@ function requireId(r: Record<string, unknown>): string {
   const id = str(r, 'file_id').trim();
   if (!id) throw new TranslatedError(() => t('tool.missingFileId'));
   return id;
+}
+
+/** What a write tells the model about the file's syntax: the first error found, or nothing */
+async function syntaxNote(deps: FileToolDeps, f: FileRecord, text: string): Promise<string> {
+  const p = await deps.syntax(f.name, text);
+  if (!p) return '';
+  const at = `${deps.pathOf(f)}${p.line ? `:${p.line}:${p.col}` : ''}`;
+  return `\nSyntax error${p.inline ? ' in an inline script' : ''} at ${at}: ${p.message}. The file is saved as written: fix it, unless append_file adds the rest.`;
 }
 
 async function mustGet(deps: FileToolDeps, ref: string): Promise<FileRecord> {
@@ -274,7 +285,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     name: WRITE_FILE,
     label: t('tool.create'),
     description:
-      `Write a text file in this conversation's working folder${hasFolder ? '' : ' (the first file makes the folder)'}: a new file, or the whole new text of one it has. The user sees it in the Files tab. Use it when the user asks for a document or a deliverable (a report, notes, a translation, a table, code), or when the answer is too long for a chat message; answer short questions in the chat. To change part of a file use edit_file; for a long document, write the first part here and continue with append_file. Write Markdown (.md) unless another format fits better (.csv, .json, .py, ...). An .html or .svg file opens as a page in a sandbox with no network: it loads the files of its site by relative path (CSS, JavaScript modules, images), but not CDN scripts, web fonts or other web addresses. Its site is the nearest folder above it with an index.html, else its own folder, so put index.html at the top of a multi-file page. Its localStorage is kept in localStorage.json at the top of its site (a JSON object of strings you can read and edit); sessionStorage lasts while it is shown; IndexedDB and cookies are not available. Afterwards tell the user briefly what the file contains instead of repeating its text.`,
+      `Write a text file in this conversation's working folder${hasFolder ? '' : ' (the first file makes the folder)'}: a new file, or the whole new text of one it has. The user sees it in the Files tab. Use it when the user asks for a document or a deliverable (a report, notes, a translation, a table, code), or when the answer is too long for a chat message; answer short questions in the chat. To change part of a file use edit_file; for a long document, write the first part here and continue with append_file. Write Markdown (.md) unless another format fits better (.csv, .json, .py, ...). An .html or .svg file opens as a page in a sandbox with no network: it loads the files of its site by relative path (CSS, JavaScript modules, images), but not CDN scripts, web fonts or other web addresses. Its site is the nearest folder above it with an index.html, else its own folder, so put index.html at the top of a multi-file page. Its localStorage is kept in localStorage.json at the top of its site (a JSON object of strings you can read and edit); sessionStorage lasts while it is shown; IndexedDB and cookies are not available. The result gives the first syntax error in a .js, .mjs or .json file or in an .html page's inline scripts. Afterwards tell the user briefly what the file contains instead of repeating its text.`,
     parameters: {
       type: 'object',
       properties: {
@@ -302,12 +313,10 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     },
     async execute(i) {
       const { file: f, replaced } = await deps.create(i.name, i.content, i.folder);
-      return {
-        content: replaced
-          ? `Replaced the text of ${shown(f)} (id: ${f.id}, ${f.bytes} bytes).`
-          : `Created ${shown(f)} (id: ${f.id}, ${f.bytes} bytes) in the working folder ${JSON.stringify(f.name.slice(0, f.name.length - deps.pathOf(f).length))}. The user sees it as a file card and can open it from the Files tab.`,
-        details: details(f)
-      };
+      const saved = replaced
+        ? `Replaced the text of ${shown(f)} (id: ${f.id}, ${f.bytes} bytes).`
+        : `Created ${shown(f)} (id: ${f.id}, ${f.bytes} bytes) in the working folder ${JSON.stringify(f.name.slice(0, f.name.length - deps.pathOf(f).length))}. The user sees it as a file card and can open it from the Files tab.`;
+      return { content: saved + (await syntaxNote(deps, f, i.content)), details: details(f) };
     }
   };
 
@@ -358,7 +367,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const u = await deps.update(f.id, next);
       const view = editView(cur, next, at, i.old_string.length, i.new_string.length);
       return {
-        content: `Saved ${shown(u)} (${at.length === 1 ? '1 replacement' : `${at.length} replacements`}, ${u.bytes} bytes). ${view ? `The changed lines (numbers in the new text; - removed, + added):\n${view}` : 'new_string is the same as old_string: nothing changed.'}`,
+        content: `Saved ${shown(u)} (${at.length === 1 ? '1 replacement' : `${at.length} replacements`}, ${u.bytes} bytes). ${view ? `The changed lines (numbers in the new text; - removed, + added):\n${view}` : 'new_string is the same as old_string: nothing changed.'}${await syntaxNote(deps, u, next)}`,
         details: details(u)
       };
     }
@@ -388,7 +397,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const next = (await deps.text(f)) + i.content;
       if (next.length > MAX_FILE_CHARS) throw new TranslatedError(() => t('tool.fileTooBig'));
       const u = await deps.update(f.id, next, true);
-      return { content: `Appended ${i.content.length} chars to ${shown(u)} (now ${u.bytes} bytes).`, details: details(u) };
+      return { content: `Appended ${i.content.length} chars to ${shown(u)} (now ${u.bytes} bytes).${await syntaxNote(deps, u, next)}`, details: details(u) };
     }
   };
 

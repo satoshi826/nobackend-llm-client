@@ -21,6 +21,7 @@ import { fileList, imageList, refreshFiles, refreshImages } from './lists';
 import { deleteFiles } from './manage';
 import { pageOf } from './pages';
 import { TranslatedError } from '../../../lib/i18n';
+import { parseInSandbox, syntaxProblem } from '../syntax';
 
 /** Let chat models work on the files of their working folder (the file tools) */
 export const fileSettings = defineFeatureSettings('files', { fileTools: true }, { legacy: (old) => pickLegacy(old, { fileTools: true }) });
@@ -178,7 +179,8 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
         // Its data as the user's preview has it, but what it stores while being tried is not kept
         return inspectPage(await fdb.readText(f.id), { ...page, storage: { items: () => items, save: () => {} } }, { waitMs, script, signal });
       },
-      pathOf: (f) => relativeTo(dir(), f.name)
+      pathOf: (f) => relativeTo(dir(), f.name),
+      syntax: (path, text) => syntaxProblem(path, text, parseInSandbox)
     },
     { hasFolder: !!dir() }
   );

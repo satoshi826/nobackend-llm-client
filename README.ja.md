@@ -60,7 +60,7 @@ VITE_JINA_BASE_URL=http://localhost:8787/jina \
 npm run dev
 ```
 
-**モックのキー**: Venice は `mock-key`、Anthropic は `mock-ant`、Tavily は `tvly-mock`。Gemini（`mock-gem`）・OpenRouter（`mock-or`。モデル一覧・残高・画像・動画だけ）・OpenAI（`mock-oai`）は、`VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`、`VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1`、`VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1` で使えます。モックは Venice・OpenAI・Gemini・OpenRouter の画像モデルも返して PNG を作り、「タグに変換」にはタグを返します。3 つの動画 API の作成も受け付け、何度か問い合わせると短い動画を返します。画像や動画のプロンプトに `違反` を含めるとコンテンツポリシーによる拒否（Venice は言い換えの提案付き）、画像のプロンプトに `ぼかし` を含めるとぼかした結果が返り、チャットのモデルに「絵を描いて」と頼むと（画像のツールがオンなら）`generate_image` を呼びます。
+**モックのキー**: Venice は `mock-key`、Anthropic は `mock-ant`、Tavily は `tvly-mock`。Gemini（`mock-gem`）・OpenRouter（`mock-or`。モデル一覧・残高・画像・動画だけ）・OpenAI（`mock-oai`）は、`VITE_GEMINI_BASE_URL=http://localhost:8787/gemini/v1beta`、`VITE_OPENROUTER_BASE_URL=http://localhost:8787/openrouter/api/v1`、`VITE_OPENAI_BASE_URL=http://localhost:8787/openai/v1` で使えます。モックは Venice・OpenAI・Gemini・OpenRouter の画像モデルも返して PNG を作り、「タグに変換」にはタグを返します。3 つの動画 API の作成も受け付け、何度か問い合わせると短い動画を返します。画像や動画のプロンプトに `違反` を含めるとコンテンツポリシーによる拒否（Venice は言い換えの提案付き）、画像のプロンプトに `ぼかし` を含めるとぼかした結果が返り、チャットのモデルに「絵を描いて」と頼むと（画像のツールがオンなら）`path: assets/cat.png` を付けて `generate_image` を呼びます。「スクリプトを書いて」では構文エラーのあるスクリプトを書き、「スクリプトを直して」では `edit_file` で直します（ファイルのツールがオンなら）。
 
 **メッセージ中のキーワード**でモックの動きが変わります。
 

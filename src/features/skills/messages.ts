@@ -187,7 +187,7 @@ export const t = defineMessages(
       'tab.warning':
         "A skill's instructions go to the model as they are. Check skills made by others before you import them.",
       'tab.details':
-        'Models get only a skill’s name and description, and load the instructions when a request matches (models with tool calling only). Ask in a conversation to “turn these steps into a skill” and a model drafts it with the built-in skill-creator; it is saved after you confirm (fixing an existing skill works the same way). You can import Claude SKILL.md files, but bundled scripts and reference files aren’t supported yet.',
+        'Models get only a skill\'s name and description, and load the instructions when a request matches (models with tool calling only). Ask in a conversation to "turn these steps into a skill" and a model drafts it with the built-in skill-creator; it is saved after you confirm (fixing an existing skill works the same way). You can import Claude SKILL.md files, but bundled scripts and reference files aren\'t supported yet.',
       'tab.about': 'About skills',
       'tab.import': 'Import SKILL.md',
       'tab.yours': 'Your skills'

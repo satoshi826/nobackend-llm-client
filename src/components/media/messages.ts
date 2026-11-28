@@ -50,7 +50,7 @@ export const t = defineMessages(
       'delete.doneMany': 'Deleted {n} items'
     },
     zh: {
-      'thumb.open': '放大{alt}',
+      'thumb.open': '放大 {alt}',
       'thumb.failed': '无法加载图像',
       'thumb.alt': '图像 {n}',
       'viewer.label': '图像查看器',

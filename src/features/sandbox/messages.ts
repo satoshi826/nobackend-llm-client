@@ -26,9 +26,9 @@ export const t = defineMessages(
       'tool.failed': 'Error',
       'tool.output': 'Output',
       'tabLabel': 'Running code',
-      'settings.desc': 'HTML is shown and JavaScript runs in an isolated space, with no network and no access to this app’s data or your files.',
+      'settings.desc': "HTML is shown and JavaScript runs in an isolated space, with no network and no access to this app's data or your files.",
       'settings.tool': 'Let models run JavaScript',
-      'settings.runButtons': 'Show “Run” on code blocks',
+      'settings.runButtons': 'Show "Run" on code blocks',
       'settings.runButtonsDesc': 'Show or run html, svg and js code in conversations and Markdown files right where it is.',
       'settings.htmlPreview': 'Open HTML and SVG files as a preview',
       'settings.htmlPreviewDesc': 'When off they open as code, and the page runs only when you press Preview.'

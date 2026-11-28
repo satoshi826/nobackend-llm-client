@@ -78,7 +78,7 @@ export const t = defineMessages(
       tab: 'Usage',
       'balance.title': 'Balance',
       'balance.none': 'Set a key for a provider that reports its balance ({providers}) to see the latest balance here.',
-      'balance.keyLimit': 'left on this key’s limit',
+      'balance.keyLimit': "left on this key's limit",
       'balance.row': 'as of {time}',
       intro:
         'Tokens and cost of what you sent from this browser. The records stay on this device and remain after you delete conversations (temporary chats are not recorded). For providers that do not report cost, it is estimated from model prices and marked "~". "—" means the price is unknown too.',

@@ -28,10 +28,10 @@ export const t = defineMessages(
   {
     en: {
       'approval.stopped': 'Stopped.',
-      'compact.tooShort': 'The conversation isn’t long enough to compact yet.',
+      'compact.tooShort': "The conversation isn't long enough to compact yet.",
       'compact.autoDone': 'The conversation got long, so the older messages ({n}) were summarized automatically',
       'compact.done': 'Summarized the older messages ({n})',
-      'compact.failed': 'Couldn’t summarize: {message}',
+      'compact.failed': "Couldn't summarize: {message}",
       'conv.newChat': 'New chat',
       'data.passwordNeeded': 'This backup is encrypted with a password.',
       'data.exportTooLarge': 'The backup is too large for this browser to make. Close other tabs and try again, or export without images and videos.',
@@ -41,7 +41,7 @@ export const t = defineMessages(
       'gen.chooseModel': 'Choose a model.',
       'gen.storageFull': 'Not sent: the browser has no room left to store it. Delete files or conversations you no longer need, then send it again.',
       'gen.notSaved': 'Not sent: the message could not be saved ({message}). Send it again.',
-      'lock.failed': 'Couldn’t update conversation protection: {message}',
+      'lock.failed': "Couldn't update conversation protection: {message}",
       'lock.sealed': 'Encrypted your conversations',
       'lock.unsealing': 'Decrypting conversations…',
       'lock.unsealingProgress': 'Decrypting conversations… {done} / {total}',
@@ -52,8 +52,8 @@ export const t = defineMessages(
     zh: {
       'approval.stopped': '已停止。',
       'compact.tooShort': '对话还没有长到需要压缩。',
-      'compact.autoDone': '对话变长了，已自动将较早的{n}条消息总结为摘要',
-      'compact.done': '已将较早的{n}条消息总结为摘要',
+      'compact.autoDone': '对话变长了，已自动将较早的 {n} 条消息总结为摘要',
+      'compact.done': '已将较早的 {n} 条消息总结为摘要',
       'compact.failed': '无法生成摘要：{message}',
       'conv.newChat': '新对话',
       'data.passwordNeeded': '此备份已用密码加密。',

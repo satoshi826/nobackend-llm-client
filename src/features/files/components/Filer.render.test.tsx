@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // How much the file manager draws when one thing changes, counted as the perf runs count it (src/lib/perf/counter.ts):
-// picking an entry draws that entry again, not the others.
+// picking an entry draws that entry again, and a new file draws its own card, not the others.
 import 'fake-indexeddb/auto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { render } from 'preact';
@@ -25,7 +25,7 @@ beforeAll(() => {
 });
 
 describe('the file manager draws only what changed', () => {
-  it('draws one card again when one entry is picked, and none of the others', async () => {
+  it('draws only the card that changed: one picked, one saved', async () => {
     for (let i = 0; i < 40; i++) await createFile(newFile({ id: `f${i}`, name: `notes-${i}.md`, origin: { kind: 'made' }, text: `text ${i}`, by: 'model' }), `text ${i}`);
     await refreshFiles();
     await refreshImages();
@@ -44,6 +44,13 @@ describe('the file manager draws only what changed', () => {
       expect(drawn('Card') - before).toBe(1);
     }
     expect([...checks()].filter((c) => c.checked)).toHaveLength(3);
+
+    // A file saved while the list is open (each save makes the list anew)
+    const before = drawn('Card');
+    await createFile(newFile({ id: 'new', name: 'notes-new.md', origin: { kind: 'made' }, text: 'new', by: 'model' }), 'new');
+    await settle();
+    expect(box.querySelectorAll('[data-entry]')).toHaveLength(41);
+    expect(drawn('Card') - before).toBe(1);
     render(null, box);
   });
 });

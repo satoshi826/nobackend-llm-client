@@ -100,6 +100,20 @@ curl -sI https://<你的站点>/vault/ | grep -i content-security-policy
 
 **数据按源（origin）分开保存**: 对话和密钥属于你访问的那个 URL。迁移时（从本地试用版到正式站点、从 `workers.dev` 到自定义域名等），请先在"设置 → 隐私与数据"中导出备份，再到新站点导入。密钥需要重新输入。
 
+### 用源代码核对构建
+
+构建是可复现的：同一个提交，用相同的 `VITE_*` 变量和 `.node-version` 中的 Node 版本构建，得到逐字节相同的文件（设置 → 关于 中的时间是提交时间，而不是构建时间）。要用自己读过的源代码核对某个部署或别人的构建：
+
+```bash
+git checkout <提交>                    # 设置 → 关于 中显示
+npm ci
+npm run -s build:verify > mine.txt     # 构建 dist/ 并输出其中每个文件的 SHA-256
+diff mine.txt theirs.txt               # 对方用同样方法生成的列表
+curl -s https://<站点>/sw.js | shasum -a 256   # 用列表中的行核对已部署的文件（sw.js 列出了所有脚本和样式表）
+```
+
+严格配置下，另外两个构建也同样处理：`node scripts/hashes.mjs dist-vault dist-fetch`。
+
 ### 严格配置：把保管库和获取页面放在独立的源上
 
 默认情况下，密钥保管库（`/vault/`）和获取页面（`/fetch/`）与应用同源提供，放在任何主机上都能用。其局限是：万一应用内运行了脚本（XSS），它可以向保管库索取密钥，也可以借获取页面把数据发往任意地址。两者都放在独立的源上后，这样的脚本什么也做不了。

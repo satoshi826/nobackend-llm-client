@@ -7,7 +7,7 @@ import { signal } from '@preact/signals';
 export interface BuildInfo {
   version: string;
   commit: string;
-  /** ISO time of the build ('' in development) */
+  /** ISO date of the source it was built from (vite.config.ts buildInfo; '' in development or when unknown) */
   builtAt: string;
 }
 

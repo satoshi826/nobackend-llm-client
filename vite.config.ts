@@ -133,20 +133,23 @@ function fontLicensePlugin(): Plugin {
 
 /**
  * Which build this is: package version, commit (Cloudflare Workers Builds sets WORKERS_CI_COMMIT_SHA; otherwise
- * git), build time. Shown in Settings → 情報 and written to /version.json, which running pages poll to learn
- * that a newer build is out (state/version.ts).
+ * git), and the source's date. Shown in Settings → 情報 and written to /version.json, which running pages poll to
+ * learn that a newer build is out (state/version.ts).
+ * The date is SOURCE_DATE_EPOCH when set, else the commit's time, never the clock: the same source always builds the
+ * same files, so anyone can rebuild a release and compare (npm run build:verify).
  */
 function buildInfo(env: Record<string, string | undefined>) {
-  let commit = env.WORKERS_CI_COMMIT_SHA || env.CF_PAGES_COMMIT_SHA || env.GITHUB_SHA || '';
-  if (!commit) {
+  const git = (args: string) => {
     try {
-      commit = execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+      return execSync(`git ${args}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
     } catch {
-      commit = 'unknown';
+      return '';
     }
-  }
+  };
+  const commit = env.WORKERS_CI_COMMIT_SHA || env.CF_PAGES_COMMIT_SHA || env.GITHUB_SHA || git('rev-parse HEAD') || 'unknown';
+  const date = env.SOURCE_DATE_EPOCH ? new Date(Number(env.SOURCE_DATE_EPOCH) * 1000) : new Date(git('log -1 --format=%cI'));
   const version = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')).version as string;
-  return { version, commit, builtAt: new Date().toISOString() };
+  return { version, commit, builtAt: Number.isNaN(date.getTime()) ? '' : date.toISOString() };
 }
 
 function versionFilePlugin(info: ReturnType<typeof buildInfo>): Plugin {

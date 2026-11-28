@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && npm run lint && npm run lint:deps && vitest run && vite build",
+    "build:verify": "vite build --logLevel error && node scripts/hashes.mjs dist",
     "build:vault": "vite build --config vite.vault.config.ts",
     "build:fetch": "vite build --config vite.fetch.config.ts",
     "preview:csp": "node scripts/serve-with-headers.mjs dist 4173",

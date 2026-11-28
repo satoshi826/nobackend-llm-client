@@ -100,6 +100,20 @@ Cloudflare Pages also works (build command `npm run build`, output directory `di
 
 **Data is per origin.** Conversations and keys belong to the URL you use. When moving (from a local trial build, from `workers.dev` to a custom domain, and so on), export a backup in Settings → Privacy and data first, then import it on the new site. Keys must be entered again.
 
+### Check a build against its source
+
+The build is reproducible: one commit, built with the same `VITE_*` variables and the Node version in `.node-version`, gives the same files byte for byte (the date in Settings → About is the commit's, not the build's). To check a deployment or someone else's build against source you have read:
+
+```bash
+git checkout <commit>                  # Settings → About shows it
+npm ci
+npm run -s build:verify > mine.txt     # builds dist/ and prints the SHA-256 of every file in it
+diff mine.txt theirs.txt               # their list, made the same way
+curl -s https://<your-site>/sw.js | shasum -a 256   # a deployed file against its line (sw.js lists every script and stylesheet)
+```
+
+For the strict setup, hash the other two builds as well: `node scripts/hashes.mjs dist-vault dist-fetch`.
+
 ### Strict setup: the vault and the fetch page on their own origins
 
 By default the key vault (`/vault/`) and the fetch page (`/fetch/`) are served from the app's own origin, which works on any host. Their limit: if a script ever ran inside the app (XSS), it could reach them, ask the vault for the keys, and use the fetch page to send data to any address. With both on origins of their own, such a script can do neither.

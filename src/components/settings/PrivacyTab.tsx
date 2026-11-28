@@ -96,29 +96,33 @@ export function PrivacyTab() {
           <Row
             label={t('privacy.usage', { used: formatBytes(usage.used), quota: formatBytes(usage.quota) })}
             hint={usage.persisted ? t('privacy.persisted') : t('privacy.notPersisted')}
-            control={
-              !usage.persisted && (
-                <Button
-                  variant="outline"
-                  class="text-xs"
-                  onClick={async () => {
-                    const ok = (await navigator.storage?.persist?.()) ?? false;
-                    setUsage({ ...usage, persisted: ok });
-                    showToast(ok ? t('privacy.persistGranted') : t('privacy.persistDenied'), ok ? 'info' : 'error');
-                  }}
-                >
-                  <Icon name="shield" class="size-3.5" />
-                  {t('privacy.requestPersist')}
-                </Button>
+            below={
+              (!usage.persisted || safariClearsData) && (
+                <div class="space-y-2.5">
+                  {!usage.persisted && (
+                    <Button
+                      variant="outline"
+                      class="text-xs"
+                      onClick={async () => {
+                        const ok = (await navigator.storage?.persist?.()) ?? false;
+                        setUsage({ ...usage, persisted: ok });
+                        showToast(ok ? t('privacy.persistGranted') : t('privacy.persistDenied'), ok ? 'info' : 'error');
+                      }}
+                    >
+                      <Icon name="shield" class="size-3.5" />
+                      {t('privacy.requestPersist')}
+                    </Button>
+                  )}
+                  {safariClearsData && <p class="text-xs text-warn">{t('privacy.iosHomeScreen')}</p>}
+                </div>
               )
             }
-            below={safariClearsData && <p class="text-xs text-warn">{t('privacy.iosHomeScreen')}</p>}
           />
         )}
         <Row below={<StorageParts />} />
       </Group>
 
-      <Group title={t('privacy.backup')} footer={sentences(s.lastBackupAt ? t('privacy.lastBackup', { date: formatDateTime(s.lastBackupAt) }) : t('privacy.noBackupYet'), t('privacy.noKeysInBackup'))}>
+      <Group title={t('privacy.backup')} footer={sentences(t('privacy.includeImagesOff'), s.lastBackupAt ? t('privacy.lastBackup', { date: formatDateTime(s.lastBackupAt) }) : t('privacy.noBackupYet'), t('privacy.noKeysInBackup'))}>
         <ToggleRow checked={encrypt} onChange={setEncrypt} label={t('privacy.encrypt')} hint={t('privacy.encryptDesc')}>
           <Row
             below={
@@ -136,11 +140,7 @@ export function PrivacyTab() {
           checked={s.backupIncludeImages}
           onChange={(v) => void saveSettings({ backupIncludeImages: v })}
           label={t('privacy.includeImages')}
-          hint={sentences(
-            t('privacy.includeImagesSize'),
-            imgUsage && t('privacy.includeImagesNow', { count: formatNumber(imgUsage.count), size: formatBytes(imgUsage.bytes) }),
-            t('privacy.includeImagesOff')
-          )}
+          hint={sentences(t('privacy.includeImagesSize'), imgUsage && t('privacy.includeImagesNow', { count: formatNumber(imgUsage.count), size: formatBytes(imgUsage.bytes) }))}
         />
         <Row
           below={

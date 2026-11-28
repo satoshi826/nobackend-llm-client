@@ -13,7 +13,7 @@ export const t = defineMessages(
     'settings.desc': 'HTML の表示と JavaScript の実行は、隔離された環境で行います。ネットへの接続や、このアプリのデータ・ファイルへのアクセスはできません。',
     'settings.tool': 'モデルによる JavaScript の実行',
     'settings.runButtons': 'コードブロックに「実行」ボタンを表示する',
-    'settings.runButtonsDesc': 'チャットと Markdown ファイルの html・svg・js のコードを、その場で表示・実行できます。',
+    'settings.runButtonsDesc': 'チャットや Markdown の html・svg・js を、その場で表示・実行します。',
     'settings.htmlPreview': 'HTML・SVG ファイルをプレビューで開く',
     'settings.htmlPreviewDesc': 'オフにするとコードで開き、ページは「プレビュー」を押したときだけ動きます。'
   },

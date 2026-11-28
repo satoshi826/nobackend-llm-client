@@ -17,51 +17,52 @@ function Version() {
   const check = updateCheck.value;
   const newer = newerBuild.value;
   return (
-    <Group title={t('about.version')} footer={t('about.updateNote')}>
-      {isDevBuild ? (
+    // A development build has no version to compare, so it cannot check for updates: only what it is shows
+    isDevBuild ? (
+      <Group title={t('about.version')}>
         <Row label={t('about.dev')} />
-      ) : (
-        <>
-          <Row label={t('about.version')} control={fact(APP_BUILD.version)} />
-          <Row label={t('about.commit')} control={fact(<span data-tip={APP_BUILD.commit}>{shortCommit(APP_BUILD.commit)}</span>)} />
-          <Row label={t('about.built')} control={fact(APP_BUILD.builtAt ? formatDateTime(new Date(APP_BUILD.builtAt)) : '-')} />
-        </>
-      )}
-      <div class="space-y-2.5 px-4 py-3">
-        <div class="text-sm" role="status" aria-live="polite">
-          {newer ? (
-            <span class="text-ink-strong">{t('about.newer', { commit: shortCommit(newer.commit) })}</span>
-          ) : !check ? (
-            <span class="text-muted">{t('about.notChecked')}</span>
-          ) : check.ok ? (
-            <span class="text-ink">{t('about.latest')}</span>
-          ) : (
-            <span class="text-warn">{t('about.checkFailed')}</span>
-          )}
-          {check && <span class="ml-2 text-xs text-muted">{t('about.checkedAt', { time: formatDateTime(check.at, { timeStyle: 'short' }) })}</span>}
-        </div>
-        <div class="flex flex-wrap gap-2">
-          {newer && (
-            <Button variant="primary" onClick={() => location.reload()}>
-              <Icon name="refresh" />
-              {t('about.reload')}
+      </Group>
+    ) : (
+      <Group title={t('about.version')} footer={t('about.updateNote')}>
+        <Row label={t('about.version')} control={fact(APP_BUILD.version)} />
+        <Row label={t('about.commit')} control={fact(<span data-tip={APP_BUILD.commit}>{shortCommit(APP_BUILD.commit)}</span>)} />
+        <Row label={t('about.built')} control={fact(APP_BUILD.builtAt ? formatDateTime(new Date(APP_BUILD.builtAt)) : '-')} />
+        <div class="space-y-2.5 px-4 py-3">
+          <div class="text-sm" role="status" aria-live="polite">
+            {newer ? (
+              <span class="text-ink-strong">{t('about.newer', { commit: shortCommit(newer.commit) })}</span>
+            ) : !check ? (
+              <span class="text-muted">{t('about.notChecked')}</span>
+            ) : check.ok ? (
+              <span class="text-ink">{t('about.latest')}</span>
+            ) : (
+              <span class="text-warn">{t('about.checkFailed')}</span>
+            )}
+            {check && <span class="ml-2 text-xs text-muted">{t('about.checkedAt', { time: formatDateTime(check.at, { timeStyle: 'short' }) })}</span>}
+          </div>
+          <div class="flex flex-wrap gap-2">
+            {newer && (
+              <Button variant="primary" onClick={() => location.reload()}>
+                <Icon name="refresh" />
+                {t('about.reload')}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              disabled={checking}
+              onClick={async () => {
+                setChecking(true);
+                await checkForUpdate();
+                setChecking(false);
+              }}
+            >
+              {checking ? <Spinner /> : <Icon name="refresh" class="size-3.5" />}
+              {t('about.check')}
             </Button>
-          )}
-          <Button
-            variant="outline"
-            disabled={checking || isDevBuild}
-            onClick={async () => {
-              setChecking(true);
-              await checkForUpdate();
-              setChecking(false);
-            }}
-          >
-            {checking ? <Spinner /> : <Icon name="refresh" class="size-3.5" />}
-            {t('about.check')}
-          </Button>
+          </div>
         </div>
-      </div>
-    </Group>
+      </Group>
+    )
   );
 }
 
@@ -122,7 +123,7 @@ export function AboutTab() {
     <div class="space-y-8">
       <Version />
       <Diagnostics />
-      <Group title={t('about.developer')}>
+      <Group title={t('about.developer')} footer={t('about.devRequestsNote')}>
         <ToggleRow checked={settings.value.developerMode} onChange={(v) => saveSettings({ developerMode: v })} label={t('about.devRequests')} hint={t('about.devRequestsDesc')} />
       </Group>
     </div>

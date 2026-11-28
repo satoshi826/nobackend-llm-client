@@ -33,7 +33,7 @@ export function ChatTab() {
         />
       </Group>
 
-      <Group title={t('chat.suggestions')}>
+      <Group title={t('chat.suggestions')} footer={t('chat.suggestionsNote')}>
         <ToggleRow checked={s.replySuggestions} onChange={(v) => saveSettings({ replySuggestions: v })} label={t('chat.suggestionsToggle')} hint={t('chat.suggestionsDesc')}>
           <Row
             label={t('chat.suggestionCount')}

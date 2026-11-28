@@ -458,18 +458,29 @@ export const ScrollArea = createContext<RefObject<HTMLElement | null> | null>(nu
 
 type Box = { x: number; y: number; w: number; h: number };
 
+/** The box of the item matching `selector` inside `list`, kept as prev when unchanged (so it renders no more) */
+function boxIn(list: HTMLElement | null, selector: string, prev: Box | null): Box | null {
+  const el = list?.querySelector<HTMLElement>(selector);
+  const next = el ? { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight } : null;
+  return prev === next || (prev && next && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h) ? prev : next;
+}
+
 /**
- * Where the item matching `selector` sits inside `ref` (a positioned element), measured after every render:
- * for a highlight that slides to the selected item. null while nothing matches
+ * Where the item matching `selector` sits inside `ref` (a positioned element), measured after every render and
+ * when `ref` changes size (the window or the sidebar resized, with no render): for a highlight that slides to the
+ * selected item. null while nothing matches
  */
 export function useSelectedBox(ref: RefObject<HTMLElement | null>, selector: string): Box | null {
   const [box, setBox] = useState<Box | null>(null);
   // oxlint-disable-next-line react/exhaustive-deps -- measured after every render on purpose; an unchanged box keeps the state, so it renders no more
-  useLayoutEffect(() => {
-    const el = ref.current?.querySelector<HTMLElement>(selector);
-    const next = el ? { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight } : null;
-    setBox((prev) => (prev === next || (prev && next && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h) ? prev : next));
-  });
+  useLayoutEffect(() => setBox((prev) => boxIn(ref.current, selector, prev)));
+  useEffect(() => {
+    const list = ref.current;
+    if (!list) return;
+    const observer = new ResizeObserver(() => setBox((prev) => boxIn(list, selector, prev)));
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [ref, selector]);
   return box;
 }
 

@@ -10,7 +10,7 @@ import { createFile, newFile } from '../../../lib/db/files';
 import { filerView, refreshFiles, refreshImages } from '../state';
 import { Filer } from './Filer';
 
-// jsdom has no IntersectionObserver (the list draws in batches with one)
+// jsdom has no IntersectionObserver (the list draws in batches with one) or ResizeObserver (a selected row's highlight)
 class NoObserver {
   observe() {}
   disconnect() {}
@@ -21,6 +21,7 @@ const settle = () => act(async () => new Promise((r) => setTimeout(r, 30)));
 
 beforeAll(() => {
   (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = NoObserver;
+  (globalThis as { ResizeObserver?: unknown }).ResizeObserver = NoObserver;
   startPerfCounting();
 });
 

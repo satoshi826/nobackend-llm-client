@@ -43,8 +43,8 @@ export function AddConnection({ onAdded, heading = true, compact }: { onAdded(id
   const available = providers.value.filter((p) => !added.has(p.id));
   // Providers with a free tier first, each group A–Z; the groups are named only when there are two
   const groups = [
-    { title: t('conn.freeTier'), list: available.filter((p) => getPreset(p.preset).freeTier) },
-    { title: t('conn.others'), list: available.filter((p) => !getPreset(p.preset).freeTier) }
+    { title: t('conn.freeTier'), list: available.filter((p) => getPreset(p.id).freeTier) },
+    { title: t('conn.others'), list: available.filter((p) => !getPreset(p.id).freeTier) }
   ].filter((g) => g.list.length);
   const GroupHeading = heading ? 'h4' : 'h3';
   return (
@@ -56,7 +56,7 @@ export function AddConnection({ onAdded, heading = true, compact }: { onAdded(id
             {groups.length > 1 && <GroupHeading class="mb-2 text-xs font-semibold text-muted">{g.title}</GroupHeading>}
             <ul class="space-y-2">
               {g.list.map((p) => {
-                const preset = getPreset(p.preset);
+                const preset = getPreset(p.id);
                 return (
                   <li key={p.id}>
                     <button type="button" class="w-full rounded-xl border border-line p-3 text-left hover:border-line-strong hover:bg-glass" onClick={() => setChosen(p.id)}>

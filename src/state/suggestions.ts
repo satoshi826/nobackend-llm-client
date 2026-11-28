@@ -38,7 +38,7 @@ export async function suggestReplies(conv: Conversation, final: MessageRecord, h
   try {
     const list = await generateSuggestions([...history, final], Math.max(1, s.suggestionTurns), Math.max(1, s.suggestionCount), {
       provider: cfg,
-      preset: getPreset(cfg.preset),
+      preset: getPreset(cfg.id),
       auth: authFor(cfg.id),
       transport,
       model: ref.modelId,

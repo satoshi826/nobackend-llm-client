@@ -32,7 +32,7 @@ export type SearchRoute = 'native' | 'tools' | null;
 /** Whether the connection's own search works with this model */
 export function nativeSearchFor(providerId: string, modelId: string): boolean {
   const cfg = providerById(providerId);
-  const native = cfg ? getPreset(cfg.preset).nativeWebSearch : undefined;
+  const native = cfg ? getPreset(cfg.id).nativeWebSearch : undefined;
   return !!native?.supports(modelId, modelOf(providerId, modelId));
 }
 
@@ -50,7 +50,7 @@ export function searchRouteFor(providerId: string, modelId: string): SearchRoute
 /** How a connection's tool-calling models search, as settings show it (a Tavily key counts while locked too) */
 export function providerSearchRoute(providerId: string): SearchRoute {
   const cfg = providerById(providerId);
-  return pickRoute(!!(cfg && getPreset(cfg.preset).nativeWebSearch), keyStatus('tavily').present);
+  return pickRoute(!!(cfg && getPreset(cfg.id).nativeWebSearch), keyStatus('tavily').present);
 }
 
 /** The connection's own search unless Tavily is preferred and usable; else Tavily when usable */
@@ -79,7 +79,7 @@ function pageReader(conv: Conversation) {
     if (!cfg || !ref.modelId || !accountInUse(cfg.id)) return { content: 'No model is available to read the page.', isError: true, details: { url: got.url } };
     const answer = await extractFromPage({ ...page, url: got.url }, prompt, {
       provider: cfg,
-      preset: getPreset(cfg.preset),
+      preset: getPreset(cfg.id),
       auth: authFor(cfg.id),
       transport,
       model: ref.modelId,

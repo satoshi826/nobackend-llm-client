@@ -23,7 +23,7 @@ function ModelButton() {
   const conv = currentConv.value;
   const model = modelOf(conv.providerId, conv.modelId);
   const cfg = providerById(conv.providerId);
-  const copy = cfg ? (getPreset(cfg.preset).copy ?? {}) : {};
+  const copy = cfg ? (getPreset(cfg.id).copy ?? {}) : {};
   const note =
     model?.privacy === 'private'
       ? (copy.private ?? t('header.privateTitle'))

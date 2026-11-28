@@ -4,8 +4,8 @@ import type { Endpoint } from './endpoints';
 
 export type { AdapterKind } from './endpoints';
 
-/** A provider's connection as the adapters use it (fixed at build time: endpoints.ts). `preset` repeats the id */
-export type ProviderConfig = Pick<Endpoint, 'id' | 'name' | 'kind' | 'baseUrl' | 'headers'> & { preset: string };
+/** A provider's connection as the adapters use it (fixed at build time: endpoints.ts). Its preset is the one with its id */
+export type ProviderConfig = Pick<Endpoint, 'id' | 'name' | 'kind' | 'baseUrl' | 'headers'>;
 
 export interface ModelCapabilities {
   vision?: boolean;

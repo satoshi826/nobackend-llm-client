@@ -36,5 +36,5 @@ export async function fetchBalance(providerId: string): Promise<void> {
 
 /** Balances of every provider with a key and a balance API */
 export function fetchBalances(): Promise<void[]> {
-  return Promise.all(providers.value.filter((p) => PRESETS[p.preset]?.balanceApi && keyReady(p.id)).map((p) => fetchBalance(p.id)));
+  return Promise.all(providers.value.filter((p) => PRESETS[p.id].balanceApi && keyReady(p.id)).map((p) => fetchBalance(p.id)));
 }

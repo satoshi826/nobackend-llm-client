@@ -70,7 +70,7 @@ export async function diagnosticsText(): Promise<string> {
     const st = modelsStates.value[p.id];
     const count = models.value.filter((m) => m.providerId === p.id).length;
     lines.push(
-      `- ${p.preset}${p.preset !== p.id ? ` (${p.id})` : ''}: key ${k?.present ? (k.locked ? 'locked' : k.encrypted ? 'encrypted' : 'plain') : 'none'}, models ${count}, list ${st?.fetchedAt ? new Date(st.fetchedAt).toISOString() : 'never'}${st?.error ? `, list error ${st.error.kind}${st.error.status ? ` ${st.error.status}` : ''}` : ''}`
+      `- ${p.id}: key ${k?.present ? (k.locked ? 'locked' : k.encrypted ? 'encrypted' : 'plain') : 'none'}, models ${count}, list ${st?.fetchedAt ? new Date(st.fetchedAt).toISOString() : 'never'}${st?.error ? `, list error ${st.error.kind}${st.error.status ? ` ${st.error.status}` : ''}` : ''}`
     );
   }
 

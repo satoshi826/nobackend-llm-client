@@ -286,11 +286,10 @@ describe('balance APIs', () => {
 
 describe('flex tier', () => {
   const flexPreset = { ...venicePreset, id: 'flexy', transformRequest: undefined, ...flexTier(0.5) };
-  const flexCfg: ProviderConfig = { ...cfg, preset: 'flexy' };
   const ask = (t: Transport, flex: boolean) =>
     collect(
       openAICompatibleAdapter.chat(
-        flexCfg,
+        cfg,
         flexPreset,
         cred,
         {

@@ -74,7 +74,7 @@ export async function loadModels() {
   const all = await repo.listAllModels();
   for (const p of providers.value) {
     const list = all.filter((m) => m.providerId === p.id);
-    cached.push(...withListPrices(list, p.preset));
+    cached.push(...withListPrices(list, p.id));
     states[p.id] = { ...EMPTY_MODELS_STATE, fetchedAt: list[0]?.fetchedAt ?? null };
   }
   batch(() => {
@@ -91,7 +91,7 @@ export async function refreshModels(providerId: string) {
   const cfg = providerById(providerId);
   if (!cfg) return;
   const setState = (st: ModelsState) => (modelsStates.value = { ...modelsStates.value, [providerId]: st });
-  const preset = getPreset(cfg.preset);
+  const preset = getPreset(cfg.id);
   // For providers whose model list requires a key, do not fetch until a key is set
   if (preset.modelsNeedKey && !keyReady(providerId)) {
     setState({ ...(modelsStates.value[providerId] ?? EMPTY_MODELS_STATE), loading: false, error: null, needsKey: true });
@@ -105,7 +105,7 @@ export async function refreshModels(providerId: string) {
       : await getAdapter(cfg).listModels(cfg, preset, plainTransport);
     await repo.replaceModels(cfg.id, list);
     // Prices from the app's own list are added on reading, so a scheduled price change applies without refetching
-    const priced = withListPrices(list, cfg.preset);
+    const priced = withListPrices(list, cfg.id);
     batch(() => {
       models.value = sortModels([...models.value.filter((m) => m.providerId !== providerId), ...priced]);
       setState({ loading: false, error: null, fetchedAt: Date.now() });
@@ -124,7 +124,7 @@ export async function refreshAllModels() {
 export function refreshModelsNeedingKey() {
   for (const p of enabledProviders.value) {
     const st = modelsStates.value[p.id];
-    if (getPreset(p.preset).modelsNeedKey && keyReady(p.id) && !st?.loading && (st?.needsKey || !st?.fetchedAt) && !st?.error) void refreshModels(p.id);
+    if (getPreset(p.id).modelsNeedKey && keyReady(p.id) && !st?.loading && (st?.needsKey || !st?.fetchedAt) && !st?.error) void refreshModels(p.id);
   }
 }
 
@@ -148,7 +148,7 @@ export function defaultModel(): { providerId: string; modelId: string } {
   const ordered = [...enabledProviders.value].sort((a, b) => Number(accountInUse(b.id)) - Number(accountInUse(a.id)));
   for (const p of ordered) {
     const list = vis.filter((m) => m.providerId === p.id);
-    const hinted = (getPreset(p.preset).defaultModels ?? []).map((id) => list.find((m) => m.id === id)).find((m) => m);
+    const hinted = (getPreset(p.id).defaultModels ?? []).map((id) => list.find((m) => m.id === id)).find((m) => m);
     const m = list.find((x) => x.tags?.includes('default')) ?? hinted ?? list[0];
     if (m) return { providerId: m.providerId, modelId: m.id };
   }

@@ -73,7 +73,7 @@ function ChatOptionsPanel() {
   const efforts = [...(model?.capabilities.reasoningEffort ?? [])].sort((a, b) => effortRank(a) - effortRank(b));
   // Some providers never take earlier reasoning back: there is nothing to choose
   const cfg = providerById(conv.providerId);
-  const resends = !!model?.capabilities.reasoning && !!cfg && getPreset(cfg.preset).reasoningResend !== 'never';
+  const resends = !!model?.capabilities.reasoning && !!cfg && getPreset(cfg.id).reasoningResend !== 'never';
   const maxes = MAX_TOKENS.filter((n) => !model?.maxOutputTokens || n <= model.maxOutputTokens);
   return (
     <div class="space-y-4 text-sm">

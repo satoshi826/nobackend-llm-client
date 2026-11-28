@@ -34,7 +34,7 @@ export function SearchSettings() {
   const w = webSettings.value.value;
   const [open, setOpen] = useState('');
   const provs = enabledProviders.value;
-  const anyNative = provs.some((p) => getPreset(p.preset).nativeWebSearch);
+  const anyNative = provs.some((p) => getPreset(p.id).nativeWebSearch);
   const reads = s.toolPermissions.fetch_url !== 'deny';
   const relay = FETCH_ROUTES.relay && new URL(FETCH_ROUTES.relay).host;
   const ways = [
@@ -59,7 +59,7 @@ export function SearchSettings() {
           )}
           {provs.map((p) => {
             const route = providerSearchRoute(p.id);
-            const note = route === 'native' ? getPreset(p.preset).nativeWebSearch?.note : undefined;
+            const note = route === 'native' ? getPreset(p.id).nativeWebSearch?.note : undefined;
             return (
               <InfoRow
                 key={p.id}

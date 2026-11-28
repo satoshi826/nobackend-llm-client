@@ -60,7 +60,7 @@ export function accountById(id: string): Account | undefined {
 /** A provider's connection (nothing for tool services) */
 export function providerConfigOf(id: string): ProviderConfig | undefined {
   const e = Object.hasOwn(ENDPOINTS, id) ? ENDPOINTS[id] : undefined;
-  return e && { id, name: e.name, kind: e.kind, baseUrl: e.baseUrl, headers: e.headers, preset: id };
+  return e && { id, name: e.name, kind: e.kind, baseUrl: e.baseUrl, headers: e.headers };
 }
 
 /** Key status (what the vault tells the app; never the key itself) */

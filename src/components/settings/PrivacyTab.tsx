@@ -60,7 +60,7 @@ export function PrivacyTab() {
   const rows: [string, string, string?][] = [
     ...enabledProviders.value.map(
       (p) => {
-        const preset = getPreset(p.preset);
+        const preset = getPreset(p.id);
         const note = preset.copy?.destinationNote;
         return [
           hostOfProvider(p.id),
@@ -73,7 +73,7 @@ export function PrivacyTab() {
     [accountById('tavily')!.host, t('privacy.destTavily')],
     [t('privacy.destPages'), t('privacy.destPagesText', { jina: new URL(FETCH_ROUTES.jina).host })],
     ...(FETCH_ROUTES.relay ? [[new URL(FETCH_ROUTES.relay).host, t('privacy.destRelay')] as [string, string]] : []),
-    ...enabledProviders.value.flatMap((p) => getPreset(p.preset).copy?.extraDestinations ?? []),
+    ...enabledProviders.value.flatMap((p) => getPreset(p.id).copy?.extraDestinations ?? []),
     [t('privacy.destOrigin'), t('privacy.destOriginText')]
   ];
   return (

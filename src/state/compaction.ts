@@ -68,7 +68,7 @@ export async function compactConversation(auto = false): Promise<boolean> {
   try {
     const summary = await summarize(plan, {
       provider: cfg,
-      preset: getPreset(cfg.preset),
+      preset: getPreset(cfg.id),
       auth: authFor(cfg.id),
       transport,
       model: ref.modelId,

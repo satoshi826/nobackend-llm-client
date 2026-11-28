@@ -55,6 +55,6 @@ registerConnectionFeature({
   icon: 'globe',
   offeredBy: (id) => {
     const cfg = providerById(id);
-    return !!cfg && !!getPreset(cfg.preset).nativeWebSearch;
+    return !!cfg && !!getPreset(cfg.id).nativeWebSearch;
   }
 });

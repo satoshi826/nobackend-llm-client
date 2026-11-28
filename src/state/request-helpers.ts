@@ -11,7 +11,7 @@ import { addConversationCost } from './costs';
 export function providerOptionsFor(providerId: string, purpose: 'chat' | 'summary', webSearch: 'off' | 'auto' | 'on' = 'off') {
   const cfg = providerById(providerId);
   if (!cfg) return undefined;
-  const preset = getPreset(cfg.preset);
+  const preset = getPreset(cfg.id);
   const opts = preset.requestOptions?.({ purpose, webSearch, settings: providerSettingsOf(cfg.id, preset.settings) });
   return opts ? { [preset.id]: opts } : undefined;
 }

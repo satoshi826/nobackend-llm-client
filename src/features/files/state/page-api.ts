@@ -76,7 +76,7 @@ export function pageApi(page: FileRecord, site: string, write: (path: string, te
         {},
         {
           provider: cfg,
-          preset: getPreset(cfg.preset),
+          preset: getPreset(cfg.id),
           auth: authFor(cfg.id),
           transport,
           model: modelId,

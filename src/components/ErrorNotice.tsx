@@ -18,7 +18,7 @@ const OTHER_MODEL = new Set<string>(['model-unavailable', 'context-length', 'con
 export function ErrorNotice({ error, providerId, retry, otherModel }: { error: MessageError; providerId?: string; retry?(): void; otherModel?(): void }) {
   const kind = error.kind;
   const cfg = providerId ? providerById(providerId) : undefined;
-  const creditUrl = kind === 'insufficient-balance' && cfg ? getPreset(cfg.preset).creditUrl : undefined;
+  const creditUrl = kind === 'insufficient-balance' && cfg ? getPreset(cfg.id).creditUrl : undefined;
   const actions = [
     kind === 'auth' && (
       <Button key="keys" class="text-xs" variant="outline" onClick={() => openSettings('connections')}>

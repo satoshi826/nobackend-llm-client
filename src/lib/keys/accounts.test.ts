@@ -45,7 +45,7 @@ describe('accounts', () => {
 
 describe('providerConfigOf', () => {
   it('builds a provider from its connection, and nothing for tool services', () => {
-    expect(providerConfigOf('anthropic')).toEqual({ id: 'anthropic', name: 'Anthropic', kind: 'anthropic', preset: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', headers: ENDPOINTS.anthropic.headers });
+    expect(providerConfigOf('anthropic')).toEqual({ id: 'anthropic', name: 'Anthropic', kind: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', headers: ENDPOINTS.anthropic.headers });
     expect(providerConfigOf('tavily')).toBeUndefined();
   });
 });

@@ -130,7 +130,7 @@ async function generateReply(convId: string, parentUserId: string) {
   try {
     const final = await runAssistant({
       provider: cfg,
-      preset: getPreset(cfg.preset),
+      preset: getPreset(cfg.id),
       auth: authFor(cfg.id),
       transport: settings.value.developerMode ? recordingTransport(transport, draft.id) : transport,
       model: conv.modelId,

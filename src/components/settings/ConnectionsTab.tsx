@@ -2,7 +2,7 @@
 import { useState } from 'preact/hooks';
 import { currentConv } from '../../state/conversations';
 import { vaultState } from '../../state/keys';
-import { connections, enabledProviders, hostOfProvider, providerById, providers, setProviderEnabled } from '../../state/models';
+import { connections, enabledProviders, hostOfProvider, providers, setProviderEnabled } from '../../state/models';
 import { providerSettingsOf, saveSettings, setProviderSetting, settings } from '../../state/settings';
 import { vaultIsolated, VAULT_ORIGIN } from '../../lib/vault/client';
 import { getPreset } from '../../lib/providers/registry';
@@ -17,7 +17,7 @@ import { t } from './messages';
 
 /** A connection's key, what it offers, and its own settings */
 function ConnectionDetails({ id }: { id: string }) {
-  const preset = getPreset(providerById(id)!.preset);
+  const preset = getPreset(id);
   const values = providerSettingsOf(id, preset.settings);
   const offers = [t('conn.chat'), ...connectionFeatures.filter((f) => f.offeredBy(id)).map((f) => textOf(f.label))];
   return (

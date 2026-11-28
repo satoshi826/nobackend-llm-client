@@ -8,6 +8,8 @@ import { currentId, currentPath, touchConversation } from '../state/conversation
 import { scheduleMessageUpdate } from '../state/generation';
 import { beginRun, endRun } from '../state/runs';
 import { saveSettings } from '../state/settings';
+import { openModelPicker } from '../state/ui';
+import type { ModelInfo } from '../lib/providers/types';
 import type { PerfCounts } from './counter';
 import { generateDataKey } from '../lib/crypto/data';
 import { currentDataKey, seal, setDataKey } from '../lib/db/sealed';
@@ -25,6 +27,8 @@ export interface SeedSpec {
   filesInConversations?: boolean;
   /** Images in the top folder */
   images?: number;
+  /** Models of the perf provider, as a long list from an aggregator (prices, context, capabilities, badges) */
+  models?: number;
 }
 
 export const LONG_CONVERSATION = 'perf-long';
@@ -62,6 +66,19 @@ async function tinyImage(i: number): Promise<Blob> {
   g.fillRect(0, 0, 64, 48);
   return canvas.convertToBlob({ type: 'image/png' });
 }
+
+/** A model as aggregators list them: varied names, prices, context lengths and capabilities */
+const model = (i: number): Omit<ModelInfo, 'source'> & { source: 'fetched' } => ({
+  providerId: PERF_PROVIDER,
+  id: `vendor-${i % 23}/model-${i}`,
+  name: `Vendor ${i % 23}: Model ${i} ${['Instruct', 'Chat', 'Coder', 'Vision', 'Mini'][i % 5]}`,
+  contextLength: [8192, 32768, 131072, 1_000_000][i % 4],
+  capabilities: { tools: i % 2 === 0, vision: i % 3 === 0, reasoning: i % 4 === 0, webSearch: i % 7 === 0, imageOutput: i % 11 === 0 },
+  pricing: { inputPerMTok: (i % 9) * 0.15, outputPerMTok: (i % 9) * 0.6, currency: 'USD' },
+  privacy: (['private', 'anonymized', 'unknown'] as const)[i % 3],
+  tags: i % 13 === 0 ? ['free'] : [],
+  source: 'fetched'
+});
 
 /** Generate data for measurements (in perf mode's own database). Reload afterwards so the app starts from it */
 async function seed(spec: SeedSpec) {
@@ -103,6 +120,7 @@ async function seed(spec: SeedSpec) {
     const name = c === null ? `folder-${i % folders}/notes-${i}.md` : `work-${c}/notes-${i}.md`;
     await createFile(newFile({ id: `perf-f${i}`, name, origin: { kind: 'made' }, text, by: 'model', conversationId: c === null ? undefined : `perf-c${c}` }), text);
   }
+  if (spec.models) await repo.replaceModels(PERF_PROVIDER, Array.from({ length: spec.models }, (_, i) => model(i)));
   for (let i = 0; i < (spec.images ?? 0); i++) await putImage({ id: `perf-i${i}`, mime: 'image/png', origin: { kind: 'upload' }, name: `image-${i}.png` }, await tinyImage(i), false);
 }
 
@@ -118,6 +136,11 @@ async function encrypt() {
 /** The full-text search of the sidebar; resolves with the number of conversations found */
 async function search(query: string): Promise<number> {
   return (await repo.searchMessages(query)).length;
+}
+
+/** The model picker, as the button by the input box opens it */
+function openModels() {
+  openModelPicker();
 }
 
 /** A message sent in conversation `id`: it moves to the top of the list, as after a real one */
@@ -187,5 +210,5 @@ function stop() {
 }
 
 export function exposePerfTools() {
-  (window as unknown as { __perf: unknown }).__perf = { seed, stream, touch, addFiles, encrypt, search, start, stop, LONG_CONVERSATION, PERF_PROVIDER };
+  (window as unknown as { __perf: unknown }).__perf = { seed, stream, touch, addFiles, encrypt, search, openModels, start, stop, LONG_CONVERSATION, PERF_PROVIDER };
 }

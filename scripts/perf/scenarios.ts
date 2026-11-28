@@ -25,9 +25,11 @@ async function prepare(probe: Probe, base: string, cpu: number, seed: object = S
 }
 
 const shown = (id: string) => `!!document.querySelector('[data-message-id="${id}"]')`;
-type Tools = { __perf: { touch(id: string): void; addFiles(n: number): Promise<void>; encrypt(): Promise<void>; seed(s: unknown): Promise<void>; search(q: string): Promise<number> } };
+type Tools = { __perf: { touch(id: string): void; openModels(): void; addFiles(n: number): Promise<void>; encrypt(): Promise<void>; seed(s: unknown): Promise<void>; search(q: string): Promise<number> } };
 const touch = (probe: Probe, id: string) => probe.page.evaluate((x) => (window as unknown as Tools).__perf.touch(x), id);
 const entries = () => `document.querySelectorAll('[data-entry]').length`;
+const MODELS = 600;
+const modelRows = () => `document.querySelectorAll('[role="dialog"] li').length`;
 
 export const SCENARIOS: Scenario[] = [
   {
@@ -136,6 +138,38 @@ export const SCENARIOS: Scenario[] = [
     }
   }
 ,
+  {
+    name: 'models',
+    label: `Model picker (${MODELS} models)`,
+    async run(probe, base, cpu) {
+      await prepare(probe, base, cpu, { ...SEED, conversations: 3, longMessages: 0, files: 0, images: 0, models: MODELS });
+      await probe.page.goto(`${base}/#/c/perf-c0`);
+      await probe.page.waitForFunction(shown('perf-c0-a'), undefined, { timeout: 60_000 });
+      const out: Record<string, Metrics> = {};
+      out.open = await probe.action(() => probe.page.evaluate(() => (window as unknown as Tools).__perf.openModels()), `${modelRows()} >= 20`);
+      // A search typed one key at a time, as a person types it
+      out.search = await probe.action(async () => {
+        await probe.page.locator('[role="dialog"] input').first().click();
+        await probe.page.keyboard.type('model 12');
+      }, `${modelRows()} > 0 && ${modelRows()} < ${MODELS}`);
+      await probe.page.locator('[role="dialog"] input').first().fill('');
+      // Down to the end of the list, a screenful at a time
+      out.scroll = await probe.action(async () => {
+        for (let i = 0; i < 200; i++) {
+          const done = await probe.page.evaluate(() => {
+            const area = document.querySelector('[role="dialog"] li')?.closest('.overflow-y-auto') as HTMLElement | null;
+            if (!area) return false;
+            area.scrollBy(0, area.clientHeight);
+            return area.scrollTop + area.clientHeight >= area.scrollHeight - 2;
+          });
+          if (done) break;
+          await probe.page.waitForTimeout(50);
+        }
+      }, 'true');
+      out.heap = { heap: await probe.heap() };
+      return out;
+    }
+  },
   {
     name: 'images',
     label: 'Scrolling through 1,500 images with a passphrase',

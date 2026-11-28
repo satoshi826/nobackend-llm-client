@@ -6,7 +6,7 @@ import { loadConversations } from './conversations';
 import { loadFeatureData } from './lifecycle';
 import { stopAll } from './runs';
 import { clearAllKeys } from './keys';
-import { decryptSecret, encryptSecret, type EncryptedBlob } from '../lib/crypto/passphrase';
+import { decryptSecret, encryptSecret, UnsupportedBlobError, type EncryptedBlob } from '../lib/crypto/passphrase';
 import { t } from './messages';
 
 export type { StorageBreakdown } from '../lib/db/storage-usage';
@@ -53,8 +53,9 @@ export async function importFromFile(file: File, password?: string) {
     if (!password) throw new BackupPasswordNeeded();
     try {
       json = JSON.parse(await decryptSecret(wrapped.enc as EncryptedBlob, password));
-    } catch {
-      throw new Error(t('data.badPassword'));
+    } catch (e) {
+      // A file this app cannot open says so; anything else is a wrong password or a damaged file
+      throw e instanceof UnsupportedBlobError ? e : new Error(t('data.badPassword'));
     }
   }
   const r = await importAll(json);

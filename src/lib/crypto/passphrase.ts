@@ -13,6 +13,9 @@ export interface EncryptedBlob {
 }
 
 export const DEFAULT_ITERATIONS = 600_000;
+/** Iteration counts accepted when opening: a file names its own, and a huge one would keep the tab busy for minutes */
+export const MIN_ITERATIONS = 100_000;
+export const MAX_ITERATIONS = 2_000_000;
 export const MIN_PASSPHRASE_LENGTH = 8;
 
 const enc = new TextEncoder();
@@ -52,8 +55,12 @@ export class WrongPassphraseError extends Error {
   }
 }
 
+/** The blob is not one this app can open (another format, or an iteration count out of range): no passphrase would help */
+export class UnsupportedBlobError extends Error {}
+
 export async function decryptSecret(blob: EncryptedBlob, passphrase: string): Promise<string> {
-  if (blob?.v !== 1 || blob.kdf !== 'PBKDF2-SHA256') throw new Error(t('passphrase.unsupported'));
+  if (blob?.v !== 1 || blob.kdf !== 'PBKDF2-SHA256') throw new UnsupportedBlobError(t('passphrase.unsupported'));
+  if (!Number.isSafeInteger(blob.iter) || blob.iter < MIN_ITERATIONS || blob.iter > MAX_ITERATIONS) throw new UnsupportedBlobError(t('passphrase.iterations'));
   const key = await deriveKey(passphrase, unb64(blob.salt), blob.iter);
   try {
     const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(blob.iv) }, key, unb64(blob.ct));

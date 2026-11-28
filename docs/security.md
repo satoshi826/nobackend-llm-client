@@ -180,10 +180,10 @@ A skill's instructions go to the model as they are: a skill is trusted text. Imp
 ### 3.10 Backups
 
 - **No keys.** Backups never contain API keys or the data key (settings whose name starts with `secret` are left out, `src/lib/db/export.ts`).
-- **Optional password.** A backup can be encrypted as a whole with its own password, using the same scheme as the vault (`src/state/data.ts`). This is on by default once a passphrase is set; otherwise backups are plain JSON.
+- **Optional password.** A backup can be encrypted as a whole with its own password, using the same scheme as the vault (`src/state/data.ts`). This is on by default once a passphrase is set; otherwise backups are plain JSON. Opening one accepts only 100,000 to 2,000,000 PBKDF2 iterations (the file names its own count; a huge one would keep the tab busy).
 - **Import checks every field.** It keeps only known fields of the expected types, drops system messages other than summaries, drops tool calls, drops skills that fail validation, imports no settings, and never overwrites an existing record.
 
-*Prevents:* a backup leaking keys; an imported file changing your settings (such as where requests go) or overwriting your data.
+*Prevents:* a backup leaking keys; an imported file changing your settings (such as where requests go), overwriting your data, or stalling the tab.
 
 ### 3.11 The Service Worker
 

@@ -18,4 +18,10 @@ describe('encrypted backups', () => {
     expect(r.conversations).toBe(1);
     expect((await db().conversations.get('c1'))?.title).toBe('secret chat');
   });
+
+  it('refuses a file whose iteration count is out of range, saying so instead of blaming the password', async () => {
+    const enc = await encryptSecret('{}', 'backup-pass');
+    const file = new File([JSON.stringify({ format: ENCRYPTED_BACKUP_FORMAT, version: 1, enc: { ...enc, iter: 1e12 } })], 'b.json');
+    await expect(importFromFile(file, 'backup-pass')).rejects.toThrow(/反復回数/);
+  });
 });

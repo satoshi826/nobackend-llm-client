@@ -1,4 +1,4 @@
-// Settings → 接続とキー: key vault placement, passphrase, and the connections the user added (on or off)
+// Settings → 接続とキー: key vault placement, auto-lock, the vault's passphrase and keys, and the connections the user added (on or off)
 import { useState } from 'preact/hooks';
 import { currentConv } from '../../state/conversations';
 import { vaultState } from '../../state/keys';
@@ -55,9 +55,9 @@ export function ConnectionsTab() {
         </div>
         {vaultIsolated ? t('conn.vaultIsolatedText') : t('conn.vaultSameOriginText')}
       </div>
-      <Group title={t('conn.passphrase')}>
-        <Row below={<VaultSecurityPanel />} />
-        {vaultState.value.hasPassphrase && (
+      {/* Before the vault's groups, whose last one deletes every key */}
+      {vaultState.value.hasPassphrase && (
+        <Group>
           <Row
             label={t('conn.autoLock')}
             hint={t('conn.autoLockHint')}
@@ -71,8 +71,9 @@ export function ConnectionsTab() {
               </Select>
             }
           />
-        )}
-      </Group>
+        </Group>
+      )}
+      <VaultSecurityPanel />
       <Group title={t('conn.providers')}>
         {list.map((p) => {
           const on = enabled.has(p.id);
@@ -98,6 +99,7 @@ export function ConnectionsTab() {
             below={
               <div class="space-y-3">
                 <AddConnection
+                  compact
                   onAdded={(id) => {
                     setAdding(false);
                     setOpen(id);

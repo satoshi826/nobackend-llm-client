@@ -54,6 +54,9 @@ const params = new URLSearchParams(location.search);
 /** Touch-first device (same test as the app's components/device.ts, which the vault cannot import) */
 const touchDevice = matchMedia('(pointer: coarse)').matches;
 const view = params.get('view') ?? 'transport';
+/** Shown inside a card of the app's settings: rows recessed instead of a card of their own, and no word on where keys are kept */
+const compact = params.get('compact') === '1';
+document.documentElement.classList.toggle('compact', compact);
 // The app passes its language; a vault opened on its own follows the browser
 {
   const l = params.get('lang');
@@ -195,62 +198,66 @@ function unlockForm(note: string, passkeys = false): HTMLElement {
   );
 }
 
+/**
+ * A group as in the app's settings (docs/design-system.md, "Settings are grouped lists"): its heading and a note, the
+ * rows in one card divided by lines, a footnote
+ */
+function group(o: { title?: string; note?: Child; footer?: Child }, ...rows: Child[]): HTMLElement {
+  return h(
+    'section',
+    { class: 'group' },
+    o.title && h('h3', {}, o.title),
+    o.note && h('p', { class: 'note' }, o.note),
+    h('div', { class: 'list' }, ...rows),
+    o.footer && h('p', { class: 'note' }, o.footer)
+  );
+}
+
+/** One row of a group: its name and a short hint on the left, its control on the right; below: a wide control or a form */
+function item(o: { label?: Child; hint?: Child; control?: Child; below?: Child }): HTMLElement {
+  return h(
+    'div',
+    { class: 'item' },
+    (o.label || o.hint || o.control) &&
+      h('div', { class: 'item-head' }, h('div', { class: 'item-text' }, o.label && h('div', {}, o.label), o.hint && h('div', { class: 'item-hint' }, o.hint)), o.control),
+    o.below && h('div', { class: 'item-below' }, o.below)
+  );
+}
+
 /** Registered passkeys and registering a new one (security view, while unlocked with a passphrase) */
-async function passkeySection(): Promise<Node[]> {
+async function passkeyGroup(): Promise<HTMLElement> {
   const [list, support] = await Promise.all([listPasskeys(), passkeySupport()]);
   const add = h('button', { type: 'button', class: 'btn outline' }, t('passkey.add'));
   add.addEventListener('click', () => void run(add, addPasskey));
-  return [
-    h('hr', {}),
-    h('div', { class: 'strong' }, t('passkey.title')),
-    h('p', { class: 'muted' }, t('passkey.desc')),
-    ...(list.length
-      ? list.map((p) =>
-          h(
-            'div',
-            { class: 'card row' },
-            h(
-              'div',
-              { class: 'fill' },
-              h('div', {}, t('passkey.item', { date: formatDateTime(p.createdAt) })),
-              p.lastUsedAt ? h('div', { class: 'muted small' }, t('passkey.lastUsed', { date: formatDateTime(p.lastUsedAt) })) : null
-            ),
-            confirmingPasskey === p.credentialId
-              ? null
-              : h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn danger', onclick: () => {
-                  confirmingPasskey = p.credentialId;
-                  void render();
-                } }, t('common.delete')))
-          )
-        )
-        .flatMap((row, i) => {
-          const p = list[i];
-          if (confirmingPasskey !== p.credentialId) return [row];
-          const yes = h('button', { type: 'button', class: 'btn danger' }, t('common.delete'));
-          yes.addEventListener('click', () => {
-            confirmingPasskey = null;
-            void run(yes, async () => {
-              await removePasskey(p.credentialId);
-              return { ok: true, message: t('passkey.removed') };
-            });
-          });
-          return [
-            row,
-            h(
-              'div',
-              { class: 'card stack', role: 'alert' },
-              h('p', {}, t('passkey.deleteWarning')),
-              h('div', { class: 'btns' }, yes, h('button', { type: 'button', class: 'btn outline', onclick: () => {
-                confirmingPasskey = null;
-                void render();
-              } }, t('common.cancel')))
-            )
-          ];
-        })
-      : [h('p', { class: 'muted small' }, t('passkey.listEmpty'))]),
-    support === false ? h('p', { class: 'muted small' }, t('passkey.unsupportedNote')) : h('div', { class: 'btns' }, add),
-    h('p', { class: 'muted small' }, t('passkey.changeNote'))
-  ];
+  const rows = list.map((p) => {
+    if (confirmingPasskey !== p.credentialId)
+      return item({
+        label: t('passkey.item', { date: formatDateTime(p.createdAt) }),
+        hint: p.lastUsedAt ? t('passkey.lastUsed', { date: formatDateTime(p.lastUsedAt) }) : null,
+        control: h('button', { type: 'button', class: 'btn danger', onclick: () => {
+          confirmingPasskey = p.credentialId;
+          void render();
+        } }, t('common.delete'))
+      });
+    const yes = h('button', { type: 'button', class: 'btn danger' }, t('common.delete'));
+    yes.addEventListener('click', () => {
+      confirmingPasskey = null;
+      void run(yes, async () => {
+        await removePasskey(p.credentialId);
+        return { ok: true, message: t('passkey.removed') };
+      });
+    });
+    const no = h('button', { type: 'button', class: 'btn outline', onclick: () => {
+      confirmingPasskey = null;
+      void render();
+    } }, t('common.cancel'));
+    return item({ label: t('passkey.item', { date: formatDateTime(p.createdAt) }), below: h('div', { class: 'inset stack', role: 'alert' }, h('p', {}, t('passkey.deleteWarning')), h('div', { class: 'btns' }, yes, no)) });
+  });
+  return group(
+    { title: t('passkey.title'), note: t('passkey.desc'), footer: t('passkey.changeNote') },
+    ...(rows.length ? rows : [item({ hint: t('passkey.listEmpty') })]),
+    support === false ? item({ hint: t('passkey.unsupportedNote') }) : item({ below: h('div', { class: 'btns' }, add) })
+  );
 }
 
 /** A translated sentence with one placeholder shown as <code> (one template per sentence, so word order can differ) */
@@ -273,7 +280,7 @@ async function showKey(id: string, pass?: string): Promise<string | null> {
   return null;
 }
 
-/** Passphrase asked again before showing a saved key */
+/** Passphrase asked again before showing a saved key (opens under the key's row) */
 function revealForm(id: string): HTMLElement {
   const pass = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': t('pass.label'), 'data-autofocus': true });
   const btn = h('button', { type: 'submit', class: 'btn primary' }, t('key.show'));
@@ -284,7 +291,7 @@ function revealForm(id: string): HTMLElement {
   } }, t('common.cancel'));
   return h(
     'form',
-    { class: 'stack', onsubmit: async (e: Event) => {
+    { class: 'inset stack', onsubmit: async (e: Event) => {
       e.preventDefault();
       error.textContent = '';
       btn.disabled = true;
@@ -302,7 +309,7 @@ function revealForm(id: string): HTMLElement {
   );
 }
 
-/** The second step of a destructive action: what will happen, then the action or cancel */
+/** The second step of a destructive action, under its row: what will happen, then the action or cancel */
 function confirmCard(warning: string, label: string, action: () => Promise<{ ok: boolean; message: string }>): HTMLElement {
   const yes = h('button', { type: 'button', class: 'btn danger' }, label);
   yes.addEventListener('click', () => {
@@ -311,7 +318,7 @@ function confirmCard(warning: string, label: string, action: () => Promise<{ ok:
   });
   return h(
     'div',
-    { class: 'card stack', role: 'alert' },
+    { class: 'inset stack', role: 'alert' },
     h('p', {}, warning),
     h('div', { class: 'btns' }, yes, h('button', { type: 'button', class: 'btn outline', onclick: () => {
       confirming = null;
@@ -320,32 +327,15 @@ function confirmCard(warning: string, label: string, action: () => Promise<{ ok:
   );
 }
 
-/** Dangerous action: a button that turns into its confirm card */
-function dangerAction(kind: 'clear-all', label: string, warning: string, action: () => Promise<{ ok: boolean; message: string }>): HTMLElement {
-  if (confirming === kind) return confirmCard(warning, label, action);
-  return h('button', { type: 'button', class: 'btn danger', onclick: () => {
-    confirming = kind;
-    void render();
-  } }, label);
-}
-
-/** Key of one provider (add, show, replace, delete). Unlock if the vault is locked */
+/** Key of one provider (show, delete, add or replace). Unlock if the vault is locked */
 async function renderKey(id: string): Promise<Node[]> {
   if (!PROVIDER_IDS.includes(id)) return [h('p', { class: 'muted' }, t('common.unsupportedProvider'))];
   const [st, vs, last4] = await Promise.all([status(id), vaultState(), lastFour(id)]);
   const name = providerLabel(id);
-  const nodes: Node[] = [];
-  if (params.get('compact') !== '1')
-    nodes.push(
-      isolated === false
-        ? h('p', { class: 'badge-line' }, t('key.sameOrigin'))
-        : h('p', { class: 'badge-line' }, ...withCode(t('key.isolated'), '{host}', location.host))
-    );
-  if (vs.locked) {
-    nodes.push(unlockForm(t('key.unlockAll'), (await listPasskeys()).length > 0));
-    return nodes;
-  }
-  if (accountById(id)?.keyOptional && !st.present) nodes.push(h('p', { class: 'muted' }, t('key.optional')));
+  // Where the key is kept; inside the app's settings this is told once for every key, above them
+  const where = compact ? null : isolated === false ? t('key.sameOrigin') : h('span', {}, ...withCode(t('key.isolated'), '{host}', location.host));
+  if (vs.locked) return [group({ note: where }, item({ below: unlockForm(t('key.unlockAll'), (await listPasskeys()).length > 0) }))];
+  const rows: Node[] = [];
   if (st.present) {
     const shown = reveal !== null && reveal !== 'asking' ? reveal.key : null;
     const toggle = shown
@@ -361,156 +351,168 @@ async function renderKey(id: string): Promise<Node[]> {
           const failed = await showKey(id);
           if (failed) show({ ok: false, text: failed });
         } }, t('key.show'));
-    nodes.push(
-      h(
-        'div',
-        { class: 'card row' },
-        h(
-          'div',
-          { class: 'fill' },
-          h('div', { class: 'strong' }, registeredLabel(last4, st.encrypted)),
-          shown && h('div', { class: 'mono secret' }, shown),
-          h('div', { class: 'muted' }, t('key.hosts', { hosts: formatList(allowedHosts(id)) }))
-        ),
-        h('div', { class: 'btns' }, toggle, h('button', { type: 'button', class: 'btn danger', onclick: () => {
-          confirming = 'delete-key';
-          void render();
-        } }, t('common.delete')))
-      )
+    const del = h('button', { type: 'button', class: 'btn danger', onclick: () => {
+      confirming = 'delete-key';
+      void render();
+    } }, t('common.delete'));
+    rows.push(
+      item({
+        label: h('span', { class: 'strong' }, registeredLabel(last4, st.encrypted)),
+        hint: t('key.hosts', { hosts: formatList(allowedHosts(id)) }),
+        control: h('div', { class: 'btns' }, toggle, confirming !== 'delete-key' && del),
+        below:
+          confirming === 'delete-key'
+            ? confirmCard(t('key.deleteWarning', { name }), t('common.delete'), async () => {
+                await remove(id);
+                return { ok: true, message: t('key.deleted') };
+              })
+            : reveal === 'asking'
+              ? revealForm(id)
+              : shown && h('div', { class: 'mono secret' }, shown)
+      })
     );
-    if (confirming === 'delete-key')
-      nodes.push(
-        confirmCard(t('key.deleteWarning', { name }), t('common.delete'), async () => {
-          await remove(id);
-          return { ok: true, message: t('key.deleted') };
-        })
-      );
-    if (reveal === 'asking') nodes.push(revealForm(id));
   }
   const key = h('input', { type: 'password', autocomplete: 'off', spellcheck: 'false', placeholder: t('key.placeholder', { name }), class: 'mono', 'aria-label': t('key.label', { name }) });
   const submit = h('button', { type: 'submit', class: 'btn primary' }, t('key.save'));
-  nodes.push(
-    h(
-      'form',
-      { class: 'stack', onsubmit: (e: Event) => {
-        e.preventDefault();
-        void run(submit, () => saveKey(id, key.value));
-      } },
-      h('label', {}, st.present ? t('key.replace') : t('key.label', { name }), key),
-      h('p', { class: 'muted' }, vs.hasPassphrase ? t('key.encryptNote') : isolated === false ? t('key.plainNoteBrowser') : t('key.plainNoteVault')),
-      submit
-    )
+  rows.push(
+    item({
+      label: st.present ? t('key.replace') : t('key.label', { name }),
+      hint: vs.hasPassphrase ? t('key.encryptNote') : isolated === false ? t('key.plainNoteBrowser') : t('key.plainNoteVault'),
+      below: h(
+        'form',
+        { class: 'inline', onsubmit: (e: Event) => {
+          e.preventDefault();
+          void run(submit, () => saveKey(id, key.value));
+        } },
+        key,
+        submit
+      )
+    })
   );
-  nodes.push(h('p', { class: 'muted small' }, t(isolated === false ? 'key.scope' : 'key.scopeIsolated', { hosts: formatList(allowedHosts(id)) })));
-  return nodes;
+  const optional = accountById(id)?.keyOptional && !st.present ? t('key.optional') : null;
+  return [
+    group(
+      { note: where || optional ? h('span', {}, where, where && optional && ' ', optional) : null, footer: t(isolated === false ? 'key.scope' : 'key.scopeIsolated', { hosts: formatList(allowedHosts(id)) }) },
+      ...rows
+    )
+  ];
 }
 
-/** Whole vault: passphrase (set, unlock, lock, change, remove) and deleting all keys */
+/** Whole vault: passphrase (set, unlock, lock, change, remove), passkeys, and deleting all keys (last) */
 async function renderSecurity(): Promise<Node[]> {
   const vs = await vaultState();
   const setup = params.get('setup') === '1';
-  const nodes: Node[] = [];
   if (setup && vs.hasPassphrase) return [h('p', { class: 'ok' }, t('security.setupDone'))];
+  const title = setup ? undefined : t('security.title');
+  const nodes: Node[] = [];
   if (!vs.hasPassphrase) {
     const f = passFields('new-password');
     const btn = h('button', { type: 'submit', class: 'btn primary' }, setup ? t('security.setupButton') : t('security.setButton'));
     nodes.push(
-      setup
-        ? h('p', { class: 'muted' }, t('security.setupHint', { min: MIN_PASSPHRASE_LENGTH }))
-        : h('p', { class: 'muted' }, t('security.unencrypted')),
-      h(
-        'form',
-        { class: 'stack', onsubmit: (e: Event) => {
-          e.preventDefault();
-          const err = f.check();
-          if (err) return show({ ok: false, text: err });
-          void run(btn, () => setPassphrase(f.p1.value));
-        } },
-        f.box,
-        btn
+      group(
+        { title, note: setup ? t('security.setupHint', { min: MIN_PASSPHRASE_LENGTH }) : t('security.unencrypted') },
+        item({
+          below: h(
+            'form',
+            { class: 'stack', onsubmit: (e: Event) => {
+              e.preventDefault();
+              const err = f.check();
+              if (err) return show({ ok: false, text: err });
+              void run(btn, () => setPassphrase(f.p1.value));
+            } },
+            f.box,
+            h('div', { class: 'btns' }, btn)
+          )
+        })
       )
     );
   } else if (vs.locked) {
-    nodes.push(unlockForm(t('security.unlockLabel'), (await listPasskeys()).length > 0), h('p', { class: 'muted' }, t('security.forgotten')));
+    nodes.push(group({ title, footer: t('security.forgotten') }, item({ below: unlockForm(t('security.unlockLabel'), (await listPasskeys()).length > 0) })));
   } else {
-    nodes.push(
-      h(
-        'div',
-        { class: 'card row' },
-        h('div', {}, h('div', { class: 'strong' }, t('security.unlocked')), h('div', { class: 'muted' }, t('security.lockHint'))),
-        h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn outline', onclick: () => lock() }, t('security.lock')))
-      )
-    );
     const cancel = h('button', { type: 'button', class: 'btn outline', onclick: () => {
       passMode = 'idle';
       void render();
     } }, t('common.cancel'));
     const current = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': t('pass.current') });
+    let change: HTMLElement;
     if (passMode === 'change') {
       const f = passFields('new-password');
       const btn = h('button', { type: 'submit', class: 'btn primary' }, t('security.change'));
-      nodes.push(
-        h(
-          'form',
-          { class: 'stack', onsubmit: (e: Event) => {
-            e.preventDefault();
-            const err = f.check();
-            if (err) return show({ ok: false, text: err });
-            void run(btn, async () => {
-              const r = await setPassphrase(f.p1.value, current.value);
-              if (r.ok) passMode = 'idle';
-              return r;
-            });
-          } },
-          h('label', {}, t('pass.current'), current),
-          h('div', { class: 'strong' }, t('pass.new')),
-          f.box,
-          h('div', { class: 'btns' }, btn, cancel)
-        )
+      change = h(
+        'form',
+        { class: 'stack', onsubmit: (e: Event) => {
+          e.preventDefault();
+          const err = f.check();
+          if (err) return show({ ok: false, text: err });
+          void run(btn, async () => {
+            const r = await setPassphrase(f.p1.value, current.value);
+            if (r.ok) passMode = 'idle';
+            return r;
+          });
+        } },
+        h('label', {}, t('pass.current'), current),
+        h('div', { class: 'strong' }, t('pass.new')),
+        f.box,
+        h('div', { class: 'btns' }, btn, cancel)
       );
     } else if (passMode === 'remove') {
       const btn = h('button', { type: 'submit', class: 'btn danger' }, t('security.remove'));
-      nodes.push(
-        h(
-          'form',
-          { class: 'stack card', onsubmit: (e: Event) => {
-            e.preventDefault();
-            void run(btn, async () => {
-              const r = await removePassphrase(current.value);
-              if (r.ok) passMode = 'idle';
-              return r;
-            });
-          } },
-          h('p', {}, t('security.removeWarning')),
-          h('label', {}, t('pass.current'), current),
-          h('div', { class: 'btns' }, btn, cancel)
-        )
+      change = h(
+        'form',
+        { class: 'stack', onsubmit: (e: Event) => {
+          e.preventDefault();
+          void run(btn, async () => {
+            const r = await removePassphrase(current.value);
+            if (r.ok) passMode = 'idle';
+            return r;
+          });
+        } },
+        h('p', {}, t('security.removeWarning')),
+        h('label', {}, t('pass.current'), current),
+        h('div', { class: 'btns' }, btn, cancel)
       );
     } else {
-      nodes.push(
-        h(
-          'div',
-          { class: 'btns' },
-          h('button', { type: 'button', class: 'btn outline', onclick: () => {
-            passMode = 'change';
-            void render();
-          } }, t('security.changeOpen')),
-          h('button', { type: 'button', class: 'btn outline', onclick: () => {
-            passMode = 'remove';
-            void render();
-          } }, t('security.remove'))
-        )
+      change = h(
+        'div',
+        { class: 'btns' },
+        h('button', { type: 'button', class: 'btn outline', onclick: () => {
+          passMode = 'change';
+          void render();
+        } }, t('security.changeOpen')),
+        h('button', { type: 'button', class: 'btn outline', onclick: () => {
+          passMode = 'remove';
+          void render();
+        } }, t('security.remove'))
       );
     }
+    nodes.push(
+      group(
+        { title },
+        item({ label: t('security.unlocked'), hint: t('security.lockHint'), control: h('button', { type: 'button', class: 'btn outline', onclick: () => lock() }, t('security.lock')) }),
+        item({ below: change })
+      )
+    );
+    if (passMode === 'idle') nodes.push(await passkeyGroup());
   }
   if (setup) return nodes;
-  if (vs.hasPassphrase && !vs.locked && passMode === 'idle') nodes.push(...(await passkeySection()));
+  const warning = vs.hasPassphrase ? t('security.clearAllWarningPass') : t('security.clearAllWarning');
+  const clear = async () => {
+    await clearAll();
+    return { ok: true, message: t('security.clearedAll') };
+  };
   nodes.push(
-    h('hr', {}),
-    dangerAction('clear-all', t('security.clearAll'), vs.hasPassphrase ? t('security.clearAllWarningPass') : t('security.clearAllWarning'), async () => {
-      await clearAll();
-      return { ok: true, message: t('security.clearedAll') };
-    })
+    group(
+      { title: t('security.clearAll'), note: warning },
+      item({
+        below:
+          confirming === 'clear-all'
+            ? confirmCard(warning, t('security.clearAll'), clear)
+            : h('div', { class: 'btns' }, h('button', { type: 'button', class: 'btn danger', onclick: () => {
+                confirming = 'clear-all';
+                void render();
+              } }, t('security.clearAll')))
+      })
+    )
   );
   return nodes;
 }

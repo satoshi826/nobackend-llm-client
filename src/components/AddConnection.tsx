@@ -4,12 +4,13 @@ import { useEffect, useState } from 'preact/hooks';
 import { getPreset } from '../lib/providers/registry';
 import { accountById } from '../lib/keys/accounts';
 import { keyStatus } from '../state/keys';
-import { connections, hostOfProvider, providerById, providers, setProviderEnabled } from '../state/models';
+import { connections, hostOfProvider, providers, setProviderEnabled } from '../state/models';
 import { KeyPanel } from './KeyPanel';
 import { Button, Icon } from './ui';
 import { t } from './messages';
 
-export function AddConnection({ onAdded, heading = true }: { onAdded(id: string): void; heading?: boolean }) {
+/** compact: inside a card of the settings (the key's rows are recessed, and where keys are kept is told there already) */
+export function AddConnection({ onAdded, heading = true, compact }: { onAdded(id: string): void; heading?: boolean; compact?: boolean }) {
   const [chosen, setChosen] = useState<string | null>(null);
   const keyless = chosen ? !!accountById(chosen)?.keyOptional : false;
   const saved = chosen !== null && (keyless || keyStatus(chosen).present);
@@ -19,14 +20,10 @@ export function AddConnection({ onAdded, heading = true }: { onAdded(id: string)
   }, [chosen, saved]);
 
   if (chosen && !saved) {
-    const name = providerById(chosen)?.name ?? chosen;
     return (
       <div class="space-y-3">
-        <div>
-          <h3 class="text-sm font-semibold">{t('conn.keyHeading', { name })}</h3>
-          <p class="mt-0.5 text-xs text-muted">{t('conn.keyNote')}</p>
-        </div>
-        <KeyPanel accountId={chosen} />
+        <p class="text-xs text-muted">{t('conn.keyNote')}</p>
+        <KeyPanel accountId={chosen} compact={compact} />
         <Button variant="outline" class="text-xs" onClick={() => setChosen(null)}>
           <Icon name="chevron-left" class="size-3.5" />
           {t('conn.back')}

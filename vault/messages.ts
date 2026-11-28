@@ -94,6 +94,7 @@ export const t = defineMessages(
     'security.clearAllWarning': '保存されているすべての API キーを削除します。元に戻せません。',
     'security.clearAllWarningPass': '保存されているすべての API キーとパスフレーズを削除します。会話の暗号化も解除されます（会話は残ります）。元に戻せません。',
     'security.clearedAll': 'すべてのキーを削除しました。',
+    'security.title': 'パスフレーズ（キーと会話の保護）',
 
     // ---- Store results and errors ----
     'store.enterKey': 'キーを入力してください。',
@@ -199,6 +200,7 @@ export const t = defineMessages(
       'security.clearAllWarning': 'All saved API keys will be deleted. This cannot be undone.',
       'security.clearAllWarningPass': 'All saved API keys and the passphrase will be deleted. Conversations will no longer be encrypted (they are kept). This cannot be undone.',
       'security.clearedAll': 'All keys deleted.',
+      'security.title': 'Passphrase (protects keys and conversations)',
 
       'store.enterKey': 'Enter a key.',
       'store.unlockFirst': 'Unlock with your passphrase first.',
@@ -302,6 +304,7 @@ export const t = defineMessages(
       'security.clearAllWarning': '将删除所有已保存的 API 密钥。此操作无法撤销。',
       'security.clearAllWarningPass': '将删除所有已保存的 API 密钥和口令。对话的加密也会被解除（对话会保留）。此操作无法撤销。',
       'security.clearedAll': '已删除所有密钥。',
+      'security.title': '口令（保护密钥和对话）',
 
       'store.enterKey': '请输入密钥。',
       'store.unlockFirst': '请先用口令解锁。',

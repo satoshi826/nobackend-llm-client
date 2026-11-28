@@ -42,7 +42,6 @@ export const t = defineMessages(
     'keys.frameUnlock': '解錠',
     'keys.guideTitle': '安全に使うために',
     'conn.chooseHeading': '追加する接続先',
-    'conn.keyHeading': '{name} の API キー',
     'conn.keyNote': 'キーを保存すると接続先に加わります。',
     'conn.back': 'ほかの接続先を選ぶ',
 
@@ -297,7 +296,6 @@ export const t = defineMessages(
       'keys.frameUnlock': 'Unlock',
       'keys.guideTitle': 'Using it safely',
       'conn.chooseHeading': 'Provider to add',
-      'conn.keyHeading': '{name} API key',
       'conn.keyNote': 'Saving the key adds the provider.',
       'conn.back': 'Choose another provider',
 
@@ -544,7 +542,6 @@ export const t = defineMessages(
       'keys.frameUnlock': '解锁',
       'keys.guideTitle': '安全使用须知',
       'conn.chooseHeading': '要添加的服务商',
-      'conn.keyHeading': '{name} 的 API 密钥',
       'conn.keyNote': '保存密钥后即添加该服务商。',
       'conn.back': '选择其他服务商',
 

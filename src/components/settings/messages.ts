@@ -92,7 +92,6 @@ export const t = defineMessages(
     'conn.vaultIsolatedText': 'API キーはアプリ本体とは別のオリジンに保管されます。アプリ本体で問題が起きても、キーそのものは読み出せません。',
     'conn.vaultSameOriginText':
       'API キーはこのブラウザ内のキー保管ページに保存され、アプリ本体の画面には渡りません。キー金庫を別オリジンに置くとさらに安全です（README の「キー金庫」）。',
-    'conn.passphrase': 'パスフレーズ（キーと会話の保護）',
     'conn.autoLock': '操作がないときに自動でロック',
     'conn.autoLockHint': '回答の生成中はロックしません',
     'conn.autoLockMinutes': '{n} 分',
@@ -263,7 +262,6 @@ export const t = defineMessages(
       'conn.vaultIsolatedText': 'Your API keys are stored on a different origin from the app. Even if something goes wrong in the app, the keys themselves can’t be read.',
       'conn.vaultSameOriginText':
         'Your API keys are stored in a key storage page in this browser and never reach the app’s screens. Putting the key vault on a separate origin is even safer (see “Key vault” in the README).',
-      'conn.passphrase': 'Passphrase (protects keys and conversations)',
       'conn.autoLock': 'Lock automatically when idle',
       'conn.autoLockHint': 'Never locks while an answer is being generated',
       'conn.autoLockMinutes': '{n} min',
@@ -428,7 +426,6 @@ export const t = defineMessages(
       'conn.vaultSameOrigin': '密钥保险库：与本网站同源',
       'conn.vaultIsolatedText': 'API 密钥保存在与应用本体不同的源中。即使应用本体出现问题，也无法读取密钥本身。',
       'conn.vaultSameOriginText': 'API 密钥保存在此浏览器内的密钥存储页面中，不会传给应用本体的界面。将密钥保险库放在独立源上会更安全（参见 README 中的“密钥保险库”）。',
-      'conn.passphrase': '口令（保护密钥和对话）',
       'conn.autoLock': '无操作时自动锁定',
       'conn.autoLockHint': '正在生成回答时不会锁定',
       'conn.autoLockMinutes': '{n}分钟',

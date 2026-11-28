@@ -18,7 +18,7 @@ function VaultFrame({ params, title }: { params: Record<string, string>; title: 
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       if (e.origin !== VAULT_ORIGIN || e.source !== ref.current?.contentWindow) return;
-      if (e.data?.type === 'vault-resize' && typeof e.data.height === 'number') setHeight(Math.min(1200, Math.max(100, e.data.height + 4)));
+      if (e.data?.type === 'vault-resize' && typeof e.data.height === 'number') setHeight(Math.min(1200, Math.max(100, e.data.height)));
       // When Esc is pressed inside the frame, close the open settings screen
       if (e.data?.type === 'vault-escape') modal.value = null;
     };
@@ -29,16 +29,20 @@ function VaultFrame({ params, title }: { params: Record<string, string>; title: 
     };
   }, []);
 
+  // The vault page keeps 4 px around its content for focus rings. That margin spills over (and collapses with the
+  // spacing around the frame), so the page's cards line up with the app's
   return (
-    <iframe
-      ref={ref}
-      src={vaultViewUrl({ ...params, theme: dark ? 'dark' : 'light' })}
-      title={title}
-      referrerpolicy="no-referrer"
-      allow="publickey-credentials-get; publickey-credentials-create"
-      class="block w-full rounded-lg border-0"
-      style={{ height: `${height}px` }}
-    />
+    <div>
+      <iframe
+        ref={ref}
+        src={vaultViewUrl({ ...params, theme: dark ? 'dark' : 'light' })}
+        title={title}
+        referrerpolicy="no-referrer"
+        allow="publickey-credentials-get; publickey-credentials-create"
+        class="-m-1 block w-[calc(100%+0.5rem)] max-w-none border-0"
+        style={{ height: `${height}px` }}
+      />
+    </div>
   );
 }
 

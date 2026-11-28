@@ -106,8 +106,8 @@ describe('repo + export', () => {
     const base = { title: 't', createdAt: 1, updatedAt: 1, currentLeafId: null, providerId: 'venice', modelId: 'm', systemPrompt: '', webSearch: 'off' as const, pinned: 0 as const, tags: [] };
     await putConversation({ id: 'perm', ...base });
     await putConversation({ id: 'temp', ...base, temporary: true });
-    await putMessage({ ...rec('m1', null, 'user', 'x', 1), conversationId: 'temp' }, true);
-    await putMessage({ ...rec('m2', null, 'user', 'y', 1), conversationId: 'perm' }, false);
+    await putMessage({ ...rec('m1', null, 'user', 'x', 1), conversationId: 'temp' });
+    await putMessage({ ...rec('m2', null, 'user', 'y', 1), conversationId: 'perm' });
     expect((await listConversations()).map((c) => c.id).sort()).toEqual(['perm', 'temp']);
     expect((await listMessages('temp')).length).toBe(1);
     const ex = await exportAll();
@@ -161,7 +161,7 @@ describe('full-text search', () => {
   it('returns conversations whose text matches, with surrounding context', async () => {
     const base = { title: '無関係なタイトル', createdAt: 1, updatedAt: 1, currentLeafId: null, providerId: 'venice', modelId: 'm', systemPrompt: '', webSearch: 'off' as const, pinned: 0 as const, tags: [] };
     await putConversation({ id: 'search-c', ...base });
-    await putMessage({ ...rec('sm1', null, 'user', 'Rust の所有権について教えてください', 5), conversationId: 'search-c' }, false);
+    await putMessage({ ...rec('sm1', null, 'user', 'Rust の所有権について教えてください', 5), conversationId: 'search-c' });
     const hits = await searchMessages('所有権');
     const h = hits.find((x) => x.conversationId === 'search-c');
     expect(h?.snippet).toContain('所有権');

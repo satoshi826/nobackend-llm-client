@@ -9,6 +9,11 @@ import { dataTables } from './data-tables';
 
 const memConversations = new Map<string, Conversation>();
 const memMessages = new Map<string, MessageRecord>();
+/**
+ * Every temporary conversation of this session, also after it is deleted: what is saved for it stays in memory, so
+ * a message saved after its conversation went (a run ending late) never reaches the database
+ */
+const temporaryIds = new Set<string>();
 
 export function newId(): string {
   return crypto.randomUUID();
@@ -29,6 +34,7 @@ export async function getConversation(id: string): Promise<Conversation | undefi
 
 export async function putConversation(c: Conversation): Promise<void> {
   if (c.temporary) {
+    temporaryIds.add(c.id);
     memConversations.set(c.id, c);
     return;
   }
@@ -67,8 +73,12 @@ export async function listMessages(conversationId: string): Promise<MessageRecor
   return Promise.all((await db().messages.where('conversationId').equals(conversationId).toArray()).map((m) => unseal(m)));
 }
 
-export async function putMessage(m: MessageRecord, temporary: boolean): Promise<void> {
-  if (temporary) {
+/**
+ * Save a message; a temporary conversation's (its conversation saved before it) stays in memory.
+ * The second argument is not read (the conversation decides); it goes once the image and video features stop passing it
+ */
+export async function putMessage(m: MessageRecord, _temporary?: boolean): Promise<void> {
+  if (temporaryIds.has(m.conversationId)) {
     memMessages.set(m.id, structuredClone(m));
     return;
   }

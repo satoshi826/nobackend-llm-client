@@ -42,8 +42,8 @@ describe('conversations', () => {
   it('deletes a conversation together with its messages', async () => {
     await repo.putConversation(conv('a'));
     await repo.putConversation(conv('b'));
-    await repo.putMessage(msg('a1', 'a', 'x'), false);
-    await repo.putMessage(msg('b1', 'b', 'y'), false);
+    await repo.putMessage(msg('a1', 'a', 'x'));
+    await repo.putMessage(msg('b1', 'b', 'y'));
     await repo.deleteConversation('a');
     expect(await repo.getConversation('a')).toBeUndefined();
     expect(await repo.listMessages('a')).toEqual([]);
@@ -53,9 +53,16 @@ describe('conversations', () => {
   it('keeps a temporary chat’s messages as copies, so later changes to the draft do not leak in', async () => {
     await repo.putConversation(conv('t', { temporary: true }));
     const m = msg('t1', 't', 'first');
-    await repo.putMessage(m, true);
+    await repo.putMessage(m);
     (m.parts[0] as { text: string }).text = 'changed';
     expect((await repo.listMessages('t'))[0].parts).toEqual([{ type: 'text', text: 'first' }]);
+    expect(await db().messages.count()).toBe(0);
+  });
+
+  it('keeps a message of a temporary chat out of the database also when it is saved after the chat was deleted', async () => {
+    await repo.putConversation(conv('t', { temporary: true }));
+    await repo.deleteConversation('t');
+    await repo.putMessage(msg('t1', 't', 'late'));
     expect(await db().messages.count()).toBe(0);
   });
 });
@@ -64,9 +71,9 @@ describe('searchMessages', () => {
   it('finds text case-insensitively, one hit per conversation, newest message first', async () => {
     await repo.putConversation(conv('a'));
     await repo.putConversation(conv('b'));
-    await repo.putMessage(msg('a1', 'a', 'Hello World', 1), false);
-    await repo.putMessage(msg('a2', 'a', 'hello again', 2), false);
-    await repo.putMessage(msg('b1', 'b', 'nothing here', 3), false);
+    await repo.putMessage(msg('a1', 'a', 'Hello World', 1));
+    await repo.putMessage(msg('a2', 'a', 'hello again', 2));
+    await repo.putMessage(msg('b1', 'b', 'nothing here', 3));
     const hits = await repo.searchMessages('  HELLO ');
     expect(hits).toEqual([{ conversationId: 'a', messageId: 'a2', snippet: 'hello again' }]);
     expect(await repo.searchMessages('   ')).toEqual([]);
@@ -74,7 +81,7 @@ describe('searchMessages', () => {
 
   it('cuts a snippet around the match and strips Markdown syntax', async () => {
     await repo.putConversation(conv('a'));
-    await repo.putMessage(msg('a1', 'a', `${'x'.repeat(50)} | **needle** | ---|---\n# after`), false);
+    await repo.putMessage(msg('a1', 'a', `${'x'.repeat(50)} | **needle** | ---|---\n# after`));
     const [hit] = await repo.searchMessages('needle');
     expect(hit.snippet.startsWith('…')).toBe(true);
     expect(hit.snippet).toContain('needle');
@@ -83,10 +90,10 @@ describe('searchMessages', () => {
 
   it('searches temporary chats too, and stops at the limit', async () => {
     await repo.putConversation(conv('t', { temporary: true }));
-    await repo.putMessage(msg('t1', 't', 'find me'), true);
+    await repo.putMessage(msg('t1', 't', 'find me'));
     for (const id of ['a', 'b', 'c']) {
       await repo.putConversation(conv(id));
-      await repo.putMessage(msg(`${id}1`, id, 'find me'), false);
+      await repo.putMessage(msg(`${id}1`, id, 'find me'));
     }
     expect((await repo.searchMessages('find')).map((h) => h.conversationId).sort()).toEqual(['a', 'b', 'c', 't']);
     expect(await repo.searchMessages('find', undefined, 2)).toHaveLength(2);
@@ -97,14 +104,14 @@ describe('searchMessages', () => {
     try {
       await repo.putConversation(conv('a'));
       await repo.putConversation(conv('b'));
-      await repo.putMessage(msg('a1', 'a', 'Secret one', 1), false);
-      await repo.putMessage(msg('b1', 'b', 'secret two', 2), false);
+      await repo.putMessage(msg('a1', 'a', 'Secret one', 1));
+      await repo.putMessage(msg('b1', 'b', 'secret two', 2));
       // As after a reload: what is stored is read and decrypted by the first search
       repo.clearSearchCache();
       const [first, second] = await Promise.all([repo.searchMessages('SECRET'), repo.searchMessages('secret')]);
       expect(first.map((h) => h.messageId)).toEqual(['b1', 'a1']);
       expect(second).toEqual(first);
-      await repo.putMessage(msg('a2', 'a', 'a newer secret', 3), false);
+      await repo.putMessage(msg('a2', 'a', 'a newer secret', 3));
       expect((await repo.searchMessages('secret')).map((h) => h.messageId)).toEqual(['a2', 'b1']);
       await repo.deleteConversation('a');
       expect((await repo.searchMessages('secret')).map((h) => h.messageId)).toEqual(['b1']);
@@ -132,7 +139,7 @@ describe('settings and counts', () => {
     await repo.setSetting('k', { a: 1 });
     expect(await repo.getSetting('k', null)).toEqual({ a: 1 });
     await repo.putConversation(conv('a'));
-    await repo.putMessage(msg('a1', 'a', 'x'), false);
+    await repo.putMessage(msg('a1', 'a', 'x'));
     const counts = await repo.tableCounts();
     expect(counts).toMatchObject({ conversations: 1, messages: 1, files: 0, usage: 0 });
   });

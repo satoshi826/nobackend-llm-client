@@ -114,7 +114,7 @@ export function startNewChat(temporary = false) {
   setHash(null);
 }
 
-/** Messages newer than the DB, such as in-progress drafts (registered by generation) */
+/** Messages being written (status 'streaming'), newer than their saved copy: reopening their conversation shows these */
 export const liveMessages = new Map<string, MessageRecord>();
 
 /**
@@ -124,8 +124,11 @@ export const liveMessages = new Map<string, MessageRecord>();
 const writing = new Map<string, Signal<MessageRecord>>();
 export const writingOf = (id: string): Signal<MessageRecord> | undefined => writing.get(id);
 
-/** A message is no longer written (it ended, also while another conversation was open) */
-export const endWriting = (id: string) => writing.delete(id);
+/** A message is no longer written (it ended, also while another conversation was open, or its run failed) */
+export function endWriting(id: string) {
+  liveMessages.delete(id);
+  writing.delete(id);
+}
 
 /**
  * Take updates of messages: the ones still being written go to their own signal; the others (one that started or
@@ -144,6 +147,46 @@ export function takeWriting(updates: Map<string, MessageRecord>): Map<string, Me
     else writing.delete(id);
   }
   return settled;
+}
+
+/** Changes to messages being written, shown once per frame */
+const pending = new Map<string, MessageRecord>();
+let pendingFrame = 0;
+function flushPending() {
+  pendingFrame = 0;
+  if (!pending.size) return;
+  const ups = new Map(pending);
+  pending.clear();
+  batch(() => {
+    const settled = takeWriting(ups);
+    if (settled.size) messages.value = messages.value.map((m) => settled.get(m.id) ?? m);
+  });
+}
+
+/**
+ * Show a message without saving it: added to the open conversation, or in place of its older copy there. A message
+ * being written is kept in memory until it ends, and its changes are shown once per frame; any other change at once
+ */
+export function showMessage(m: MessageRecord) {
+  // The runner keeps changing the message it writes
+  const copy = { ...m, parts: m.parts.map((p) => ({ ...p })) };
+  if (copy.status === 'streaming') liveMessages.set(copy.id, copy);
+  else endWriting(copy.id);
+  if (copy.conversationId !== currentId.value) return;
+  if (!messagesById.value.has(copy.id)) messages.value = [...messages.value, copy];
+  else if (copy.status === 'streaming') {
+    pending.set(copy.id, copy);
+    if (!pendingFrame) pendingFrame = requestAnimationFrame(flushPending);
+  } else {
+    pending.delete(copy.id);
+    messages.value = messages.value.map((x) => (x.id === copy.id ? copy : x));
+  }
+}
+
+/** Save a message and show it (a temporary conversation's stays in memory: the storage decides from its conversation) */
+export async function saveMessage(m: MessageRecord) {
+  await repo.putMessage(m);
+  showMessage(m);
 }
 
 export async function openConversation(id: string) {
@@ -214,8 +257,9 @@ export async function removeConversation(id: string, { beforeRemove, withItems =
   conversations.value = conversations.value.filter((c) => c.id !== id);
 }
 
-export async function putMessage(m: MessageRecord, conv: Conversation) {
-  await repo.putMessage(m, !!conv.temporary);
+/** Save a message without showing it. Only for the image and video features until they move to saveMessage */
+export async function putMessage(m: MessageRecord, _conv?: Conversation) {
+  await repo.putMessage(m);
 }
 
 // ---- URL（#/c/<id>）----

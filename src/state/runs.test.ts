@@ -1,24 +1,24 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { abortConversation, beginRun, controllers, endRun, isStreaming, stopAll, stopGeneration, streamingConv } from './runs';
+import { beginRun, endRun, isStreaming, runs, stopAll, stopGeneration } from './runs';
 import { currentId } from './conversations';
 
 afterEach(() => {
-  for (const id of controllers.keys()) endRun(id);
+  for (const id of runs.value.keys()) endRun(id);
   currentId.value = null;
 });
 
 describe('runs per conversation', () => {
-  it('marks a conversation as streaming while a run is going, and the stop button follows the open one', () => {
+  it('marks a conversation as running while a run is going, and the stop button follows the open one', () => {
     beginRun('a');
     beginRun('b');
-    expect([...streamingConv.value].sort()).toEqual(['a', 'b']);
+    expect([...runs.value.keys()].sort()).toEqual(['a', 'b']);
     currentId.value = 'a';
     expect(isStreaming.value).toBe(true);
     endRun('a');
     expect(isStreaming.value).toBe(false);
-    expect(streamingConv.value.has('b')).toBe(true);
-    expect(controllers.has('a')).toBe(false);
+    expect(runs.value.has('b')).toBe(true);
+    expect(runs.value.has('a')).toBe(false);
   });
 
   it('stops only the open conversation, a named one, or all of them', () => {
@@ -28,7 +28,7 @@ describe('runs per conversation', () => {
     currentId.value = 'a';
     stopGeneration();
     expect([a.signal.aborted, b.signal.aborted, c.signal.aborted]).toEqual([true, false, false]);
-    abortConversation('b');
+    stopGeneration('b');
     expect(b.signal.aborted).toBe(true);
     expect(c.signal.aborted).toBe(false);
     stopAll();

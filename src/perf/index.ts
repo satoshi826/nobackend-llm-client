@@ -4,8 +4,7 @@ import * as repo from '../lib/db/repo';
 import { createFile, newFile } from '../lib/db/files';
 import { putImage } from '../lib/db/images';
 import { db, type Conversation, type MessageRecord } from '../lib/db/schema';
-import { currentId, currentPath, touchConversation } from '../state/conversations';
-import { scheduleMessageUpdate } from '../state/generation';
+import { currentId, currentPath, showMessage, touchConversation } from '../state/conversations';
 import { beginRun, endRun } from '../state/runs';
 import { saveSettings } from '../state/settings';
 import { openModelPicker, openSettings } from '../state/ui';
@@ -116,7 +115,7 @@ async function seed(spec: SeedSpec) {
     for (let i = 0; i < n; i++) {
       const id = `${LONG_CONVERSATION}-${i}`;
       const user = i % 2 === 0;
-      await repo.putMessage(message(id, LONG_CONVERSATION, parent, user ? 'user' : 'assistant', user ? `Question ${i}: how does part ${i} work?` : answer(i), now - (n - i) * 60_000), false);
+      await repo.putMessage(message(id, LONG_CONVERSATION, parent, user ? 'user' : 'assistant', user ? `Question ${i}: how does part ${i} work?` : answer(i), now - (n - i) * 60_000));
       parent = id;
     }
     await repo.putConversation(conversation(LONG_CONVERSATION, 'Long conversation', now, parent));
@@ -218,11 +217,11 @@ async function stream(o: { tokens: number; perFrame?: number }) {
     for (let i = 0; i < o.tokens; i++) {
       text += words[i % words.length];
       if ((i + 1) % per === 0) {
-        scheduleMessageUpdate({ ...last, status: 'streaming', parts: [{ type: 'text', text, state: 'streaming' }] });
+        showMessage({ ...last, status: 'streaming', parts: [{ type: 'text', text, state: 'streaming' }] });
         await nextFrame();
       }
     }
-    scheduleMessageUpdate({ ...last, status: 'done', parts: [{ type: 'text', text, state: 'done' }] });
+    showMessage({ ...last, status: 'done', parts: [{ type: 'text', text, state: 'done' }] });
     await nextFrame();
   } finally {
     endRun(conv);

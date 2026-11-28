@@ -10,10 +10,10 @@ import { vaultTransport as transport } from '../lib/vault/client';
 import { settings } from './settings';
 import { authFor } from './keys';
 import { accountInUse, modelOf, providerById } from './models';
-import { currentConv, currentId, currentPath, messages, putMessage, updateConversation } from './conversations';
+import { currentConv, currentId, currentPath, saveMessage, updateConversation } from './conversations';
 import { showToast } from './ui';
 import { contributedSystemNotes } from './tool-registry';
-import { controllers, setStreaming, streamingConv } from './runs';
+import { beginRun, endRun, runs } from './runs';
 import { parseModelRef, providerOptionsFor, recordUsage } from './request-helpers';
 import { t } from './messages';
 
@@ -54,7 +54,7 @@ export const lastCompaction = computed(() => currentPath.value.findLast((m) => m
 /** Summarize the older part and add a compaction node (the original history is kept). Returns true if compacted */
 export async function compactConversation(auto = false): Promise<boolean> {
   const conv = currentConv.value;
-  if (!currentId.value || streamingConv.value.has(conv.id)) return false;
+  if (!currentId.value || runs.value.has(conv.id)) return false;
   const plan = planCompaction(currentPath.value);
   if (!plan) {
     if (!auto) showToast(t('compact.tooShort'));
@@ -63,9 +63,7 @@ export async function compactConversation(auto = false): Promise<boolean> {
   const ref = compactionModel();
   const cfg = providerById(ref.providerId);
   if (!cfg) return false;
-  const ctrl = new AbortController();
-  controllers.set(conv.id, ctrl);
-  setStreaming(conv.id, true);
+  const ctrl = beginRun(conv.id);
   compactingConv.value = conv.id;
   try {
     const summary = await summarize(plan, {
@@ -90,8 +88,7 @@ export async function compactConversation(auto = false): Promise<boolean> {
       meta: { providerId: cfg.id, model: ref.modelId },
       compaction: { summary, coversUntilId: plan.coversUntilId, count: plan.toSummarize.length, model: ref.modelId, auto }
     };
-    await putMessage(node, conv);
-    messages.value = [...messages.value, node];
+    await saveMessage(node);
     await updateConversation({ currentLeafId: node.id, updatedAt: Date.now() }, conv.id);
     showToast(t(auto ? 'compact.autoDone' : 'compact.done', { n: formatNumber(plan.toSummarize.length) }));
     return true;
@@ -99,8 +96,7 @@ export async function compactConversation(auto = false): Promise<boolean> {
     if (!ctrl.signal.aborted) showToast(t('compact.failed', { message: (e as Error).message }), 'error');
     return false;
   } finally {
-    controllers.delete(conv.id);
-    setStreaming(conv.id, false);
+    endRun(conv.id);
     compactingConv.value = null;
   }
 }

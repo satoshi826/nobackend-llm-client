@@ -8,7 +8,7 @@ import { vaultTransport as transport } from '../lib/vault/client';
 import { settings } from './settings';
 import { authFor } from './keys';
 import { accountInUse, providerById } from './models';
-import { messages, putMessage } from './conversations';
+import { messages, saveMessage } from './conversations';
 import { parseModelRef, providerOptionsFor, recordUsage } from './request-helpers';
 
 // ---- Reply suggestions ----
@@ -48,9 +48,7 @@ export async function suggestReplies(conv: Conversation, final: MessageRecord, h
     });
     if (ctrl.signal.aborted || !list.length) return;
     const latest = messages.value.find((m) => m.id === final.id) ?? final;
-    const updated: MessageRecord = { ...latest, suggestions: list };
-    await putMessage(updated, conv);
-    if (messages.value.some((m) => m.id === final.id)) messages.value = messages.value.map((m) => (m.id === final.id ? updated : m));
+    await saveMessage({ ...latest, suggestions: list });
   } catch {
     /* Reply suggestions are only an aid, so failures are not reported */
   } finally {

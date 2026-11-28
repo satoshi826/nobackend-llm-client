@@ -5,7 +5,7 @@ import { useComputed } from '@preact/signals';
 import { useDialog } from './dialog';
 import type { Conversation } from '../lib/db/schema';
 import { conversations, countMadeIn, currentId, openConversation, removeConversation, searchMessages, showChat, startNewChat, updateConversation, type SearchHit } from '../state/conversations';
-import { abortConversation, streamingConv } from '../state/runs';
+import { runs, stopGeneration } from '../state/runs';
 import { clearLeftoverLocalKeys, leftoverLocalKeys } from '../state/keys';
 import { dataLock, lockNow } from '../state/lock';
 import { newerBuild } from '../state/version';
@@ -43,7 +43,7 @@ const Row = memo(function Row({ c, active, snippet }: { c: Conversation; active:
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(c.title);
   // Whether this one is being answered (not the whole set: another conversation's answer does not draw this row)
-  const live = useComputed(() => streamingConv.value.has(c.id)).value;
+  const live = useComputed(() => runs.value.has(c.id)).value;
   if (renaming) {
     return (
       <form
@@ -106,7 +106,7 @@ const Row = memo(function Row({ c, active, snippet }: { c: Conversation; active:
               danger: true,
               check: n ? { label: t('side.deleteItems', { n: formatNumber(n) }), desc: t('side.deleteItemsDesc') } : undefined
             });
-            if (a) void removeConversation(c.id, { beforeRemove: abortConversation, withItems: a.checked });
+            if (a) void removeConversation(c.id, { beforeRemove: stopGeneration, withItems: a.checked });
           }}
         >
           <Icon name="trash" class="size-3.5" />

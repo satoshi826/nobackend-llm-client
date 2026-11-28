@@ -14,6 +14,7 @@ import {
   openConversation,
   persistDraft,
   removeConversation,
+  saveMessage,
   startNewChat,
   takeWriting,
   updateConversation,
@@ -52,7 +53,7 @@ const msg = (id: string, parentId: string | null, createdAt: number, extra: Part
 
 async function store(c: Conversation, list: MessageRecord[] = []) {
   await repo.putConversation(c);
-  for (const m of list) await repo.putMessage(m, !!c.temporary);
+  for (const m of list) await repo.putMessage(m);
   await loadConversations();
 }
 
@@ -174,5 +175,29 @@ describe('a message being written', () => {
     // It ends: the messages take the last copy, and the signal goes
     expect([...takeWriting(new Map([['w1', m('abc', 'done')]])).keys()]).toEqual(['w1']);
     expect(writingOf('w1')).toBeUndefined();
+  });
+});
+
+describe('saving a message', () => {
+  it('adds it to the open conversation, replaces its older copy, and keeps one being written in memory until it ends', async () => {
+    await store(conv('c'), [msg('u1', null, 1)]);
+    await openConversation('c');
+    await saveMessage(msg('a1', 'u1', 2, { status: 'streaming' }));
+    expect(messages.value.map((m) => m.id)).toEqual(['u1', 'a1']);
+    expect(liveMessages.get('a1')?.status).toBe('streaming');
+    await saveMessage(msg('a1', 'u1', 2, { parts: [{ type: 'text', text: 'done' }] }));
+    expect(messages.value.map((m) => m.parts)).toEqual([[{ type: 'text', text: 'u1' }], [{ type: 'text', text: 'done' }]]);
+    expect(liveMessages.has('a1')).toBe(false);
+    expect((await repo.listMessages('c')).map((m) => m.id).sort()).toEqual(['a1', 'u1']);
+  });
+
+  it('only saves a message of a conversation that is not open, and keeps a temporary chat’s out of the database', async () => {
+    await store(conv('c'), [msg('u1', null, 1)]);
+    await store(conv('t', { temporary: true }));
+    await openConversation('c');
+    await saveMessage(msg('t1', null, 1, { conversationId: 't' }));
+    expect(messages.value.map((m) => m.id)).toEqual(['u1']);
+    expect((await repo.listMessages('t')).map((m) => m.id)).toEqual(['t1']);
+    expect(await db().messages.get('t1')).toBeUndefined();
   });
 });

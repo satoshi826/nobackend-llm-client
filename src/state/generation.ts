@@ -11,13 +11,12 @@ import { vaultTransport as transport } from '../lib/vault/client';
 import { settings, saveSettings } from './settings';
 import { authFor } from './keys';
 import { accountInUse, modelOf, providerById } from './models';
-import { conversations, currentConv, currentId, endWriting, liveMessages, messages, persistDraft, putMessage, takeWriting, touchConversation, updateConversation } from './conversations';
-import { batch } from '@preact/signals';
+import { conversations, currentConv, currentId, endWriting, messages, persistDraft, saveMessage, showMessage, touchConversation, updateConversation } from './conversations';
 import { openSettings, showToast } from './ui';
 import { chatOptionsOf } from './chat-options';
 import type { ChatParams } from '../lib/providers/types';
 import { contributedBuiltinWebSearch, contributedDynamicTools, contributedTools, requestHandlerFor, systemPromptFor, type ToolProviderContext } from './tool-registry';
-import { controllers, setStreaming, streamingConv } from './runs';
+import { beginRun, endRun, runs } from './runs';
 import { observeProviderBalance } from './balance';
 import { recordingTransport } from './sent-requests';
 import { providerOptionsFor, recordUsage } from './request-helpers';
@@ -26,24 +25,6 @@ import { cancelSuggestions, suggestReplies } from './suggestions';
 import { compactConversation, contextUsage } from './compaction';
 import { t } from './messages';
 import { saveReplyImage } from './media';
-
-let pendingFlush = 0;
-const pendingUpdates = new Map<string, MessageRecord>();
-/** Show a message that changed while it is written (applied once per frame; a perf measurement drives it too) */
-export function scheduleMessageUpdate(m: MessageRecord) {
-  pendingUpdates.set(m.id, { ...m, parts: m.parts.map((p) => ({ ...p })) });
-  if (!pendingFlush) pendingFlush = requestAnimationFrame(flushUpdates);
-}
-function flushUpdates() {
-  pendingFlush = 0;
-  if (!pendingUpdates.size) return;
-  const ups = new Map(pendingUpdates);
-  pendingUpdates.clear();
-  batch(() => {
-    const settled = takeWriting(ups);
-    if (settled.size) messages.value = messages.value.map((m) => settled.get(m.id) ?? m);
-  });
-}
 
 // ---- Sending and generation ----
 /** If the connection cannot be used now (removed, turned off, or locked), open settings and return false */
@@ -79,22 +60,21 @@ export async function sendMessage(text: string, extras: SendExtras = {}): Promis
   try {
     conv = await persistDraft(text.trim() ? text : [...skills.map((s) => s.name), ...files.map((f) => f.name)].join(', '));
     user = {
-    id: repo.newId(),
-    conversationId: conv.id,
-    parentId: currentConv.value.currentLeafId,
-    role: 'user',
-    parts: [{ type: 'text', text }],
-    createdAt: Date.now(),
-    status: 'done',
-    ...(skills.length ? { skills } : {}),
-    ...(files.length ? { attachments: files } : {})
+      id: repo.newId(),
+      conversationId: conv.id,
+      parentId: currentConv.value.currentLeafId,
+      role: 'user',
+      parts: [{ type: 'text', text }],
+      createdAt: Date.now(),
+      status: 'done',
+      ...(skills.length ? { skills } : {}),
+      ...(files.length ? { attachments: files } : {})
     };
-    await putMessage(user, conv);
+    await saveMessage(user);
   } catch (e) {
     showToast(storageFull(e) ? t('gen.storageFull') : t('gen.notSaved', { message: (e as Error)?.message ?? String(e) }), 'error');
     return false;
   }
-  messages.value = [...messages.value, user];
   void generateReply(conv.id, user.id);
   return true;
 }
@@ -121,7 +101,7 @@ async function generateReply(convId: string, parentUserId: string) {
   cancelSuggestions();
   const conv = conversations.value.find((c) => c.id === convId);
   const cfg = conv ? providerById(conv.providerId) : undefined;
-  if (!conv || !cfg || streamingConv.value.has(convId)) return;
+  if (!conv || !cfg || runs.value.has(convId)) return;
   const draft: MessageRecord = {
     id: repo.newId(),
     conversationId: conv.id,
@@ -133,15 +113,12 @@ async function generateReply(convId: string, parentUserId: string) {
     meta: { providerId: cfg.id, model: conv.modelId }
   };
   const history = pathToLeaf(new Map(messages.value.map((m) => [m.id, m])), parentUserId);
-  messages.value = [...messages.value, draft];
   // Write the (empty) reply before pointing the conversation at it, so closing the tab right now
   // cannot leave the conversation pointing at a message that does not exist
-  await putMessage(draft, conv);
+  await saveMessage(draft);
   await updateConversation({ currentLeafId: draft.id, updatedAt: Date.now() }, conv.id);
 
-  const ctrl = new AbortController();
-  controllers.set(conv.id, ctrl);
-  setStreaming(conv.id, true);
+  const ctrl = beginRun(conv.id);
   const model = modelOf(cfg.id, conv.modelId);
   // Tools, system prompt notes and built-in search come from the features through the tool registry
   const toolCtx: ToolProviderContext = { conv, messageId: draft.id, model, history };
@@ -181,24 +158,17 @@ async function generateReply(convId: string, parentUserId: string) {
       onEvent: (ev) => {
         if (ev.type === 'account' && ev.balanceUsd !== undefined) observeProviderBalance(cfg.id, ev.balanceUsd);
       },
-      onUpdate: (m) => {
-        liveMessages.set(m.id, { ...m, parts: m.parts.map((p) => ({ ...p })) });
-        if (currentId.value === conv.id) scheduleMessageUpdate(m);
-      },
-      persist: (m) => putMessage(m, conv)
+      onUpdate: showMessage,
+      // Shown already by onUpdate
+      persist: (m) => repo.putMessage(m)
     });
-    if (currentId.value === conv.id) {
-      scheduleMessageUpdate(final);
-      flushUpdates();
-    }
     recordUsage({ id: final.id, conversationId: conv.id, providerId: cfg.id, model: conv.modelId, kind: 'chat', usage: final.meta?.usage, costUsd: final.meta?.costUsd, temporary: conv.temporary });
     if (final.status === 'error' && final.error) showToast(final.error.message, 'error');
     void suggestReplies(conv, final, history);
   } finally {
-    liveMessages.delete(draft.id);
+    // Ended already unless the run failed
     endWriting(draft.id);
-    controllers.delete(conv.id);
-    setStreaming(conv.id, false);
+    endRun(conv.id);
     touchConversation(conv.id);
   }
 }
@@ -235,8 +205,7 @@ export async function editUserMessage(userId: string, newText: string) {
     createdAt: Date.now(),
     ...handler?.edit?.(orig, newText)
   };
-  await putMessage(user, conv);
-  messages.value = [...messages.value, user];
+  await saveMessage(user);
   await updateConversation({ currentLeafId: user.id });
   if (handler) return handler.run(conv.id, user.id);
   await generateReply(conv.id, user.id);

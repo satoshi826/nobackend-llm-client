@@ -81,7 +81,7 @@ describe('sealed storage', () => {
     const k = await generateDataKey();
     setDataKey(k);
     await repo.putConversation(conv('c1'));
-    await repo.putMessage(msg('m1', 'c1', '猫の飼い方について'), false);
+    await repo.putMessage(msg('m1', 'c1', '猫の飼い方について'));
     const raw = await db().messages.get('m1');
     expect(JSON.stringify(raw)).not.toContain('猫');
     expect((await repo.listConversations())[0].title).toBe('秘密の題名');
@@ -92,7 +92,7 @@ describe('sealed storage', () => {
 
   it('resealAll turns encryption on and off, and export/import go through it', async () => {
     await repo.putConversation(conv('c1'));
-    await repo.putMessage(msg('m1', 'c1', 'こんにちは'), false);
+    await repo.putMessage(msg('m1', 'c1', 'こんにちは'));
     const k = await generateDataKey();
     await repo.resealAll(null, k);
     expect(JSON.stringify(await db().messages.toArray())).not.toContain('こんにちは');

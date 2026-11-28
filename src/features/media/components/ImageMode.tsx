@@ -1,14 +1,11 @@
-// Image mode's parts of the input box: its options, its model, what goes beside the text (characters left) and under
-// it ("Convert to tags")
-import { useEffect, useRef, useState } from 'preact/hooks';
+// Image mode's parts of the input box: its options, its model, and what goes beside the text (characters left)
+import { useEffect } from 'preact/hooks';
 import type { ComposerApi } from '../../../components/extensions';
-import { Button, Collapse, Icon, Segmented, Select, Spinner, TextArea, TextField, cx } from '../../../components/ui';
-import { openSettings, showToast } from '../../../state/ui';
+import { Button, Collapse, Icon, Segmented, Select, TextArea, TextField, cx } from '../../../components/ui';
 import { formatNumber, formatUsd } from '../../../lib/i18n';
 import { hasOption, sizeOf, type TagFamily } from '../image/providers/common';
 import { imageProviderOf } from '../image/providers/types';
 import { TAG_PRESETS, tagModelLabel } from '../image/presets';
-import { tagWriter, toTags } from '../image/to-tags';
 import {
   currentImageModel,
   defaultImageModel,
@@ -24,7 +21,6 @@ import {
   modelRef,
   modeParams,
   privacyLabelOf,
-  promptRoom,
   promptUse,
   qualityTagsOf,
   setConversationImageModel,
@@ -33,7 +29,6 @@ import {
 } from '../image/state';
 import { imageCount, t as ti } from '../image/messages';
 import { ModelButton, ModeNotice, OptionRow, OptionsButton, SwitchRow, type ModelEntry } from './Mode';
-import { closeTagSuggestions } from './TagSuggestions';
 import { t } from '../messages';
 
 /** Choices as a segmented control when they are few, else a menu */
@@ -247,83 +242,6 @@ export function ImageNotice() {
   return null;
 }
 
-/** Put a whole text in (not typed): no tag suggestions for its last tag */
-function setText(api: ComposerApi, text: string) {
-  api.setText(text);
-  closeTagSuggestions(text);
-}
-
-/**
- * "Convert to tags" for tag models: the chat model rewrites the prompt as tags. While the tags are as they came, the
- * button puts the text from before back instead. Typing meanwhile stops it and keeps what was typed; so does the button
- * going away (the image model or the mode changed), which says so. Without a chat model, it says why it can't run
- */
-function ToTags({ api, limit }: { api: ComposerApi; limit: number | undefined }) {
-  /** The text being converted, while it is */
-  const [busy, setBusy] = useState<string | null>(null);
-  const [done, setDone] = useState<{ from: string; to: string } | null>(null);
-  const ctrl = useRef<AbortController | null>(null);
-  useEffect(
-    () => () => {
-      if (!ctrl.current) return;
-      ctrl.current.abort();
-      showToast(ti('bar.toTagsStopped'));
-    },
-    []
-  );
-  useEffect(() => {
-    if (busy === null || api.text === busy) return;
-    ctrl.current?.abort();
-    ctrl.current = null;
-    setBusy(null);
-  }, [api.text, busy]);
-  if (!tagWriter())
-    return (
-      <div class="flex flex-wrap items-center gap-2 px-3 pb-2.5 text-xs text-warn" role="status">
-        <span class="min-w-0 flex-1">{ti('bar.toTagsNoModel')}</span>
-        <Button class="text-xs" variant="outline" onClick={() => openSettings('connections')}>
-          <Icon name="key" class="size-3.5" />
-          {t('setKey')}
-        </Button>
-      </div>
-    );
-  const run = async () => {
-    const from = api.text;
-    const c = new AbortController();
-    ctrl.current = c;
-    setBusy(from);
-    try {
-      const to = await toTags(from, limit, c.signal);
-      if (c.signal.aborted) return;
-      setText(api, to);
-      setDone({ from, to });
-    } catch (e) {
-      if (!c.signal.aborted) showToast(ti('bar.toTagsFailed', { error: (e as Error).message }), 'error');
-    } finally {
-      if (ctrl.current === c) {
-        ctrl.current = null;
-        setBusy(null);
-      }
-    }
-  };
-  const undo = done && api.text === done.to;
-  return (
-    <div class="flex px-1.5 pb-1.5">
-      {undo ? (
-        <Button class="text-xs text-muted hover:text-ink" title={ti('bar.toTagsBackTitle')} onClick={() => setText(api, done.from)}>
-          <Icon name="history" class="size-3.5" />
-          {ti('bar.toTagsBack')}
-        </Button>
-      ) : (
-        <Button class="text-xs text-muted hover:text-ink" title={ti('bar.toTagsTitle')} aria-busy={busy !== null} disabled={busy !== null || !api.text.trim()} onClick={() => void run()}>
-          {busy !== null ? <Spinner class="size-3.5" /> : <Icon name="wand" class="size-3.5" />}
-          {ti('bar.toTags')}
-        </Button>
-      )}
-    </div>
-  );
-}
-
 /** Beside the text: the characters left for a model with a prompt limit (in the last fifth before it, and over it why the prompt can't be sent) */
 export function ImageEnd({ api }: { api: ComposerApi }) {
   const use = promptUse(modeParams(api.text.trim()));
@@ -334,10 +252,4 @@ export function ImageEnd({ api }: { api: ComposerApi }) {
       {left < 0 ? ti('bar.overLimit', { n: formatNumber(-left), limit: formatNumber(use.limit) }) : ti('bar.charsLeft', { n: formatNumber(left) })}
     </span>
   );
-}
-
-/** Under the text: "Convert to tags" for tag models */
-export function ImageBelow({ api }: { api: ComposerApi }) {
-  if (currentImageModel.value?.promptStyle !== 'tags') return null;
-  return <ToTags api={api} limit={promptRoom(modeParams(api.text.trim()))} />;
 }

@@ -8,7 +8,7 @@ import { currentImageModel, imageReady, modeParams as imageParams, promptUse, se
 import { t as ti } from '../image/messages';
 import { currentVideoModel, sendVideoPrompt, setVideoMode, videoReady } from '../video/state';
 import { t as tv } from '../video/messages';
-import { ImageBelow, ImageEnd, ImageModel, ImageNotice, ImageOptions } from './ImageMode';
+import { ImageEnd, ImageModel, ImageNotice, ImageOptions } from './ImageMode';
 import { VideoModel, VideoNotice, VideoOptions, VideoStart } from './VideoMode';
 import { TagSuggestions } from './TagSuggestions';
 import { ModeChip } from './Mode';
@@ -55,7 +55,6 @@ export function mediaMode(conv: Conversation): ComposerMode | null {
       ready: imageReady.value && !!currentImageModel.value && !promptTooLong(composerText.value),
       send: (text) => sendImagePrompt(text),
       End: ImageEnd,
-      Below: ImageBelow,
       Options: ImageOptions,
       Model: ImageModel
     };

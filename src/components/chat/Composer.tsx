@@ -2,7 +2,7 @@
 // comes from composer add-ons that features register (components/extensions.ts).
 // Layout: inside the box, one line by default = 'inside' add-ons (attach) | text | send;
 // below the box = a row of chips for the other add-ons, and the model on the right.
-// A mode (image, video) puts its own parts in the box before, after and under the text, and its model in place of the chat's.
+// A mode (image, video) puts its own parts in the box before and after the text, and its model in place of the chat's.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { currentConv } from '../../state/conversations';
 import { modelOf, providerById } from '../../state/models';
@@ -167,7 +167,6 @@ export function Composer() {
             </IconButton>
           )}
         </div>
-        {Mode?.Below && <Mode.Below api={api} />}
       </div>
       {/* Below the box: the features' chips, and the model (with a mode's options before it) on the right, on one line.
           When it is narrow the chips keep only their icons (their labels: @max-[22rem]:hidden), the options their cost

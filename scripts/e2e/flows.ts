@@ -346,7 +346,7 @@ const files: Flow = {
 const images: Flow = {
   name: 'images',
   label:
-    'image mode with the mock image model → the generated image shows → its options → it opens in the viewer → a tag model: its badge in the picker, its quality tags edited and reset, tag suggestions off and on, Convert to tags stopped by typing, then converted and undone',
+    'image mode with the mock image model → the generated image shows → its options → it opens in the viewer → a tag model: its badge in the picker, its quality tags edited and reset, tag suggestions off and on',
   async run({ page, url, a11y, shot }) {
     await page.goto(url);
     await addVenice(page);
@@ -411,22 +411,6 @@ async function tagModel(page: Page, a11y: FlowContext['a11y'], shot: FlowContext
   await composer(page).fill('1girl, long_ha');
   await suggestions.getByRole('option', { name: /^long hair \d/ }).waitFor();
   await page.keyboard.press('Escape');
-
-  // Convert to tags: typing while it runs stops it and keeps what was typed
-  const convert = page.getByRole('button', { name: 'Convert to tags' });
-  await composer(page).fill('ゆっくり: a girl under cherry blossoms');
-  await convert.click();
-  await until('the conversion to run', () => convert.getAttribute('aria-busy').then((v) => v === 'true'));
-  await composer(page).fill('a girl in a school uniform');
-  await page.waitForTimeout(2500);
-  if ((await composer(page).inputValue()) !== 'a girl in a school uniform') throw new Error('The tags replaced what was typed during the conversion');
-  // Converted, then undone
-  await convert.click();
-  await until('the tags', async () => (await composer(page).inputValue()).startsWith('1girl, solo'));
-  await a11y('converted to tags');
-  await shot('converted to tags');
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
-  await until('the text back', async () => (await composer(page).inputValue()) === 'a girl in a school uniform');
 }
 
 const settings: Flow = {

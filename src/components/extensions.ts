@@ -32,8 +32,6 @@ export interface ComposerMode {
   /** Inside the box, before the text (where attaching is in a chat) and after it (before the send button) */
   Start?: ComponentType<{ api: ComposerApi }>;
   End?: ComponentType<{ api: ComposerApi }>;
-  /** Inside the box, under the text (e.g. image mode's "Convert to tags") */
-  Below?: ComponentType<{ api: ComposerApi }>;
   /** Its options, left of its model (bottom right) */
   Options?: ComponentType;
   /** Where its prompts go, in place of the chat model (bottom right) */

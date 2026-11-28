@@ -626,12 +626,6 @@ const server = http.createServer(async (req, res) => {
       return finishText(ans, { prompt_tokens: 120, completion_tokens: 30 }, COST / 4);
     }
 
-    // ---- "To tags" in the image bar (detected by its system prompt) gets tags; "ゆっくり" answers after 2 s ----
-    if (String(sys ?? '').includes('prompted with Danbooru tags')) {
-      if (String(last).includes('ゆっくり')) await sleep(2000);
-      return finishText('1girl, solo, long hair, smile, school uniform, cherry blossoms, outdoors', { prompt_tokens: 150, completion_tokens: 20 }, COST / 4);
-    }
-
     // ---- Tool-call mock ----
     // Tools are passed and the last message is from the user and contains "検索" → call web_search
     // Last message is a tool result → if the request contains "読んで" and nothing was fetched yet, call fetch_url; otherwise answer with citations

@@ -46,19 +46,23 @@ const ModelRow = memo(function ModelRow({ m, selected, fav, onPick, showProvider
     // the star by a little bookmarks nothing rather than picking the model and closing the list
     <li class={cx('flex rounded-lg', selected ? 'bg-glass-strong' : 'hover:bg-glass')}>
       <button type="button" onClick={() => onPick(m)} class="min-w-0 flex-1 rounded-l-lg py-2.5 pr-1 pl-3 text-left" aria-pressed={selected}>
-        <div class="flex items-center gap-2">
-          <span class="truncate text-sm font-medium">{m.name}</span>
-          {showProvider && <span class="shrink-0 text-xs text-muted">{providerById(m.providerId)?.name}</span>}
-          {selected && <Icon name="check" class="size-4 shrink-0 text-ink-strong" />}
+        {/* The name has the whole width and wraps rather than being cut (names often differ at the end); the price is under it */}
+        <div class="flex items-start gap-2">
+          <span class="min-w-0 text-sm leading-5 font-medium [overflow-wrap:anywhere]">{m.name}</span>
+          {showProvider && <span class="shrink-0 text-xs leading-5 text-muted">{providerById(m.providerId)?.name}</span>}
+          {selected && <Icon name="check" class="mt-0.5 size-4 shrink-0 text-ink-strong" />}
+        </div>
+        {/* A line of its own only when a price is known ("— / —" alone says nothing) */}
+        {(m.pricing?.inputPerMTok !== undefined || m.pricing?.outputPerMTok !== undefined) && (
           <span
-            class="ml-auto shrink-0 text-xs text-muted tabular-nums"
+            class="mt-0.5 block w-fit text-xs text-muted tabular-nums"
             data-tip={m.pricing?.listedAt ? `${t('picker.priceTitle')}
 ${t('picker.priceListed', { date: m.pricing.listedAt })}` : t('picker.priceTitle')}
           >
             {m.pricing?.listedAt && '≈ '}
             {price(m.pricing?.inputPerMTok)} / {price(m.pricing?.outputPerMTok)}
           </span>
-        </div>
+        )}
         <div class="mt-1 flex flex-wrap items-center gap-1">
           <PrivacyBadge m={m} />
           {m.contextLength ? <Badge>{formatCtx(m.contextLength)}</Badge> : null}

@@ -40,7 +40,7 @@ function SkillMenu({ anchor, onClose }: { anchor: HTMLElement | null; onClose():
   const list = allSkills.value;
   const ids = attachedSkillIds.value;
   return (
-    <Popover anchor={anchor} onClose={onClose} label={t('composer.menu')} class="w-80 max-w-[calc(100vw-2rem)]">
+    <Popover anchor={anchor} onClose={onClose} label={t('composer.menu')} class="w-80">
       {list.length === 0 ? (
         <EmptyState icon="book" compact>{t('none')}</EmptyState>
       ) : (
@@ -100,7 +100,7 @@ export function SkillsAbove({ api }: { api: ComposerApi }) {
     <>
       {suggestions.length > 0 && (
         // A suggestion list: typing goes on in the input box (no focus move); a press outside clears the text's "/"
-        <Popover anchor={api.box} role="listbox" label={t('composer.suggestions')} onClose={() => {}} class="w-80 max-w-[calc(100vw-2rem)]">
+        <Popover anchor={api.box} role="listbox" label={t('composer.suggestions')} onClose={() => {}} class="w-80">
           {suggestions.map((s, i) => (
             <MenuItem key={s.id} role="option" selected={i === 0} onMouseDown={(e) => e.preventDefault()} onSelect={() => pickSkill(s.id, api)}>
               <span class="block font-mono text-sm">/{s.name}</span>

@@ -149,7 +149,7 @@ export function Popover({
       onFocusIn={() => (focused.current = true)}
       // Not when focus goes nowhere: that is the popover going
       onFocusOut={(e) => e.relatedTarget && (focused.current = !!ref.current?.contains(e.relatedTarget as Node))}
-      class={cx('panel pop scroll-thin fixed z-50 overflow-y-auto rounded-2xl p-1.5 text-sm', !pos && 'invisible', className)}
+      class={cx('panel pop scroll-thin fixed z-50 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl p-1.5 text-sm', !pos && 'invisible', className)}
       style={pos ? { left: `${pos.left}px`, top: pos.top !== undefined ? `${pos.top}px` : undefined, bottom: pos.bottom !== undefined ? `${pos.bottom}px` : undefined, maxHeight: `${pos.maxHeight}px`, transformOrigin: pos.origin } : undefined}
     >
       {children}

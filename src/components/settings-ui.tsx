@@ -29,20 +29,21 @@ export function Group({ title, note, footer, children }: { title?: string; note?
 }
 
 /**
- * One setting in a group: its name (and a one-line hint) on the left, its control on the right; a control too wide for
- * that (a model choice, a text, a picker) goes on a second line, the row's full width. A row of only `below` holds a
- * control that names itself (a slider with its label, a set of swatches under the group's heading)
+ * One setting in a group: its name (and a one-line hint) on the left, its control on the right, or on a line of its own
+ * at the right when the row is too narrow for both (a phone, a recessed row); a control too wide for that (a model
+ * choice, a text, a picker) goes `below`, the row's full width. A row of only `below` holds a control that names
+ * itself (a slider with its label, a set of swatches under the group's heading)
  */
 export function Row({ label, hint, control, below, disabled }: { label?: string; hint?: string; control?: ComponentChildren; below?: ComponentChildren; disabled?: boolean }) {
   return (
     <div class={cx('px-4 py-3', disabled && 'opacity-50')}>
       {(label || hint || control) && (
-        <div class="flex items-center justify-between gap-4">
-          <div class="min-w-0">
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div class="min-w-0 flex-[1_1_8rem]">
             {label && <div class="text-sm text-ink">{label}</div>}
             {hint && <div class="mt-0.5 text-xs leading-5 text-muted">{hint}</div>}
           </div>
-          {control && <div class="shrink-0">{control}</div>}
+          {control && <div class="ml-auto shrink-0">{control}</div>}
         </div>
       )}
       {below && <div class={label || hint || control ? 'mt-2.5' : undefined}>{below}</div>}

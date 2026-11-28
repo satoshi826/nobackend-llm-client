@@ -17,7 +17,7 @@ export function AccountRow(props: { id: string; title: string; host: string; ope
     <div>
       <div class="flex items-center gap-2 px-4 py-3">
         <button type="button" class="-mx-1.5 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-0.5 text-left hover:bg-glass-strong" onClick={props.onToggle} aria-expanded={props.open}>
-          <span class="font-medium">{props.title}</span>
+          <span class="font-medium whitespace-nowrap">{props.title}</span>
           <span class="truncate text-xs text-muted">{props.host}</span>
           <KeyBadge id={props.id} />
           <Chevron open={props.open} class="ml-auto" />

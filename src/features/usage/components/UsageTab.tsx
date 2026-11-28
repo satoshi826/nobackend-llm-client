@@ -267,7 +267,7 @@ function Chart({ s, split, entries }: { s: UsageSummary; split: UsageSplit; entr
           <div class="relative">
             {/* The scale: the top line is the largest step */}
             <div class="pointer-events-none absolute inset-x-0 top-0 border-t border-dashed border-line" />
-            <span class="pointer-events-none absolute top-1 left-0 text-[10px] text-faint tabular-nums">{metric === 'cost' ? formatUsd(max) : fmtTok(max)}</span>
+            <span class="pointer-events-none absolute top-1 left-0 text-xs text-faint tabular-nums">{metric === 'cost' ? formatUsd(max) : fmtTok(max)}</span>
             <div
               class="flex h-40 touch-none items-end gap-[2px] border-b border-line pt-5"
               role="img"

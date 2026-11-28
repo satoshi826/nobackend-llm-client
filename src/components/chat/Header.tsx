@@ -51,7 +51,7 @@ function ContextMeter() {
         <span class="tabular-nums">{pct != null ? `${pct}%` : `${formatNumber(Math.round(u.total / 1000))}K`}</span>
       </Button>
       {open && (
-        <Popover anchor={ref.current} onClose={() => setOpen(false)} placement="bottom-end" role="dialog" label={t('context.label')} class="w-80 max-w-[calc(100vw-1rem)] p-4!">
+        <Popover anchor={ref.current} onClose={() => setOpen(false)} placement="bottom-end" role="dialog" label={t('context.label')} class="w-80 p-4!">
           <ContextDetails pct={pct} tone={tone} busy={busy} onSettings={() => setOpen(false)} />
         </Popover>
       )}
@@ -137,7 +137,10 @@ function ContextDetails({ pct, tone, busy, onSettings }: { pct: number | null; t
 }
 
 
-/** Estimated total cost of this conversation (replies, summaries, reply suggestions, images); opens the usage tab */
+/**
+ * Estimated total cost of this conversation (replies, summaries, reply suggestions, images); opens the usage tab. Not
+ * on a phone, where the title needs the room
+ */
 function ConversationCost() {
   const conv = currentConv.value;
   useEffect(() => {
@@ -147,7 +150,7 @@ function ConversationCost() {
   if (!c || (c.usd === 0 && c.unknown === 0)) return null;
   const title = [t('header.costTitle'), c.unknown ? t('header.costUnknown', { n: formatNumber(c.unknown) }) : '', c.estimated ? t('header.costEstimated') : ''].filter(Boolean).join('\n');
   return (
-    <Button aria-label={`${t('header.cost')}: ${formatUsd(c.usd)}`} title={title} class="text-xs tabular-nums text-muted" onClick={() => openSettings('usage')}>
+    <Button aria-label={`${t('header.cost')}: ${formatUsd(c.usd)}`} title={title} class="text-xs tabular-nums text-muted max-sm:hidden" onClick={() => openSettings('usage')}>
       <span aria-hidden="true">≈</span>
       {formatUsd(c.usd)}
       {c.unknown > 0 && <span aria-hidden="true">+</span>}

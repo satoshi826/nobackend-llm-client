@@ -29,7 +29,7 @@ export function AttachButton({ conv }: { conv: Conversation }) {
       >
         <Icon name="paperclip" class="size-4" />
         {n > 0 && (
-          <span class="absolute -top-0.5 -right-0.5 grid size-4 place-items-center rounded-full bg-accent text-[10px] font-semibold text-accent-ink tabular-nums">{n}</span>
+          <span class="absolute -top-0.5 -right-0.5 grid size-4 place-items-center rounded-full bg-accent text-[11px] font-semibold text-accent-ink tabular-nums">{n}</span>
         )}
       </Button>
       {menu && (
@@ -146,8 +146,8 @@ export function AttachmentChips({ conv }: { conv: Conversation }) {
         >
           {a.reading ? <Spinner class="size-3" /> : <Icon name="paperclip" class="size-3" />}
           <span class="truncate">{a.name}</span>
-          {a.bytes !== undefined && <span class="text-muted tabular-nums">{formatBytes(a.bytes)}</span>}
-          <button type="button" aria-label={t('attach.remove', { name: a.name })} data-tip={t('attach.remove', { name: a.name })} class="rounded-full p-0.5 hover:bg-glass-strong" onClick={() => detach(a.fileId)}>
+          {a.bytes !== undefined && <span class="shrink-0 whitespace-nowrap text-muted tabular-nums">{formatBytes(a.bytes)}</span>}
+          <button type="button" aria-label={t('attach.remove', { name: a.name })} data-tip={t('attach.remove', { name: a.name })} class="grid size-6 shrink-0 place-items-center rounded-full hover:bg-glass-strong" onClick={() => detach(a.fileId)}>
             <Icon name="x" class="size-3" />
           </button>
         </span>

@@ -223,7 +223,8 @@ body {
 .md blockquote { @apply border-l-2 border-line-strong pl-4 text-muted; }
 .md hr { @apply border-line; }
 .md table { @apply block overflow-x-auto border-collapse text-sm; }
-.md th, .md td { @apply border border-line px-3 py-1.5; }
+/* Cells keep a few words' width: a wide table scrolls instead of crushing its text to one character a line */
+.md th, .md td { @apply min-w-[6em] border border-line px-3 py-1.5; }
 .md th { @apply bg-glass font-semibold; }
 .md :not(pre) > code {
   @apply rounded-md bg-sunken px-1.5 py-0.5 font-mono text-[0.85em];
@@ -232,7 +233,7 @@ body {
 .md .code-head {
   @apply flex items-center justify-between bg-glass px-3 py-1 text-xs text-muted;
 }
-.md .code-copy { @apply rounded-md px-2 py-0.5 hover:bg-glass-strong; }
+.md .code-copy { @apply rounded-md px-2 py-1 hover:bg-glass-strong; }
 .md .code-lang { @apply mr-auto; }
 .md-no-run [data-run] { @apply hidden; }
 .md .code-copy[aria-pressed='true'] { @apply bg-glass-strong text-ink; }

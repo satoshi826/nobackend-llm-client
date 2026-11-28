@@ -64,7 +64,7 @@ export function TagSuggestions({ api }: { api: ComposerApi }) {
   if (!list.length) return null;
   const i = activeIndex(api.text, list.length);
   return (
-    <Popover anchor={api.box} role="listbox" label={t('tags.label')} onClose={() => (closedFor.value = composerText.peek())} class="w-80 max-w-[calc(100vw-2rem)]">
+    <Popover anchor={api.box} role="listbox" label={t('tags.label')} onClose={() => (closedFor.value = composerText.peek())} class="w-80">
       {list.map((m, n) => {
         const count = formatNumber(m.count, { notation: 'compact' });
         return (

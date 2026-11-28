@@ -263,7 +263,7 @@ export function Segmented<T extends string>({
           {...tabKeys(ref, items, x.id, value, onChange, 'ArrowLeft', 'ArrowRight')}
           class={cx(
             'relative z-10 flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px]',
-            size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1.5 text-sm',
+            size === 'sm' ? 'min-w-6 px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-sm',
             stretch && 'flex-1',
             value === x.id ? 'text-ink-strong' : 'text-muted hover:text-ink'
           )}

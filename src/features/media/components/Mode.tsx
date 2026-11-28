@@ -34,7 +34,7 @@ export function OptionsChip({ summary, cost, costTitle, label, children }: { sum
       </Chip>
       {open && (
         // Above the input box, so it covers neither the text nor the chips
-        <Popover anchor={document.querySelector<HTMLElement>('[data-composer-box]')} opener={ref.current} onClose={() => setOpen(false)} role="dialog" label={label} class="w-80 max-w-[calc(100vw-1rem)] px-3! py-1!">
+        <Popover anchor={document.querySelector<HTMLElement>('[data-composer-box]')} opener={ref.current} onClose={() => setOpen(false)} role="dialog" label={label} class="w-80 px-3! py-1!">
           <div class="divide-y divide-line">{children}</div>
         </Popover>
       )}
@@ -124,7 +124,7 @@ export function ModelButton({
         <Icon name="chevron-down" class="size-3 shrink-0 text-faint transition-transform duration-200 group-hover:translate-y-px" />
       </button>
       {open && (
-        <Popover anchor={ref.current} onClose={() => setOpen(false)} placement="top-end" label={label} class="w-80 max-w-[calc(100vw-1rem)]">
+        <Popover anchor={ref.current} onClose={() => setOpen(false)} placement="top-end" label={label} class="w-80">
           {error && (
             <>
               <p class="px-2.5 py-1.5 text-xs text-danger">{t('model.failed', { error })}</p>

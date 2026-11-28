@@ -111,7 +111,7 @@ function BuiltinRow({ s }: { s: Skill }) {
             <Checkbox checked={on} onChange={(v) => void setBuiltinEnabled(s.name, v)}>
               {t('tab.use')}
             </Checkbox>
-            <button type="button" class="flex items-center gap-1 text-muted hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>
+            <button type="button" class="flex min-h-6 items-center gap-1 text-muted hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>
               {t('tab.body')}
               <Chevron open={open} />
             </button>

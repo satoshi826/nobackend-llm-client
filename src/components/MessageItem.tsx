@@ -308,7 +308,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
             {!owned && (
               <IdleIconButton
                 label={t('msg.regenerateOther')}
-                class="-ml-1 px-1!"
+                class="-ml-1 px-1.5!"
                 onClick={() => openModelPicker({ kind: 'regenerate', assistantId: m.id })}
               >
                 <Icon name="chevron-down" class="size-3" />

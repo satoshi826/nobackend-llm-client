@@ -80,7 +80,7 @@ const Row = memo(function Row({ c, active, snippet }: { c: Conversation; active:
       </button>
       {/* Always shown on touch devices (no hover) */}
       <div class="hidden shrink-0 items-center pr-1 group-focus-within:flex group-hover:flex [@media(hover:none)]:flex">
-        <IconButton label={c.pinned ? t('side.unpin') : t('side.pin')} onClick={() => updateConversation({ pinned: c.pinned ? 0 : 1 }, c.id)} class="px-1!">
+        <IconButton label={c.pinned ? t('side.unpin') : t('side.pin')} onClick={() => updateConversation({ pinned: c.pinned ? 0 : 1 }, c.id)} class="px-1.5!">
           <Icon name="pin" class="size-3.5" />
         </IconButton>
         <IconButton
@@ -89,14 +89,14 @@ const Row = memo(function Row({ c, active, snippet }: { c: Conversation; active:
             setTitle(c.title);
             rename.show();
           }}
-          class="px-1!"
+          class="px-1.5!"
         >
           <Icon name="edit" class="size-3.5" />
         </IconButton>
         <IconButton
           label={t('side.delete')}
           variant="remove"
-          class="px-1!"
+          class="px-1.5!"
           onClick={async () => {
             // Its images and files outlive it unless the user ticks the box
             const n = await countMadeIn(c.id);

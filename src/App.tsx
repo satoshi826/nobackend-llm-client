@@ -100,7 +100,7 @@ function Toast() {
       data-live
       role={toastNow.kind === 'error' ? 'alert' : 'status'}
       class={cx(
-        'panel rise fixed bottom-28 left-1/2 z-[80] -translate-x-1/2 rounded-2xl px-4 py-2.5 text-sm',
+        'panel rise fixed bottom-28 left-1/2 z-[80] w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl px-4 py-2.5 text-sm',
         toastNow.kind === 'error' ? 'text-danger' : 'text-ink-strong'
       )}
     >
@@ -202,7 +202,7 @@ export function App() {
     );
   }
   return (
-    <div class="relative isolate flex h-full md:gap-3 md:py-3 md:pl-3">
+    <div class="relative isolate flex h-full pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] md:gap-3 md:py-3 md:pl-[max(0.75rem,env(safe-area-inset-left))]">
       <SkyGlow />
       <DataWork />
       <Sidebar />

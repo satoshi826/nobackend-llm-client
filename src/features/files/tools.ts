@@ -113,7 +113,7 @@ export interface FileToolDeps {
   /** Delete a file in the working folder */
   remove(id: string): Promise<void>;
   /** Open a page of the working folder out of sight and read back what happened on it (nothing it stores is kept) */
-  inspect(f: FileRecord, o: { waitMs: number; script?: string; layout?: boolean }, signal: AbortSignal): Promise<PageInspection>;
+  inspect(f: FileRecord, o: { waitMs: number; script?: string; layout?: boolean; freshStorage?: boolean }, signal: AbortSignal): Promise<PageInspection>;
   /** Fetch an address through the fetch page (the user is asked there). null when declined or failed */
   fetch(url: string, signal: AbortSignal): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null>;
   /** How the model sees a file's path: relative to the working folder (whole for a file outside it) */
@@ -509,10 +509,10 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { h
     }
   };
 
-  const preview: Tool<{ file_id: string; wait_ms: number; script?: string; include_text: boolean; layout: boolean }> = {
+  const preview: Tool<{ file_id: string; wait_ms: number; script?: string; include_text: boolean; layout: boolean; fresh_storage: boolean }> = {
     name: PREVIEW_PAGE,
     label: t('tool.preview'),
-    description: `Open an .html page of the working folder as the user would see it (in the sandbox, in a ${INSPECT_VIEW.width}×${INSPECT_VIEW.height} view, with the files of its site and its localStorage; nothing it stores is kept), and get back its console output, its errors (exceptions, files that did not load, anything the sandbox blocked) and the text it shows. Optionally run a short script on it first (click a button, fill a field) and get what the script returns. Use it after writing or changing a page, and fix what it reports before telling the user the page works. Set include_text=false when you only need the errors or the script's result, and layout=true to check where things are drawn.`,
+    description: `Open an .html page of the working folder as the user would see it (in the sandbox, in a ${INSPECT_VIEW.width}×${INSPECT_VIEW.height} view, with the files of its site; it starts from the folder's localStorage.json, or with an empty localStorage when fresh_storage=true, and nothing it stores is saved either way), and get back its console output, its errors (exceptions, files that did not load, anything the sandbox blocked) and the text it shows. Optionally run a short script on it first (click a button, fill a field) and get what the script returns. Use it after writing or changing a page, and fix what it reports before telling the user the page works. Set include_text=false when you only need the errors or the script's result, and layout=true to check where things are drawn.`,
     parameters: {
       type: 'object',
       properties: {
@@ -520,6 +520,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { h
         wait_ms: { type: 'number', description: 'Optional. How long to let the page run before reading it, in ms; default 1500, at most 10000.' },
         script: { type: 'string', description: 'Optional. JavaScript run on the page after the wait, as the body of an async function: e.g. "document.querySelector(\'#add\').click(); return document.querySelectorAll(\'li\').length;"' },
         include_text: { type: 'boolean', description: 'Optional. false to leave out the text the page shows (errors and the script\'s result still come); default true.' },
+        fresh_storage: { type: 'boolean', description: 'Optional. true to start the page with an empty localStorage instead of localStorage.json (a first visit); nothing is saved either way.' },
         layout: {
           type: 'boolean',
           description: 'Optional. true to also get the position and size of up to 30 key elements (headings, buttons, form fields, images, canvases, elements with an id), and which are hidden or outside the view.'
@@ -532,12 +533,12 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { h
     prepare(raw) {
       const r = obj(raw);
       const script = str(r, 'script').trim();
-      return { file_id: requireId(r), wait_ms: Math.min(10_000, int(r.wait_ms, 0) ?? 1500), ...(script ? { script } : {}), include_text: r.include_text !== false, layout: r.layout === true };
+      return { file_id: requireId(r), wait_ms: Math.min(10_000, int(r.wait_ms, 0) ?? 1500), ...(script ? { script } : {}), include_text: r.include_text !== false, layout: r.layout === true, fresh_storage: r.fresh_storage === true };
     },
     async execute(i, ctx) {
       const f = await mustGet(deps, i.file_id);
       if (!/\.html?$/i.test(f.name)) throw new TranslatedError(() => t('tool.notPage'));
-      const r = await deps.inspect(f, { waitMs: i.wait_ms, script: i.script, layout: i.layout }, ctx.signal);
+      const r = await deps.inspect(f, { waitMs: i.wait_ms, script: i.script, layout: i.layout, freshStorage: i.fresh_storage }, ctx.signal);
       const out = [`Opened ${shown(f)} for ${i.wait_ms} ms.`];
       if (r.stuck) out.push('The page stopped answering (an endless loop?), and was closed.');
       out.push(r.logs.length ? `Console and errors (${r.logs.length}):\n${r.logs.map((l) => `[${l.level}] ${l.text}`).join('\n')}` : 'No console output and no errors.');

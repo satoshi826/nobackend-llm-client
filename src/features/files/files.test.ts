@@ -51,9 +51,10 @@ function memDeps(scope = new Set<string>()) {
     // As the sandbox would find it: a .js file whose text has "oops" fails at its first line
     syntax: async (path, text) => (path.endsWith('.js') && text.includes('oops') ? { line: 1, col: 5, message: "Unexpected identifier 'oops'" } : undefined),
     // As the sandbox would report a page that throws while it starts
-    inspect: async (_f, { script, layout }) => ({
+    // The text shows whether it started with the folder's localStorage or an empty one
+    inspect: async (_f, { script, layout, freshStorage }) => ({
       logs: [{ level: 'exception', text: 'ReferenceError: x is not defined (js/app.js:3)' }],
-      text: 'Count 0',
+      text: freshStorage ? 'Count 0' : 'Count 5',
       ...(script ? { scriptResult: '1' } : {}),
       ...(layout
         ? {
@@ -292,16 +293,18 @@ describe('file tools', () => {
     const r = await run(deps, 'preview_page', { file_id: 'index.html', script: 'return 1' });
     expect(r.content).toContain('[exception] ReferenceError: x is not defined (js/app.js:3)');
     expect(r.content).toContain('The script returned: 1');
-    expect(r.content).toContain('Text on the page:\nCount 0');
+    expect(r.content).toContain('Text on the page:\nCount 5');
+    // fresh_storage: as on a first visit, without localStorage.json
+    expect((await run(deps, 'preview_page', { file_id: 'index.html', fresh_storage: true })).content).toContain('Text on the page:\nCount 0');
     expect((r.details as { problems: number }).problems).toBe(1);
     await expect(run(deps, 'preview_page', { file_id: 'notes.md' })).rejects.toThrow(/html/);
-    expect(tool(deps, 'preview_page').prepare({ file_id: 'a.html', wait_ms: 99_999 })).toEqual({ file_id: 'a.html', wait_ms: 10_000, include_text: true, layout: false });
+    expect(tool(deps, 'preview_page').prepare({ file_id: 'a.html', wait_ms: 99_999 })).toEqual({ file_id: 'a.html', wait_ms: 10_000, include_text: true, layout: false, fresh_storage: false });
   });
   it('tries a page without its text, or with where its key elements are', async () => {
     const { deps } = memDeps();
     await run(deps, 'write_file', { name: 'index.html', content: '<p>Count 0</p>' });
     const quiet = await run(deps, 'preview_page', { file_id: 'index.html', include_text: false });
-    expect(quiet.content).not.toContain('Count 0');
+    expect(quiet.content).not.toContain('Count');
     expect(quiet.content).toContain('ReferenceError');
     const laid = await run(deps, 'preview_page', { file_id: 'index.html', layout: true, include_text: false });
     expect(laid.content).toContain('Layout in the 1024×768 view (page 1024×1200;');

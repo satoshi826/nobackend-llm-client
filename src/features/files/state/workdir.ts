@@ -206,7 +206,7 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
         // Only what lies in the working folder, even when the page's site reaches above it
         const page = await pageOf(f, dir());
         const items = page.storage?.items() ?? {};
-        // Its data as the user's preview has it, but what it stores while being tried is not kept
+        // Its data as the user's preview has it (empty with o.freshStorage), but what it stores while being tried is not kept
         return inspectPage(await fdb.readText(f.id), { ...page, storage: { items: () => items, save: () => {} } }, { ...o, signal });
       },
       pathOf: (f) => relativeTo(dir(), f.name),

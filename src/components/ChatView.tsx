@@ -16,8 +16,6 @@ export function ChatView() {
   const main = useRef<HTMLElement>(null);
   const top = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
-  // A saved conversation keeps its header (and with it the way to the sidebar on a phone) while setup is asked for
-  const hasHeader = !isDraft.value || (body !== 'choose' && body !== 'passphrase');
   const hasComposer = body === 'chat';
   useLayoutEffect(() => {
     const el = main.current;
@@ -39,16 +37,15 @@ export function ChatView() {
     if (bottom.current) ro.observe(bottom.current);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [hasHeader, hasComposer]);
+  }, [hasComposer]);
   const list = body === 'chat' && !isDraft.value;
   return (
     <main ref={main} class="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-      {/* Before the list, so Tab reaches it before the messages, as it is seen; z-20 draws it over them */}
-      {hasHeader && (
-        <div ref={top} class="pointer-events-none absolute inset-x-0 top-0 z-20 [&>*]:pointer-events-auto">
-          <Header />
-        </div>
-      )}
+      {/* Before the list, so Tab reaches it before the messages, as it is seen; z-20 draws it over them. On every
+          screen, setup included: on a phone its Menu button is the only way to the sidebar and Settings */}
+      <div ref={top} class="pointer-events-none absolute inset-x-0 top-0 z-20 [&>*]:pointer-events-auto">
+        <Header />
+      </div>
       {list ? (
         // The list scrolls under the header and the input box (its content is padded by their heights)
         // One list per conversation: opening a conversation starts at its bottom (no scroll state carried over)

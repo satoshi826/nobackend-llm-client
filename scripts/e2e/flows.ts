@@ -444,4 +444,26 @@ const offline: Flow = {
   }
 };
 
-export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update, offline];
+/** At a phone's width the sidebar is a drawer, opened by the header's Menu button, which every screen has */
+const phone: Flow = {
+  name: 'phone',
+  label: 'on a phone, the first-run screen leads to the sidebar and Settings (a backup can be imported before any key) → the new chat passes the accessibility checks',
+  async run({ page, url, a11y }) {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto(url);
+    await page.getByRole('button', { name: /Venice\.ai/ }).waitFor();
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await openSettings(page, 'Privacy and data');
+    await page.getByRole('button', { name: 'Import', exact: true }).waitFor();
+    // Settings, then the sidebar: Esc closes the topmost
+    await page.keyboard.press('Escape');
+    // Once focus is back on the sidebar's Settings button, the sidebar is the topmost
+    await until('focus to return to Settings', () => page.getByRole('button', { name: 'Settings' }).evaluate((e) => e === document.activeElement));
+    await page.keyboard.press('Escape');
+    await addVenice(page);
+    await composer(page).waitFor();
+    await a11y('new chat');
+  }
+};
+
+export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update, offline, phone];

@@ -171,13 +171,14 @@ export function Header() {
           onClick={() => startNewChat(!conv.temporary)}
         >
           <Icon name="ghost" class="size-3.5" />
-          <span class="hidden whitespace-nowrap sm:inline">{conv.temporary ? t('header.tempOn') : t('header.temp')}</span>
+          {/* Its name on a phone too, where only the icon shows */}
+          <span class="sr-only whitespace-nowrap sm:not-sr-only">{conv.temporary ? t('header.tempOn') : t('header.temp')}</span>
         </Chip>
       ) : (
         conv.temporary && (
           <Badge title={t('header.tempBadgeTitle')}>
             <Icon name="ghost" class="size-3" />
-            <span class="hidden whitespace-nowrap sm:inline">{t('header.temp')}</span>
+            <span class="sr-only whitespace-nowrap sm:not-sr-only">{t('header.temp')}</span>
           </Badge>
         )
       )}

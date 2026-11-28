@@ -109,7 +109,8 @@ export const t = defineMessages(
     'store.removed': 'パスフレーズを外しました。キーは暗号化せずに保存されています。',
     'store.notUnlocked': 'パスフレーズで解錠されていません。先に解錠してください。',
     'store.notDataKey': 'データ鍵ではありません。',
-    'store.hostMismatch': '{name} のキーは {hosts} にしか送れません。',
+    'store.hostMismatch': '{name} のキーは {host} にしか送れません。',
+    'store.pathMismatch': '{name} のキーは、このアプリが使う {host} の API にしか送れません（{path} は対象外です）。',
     'store.noKey': '{name} のキーが未設定か、ロックされています。キーを設定するか、解錠してください。'
   },
   {
@@ -214,7 +215,8 @@ export const t = defineMessages(
       'store.removed': 'Passphrase removed. Keys are now stored unencrypted.',
       'store.notUnlocked': 'Not unlocked with the passphrase. Unlock first.',
       'store.notDataKey': 'This is not a data key.',
-      'store.hostMismatch': 'The {name} key can only be sent to {hosts}.',
+      'store.hostMismatch': 'The {name} key can only be sent to {host}.',
+      'store.pathMismatch': 'The {name} key can only be sent to the {host} APIs this app uses ({path} is not one of them).',
       'store.noKey': 'The {name} key is not set or is locked. Set the key or unlock.'
     },
     zh: {
@@ -318,7 +320,8 @@ export const t = defineMessages(
       'store.removed': '已移除口令。密钥现以未加密方式保存。',
       'store.notUnlocked': '尚未用口令解锁。请先解锁。',
       'store.notDataKey': '这不是数据密钥。',
-      'store.hostMismatch': '{name} 的密钥只能发送到 {hosts}。',
+      'store.hostMismatch': '{name} 的密钥只能发送到 {host}。',
+      'store.pathMismatch': '{name} 的密钥只能发送到本应用使用的 {host} API（{path} 不在其中）。',
       'store.noKey': '{name} 的密钥未设置或已锁定。请设置密钥或解锁。'
     }
   }

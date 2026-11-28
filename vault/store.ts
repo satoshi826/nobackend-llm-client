@@ -8,7 +8,7 @@
 import { decryptSecret, encryptSecret, MIN_PASSPHRASE_LENGTH, WrongPassphraseError, type EncryptedBlob } from '../src/lib/crypto/passphrase';
 import { ACCOUNT_IDS, accountById, type KeyStatus, type VaultState } from '../src/lib/keys/accounts';
 import { failureOf, sendOrFail } from '../src/lib/providers/errors';
-import { formatList, formatNumber } from '../src/lib/i18n';
+import { formatNumber } from '../src/lib/i18n';
 import { t } from './messages';
 import { b64url, openWithPrf, randomBytes, sealWithPrf, unb64url, type SealedPassphrase } from './passkey';
 import { fromBase64, toBase64 } from '../src/lib/base64';
@@ -482,17 +482,49 @@ export async function revealKey(id: string, pass = ''): Promise<{ ok: true; key:
 }
 
 // ---- Sending with keys attached ----
-export function isAllowedUrl(id: string, url: string): boolean {
+/** Whether one path segment fits a pattern segment, where `*` stands for one parameter (without `:`) */
+function segmentFits(pattern: string, seg: string): boolean {
+  const [head, tail] = pattern.split('*');
+  if (tail === undefined) return seg === pattern;
+  return seg.length > head.length + tail.length && seg.startsWith(head) && seg.endsWith(tail) && !seg.slice(head.length, seg.length - tail.length).includes(':');
+}
+
+/**
+ * Whether a URL's path is one of these patterns. Segments are compared decoded, so an encoded `/` or `\`, a dot
+ * segment or an empty one (`//`, a trailing `/`) never matches; the query is not part of it
+ */
+function pathFits(patterns: string[], pathname: string): boolean {
+  const segs: string[] = [];
+  for (const raw of pathname.slice(1).split('/')) {
+    let seg: string;
+    try {
+      seg = decodeURIComponent(raw);
+    } catch {
+      return false;
+    }
+    if (!seg || seg === '.' || seg === '..' || /[/\\]/.test(seg)) return false;
+    segs.push(seg);
+  }
+  return patterns.some((p) => {
+    const ps = p.slice(1).split('/');
+    return ps.length === segs.length && ps.every((x, i) => segmentFits(x, segs[i]));
+  });
+}
+
+/** Why this account's key may not be sent to this URL (null when it may) */
+export function refusal(id: string, url: string): string | null {
+  const a = accountById(id);
+  if (!a) return t('common.unsupportedProvider');
+  const otherHost = t('store.hostMismatch', { name: a.label, host: a.host });
   let u: URL;
   try {
     u = new URL(url);
   } catch {
-    return false;
+    return otherHost;
   }
   const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]';
-  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) return false;
-  if (u.username || u.password) return false;
-  return allowedHosts(id).includes(u.host);
+  if ((u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) || u.username || u.password || u.host !== a.host) return otherHost;
+  return pathFits(a.paths, u.pathname) ? null : t('store.pathMismatch', { name: a.label, host: a.host, path: u.pathname });
 }
 
 export class KeyError extends Error {
@@ -505,12 +537,12 @@ export class KeyError extends Error {
 }
 
 /**
- * Attaches the key and sends only when the URL is on an allowed host.
+ * Attaches the key and sends only when the URL is one of the account's API paths on its host.
  * @param candidate key to verify before saving (defaults to the stored key)
  */
 export async function keyedFetch(id: string, url: string, init: RequestInit, candidate?: string): Promise<Response> {
-  if (!accountById(id)) throw new KeyError('host-mismatch', t('common.unsupportedProvider'));
-  if (!isAllowedUrl(id, url)) throw new KeyError('host-mismatch', t('store.hostMismatch', { name: label(id), hosts: formatList(allowedHosts(id)) }));
+  const refused = refusal(id, url);
+  if (refused) throw new KeyError('host-mismatch', refused);
   const key = candidate ?? (await keyFor(id));
   if (!key) throw new KeyError('auth', t('store.noKey', { name: label(id) }));
   const headers = new Headers(init.headers);

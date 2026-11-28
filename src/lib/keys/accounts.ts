@@ -1,5 +1,5 @@
 // Accounts whose API keys we hold (LLM providers + external services used by tools).
-// The key vault attaches keys only for accounts listed here, and only to the hosts listed here.
+// The key vault attaches keys only for accounts listed here, and only to the host and paths listed here.
 // The app cannot change this (fixed at build time). Built from data alone (no provider code), so the vault page stays small.
 import { ENDPOINTS } from '../providers/endpoints';
 import { SERVICES } from '../tools/services';
@@ -8,8 +8,10 @@ import type { ProviderConfig } from '../providers/types';
 export interface Account {
   id: string;
   label: string;
-  /** Hosts the key may be attached to */
+  /** Host the key may be attached to */
   host: string;
+  /** Paths on that host the key may be attached to (from the root; `*` is one path parameter) */
+  paths: string[];
   kind: 'llm' | 'tool';
   /** Usable without a key (with limits) */
   keyOptional: boolean;
@@ -25,12 +27,18 @@ function hostOf(url: string): string {
   return new URL(url).host;
 }
 
+/** A service's paths (relative to its base URL) as paths from the host's root */
+function pathsOf(baseUrl: string, paths: string[]): string[] {
+  return paths.map((p) => new URL(p, `${baseUrl.replace(/\/+$/, '')}/`).pathname);
+}
+
 export const ACCOUNTS: Record<string, Account> = {};
 for (const e of Object.values(ENDPOINTS)) {
   ACCOUNTS[e.id] = {
     id: e.id,
     label: e.label,
     host: hostOf(e.baseUrl),
+    paths: pathsOf(e.baseUrl, e.paths),
     kind: 'llm',
     keyOptional: e.keyOptional,
     keyHeader: e.keyHeader ? { name: e.keyHeader.name, prefix: e.keyHeader.prefix ?? '' } : BEARER,
@@ -44,6 +52,7 @@ for (const [id, s] of Object.entries(SERVICES)) {
       return s.label;
     },
     host: hostOf(s.baseUrl),
+    paths: pathsOf(s.baseUrl, s.paths),
     kind: 'tool',
     keyOptional: s.keyOptional,
     keyHeader: BEARER

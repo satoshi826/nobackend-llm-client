@@ -38,7 +38,7 @@ flowchart LR
     sandbox["Sandbox<br>/sandbox/ with no origin<br>HTML and JS from models and files"]
   end
   app -- "MessagePort: send this request for provider X" --> vault
-  vault -- "key attached, that provider's host only" --> prov[("LLM providers, Tavily")]
+  vault -- "key attached, only to the API paths the app uses" --> prov[("LLM providers, Tavily")]
   app -- "requests that need no key" --> prov
   app -- "postMessage: address and mode" --> fetchp
   fetchp -- "after you confirm" --> web[("Any https site")]
@@ -63,9 +63,11 @@ Static files only. Your browser talks to each provider with your key; there is n
 
 The vault page (`vault/`) is the only page that reads, stores, shows or sends API keys. The app opens it in a hidden frame and asks over a private `MessagePort` "send this request for provider X"; the vault attaches the key and streams the response back (`src/lib/vault/client.ts`, `vault/core.ts`). The app learns only whether a key is present, encrypted or locked (`status` in `vault/store.ts`), never its value. Keys are typed into the vault's own page, and so is the passphrase.
 
-Before sending, the vault (`keyedFetch`, `isAllowedUrl` in `vault/store.ts`):
+Before sending, the vault (`keyedFetch`, `refusal` in `vault/store.ts`):
 
 - accepts only the providers built into this build and only the host fixed for each at build time (`src/lib/keys/accounts.ts`); providers cannot be added at runtime;
+- accepts on that host only the API paths the app calls with the key: chat, the model list, and per provider its images, video, balance and key check (`paths` in `src/lib/providers/endpoints.ts` and `src/lib/tools/services.ts`). A provider added at build time (`VITE_CUSTOM_PROVIDERS`) gets only `chat/completions` and `models` under its base URL;
+- compares the path decoded, segment by segment: a path with `..`, an encoded `/` or `\`, or an empty segment (`//`) matches none of them; the query string is not compared;
 - accepts only `https` (plain `http` only for localhost) and no user name or password in the address;
 - accepts only `GET` and `POST`, with a text body;
 - removes any authentication headers the app sent (`Authorization`, `Cookie`, `x-api-key`, …) and sets only the provider's own key header;
@@ -74,9 +76,9 @@ Before sending, the vault (`keyedFetch`, `isAllowedUrl` in `vault/store.ts`):
 
 The vault accepts a connection only from the app origins it was built for, never from `null` (sandboxed frames), and its `frame-ancestors` lists only those apps. It is built with no third-party packages and no framework; its DOM is made with `createElement` and `textContent`.
 
-*Prevents:* a prompt or a script in the app sending a key to another host; the app's code, its Markdown rendering and its dependencies ever holding a key. **(strict setup only)** a script running in the app reading the keys. On the app's own origin, such a script can open the vault's storage or its frame directly, and read what is typed there.
+*Prevents:* a prompt or a script in the app sending a key to another host, or using it on the provider's other APIs (creating keys or managing the account, such as OpenRouter's `/api/v1/keys` or OpenAI's `/v1/organization/…`); the app's code, its Markdown rendering and its dependencies ever holding a key. **(strict setup only)** a script running in the app reading the keys. On the app's own origin, such a script can open the vault's storage or its frame directly, and read what is typed there.
 
-*Does not prevent:* a script running in the app *using* the keys. It can ask the vault for any `GET` or `POST` on the provider's host and read the answer. A key that can manage the account (an admin key that creates keys, for example) can therefore be misused through the vault; use keys that can only make requests (§5).
+*Does not prevent:* a script running in the app *using* the keys for what the app does with them. It can ask the vault for any chat, image or video request (`GET` or `POST`, with any body) and read the answer, spending up to what the key allows; use spend-limited keys (§5).
 
 ### 3.3 CSP, Trusted Types and sanitized Markdown
 
@@ -230,7 +232,7 @@ Only one tab uses the data at a time (Web Locks, `src/state/tab.ts`). Another ta
 **For users**
 
 - Use **spend-limited keys** that can only make requests (for Venice, an INFERENCE key with a daily limit; see the README for each provider). Set a spending limit at the provider where it offers one.
-- Never store an admin, management or provisioning key (such as an OpenRouter provisioning key or an OpenAI admin key). The vault sends a key only to its provider's API, but a script running in the app can use whatever the key is allowed to do there (§3.2).
+- Never store an admin, management or provisioning key (such as an OpenRouter provisioning key or an OpenAI admin key). The vault sends a key only to the API paths the app uses, but in the same-origin setup a script running in the app can read the key itself and use whatever it is allowed to do (§3.2).
 - Set a **passphrase** of several words, and an **auto-lock** time. Lock before leaving the device.
 - **Encrypt backups** with a password, and keep them where only you can read them.
 - **Read what you approve**: the address in the fetch page, the code before you run it, the skill draft before you save it.

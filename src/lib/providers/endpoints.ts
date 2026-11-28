@@ -25,18 +25,30 @@ export interface Endpoint {
   headers?: Record<string, string>;
   /** A GET (relative to baseUrl) that fails without a valid key: the vault tries a key with it before saving it */
   keyCheck?: string;
+  /**
+   * The API paths (relative to baseUrl) the app calls with the key: the vault attaches it to no other path on the host.
+   * `*` stands for one path parameter (part of one segment, without `/` or `:`)
+   */
+  paths: string[];
   /** Response headers the key vault may pass back to the app (balance etc.) */
   responseHeaders?: string[];
   /** Hosts that hand out one-time keyless download addresses (Venice videos), fetched by the app (its CSP) */
   downloads?: string[];
 }
 
-type Builtin = Omit<Endpoint, 'id' | 'baseUrl' | 'name' | 'kind' | 'publicModels' | 'keyOptional'> &
-  Partial<Pick<Endpoint, 'name' | 'kind' | 'publicModels'>> & {
+type Builtin = Omit<Endpoint, 'id' | 'baseUrl' | 'name' | 'kind' | 'publicModels' | 'keyOptional' | 'paths'> &
+  Partial<Pick<Endpoint, 'name' | 'kind' | 'publicModels' | 'paths'>> & {
     /** Default base URL, overridable with this variable (for mocks during development) */
     url: string;
     env: string;
   };
+
+/** Paths every provider of a kind is called on (chat and the model list); a provider's own paths add to these */
+const KIND_PATHS: Record<AdapterKind, string[]> = {
+  'openai-compatible': ['chat/completions', 'models'],
+  anthropic: ['messages', 'models'],
+  gemini: ['models', 'models/*:streamGenerateContent']
+};
 
 const BUILTIN: Record<string, Builtin> = {
   venice: {
@@ -46,16 +58,24 @@ const BUILTIN: Record<string, Builtin> = {
     env: 'VITE_VENICE_BASE_URL',
     publicModels: true,
     keyCheck: 'api_keys/rate_limits',
+    paths: ['api_keys/rate_limits', 'image/styles', 'image/generate', 'image/edit', 'image/upscale', 'image/background-remove', 'video/quote', 'video/queue', 'video/retrieve', 'video/complete'],
     responseHeaders: ['x-venice-balance-usd', 'x-venice-balance-diem', 'x-venice-is-blurred', 'x-venice-is-content-violation', 'x-venice-content-violation-count', 'x-venice-enhanced-prompt'],
     downloads: ['https://private-share.venice.ai']
   },
-  openrouter: { label: 'OpenRouter', url: 'https://openrouter.ai/api/v1', env: 'VITE_OPENROUTER_BASE_URL', publicModels: true, keyCheck: 'key' },
-  nanogpt: { label: 'NanoGPT', url: 'https://api.nano-gpt.com/api/v1', env: 'VITE_NANOGPT_BASE_URL', publicModels: true },
-  deepinfra: { label: 'DeepInfra', url: 'https://api.deepinfra.com/v1/openai', env: 'VITE_DEEPINFRA_BASE_URL', publicModels: true },
+  openrouter: {
+    label: 'OpenRouter',
+    url: 'https://openrouter.ai/api/v1',
+    env: 'VITE_OPENROUTER_BASE_URL',
+    publicModels: true,
+    keyCheck: 'key',
+    paths: ['key', 'images', 'videos', 'videos/*', 'videos/*/content']
+  },
+  nanogpt: { label: 'NanoGPT', url: 'https://api.nano-gpt.com/api/v1', env: 'VITE_NANOGPT_BASE_URL', publicModels: true, paths: ['../check-balance', 'images/generations'] },
+  deepinfra: { label: 'DeepInfra', url: 'https://api.deepinfra.com/v1/openai', env: 'VITE_DEEPINFRA_BASE_URL', publicModels: true, paths: ['images/generations'] },
   cerebras: { label: 'Cerebras', url: 'https://api.cerebras.ai/v1', env: 'VITE_CEREBRAS_BASE_URL', publicModels: true, keyCheck: 'models' },
   novita: { label: 'Novita', url: 'https://api.novita.ai/openai/v1', env: 'VITE_NOVITA_BASE_URL', publicModels: true },
   chutes: { label: 'Chutes', url: 'https://llm.chutes.ai/v1', env: 'VITE_CHUTES_BASE_URL', publicModels: true },
-  together: { label: 'Together', url: 'https://api.together.ai/v1', env: 'VITE_TOGETHER_BASE_URL', keyCheck: 'models' },
+  together: { label: 'Together', url: 'https://api.together.ai/v1', env: 'VITE_TOGETHER_BASE_URL', keyCheck: 'models', paths: ['images/generations'] },
   anthropic: {
     label: 'Anthropic',
     kind: 'anthropic',
@@ -72,10 +92,12 @@ const BUILTIN: Record<string, Builtin> = {
     url: 'https://generativelanguage.googleapis.com/v1beta',
     env: 'VITE_GEMINI_BASE_URL',
     keyHeader: { name: 'x-goog-api-key' },
-    keyCheck: 'models?pageSize=1'
+    keyCheck: 'models?pageSize=1',
+    // Images, video, and the file a video answer may point to
+    paths: ['models/*:generateContent', 'interactions', 'files/*:download']
   },
-  deepseek: { label: 'DeepSeek', url: 'https://api.deepseek.com', env: 'VITE_DEEPSEEK_BASE_URL', keyCheck: 'models' },
-  openai: { label: 'OpenAI', url: 'https://api.openai.com/v1', env: 'VITE_OPENAI_BASE_URL', keyCheck: 'models' },
+  deepseek: { label: 'DeepSeek', url: 'https://api.deepseek.com', env: 'VITE_DEEPSEEK_BASE_URL', keyCheck: 'models', paths: ['user/balance'] },
+  openai: { label: 'OpenAI', url: 'https://api.openai.com/v1', env: 'VITE_OPENAI_BASE_URL', keyCheck: 'models', paths: ['images/generations', 'images/edits'] },
   groq: { label: 'Groq', url: 'https://api.groq.com/openai/v1', env: 'VITE_GROQ_BASE_URL', keyCheck: 'models' }
 };
 
@@ -123,6 +145,7 @@ export function parseCustomProviders(json: string | undefined): Endpoint[] {
       baseUrl: u.toString().replace(/\/+$/, ''),
       publicModels: !!r.publicModels || keyOptional,
       keyOptional,
+      paths: KIND_PATHS['openai-compatible'],
       ...(keyOptional ? {} : { keyCheck: 'models' })
     };
   });
@@ -137,7 +160,8 @@ export function endpointsOf(env: Env): Endpoint[] {
     publicModels: false,
     keyOptional: false,
     ...b,
-    baseUrl: env[name] || url
+    baseUrl: env[name] || url,
+    paths: [...KIND_PATHS[b.kind ?? 'openai-compatible'], ...(b.paths ?? [])]
   }));
   return [...builtins, ...parseCustomProviders(env.VITE_CUSTOM_PROVIDERS)];
 }

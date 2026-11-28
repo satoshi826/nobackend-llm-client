@@ -1,16 +1,14 @@
 // Messaging between the key vault and the app (MessagePort). Validates send requests, has the key store attach the key and send, and streams the response back.
 import { PASSTHROUGH_HEADERS, type FromVault, type ToVault } from '../src/lib/vault/protocol';
-import { accountById } from '../src/lib/keys/accounts';
-import { allStatus, allowedHosts, clearAll, isAllowedUrl, KeyError, keyedFetch, label, lock, unwrapDataKey, wrapDataKey } from './store';
-import { formatList } from '../src/lib/i18n';
+import { allStatus, allowedHosts, clearAll, KeyError, keyedFetch, lock, refusal, unwrapDataKey, wrapDataKey } from './store';
 import { t } from './messages';
 
 export { allowedHosts };
 
 export function validateRequest(req: ToVault & { type: 'fetch' }): string | null {
-  if (!accountById(req.providerId)) return t('common.unsupportedProvider');
+  const refused = refusal(req.providerId, req.url);
+  if (refused) return refused;
   if (req.method !== 'GET' && req.method !== 'POST') return t('common.methodNotAllowed');
-  if (!isAllowedUrl(req.providerId, req.url)) return t('store.hostMismatch', { name: label(req.providerId), hosts: formatList(allowedHosts(req.providerId)) });
   if (req.body !== undefined && typeof req.body !== 'string') return t('common.badBody');
   return null;
 }

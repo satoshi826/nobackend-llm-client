@@ -128,9 +128,11 @@ describe('build-time custom providers', () => {
   const json = JSON.stringify([{ id: 'ollama', label: 'Ollama', baseUrl: 'http://localhost:11434/v1/', keyOptional: true }, { id: 'lab', baseUrl: 'https://llm.example.com/v1' }]);
   it('parses and validates', () => {
     const list = parseCustomProviders(json);
+    // The vault sends their keys only to the OpenAI-compatible chat and model list under the base URL
+    const paths = ['chat/completions', 'models'];
     expect(list).toEqual([
-      { id: 'ollama', label: 'Ollama', name: 'Ollama', kind: 'openai-compatible', baseUrl: 'http://localhost:11434/v1', keyOptional: true, publicModels: true },
-      { id: 'lab', label: 'lab', name: 'lab', kind: 'openai-compatible', baseUrl: 'https://llm.example.com/v1', keyOptional: false, publicModels: false, keyCheck: 'models' }
+      { id: 'ollama', label: 'Ollama', name: 'Ollama', kind: 'openai-compatible', baseUrl: 'http://localhost:11434/v1', keyOptional: true, publicModels: true, paths },
+      { id: 'lab', label: 'lab', name: 'lab', kind: 'openai-compatible', baseUrl: 'https://llm.example.com/v1', keyOptional: false, publicModels: false, keyCheck: 'models', paths }
     ]);
     expect(() => parseCustomProviders('[{"id":"venice","baseUrl":"https://x"}]')).toThrow();
     expect(() => parseCustomProviders('[{"id":"x","baseUrl":"http://evil.example.com"}]')).toThrow();

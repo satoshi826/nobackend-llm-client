@@ -5,6 +5,8 @@ export interface ToolService {
   id: string;
   label: string;
   baseUrl: string;
+  /** The API paths (relative to baseUrl) the app calls with the key: the vault attaches it to no other path */
+  paths: string[];
   /** Usable without a key (with limits) */
   keyOptional: boolean;
   keyGuide: string;
@@ -20,6 +22,7 @@ export const SERVICES: Record<string, ToolService> = {
       return t('tavily.label');
     },
     baseUrl: env.VITE_TAVILY_BASE_URL || 'https://api.tavily.com',
+    paths: ['search'],
     keyOptional: false,
     get keyGuide() {
       return t('tavily.keyGuide');

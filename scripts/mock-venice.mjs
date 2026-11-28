@@ -243,9 +243,13 @@ const FAILURES = {
   }
 };
 
-/** The failure asked for in a request ("#err:<kind>" in its last user message) */
-function failureAsked(lastUserMessage) {
-  return /#err:([a-z]+)/.exec(JSON.stringify(lastUserMessage ?? ''))?.[1];
+/**
+ * The failure asked for in a request ("#err:<kind>" in its last user message). "context" ends once the conversation is
+ * compacted (the request carries its summary), as a real conversation that was too long fits again
+ */
+function failureAsked(lastUserMessage, request) {
+  const kind = /#err:([a-z]+)/.exec(JSON.stringify(lastUserMessage ?? ''))?.[1];
+  return kind === 'context' && JSON.stringify(request).includes('Summary of the conversation so far') ? undefined : kind;
 }
 
 /** Answer with the failure of this API, when there is one for the kind; true when answered */
@@ -335,7 +339,7 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const lastUser = [...b.messages].reverse().find((m) => m.role === 'user');
       const text = (lastUser?.content ?? []).map((c) => c.text ?? '').join('');
-      const failure = failureAsked(lastUser);
+      const failure = failureAsked(lastUser, b);
       if (fail(res, req, 'anthropic', failure)) return;
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       const ev = (o) => res.write(`event: ${o.type}\ndata: ${JSON.stringify(o)}\n\n`);
@@ -420,7 +424,7 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const last = b.contents.at(-1);
       const text = (last?.parts ?? []).map((p) => p.text ?? '').join('');
-      const failure = failureAsked(last);
+      const failure = failureAsked(last, b);
       if (fail(res, req, 'gemini', failure)) return;
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       const send = (o) => res.write(`data: ${JSON.stringify(o)}\n\n`);
@@ -523,7 +527,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/chat/completions' && req.method === 'POST') {
       const b = await readBody(req);
       const text = (b.messages?.at(-1)?.content ?? '').toString();
-      if (fail(res, req, 'openai', failureAsked(b.messages?.at(-1)))) return;
+      if (fail(res, req, 'openai', failureAsked(b.messages?.at(-1), b))) return;
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       for (const c of chunked('OpenAI モックの応答です。あなた: ' + text.slice(0, 40))) { chunk(res, { choices: [{ delta: { content: c } }] }); await sleep(15); }
       chunk(res, { choices: [{ delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 20, completion_tokens: 10 } });
@@ -578,7 +582,7 @@ const server = http.createServer(async (req, res) => {
     const sys = (body.messages ?? []).find((m) => m.role === 'system')?.content;
     const vp = body.venice_parameters ?? {};
     if (last.includes('残高')) return json(res, 402, { error: 'Insufficient USD or Diem balance to complete request' });
-    const failure = failureAsked([...(body.messages ?? [])].reverse().find((m) => m.role === 'user'));
+    const failure = failureAsked([...(body.messages ?? [])].reverse().find((m) => m.role === 'user'), body);
     if (fail(res, req, 'venice', failure)) return;
     if (last.includes('盗用')) balanceUsd -= 2;
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'x-venice-balance-usd': balanceUsd.toFixed(6) });

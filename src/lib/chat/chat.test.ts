@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { applyEvent, buildRequestMessages, runAssistant } from './runner';
-import { deepestLatestLeaf, pathToLeaf, resolveLeaf } from './tree';
+import { deepestLatestLeaf, moveChildren, pathToLeaf, resolveLeaf } from './tree';
 import type { MessageRecord } from '../db/schema';
 import { venicePreset } from '../providers/presets/venice';
 import type { ProviderConfig, Transport } from '../providers/types';
@@ -209,6 +209,34 @@ describe('compaction', () => {
     expect((out[0].parts[0] as any).text).toContain('要約本文');
     expect((out[0].parts[0] as any).text).toContain('あなたは助手です');
     expect(out.slice(1).map((m) => m.id)).toEqual(['m6', 'm7', 'm8', 'm9', 'm10']);
+  });
+  it('goes above the last question, so a regenerated answer and an edited question keep the summary', () => {
+    // m0..m8, then m9 failed (too long: no text)
+    const p = path();
+    p[9] = { ...p[9], parts: [], status: 'error', error: { kind: 'context-length', message: 'too long' } };
+    const other = rec('m8b', 'm7', 'user', '別の版', 9.5);
+    const all = [...p, other];
+    const plan = planCompaction(p)!;
+    expect(plan.parentId).toBe('m7');
+    const node: MessageRecord = { ...rec('c1', plan.parentId, 'assistant', 'S', 20), role: 'system', compaction: { summary: '要約本文', coversUntilId: plan.coversUntilId, count: plan.toSummarize.length } };
+    const moved = moveChildren(all, plan.parentId, node.id);
+    // Every version of the last question goes under the summary, which is not one of their versions
+    expect(moved.map((m) => [m.id, m.parentId])).toEqual([
+      ['m8', 'c1'],
+      ['m8b', 'c1']
+    ]);
+    const tree = [...all.filter((m) => !moved.some((x) => x.id === m.id)), node, ...moved];
+    const regenerated = rec('m9b', 'm8', 'assistant', '答え', 21);
+    const edited = rec('m8c', 'c1', 'user', '直した質問', 22);
+    const byId = new Map([...tree, regenerated, edited].map((m) => [m.id, m]));
+    for (const leaf of ['m9', 'm9b', 'm8b', 'm8c']) expect(pathToLeaf(byId, leaf).map((m) => m.id)).toContain('c1');
+    const sent = buildRequestMessages(pathToLeaf(byId, 'm8'), '');
+    expect((sent[0].parts[0] as any).text).toContain('要約本文');
+    expect(sent.slice(1).map((m) => m.id)).toEqual(['m4', 'm5', 'm6', 'm7', 'm8']);
+  });
+  it('goes above the last question after an answer that did not fail too', () => {
+    const plan = planCompaction([...path(), rec('m10', 'm9', 'user', 'q', 10), rec('m11', 'm10', 'assistant', 'a', 11)])!;
+    expect(plan.parentId).toBe('m9');
   });
   it('a second compaction re-summarizes including the previous summary', () => {
     const p = path();

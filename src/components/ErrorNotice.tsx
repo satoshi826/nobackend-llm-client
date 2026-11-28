@@ -14,11 +14,16 @@ const RETRY = new Set<string>(['auth', 'insufficient-balance', 'rate-limit', 'ov
 /** Kinds where another model may answer */
 const OTHER_MODEL = new Set<string>(['model-unavailable', 'context-length', 'content-policy', 'overloaded', 'bad-request'] satisfies ProviderErrorKind[]);
 
-/** retry / otherModel: given only where they can run (the request can be sent again; another model can answer it) */
-export function ErrorNotice({ error, providerId, retry, otherModel }: { error: MessageError; providerId?: string; retry?(): void; otherModel?(): void }) {
+/**
+ * retry / otherModel: given only where they can run (the request can be sent again; another model can answer it).
+ * compacted: the conversation was compacted since the request failed, so sending it again may work now
+ */
+export function ErrorNotice({ error, providerId, compacted, retry, otherModel }: { error: MessageError; providerId?: string; compacted?: boolean; retry?(): void; otherModel?(): void }) {
   const kind = error.kind;
   const cfg = providerId ? providerById(providerId) : undefined;
   const creditUrl = kind === 'insufficient-balance' && cfg ? getPreset(cfg.id).creditUrl : undefined;
+  // Too long, and compacted since: sending it again is the next step, not compacting
+  const fitsNow = kind === 'context-length' && compacted;
   const actions = [
     kind === 'auth' && (
       <Button key="keys" class="text-xs" variant="outline" onClick={() => openSettings('connections')}>
@@ -32,13 +37,13 @@ export function ErrorNotice({ error, providerId, retry, otherModel }: { error: M
         {t('error.addCredit')}
       </Button>
     ),
-    kind === 'context-length' && (
+    kind === 'context-length' && !fitsNow && (
       <Button key="compact" class="text-xs" variant="outline" onClick={() => (contextPanelOpen.value = true)}>
         <Icon name="compress" class="size-3.5" />
         {t('error.compact')}
       </Button>
     ),
-    retry && RETRY.has(kind) && (
+    retry && (RETRY.has(kind) || fitsNow) && (
       <IdleButton key="retry" class="text-xs" variant="outline" onClick={retry}>
         <Icon name="refresh" class="size-3.5" />
         {t('msg.regenerate')}

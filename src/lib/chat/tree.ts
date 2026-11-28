@@ -24,6 +24,14 @@ export function childrenOf<T extends TreeNode>(all: Iterable<T>, parentId: strin
   return out.sort((a, b) => a.createdAt - b.createdAt);
 }
 
+/**
+ * The children of `parentId`, moved under `nodeId` (the records to save): puts a new node between a message and every
+ * branch below it, so the node is on all their paths. `all` must not hold the new node yet
+ */
+export function moveChildren<T extends TreeNode>(all: T[], parentId: string | null, nodeId: string): T[] {
+  return childrenOf(all, parentId).map((m) => ({ ...m, parentId: nodeId }));
+}
+
 /** The leaf reached from a node by always following the newest child */
 export function deepestLatestLeaf<T extends TreeNode>(all: T[], startId: string): string {
   let cur = startId;

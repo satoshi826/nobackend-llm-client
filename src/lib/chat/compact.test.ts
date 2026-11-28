@@ -60,7 +60,8 @@ describe('buildTranscript', () => {
     previousSummary,
     toSummarize: lines.map((t, i) => rec(`m${i}`, i % 2 ? 'assistant' : 'user', [text(t)])),
     kept: 2,
-    coversUntilId: `m${lines.length - 1}`
+    coversUntilId: `m${lines.length - 1}`,
+    parentId: null
   });
 
   it('labels each speaker and leaves the transcript whole when it fits', () => {
@@ -114,7 +115,7 @@ describe('estimateRequest', () => {
 });
 
 describe('summarize', () => {
-  const plan: CompactionPlan = { previousSummary: null, toSummarize: [rec('u', 'user', [text('what is 2+2')]), rec('a', 'assistant', [text('4')])], kept: 4, coversUntilId: 'a' };
+  const plan: CompactionPlan = { previousSummary: null, toSummarize: [rec('u', 'user', [text('what is 2+2')]), rec('a', 'assistant', [text('4')])], kept: 4, coversUntilId: 'a', parentId: null };
 
   it('asks with the summary instruction, keeps only the text of the reply, and reports usage', async () => {
     const capture: { body?: any } = {};

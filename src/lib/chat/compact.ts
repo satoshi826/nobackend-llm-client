@@ -1,5 +1,5 @@
 // Conversation compaction (replaces the older part with a summary).
-// - The original history is never deleted. A compaction node is appended to the conversation tree and replaced by the summary only when sending (runner.buildRequestMessages)
+// - The original history is never deleted. A compaction node is put into the conversation tree above the last question and replaced by the summary only when sending (runner.buildRequestMessages)
 // - The most recent exchanges are kept verbatim, not summarized (their details are the most likely to be needed)
 // - If there was a previous compaction, re-summarize "previous summary + the conversation since"
 import type { MessageRecord } from '../db/schema';
@@ -22,6 +22,11 @@ export interface CompactionPlan {
   kept: number;
   /** Everything up to (and including) this message is replaced by the summary */
   coversUntilId: string;
+  /**
+   * Where the summary node goes: above the last question, so every answer and version of it (a regenerated
+   * answer, an edited question) comes after the summary
+   */
+  parentId: string | null;
 }
 
 /** Decide the compaction range from path (root → tail). null if the conversation is not long enough to compact */
@@ -44,7 +49,9 @@ export function planCompaction(path: MessageRecord[], keepRecent = KEEP_RECENT):
   while (cut > 0 && candidates[cut].role !== 'user') cut--;
   if (cut <= 0) return null;
   const toSummarize = candidates.slice(0, cut);
-  return { previousSummary, toSummarize, kept: candidates.length - cut, coversUntilId: toSummarize[toSummarize.length - 1].id };
+  // The kept part starts with a user message, so the last question is after the summarized range
+  const lastQuestion = path.findLast((m) => m.role === 'user')!;
+  return { previousSummary, toSummarize, kept: candidates.length - cut, coversUntilId: toSummarize[toSummarize.length - 1].id, parentId: lastQuestion.parentId };
 }
 
 /**

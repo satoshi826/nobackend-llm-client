@@ -8,6 +8,7 @@ import { editUserMessage, regenerate, switchSibling } from '../state/generation'
 import { requestHandlerFor } from '../state/tool-registry';
 import { IdleButton, IdleIconButton } from './IdleButton';
 import { suggestingFor } from '../state/suggestions';
+import { compactedSinceFailed } from '../state/compaction';
 import { modelOf } from '../state/models';
 import { settings } from '../state/settings';
 import { sentRequestsOf } from '../state/sent-requests';
@@ -255,6 +256,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
     const handler = requestHandlerFor(request);
     return !handler || handler.ready(request!);
   }).value;
+  const compacted = useComputed(() => compactedSinceFailed.value.has(m.id)).value;
   // The developer button: shows the requests recorded for this reply in this session
   const [reqOpen, setReqOpen] = useState(false);
   const showReq = settings.value.developerMode && sentRequestsOf(m.id).length > 0;
@@ -280,6 +282,7 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
         <ErrorNotice
           error={m.error}
           providerId={m.meta?.providerId}
+          compacted={compacted}
           retry={rerunnable ? () => regenerate(m.id) : undefined}
           otherModel={rerunnable && !owned ? () => openModelPicker({ kind: 'regenerate', assistantId: m.id }) : undefined}
         />

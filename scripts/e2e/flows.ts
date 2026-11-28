@@ -603,7 +603,7 @@ async function fails(page: Page, message: string) {
 
 const errors: Flow = {
   name: 'errors',
-  label: 'a refused key → its button opens Connections and keys; a conversation too long for the model → its button opens the compaction panel → compacted',
+  label: 'a refused key → its button opens Connections and keys; a conversation too long for the model → its button opens the compaction panel → compacted → regenerated, now answered',
   // The browser reports the mock's failures
   expected: ['status of 401 (Unauthorized)', 'status of 400 (Bad Request)'],
   async run({ page, url, a11y, shot }) {
@@ -627,8 +627,17 @@ const errors: Flow = {
     await shot('compaction panel');
     await a11y('compaction panel');
     await panel.getByRole('button', { name: 'Compact now' }).click();
-    await page.getByText(/^Summarized the messages so far/).waitFor();
+    const failed = page.locator('[data-message-id]').last();
+    // The summary goes above the question that failed, so sending it again carries the summary
+    await page.getByRole('button', { name: /^Summarized the older messages/ }).waitFor();
+    await page.keyboard.press('Escape');
     await shot('compacted');
+    // The failed answer now offers to send it again in place of compacting
+    await failed.getByRole('button', { name: 'Compact conversation' }).waitFor({ state: 'detached' });
+    await failed.getByRole('button', { name: 'Regenerate', exact: true }).first().click();
+    await answer(page, 'Message five #err:context').waitFor();
+    await settled(page);
+    await shot('regenerated');
   }
 };
 

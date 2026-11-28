@@ -6,11 +6,12 @@ import { getPreset } from '../lib/providers/registry';
 import { formatNumber } from '../lib/i18n';
 import { buildTranscript, estimateRequest, planCompaction, summarize, summaryInstruction, type RequestEstimate } from '../lib/chat/compact';
 import { estimateTokens } from '../lib/chat/context';
+import { moveChildren } from '../lib/chat/tree';
 import { vaultTransport as transport } from '../lib/vault/client';
 import { settings } from './settings';
 import { authFor } from './keys';
 import { accountInUse, modelOf, providerById } from './models';
-import { currentConv, currentId, currentPath, saveMessage, updateConversation } from './conversations';
+import { currentConv, currentId, currentPath, messages, saveMessage, updateConversation } from './conversations';
 import { showToast } from './ui';
 import { contributedSystemNotes } from './tool-registry';
 import { beginRun, endRun, runs } from './runs';
@@ -50,7 +51,21 @@ export const compactionPreview = computed(() => {
 /** The compaction in effect (the last one on the current path) */
 export const lastCompaction = computed(() => currentPath.value.findLast((m) => m.compaction)?.compaction ?? null);
 
-/** Summarize the older part and add a compaction node (the original history is kept). Returns true if compacted */
+/** Failed answers on the current path with a compaction above them made after they failed: sending them again uses the summary */
+export const compactedSinceFailed = computed(() => {
+  const out = new Set<string>();
+  let compactedAt = -Infinity;
+  for (const m of currentPath.value) {
+    if (m.compaction) compactedAt = Math.max(compactedAt, m.createdAt);
+    else if (m.status === 'error' && compactedAt > m.createdAt) out.add(m.id);
+  }
+  return out;
+});
+
+/**
+ * Summarize the older part and put a compaction node above the last question (the original history is kept), so
+ * regenerating its answer or editing it keeps the summary. Returns true if compacted
+ */
 export async function compactConversation(auto = false): Promise<boolean> {
   const conv = currentConv.value;
   if (!currentId.value || runs.value.has(conv.id)) return false;
@@ -62,6 +77,9 @@ export async function compactConversation(auto = false): Promise<boolean> {
   const ref = compactionModel();
   const cfg = providerById(ref.providerId);
   if (!cfg) return false;
+  const nodeId = repo.newId();
+  // Taken now: the run keeps this conversation's tree as it is, and the user may open another one meanwhile
+  const below = moveChildren(messages.value, plan.parentId, nodeId);
   const ctrl = beginRun(conv.id);
   compactingConv.value = conv.id;
   try {
@@ -77,9 +95,9 @@ export async function compactConversation(auto = false): Promise<boolean> {
       signal: ctrl.signal
     });
     const node: MessageRecord = {
-      id: repo.newId(),
+      id: nodeId,
       conversationId: conv.id,
-      parentId: conv.currentLeafId,
+      parentId: plan.parentId,
       role: 'system',
       parts: [{ type: 'text', text: summary }],
       createdAt: Date.now(),
@@ -87,8 +105,10 @@ export async function compactConversation(auto = false): Promise<boolean> {
       meta: { providerId: cfg.id, model: ref.modelId },
       compaction: { summary, coversUntilId: plan.coversUntilId, count: plan.toSummarize.length, model: ref.modelId, auto }
     };
+    // The node before what goes under it: stopped in between, the tree stays whole (the node is a leaf off the path)
     await saveMessage(node);
-    await updateConversation({ currentLeafId: node.id, updatedAt: Date.now() }, conv.id);
+    for (const m of below) await saveMessage(m);
+    await updateConversation({ updatedAt: Date.now() }, conv.id);
     showToast(t(auto ? 'compact.autoDone' : 'compact.done', { n: formatNumber(plan.toSummarize.length) }));
     return true;
   } catch (e) {

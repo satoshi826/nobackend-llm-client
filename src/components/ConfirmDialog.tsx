@@ -8,7 +8,8 @@ import { t } from './messages';
 interface ConfirmOptions {
   title: string;
   message: string;
-  confirmLabel?: string;
+  /** The button's text, saying what it does (削除, すべて削除してやり直す) */
+  confirmLabel: string;
   danger?: boolean;
   /** Can only be executed when the typed input matches (guards against mistakes on irreversible actions) */
   requireText?: string;
@@ -97,7 +98,7 @@ export function ConfirmDialog() {
           </Button>
           <Button variant={s.danger ? 'danger' : 'primary'} disabled={!canConfirm} onClick={() => close({ checked })}>
             <Icon name={s.danger ? 'trash' : 'check'} />
-            {s.confirmLabel ?? t('confirm.ok')}
+            {s.confirmLabel}
           </Button>
         </div>
       </div>

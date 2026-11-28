@@ -27,7 +27,6 @@ export const t = defineMessages(
     'model.subPriced': '{provider} ・ 入力 {price}/M',
     'confirm.typeToConfirm': '確認のため「{text}」と入力してください',
     'confirm.cancel': 'キャンセル',
-    'confirm.ok': 'OK',
     /** The word typed to confirm deleting everything */
     'confirm.deleteWord': '削除',
 
@@ -292,7 +291,6 @@ export const t = defineMessages(
       'model.subPriced': '{provider} · input {price}/M',
       'confirm.typeToConfirm': 'Type “{text}” to confirm',
       'confirm.cancel': 'Cancel',
-      'confirm.ok': 'OK',
       'confirm.deleteWord': 'delete',
 
       'md.copy': 'Copy',
@@ -546,7 +544,6 @@ export const t = defineMessages(
       'model.subPriced': '{provider} · 输入 {price}/M',
       'confirm.typeToConfirm': '请输入“{text}”以确认',
       'confirm.cancel': '取消',
-      'confirm.ok': '确定',
       'confirm.deleteWord': '删除',
 
       'md.copy': '复制',

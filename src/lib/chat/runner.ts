@@ -1,4 +1,4 @@
-// Execution loop: repeats "generate → run tools (with approval if needed) → regenerate with the results" up to the step limit (§9).
+// Execution loop: repeats "generate → run tools (with approval if needed) → regenerate with the results" up to the step limit (maxSteps).
 import type { AuthRef, ChatParams, ProviderConfig, ProviderEvent, ProviderPreset, Transport } from '../providers/types';
 import type { Part } from '../providers/types';
 import { getAdapter } from '../providers/registry';

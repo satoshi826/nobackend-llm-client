@@ -30,6 +30,12 @@ describe('tree', () => {
     expect(resolveLeaf(all, null)).toBe('u2');
     expect(resolveLeaf([], 'x')).toBeNull();
   });
+  it('still opens a conversation whose messages point at each other in a loop (damaged data)', () => {
+    const loop = [rec('x', 'y', 'user', 'a', 1), rec('y', 'x', 'assistant', 'b', 2)];
+    expect(pathToLeaf(new Map(loop.map((m) => [m.id, m])), 'y').map((m) => m.id)).toEqual(['x', 'y']);
+    expect(['x', 'y']).toContain(deepestLatestLeaf(loop, 'x'));
+    expect(['x', 'y']).toContain(resolveLeaf(loop, 'gone'));
+  });
 });
 
 describe('applyEvent', () => {

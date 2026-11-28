@@ -15,7 +15,7 @@ import { detectLang, formatNumber, getLang, setLang } from '../src/lib/i18n';
 import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, pagesReachWeb, parseCheck, type FetchCheck, type FetchMode, type LeakPlace, type FromFetcher, type ToPageFetcher } from '../src/lib/fetcher/protocol';
 import '../vault/style.css';
 import './style.css';
-import { markedPieces, skipsQuestion } from './composed';
+import { markedPieces, offersRemember, skipsQuestion } from './composed';
 import { t } from './messages';
 import { MAX_REDIRECTS, redirectStep } from './redirect';
 
@@ -418,7 +418,7 @@ function askNext() {
       { class: 'card stack' },
       h('strong', {}, t('titlePage')),
       h('div', {}, h('span', { class: 'muted' }, `${t('from')}: `), h('strong', {}, u.host)),
-      h('p', { class: 'mono secret' }, u.href),
+      address(u, null),
       redirectNote(asking),
       h('p', { class: 'muted' }, t('noteDirect', { host: u.host })),
       RELAY && h('p', { class: 'muted' }, t('noteRelay', { host: u.host, relay: new URL(RELAY).host })),
@@ -458,7 +458,7 @@ function render() {
 /** Sites ticked "without asking" during this fetch (the address asked first and any redirect asked about): kept once it succeeds */
 const toRemember: string[] = [];
 
-/** The address as shown in a question, the parts the model put together marked */
+/** The address as shown in a question, readable, the parts the model put together marked */
 const address = (u: URL, c: FetchCheck | null) =>
   h('p', { class: 'mono secret' }, ...markedPieces(u.href, c?.composed ?? []).map((p) => (p.marked ? h('mark', {}, p.text) : p.text)));
 
@@ -527,8 +527,8 @@ function question(r: Req) {
       RELAY && h('p', { class: 'muted' }, t('noteRelay', { host: u.host, relay: new URL(RELAY).host })),
       mode === 'read' && h('p', { class: 'muted' }, t('noteJina', { jina: new URL(JINA).host })),
       mode === 'save' && h('p', { class: 'muted' }, t('limit', { max: MAX_MB })),
-      !r.blind && h('label', { class: 'check' }, remember, t(mode === 'read' ? 'rememberRead' : 'rememberSave', { host: u.host })),
-      !r.blind && h('p', { class: 'muted' }, t('rememberNote', { host: u.host })),
+      offersRemember({ blind: r.blind, check: c }) && h('label', { class: 'check' }, remember, t(mode === 'read' ? 'rememberRead' : 'rememberSave', { host: u.host })),
+      offersRemember({ blind: r.blind, check: c }) && h('p', { class: 'muted' }, t('rememberNote', { host: u.host })),
       allowed.length > 0 && forget,
       status,
       h('div', { class: 'btns' }, cancel, go)

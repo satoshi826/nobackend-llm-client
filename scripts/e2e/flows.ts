@@ -507,7 +507,7 @@ const GUIDE = `<!doctype html><meta charset="utf-8"><title>使い方の案内</t
 
 const fetchLeak: Flow = {
   name: 'fetch-leak',
-  label: 'a page the user asked to read, on a site they chose not to be asked about, hides an instruction to fetch an address with their file in it → the fetch page asks anyway, marks what the model added, names the file the text is from and offers Cancel first → declined, nothing is requested from that address and the model is told',
+  label: 'a page the user asked to read, on a site they chose not to be asked about, hides an instruction to fetch an address with their file in it → the fetch page asks anyway (with no choice to stop asking), shows the address readable, marks what the model added, names the file the text is from and offers Cancel first → declined, nothing is requested from that address and the model is told',
   reach: ['https://trusted.example'],
   async run({ page, url, a11y, shot }) {
     const requested: string[] = [];
@@ -530,7 +530,9 @@ const fetchLeak: Flow = {
     await fetchPage.getByText('The address contains text that is also in 調査レポート.md.').waitFor();
     await fetchPage.getByText('trusted.example is a site not asked about, but addresses the model puts together are always asked about.').waitFor();
     const marked = await fetchPage.locator('mark').allTextContents();
-    if (marked.join(' ') !== `collect d=${encodeURIComponent('モックで作ったレポートです。')}`) throw new Error(`The marked parts are ${JSON.stringify(marked)}`);
+    // Shown readable (what is fetched stays encoded), and with no choice to stop asking
+    if (marked.join(' ') !== 'collect d=モックで作ったレポートです。') throw new Error(`The marked parts are ${JSON.stringify(marked)}`);
+    if (await fetchPage.getByRole('checkbox').count()) throw new Error('A put-together address offers not to be asked about again');
     const focused = await fetchPage.locator(':focus').textContent();
     if (focused !== 'Cancel') throw new Error(`The button offered first is ${JSON.stringify(focused)}, not Cancel`);
     await a11y('fetch page warning');

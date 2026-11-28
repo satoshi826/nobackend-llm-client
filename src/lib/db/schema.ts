@@ -404,6 +404,14 @@ export function onDatabaseReplaced(fn: () => void): () => void {
   return () => replacedListeners.delete(fn);
 }
 
+/** The database's name (also the name of the lock that lets one tab use it: state/tab.ts) */
+export const databaseName = () => dbName;
+
+/** Stop using the database for good in this tab (another tab took it over) */
+export function closeDatabase() {
+  _db?.close({ disableAutoOpen: true });
+}
+
 /** Use another database (perf mode keeps its generated data apart from the real one); call before the first db() */
 export function setDatabaseName(name: string) {
   if (_db) throw new Error('The database is already open');

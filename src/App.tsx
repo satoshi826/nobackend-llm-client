@@ -1,5 +1,8 @@
-import { useEffect, useRef } from 'preact/hooks';
-import { ready, replacedByAnotherTab } from './state/app';
+import type { ComponentChildren } from 'preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { ready, replacedByAnotherTab, startFailed } from './state/app';
+import { diagnosticsText } from './state/diagnostics';
+import { tabState, takeOver } from './state/tab';
 import { backgroundImage, backgroundOf, GLOW_PRESETS, loadBackgroundImage } from './state/background';
 import { uiLang } from './state/settings';
 import { dataLock, dataWork } from './state/lock';
@@ -16,6 +19,7 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { mainViews, overlays } from './components/extensions';
 import { mainView } from './state/ui';
 import { t } from './components/messages';
+import { t as ts } from './components/settings/messages';
 
 // Screens that are not on the first screen load their code when first opened (components/lazy.tsx)
 const closeModal = () => (modal.value = null);
@@ -102,27 +106,85 @@ function Toast() {
   );
 }
 
-/** Another tab upgraded the app's data: this tab stopped using it, so nothing is lost by reloading */
-function Replaced() {
+/** A screen in place of the app, when this tab cannot use its data: what happened, and the way on */
+function Stopped({ title, text, children }: { title: string; text: string; children: ComponentChildren }) {
   return (
     <div class="relative isolate grid h-full place-items-center px-6">
       <SkyGlow />
-      <div class="max-w-sm text-center">
-        <h1 class="text-lg font-semibold text-ink-strong">{t('app.replacedTitle')}</h1>
-        <p class="mt-2 text-sm text-muted">{t('app.replacedText')}</p>
-        <Button variant="primary" class="mt-4" onClick={() => location.reload()}>
-          <Icon name="refresh" />
-          {t('app.reload')}
-        </Button>
+      <div class="w-full max-w-md text-center">
+        <h1 class="text-lg font-semibold text-ink-strong">{title}</h1>
+        <p class="mt-2 text-sm text-muted">{text}</p>
+        {children}
       </div>
     </div>
+  );
+}
+
+const reloadButton = () => (
+  <Button variant="primary" class="mt-4" onClick={() => location.reload()}>
+    <Icon name="refresh" />
+    {t('app.reload')}
+  </Button>
+);
+
+/** Another tab uses the data (waiting), or took it over (left): the user can use the app here instead */
+function OtherTab({ left }: { left: boolean }) {
+  return (
+    <Stopped title={t(left ? 'app.leftTitle' : 'app.otherTabTitle')} text={t(left ? 'app.leftText' : 'app.otherTabText')}>
+      <Button variant="primary" class="mt-4" onClick={takeOver}>
+        <Icon name="swap" />
+        {t('app.useHere')}
+      </Button>
+    </Stopped>
+  );
+}
+
+/** Starting failed: why, a reload, and the diagnostics to report it with */
+function StartFailed({ message }: { message: string }) {
+  const [copied, setCopied] = useState(false);
+  const [text, setText] = useState<string | null>(null);
+  const copy = async () => {
+    const s = await diagnosticsText();
+    try {
+      await navigator.clipboard.writeText(s);
+      setCopied(true);
+    } catch {
+      // No clipboard (e.g. not allowed): the text is shown to select by hand
+      setText(s);
+    }
+  };
+  return (
+    <Stopped title={t('app.startFailedTitle')} text={t('app.startFailedText')}>
+      <p class="mt-3 rounded-lg bg-sunken px-3 py-2 text-left font-mono text-xs break-words text-ink">{message}</p>
+      <div class="flex flex-wrap justify-center gap-2">
+        {reloadButton()}
+        <Button variant="outline" class="mt-4" onClick={() => void copy()}>
+          <Icon name="copy" />
+          {ts('about.diagCopy')}
+        </Button>
+      </div>
+      {copied && (
+        <p role="status" class="mt-3 text-xs text-muted">
+          {ts('about.diagCopied')}
+        </p>
+      )}
+      {text !== null && <textarea readOnly class="mt-3 h-48 w-full rounded-lg bg-sunken p-3 font-mono text-xs text-ink" value={text} />}
+    </Stopped>
   );
 }
 
 export function App() {
   // Reading the language here re-renders the whole tree when it changes (messages are read during render)
   void uiLang.value;
-  if (replacedByAnotherTab.value) return <Replaced />;
+  // Another tab upgraded the app's data: this tab stopped using it, so nothing is lost by reloading
+  if (replacedByAnotherTab.value)
+    return (
+      <Stopped title={t('app.replacedTitle')} text={t('app.replacedText')}>
+        {reloadButton()}
+      </Stopped>
+    );
+  if (tabState.value !== 'active') return <OtherTab left={tabState.value === 'left'} />;
+  if (startFailed.value !== null) return <StartFailed message={startFailed.value} />;
   if (!ready.value) {
     return <div class="grid h-full place-items-center text-sm text-muted">{t('app.loading')}</div>;
   }

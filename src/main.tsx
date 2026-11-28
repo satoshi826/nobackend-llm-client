@@ -30,9 +30,7 @@ installTooltips();
 if ((import.meta.env.DEV || import.meta.env.VITE_PERF === '1') && perfMode) void import('./perf').then((m) => m.exposePerfTools());
 // Screens split into their own chunks are fetched in the background once the browser is idle
 preloadLazyComponents();
-init().catch((e) => {
-  console.error('Initialization failed', e);
-});
+void init();
 
 // PWA: register the Service Worker only in production builds (it caches only the app itself)
 // Learn about newer builds (told in the sidebar and Settings → 情報; applied on reload)

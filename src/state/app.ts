@@ -13,14 +13,30 @@ import { restoreRoute } from './router';
 import { loadFeatureData } from './lifecycle';
 import { dataLock, initDataLock, setBusyCheck } from './lock';
 import { isStreaming } from './runs';
+import { holdData, tabState } from './tab';
 
 
 export const ready = signal(false);
+/** Starting failed: the error's message (the app shows it, with a reload, instead of loading forever) */
+export const startFailed = signal<string | null>(null);
 /** Another tab upgraded (or deleted) the database: this tab stopped using it and has to be reloaded */
 export const replacedByAnotherTab = signal(false);
 onDatabaseReplaced(() => (replacedByAnotherTab.value = true));
 
 export async function init() {
+  try {
+    if (!(await holdData())) {
+      tabState.value = 'waiting';
+      return;
+    }
+    await start();
+  } catch (e) {
+    console.error('Initialization failed', e);
+    startFailed.value = String((e as Error)?.message ?? e);
+  }
+}
+
+async function start() {
   // The vault page loads in its frame while the stored data is read (it is awaited before the first screen,
   // which depends on whether keys are set)
   const keys = connectKeys();

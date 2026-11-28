@@ -22,12 +22,12 @@ import { veniceImageProvider } from './providers/venice';
 import { openrouterImageProvider } from './providers/openrouter';
 import { geminiImageProvider } from './providers/gemini';
 import { openaiImageProvider } from './providers/openai';
-import { ImageApiError, generationCost, hasOption, promptLength, sizeOf, type ImageModelInfo } from './providers/common';
+import { ImageApiError, generationCost, hasOption, promptLength, sizeOf, type ImageModelInfo, type TagFamily } from './providers/common';
 import { deepinfraImageProvider, nanogptImageProvider, togetherImageProvider } from './providers/hosts';
 import { imageProviderList, imageProviderOf, registerImageProvider, type ImageCallContext, type ImageProvider } from './providers/types';
 import { imageStems, makeImageTool, type ImageToolInput } from './tool';
 import { extOfMime } from '../../../lib/paths';
-import { TAG_PRESETS, isPresetNegative, sentPrompt } from './presets';
+import { TAG_PRESETS, isPresetNegative, qualityTagsAdded, qualityTagsText, sentPrompt, withQualityTags, type QualityTagsByFamily } from './presets';
 import { formatNumber, TranslatedError } from '../../../lib/i18n';
 import { modelLists } from '../models';
 import { t } from './messages';
@@ -54,14 +54,16 @@ export interface ImageDefaults {
   negativePrompt: string;
   enhancePrompt: boolean;
   seed: string;
-  /** Add the recommended quality tags of the model's family (presets.ts) */
+  /** Add quality tags for the model's family */
   qualityTags: boolean;
+  /** The quality tags of each family the user changed; a family left out gets the recommended ones (presets.ts) */
+  qualityTagsByFamily: QualityTagsByFamily;
 }
 const DEFAULT_IMAGE_SETTINGS = {
   /** Format images are saved in */
   imageFormat: 'webp' as 'webp' | 'png' | 'jpeg',
   /** Last-used options (image mode starts from these) */
-  imageDefaults: { providerId: '', model: '', size: '', aspectRatio: '1:1', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '', qualityTags: true } as ImageDefaults,
+  imageDefaults: { providerId: '', model: '', size: '', aspectRatio: '1:1', variants: 1, style: '', negativePrompt: '', enhancePrompt: false, seed: '', qualityTags: true, qualityTagsByFamily: {} } as ImageDefaults,
   /** Let chat models create images with the generate_image tool */
   imageTool: true
 };
@@ -211,10 +213,17 @@ effect(() => {
   if (now !== preset && (!now || isPresetNegative(now))) void setImageDefaults({ negativePrompt: preset });
 });
 
-/** The quality tags a model's family recommends, when the user keeps them on */
+/** The quality tags a family gets: the user's own, else the recommended ones */
+export const qualityTagsOf = (family: TagFamily) => qualityTagsText(family, imageDefaults.value.qualityTagsByFamily);
+
+/** Change a family's quality tags; undefined goes back to the recommended ones */
+export async function setQualityTags(family: TagFamily, text: string | undefined) {
+  await setImageDefaults({ qualityTagsByFamily: withQualityTags(imageDefaults.value.qualityTagsByFamily, family, text) });
+}
+
+/** The quality tags for a model's family, when the user keeps them on */
 function qualityTagsFor(m: ImageModelInfo | undefined): ImageParams['qualityTags'] {
-  const preset = m?.family && TAG_PRESETS[m.family];
-  return preset && imageDefaults.value.qualityTags ? { text: preset.quality, at: preset.at } : undefined;
+  return m?.family && imageDefaults.value.qualityTags ? qualityTagsAdded(m.family, imageDefaults.value.qualityTagsByFamily) : undefined;
 }
 
 // Prices some providers list per model (OpenRouter) are fetched when the model is in use

@@ -1,10 +1,10 @@
 // Image mode's parts of the input box: its options, its model, what goes beside the text (characters left, "to tags")
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComposerApi } from '../../../components/extensions';
-import { Icon, IconButton, Segmented, Select, Spinner, TextArea, TextField, cx } from '../../../components/ui';
+import { Button, Collapse, Icon, IconButton, Segmented, Select, Spinner, TextArea, TextField, cx } from '../../../components/ui';
 import { showToast } from '../../../state/ui';
 import { formatNumber, formatUsd } from '../../../lib/i18n';
-import { hasOption, sizeOf } from '../image/providers/common';
+import { hasOption, sizeOf, type TagFamily } from '../image/providers/common';
 import { imageProviderOf } from '../image/providers/types';
 import { TAG_PRESETS } from '../image/presets';
 import { tagWriter, toTags } from '../image/to-tags';
@@ -24,8 +24,10 @@ import {
   privacyLabelOf,
   promptRoom,
   promptUse,
+  qualityTagsOf,
   setConversationImageModel,
-  setImageDefaults
+  setImageDefaults,
+  setQualityTags
 } from '../image/state';
 import { imageCount, t as ti } from '../image/messages';
 import { ModelButton, ModeNotice, OptionRow, OptionsChip, SwitchRow, type ModelEntry } from './Mode';
@@ -43,6 +45,38 @@ function Choose<T extends string>({ label, value, items, onChange }: { label: st
         </option>
       ))}
     </Select>
+  );
+}
+
+/** The quality tags of a tag model's family: on or off, and under the switch the tags themselves, to change */
+function QualityTags({ family }: { family: TagFamily }) {
+  const on = imageDefaults.value.qualityTags;
+  const preset = TAG_PRESETS[family];
+  const text = qualityTagsOf(family);
+  return (
+    <div>
+      <SwitchRow label={ti('bar.qualityTags')} checked={on} onChange={(v) => void setImageDefaults({ qualityTags: v })} />
+      <Collapse open={on}>
+        <div class="space-y-1.5 pb-2.5">
+          <TextArea
+            compact
+            rows={2}
+            class="block w-full resize-none"
+            value={text}
+            aria-label={ti('bar.qualityField', { family: preset.name })}
+            onInput={(e) => void setQualityTags(family, (e.target as HTMLTextAreaElement).value)}
+          />
+          <div class="flex items-center justify-between gap-2">
+            <span class="min-w-0 text-xs leading-5 text-muted">{ti(preset.at === 'start' ? 'bar.qualityStart' : 'bar.qualityEnd', { family: preset.name })}</span>
+            {/* Its place is kept while the tags are the recommended ones, so nothing moves as they are edited */}
+            <Button class={cx('shrink-0 text-xs', text === preset.quality && 'invisible')} onClick={() => void setQualityTags(family, undefined)}>
+              <Icon name="refresh" class="size-3.5" />
+              {ti('bar.qualityReset')}
+            </Button>
+          </div>
+        </div>
+      </Collapse>
+    </div>
   );
 }
 
@@ -67,7 +101,6 @@ export function ImageOptions() {
   const tierLabel = m.constraints.tierLabel === 'quality' ? ti('bar.quality') : ti('bar.resolution');
   const counts = [1, 2, 3, 4].slice(0, m.maxImages ?? 4);
   const variants = Math.min(d.variants, counts.length);
-  const preset = m.family && TAG_PRESETS[m.family];
   const styles = hasOption(m, 'styles') ? imageStyles.value : [];
   const cost = estimateCost(modeParams(''));
   const costText = cost !== undefined ? t('cost.estimate', { cost: formatUsd(cost) }) : t('cost.unknown');
@@ -142,14 +175,7 @@ export function ImageOptions() {
           />
         </OptionRow>
       )}
-      {preset && (
-        <SwitchRow
-          label={ti('bar.qualityTags')}
-          hint={d.qualityTags ? ti(preset.at === 'start' ? 'bar.qualityStart' : 'bar.qualityEnd', { tags: preset.quality }) : undefined}
-          checked={d.qualityTags}
-          onChange={(v) => void setImageDefaults({ qualityTags: v })}
-        />
-      )}
+      {m.family && <QualityTags family={m.family} />}
       {hasOption(m, 'enhance') && <SwitchRow label={ti('bar.enhance')} checked={d.enhancePrompt} onChange={(v) => void setImageDefaults({ enhancePrompt: v })} />}
     </OptionsChip>
   );

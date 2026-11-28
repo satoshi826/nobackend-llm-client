@@ -635,6 +635,7 @@ export function Modal({
   fullOnPhone?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
   useDialog(ref, { onClose });
   return (
     <div class="backdrop fixed inset-0 z-40 flex items-end justify-center sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -657,7 +658,16 @@ export function Modal({
             <Icon name="x" />
           </IconButton>
         </div>
-        {bare ? <div class="flex min-h-0 flex-1 flex-col">{children}</div> : <div class="scroll-thin min-h-0 flex-1 overflow-y-auto p-5">{children}</div>}
+        {bare ? (
+          <div class="flex min-h-0 flex-1 flex-col">{children}</div>
+        ) : (
+          // What is drawn inside measures "near the screen" against the dialog's own scrolling (long lists, thumbnails)
+          <ScrollArea.Provider value={body}>
+            <div ref={body} class="scroll-thin min-h-0 flex-1 overflow-y-auto p-5">
+              {children}
+            </div>
+          </ScrollArea.Provider>
+        )}
       </div>
     </div>
   );

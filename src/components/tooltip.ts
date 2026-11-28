@@ -38,8 +38,8 @@ function tipFor(from: EventTarget | null): { el: Element; text: string; cut: boo
     if (cutOff(el)) return { el, text: (el as HTMLElement).innerText.trim(), cut: true };
     if (el.matches(CONTROL)) {
       const label = el.getAttribute('aria-label');
-      // A control with words on it says them itself
-      return label && !el.textContent?.trim() ? { el, text: label, cut: false } : null;
+      // A control with words on it says them itself, a text field its placeholder
+      return label && !el.textContent?.trim() && !el.getAttribute('placeholder') ? { el, text: label, cut: false } : null;
     }
   }
   return null;

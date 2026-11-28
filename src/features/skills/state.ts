@@ -10,6 +10,7 @@ import { registerDataLoader } from '../../state/lifecycle';
 import { registerToolProvider } from '../../state/tool-registry';
 import { makeSaveSkillTool, makeSkillTool } from './tools';
 import { t } from './messages';
+import { TranslatedError } from '../../lib/i18n';
 
 /** Skills created by the user (and the model) */
 export const skills = signal<Skill[]>([]);
@@ -59,10 +60,9 @@ const byName = (a: Skill, b: Skill) => a.name.localeCompare(b.name);
  */
 export async function saveSkill(draft: SkillDraft, id?: string, by?: 'model'): Promise<Skill> {
   const d: SkillDraft = { name: draft.name.trim(), description: draft.description.trim(), body: draft.body, modelInvocable: draft.modelInvocable };
-  const err = validateSkill(d);
-  if (err) throw new Error(err);
-  if (BUILTIN_NAMES.has(d.name)) throw new Error(t('state.builtinName', { name: d.name }));
-  if (skills.value.some((s) => s.name === d.name && s.id !== id)) throw new Error(t('state.duplicate', { name: d.name }));
+  if (validateSkill(d)) throw new TranslatedError(() => validateSkill(d)!);
+  if (BUILTIN_NAMES.has(d.name)) throw new TranslatedError(() => t('state.builtinName', { name: d.name }));
+  if (skills.value.some((s) => s.name === d.name && s.id !== id)) throw new TranslatedError(() => t('state.duplicate', { name: d.name }));
   const prev = id ? skills.value.find((s) => s.id === id) : undefined;
   const now = Date.now();
   const createdBy = prev ? prev.createdBy : by;

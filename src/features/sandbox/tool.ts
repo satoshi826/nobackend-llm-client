@@ -3,6 +3,7 @@
 import type { Tool } from '../../lib/tools/types';
 import { RUN_TIMEOUT_MS, runJavaScript, runText } from '../../lib/sandbox/client';
 import { t } from './messages';
+import { TranslatedError } from '../../lib/i18n';
 
 export const RUN_JAVASCRIPT = 'run_javascript';
 /** Characters of output given back to the model */
@@ -38,7 +39,7 @@ export function makeRunJavaScriptTool(readFile: FileReader): Tool<RunInput> {
     prepare(raw) {
       const r = (raw ?? {}) as { code?: unknown; file_ids?: unknown; dom?: unknown };
       const code = typeof r.code === 'string' ? r.code : '';
-      if (!code.trim()) throw new Error(t('tool.noCode'));
+      if (!code.trim()) throw new TranslatedError(() => t('tool.noCode'));
       const file_ids = Array.isArray(r.file_ids) ? r.file_ids.filter((x): x is string => typeof x === 'string' && !!x.trim()).slice(0, 10) : [];
       return { code, file_ids, dom: r.dom === true };
     },

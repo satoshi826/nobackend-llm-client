@@ -8,6 +8,7 @@ import { toDefinition, type Permission, type Tool, type ToolContext } from '../t
 import { applyEvent, type BlockMap } from './events';
 import { buildRequestMessages, turnMessages } from './request';
 import { t } from './messages';
+import { inEnglish, TranslatedError } from '../i18n';
 
 export { applyEvent } from './events';
 export { buildRequestMessages, turnMessages } from './request';
@@ -69,6 +70,22 @@ export interface ApprovalDecision {
   reason?: string;
   /** Arguments edited by the user */
   input?: unknown;
+}
+
+type ToolPart = Extract<Part, { type: 'tool' }>;
+
+/** The call failed. An error of the app's own (TranslatedError) is shown in the UI language and read by the model in English */
+function fail(call: ToolPart, e: unknown) {
+  call.state = 'output-error';
+  call.error = e instanceof Error ? e.message : String(e);
+  call.modelError = e instanceof TranslatedError ? e.english : undefined;
+}
+
+/** The app denied the call for a reason of its own (shown in the UI language, read by the model in English) */
+function deny(call: ToolPart, auto: boolean, reason: () => string) {
+  call.state = 'output-denied';
+  call.approval = { approved: false, auto, reason: reason() };
+  call.modelError = inEnglish(reason);
 }
 
 export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
@@ -177,7 +194,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
     }
 
     // ---- Running tools ----
-    const calls = msg.parts.slice(segStart).filter((p): p is Extract<Part, { type: 'tool' }> => p.type === 'tool');
+    const calls = msg.parts.slice(segStart).filter((p): p is ToolPart => p.type === 'tool');
     if (calls.length === 0 || tools.length === 0) break;
     msg.status = 'streaming';
     let stop = false;
@@ -186,16 +203,14 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
       if (call.state === 'output-error') continue; // argument parse failures go back to the model as is
       const tool = tools.find((t) => t.name === call.name);
       if (!tool) {
-        call.state = 'output-error';
-        call.error = t('run.unknownTool', { name: call.name });
+        fail(call, new TranslatedError(() => t('run.unknownTool', { name: call.name })));
         continue;
       }
       let input: unknown;
       try {
         input = tool.prepare(call.input);
       } catch (e) {
-        call.state = 'output-error';
-        call.error = (e as Error).message;
+        fail(call, e);
         continue;
       }
       call.input = input;
@@ -203,24 +218,24 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
       const n = (callCounts.get(sig) ?? 0) + 1;
       callCounts.set(sig, n);
       if (n >= 3) {
-        call.state = 'output-error';
-        call.error = t('run.repeated');
+        fail(call, new TranslatedError(() => t('run.repeated')));
         stop = true;
         continue;
       }
       const perm = o.permissionFor?.(tool) ?? 'ask';
       if (perm === 'deny') {
-        call.state = 'output-denied';
-        call.approval = { approved: false, auto: true, reason: t('run.forbidden') };
+        deny(call, true, () => t('run.forbidden'));
         continue;
       }
       if (perm === 'ask') {
+        if (!o.requestApproval) {
+          deny(call, false, () => t('run.noApprovalUi'));
+          continue;
+        }
         call.state = 'approval-requested';
         o.onUpdate(msg);
         await o.persist(msg);
-        const d: ApprovalDecision = o.requestApproval
-          ? await o.requestApproval({ toolCallId: call.toolCallId, tool, input, signal: o.signal })
-          : { approved: false, reason: t('run.noApprovalUi') };
+        const d = await o.requestApproval({ toolCallId: call.toolCallId, tool, input, signal: o.signal });
         if (o.signal.aborted) break;
         if (!d.approved) {
           call.state = 'output-denied';
@@ -233,8 +248,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
             input = tool.prepare(d.input);
             call.input = input;
           } catch (e) {
-            call.state = 'output-error';
-            call.error = (e as Error).message;
+            fail(call, e);
             continue;
           }
         }
@@ -256,8 +270,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
           if (!msg.parts.some((p) => p.type === 'source' && p.url === s.url)) msg.parts.push({ type: 'source', url: s.url, title: s.title, snippet: s.snippet });
         }
       } catch (e) {
-        call.state = 'output-error';
-        call.error = o.signal.aborted ? t('run.stopped') : (e as Error).message;
+        fail(call, o.signal.aborted ? new TranslatedError(() => t('run.stopped')) : e);
       }
       call.endedAt = Date.now();
       o.onUpdate(msg);

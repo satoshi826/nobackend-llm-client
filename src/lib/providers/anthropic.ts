@@ -9,7 +9,7 @@
 import type { ChatMessage, ChatRequest, ModelInfo, ProviderAdapter, ProviderEvent, Part } from './types';
 import { parseSSE } from './sse';
 import { classifyError, failureOf, isAbort } from './errors';
-import { send } from './openai-compatible';
+import { send, toolFailureText } from './openai-compatible';
 import { t as tp } from './messages';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
@@ -19,9 +19,7 @@ const MAX_SEARCHES = 5;
 const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: MAX_SEARCHES };
 
 function toolResultText(t: ToolPart): string {
-  if (t.state === 'output-denied') return tp('tool.denied', { reason: t.approval?.reason ?? '' }).trim();
-  if (t.state === 'output-error') return tp('tool.failed', { error: t.error ?? '' });
-  return typeof t.modelOutput === 'string' ? t.modelOutput : JSON.stringify(t.modelOutput ?? null);
+  return toolFailureText(t) ?? (typeof t.modelOutput === 'string' ? t.modelOutput : JSON.stringify(t.modelOutput ?? null));
 }
 
 /** Normalized messages → Anthropic system and messages */

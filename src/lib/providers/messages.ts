@@ -1,11 +1,9 @@
-// Texts of lib/providers: errors, and texts sent back to models
+// Texts of lib/providers: errors
 // (i18n/index named explicitly: endpoints.ts is also loaded by the Vite config)
 import { defineMessages } from '../i18n/index';
 
 export const t = defineMessages(
   {
-    'tool.denied': 'ユーザーがこのツールの実行を拒否しました。{reason}',
-    'tool.failed': 'ツールの実行に失敗しました: {error}',
     'stream.stopped': '停止しました。',
     'stream.emptyBody': '応答の本文が空でした。もう一度試してください。',
     'stream.error': 'ストリームの途中でエラーが発生しました: {message}',
@@ -32,8 +30,6 @@ export const t = defineMessages(
   },
   {
     en: {
-      'tool.denied': 'The user denied running this tool. {reason}',
-      'tool.failed': 'The tool failed: {error}',
       'stream.stopped': 'Stopped.',
       'stream.emptyBody': 'The response body was empty. Try again.',
       'stream.error': 'An error occurred during the stream: {message}',
@@ -59,8 +55,6 @@ export const t = defineMessages(
       'custom.urlExtras': '{where}.baseUrl cannot contain credentials or a query.'
     },
     zh: {
-      'tool.denied': '用户拒绝运行此工具。{reason}',
-      'tool.failed': '工具运行失败：{error}',
       'stream.stopped': '已停止。',
       'stream.emptyBody': '响应正文为空。请重试。',
       'stream.error': '流式传输过程中发生错误：{message}',

@@ -2,6 +2,7 @@
 import type { Part, ProviderEvent } from '../providers/types';
 import type { MessageRecord } from '../db/schema';
 import { t } from './messages';
+import { inEnglish } from '../i18n';
 import { noteError } from '../error-log';
 
 export interface BlockMap {
@@ -44,7 +45,11 @@ export function applyEvent(msg: MessageRecord, ev: ProviderEvent, blocks: BlockM
       if (p?.type === 'tool') {
         p.input = ev.input;
         p.state = ev.parseError ? 'output-error' : 'input-available';
-        if (ev.parseError) p.error = t('events.parseError', { error: ev.parseError });
+        if (ev.parseError) {
+          const text = () => t('events.parseError', { error: ev.parseError! });
+          p.error = text();
+          p.modelError = inEnglish(text);
+        }
       }
       break;
     }

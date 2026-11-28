@@ -7,6 +7,7 @@ import { SERVICES } from '../../lib/tools/services';
 import type { Tool, ToolContext, ToolResult, ToolSource } from '../../lib/tools/types';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
 import { t } from './messages';
+import { TranslatedError } from '../../lib/i18n';
 
 // What the model reads is English whatever the UI language (tool descriptions, notes, result headers): models follow
 // English descriptions most reliably, and the request stays the same when the language changes (prompt cache).
@@ -61,7 +62,7 @@ export const webSearchTool: Tool<SearchInput> = {
   prepare(raw) {
     const r = (raw ?? {}) as Record<string, unknown>;
     const query = typeof r.query === 'string' ? r.query.trim() : '';
-    if (!query) throw new Error(t('search.emptyQuery'));
+    if (!query) throw new TranslatedError(() => t('search.emptyQuery'));
     const n = Number(r.max_results ?? 5);
     return { query: query.slice(0, 400), max_results: Number.isFinite(n) ? Math.min(10, Math.max(1, Math.round(n))) : 5 };
   },
@@ -117,9 +118,9 @@ export function makeFetchUrlTool(read: PageReader): Tool<FetchInput> {
     prepare(raw) {
       const r = (raw ?? {}) as Record<string, unknown>;
       const url = fetchableUrl(typeof r.url === 'string' ? r.url : '');
-      if (!url) throw new Error(t('fetch.badUrl'));
+      if (!url) throw new TranslatedError(() => t('fetch.badUrl'));
       const prompt = typeof r.prompt === 'string' ? r.prompt.trim() : '';
-      if (!prompt) throw new Error(t('fetch.noPrompt'));
+      if (!prompt) throw new TranslatedError(() => t('fetch.noPrompt'));
       return { url: url.href, prompt };
     },
     execute: (input, ctx) => read(input.url, input.prompt, ctx.signal)

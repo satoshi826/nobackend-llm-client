@@ -8,6 +8,7 @@ import type {
   ProviderConfig,
   ProviderEvent,
   ProviderPreset,
+  Part,
   Transport
 } from './types';
 import { parseSSE } from './sse';
@@ -19,6 +20,19 @@ import { t as tp } from './messages';
 export function numberOf(x: unknown): number | undefined {
   const n = typeof x === 'string' ? parseFloat(x) : x;
   return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * What the model reads for a tool call that failed or was denied (undefined for one that ran): in English, whatever
+ * the UI language. The app's own texts come as modelError; a tool's raw error and the user's reason as they are
+ */
+export function toolFailureText(t: Extract<Part, { type: 'tool' }>): string | undefined {
+  if (t.state === 'output-denied') {
+    const reason = t.modelError ?? t.approval?.reason;
+    return reason ? `The user denied running this tool. ${reason}` : 'The user denied running this tool.';
+  }
+  if (t.state === 'output-error') return `The tool failed: ${t.modelError ?? t.error ?? ''}`;
+  return undefined;
 }
 
 export function joinUrl(base: string, path: string): string {
@@ -57,14 +71,7 @@ export function toOpenAIMessages(messages: ChatMessage[]): any[] {
       out.push(msg);
       for (const t of toolParts) {
         if (t.state === 'output-available' || t.state === 'output-error' || t.state === 'output-denied') {
-          const content =
-            t.state === 'output-denied'
-              ? tp('tool.denied', { reason: t.approval?.reason ?? '' }).trim()
-              : t.state === 'output-error'
-                ? tp('tool.failed', { error: t.error ?? '' })
-                : typeof t.modelOutput === 'string'
-                  ? t.modelOutput
-                  : JSON.stringify(t.modelOutput ?? null);
+          const content = toolFailureText(t) ?? (typeof t.modelOutput === 'string' ? t.modelOutput : JSON.stringify(t.modelOutput ?? null));
           out.push({ role: 'tool', tool_call_id: t.toolCallId, content });
         }
       }

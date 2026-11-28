@@ -82,7 +82,14 @@ export type Part =
       approval?: { approved: boolean; reason?: string; auto: boolean };
       modelOutput?: unknown;
       uiDetails?: unknown;
+      /** Why it failed (output-error), shown on the card in the UI language */
       error?: string;
+      /**
+       * What the model reads of a failure (output-error) or of an app's reason to deny (output-denied), in English.
+       * Absent when the text is not the app's own (a tool's raw error, the user's reason) and in parts stored before
+       * it: the model then reads `error` / `approval.reason`
+       */
+      modelError?: string;
       startedAt?: number;
       endedAt?: number;
     }

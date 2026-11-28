@@ -20,6 +20,7 @@ import { importImage, importOne } from './imports';
 import { fileList, imageList, refreshFiles, refreshImages } from './lists';
 import { deleteFiles } from './manage';
 import { pageOf } from './pages';
+import { TranslatedError } from '../../../lib/i18n';
 
 /** Let chat models work on the files of their working folder (the file tools) */
 export const fileSettings = defineFeatureSettings('files', { fileTools: true }, { legacy: (old) => pickLegacy(old, { fileTools: true }) });
@@ -110,7 +111,7 @@ for (const [path, text] of Object.entries(files).sort(([a], [b]) => a.localeComp
 }
 return out;`;
   const r = await runJavaScript(code, { files });
-  if (r.error || r.result === undefined) throw new Error(t('tool.searchFailed', { message: r.error ?? '' }));
+  if (r.error || r.result === undefined) throw new TranslatedError(() => t('tool.searchFailed', { message: r.error ?? '' }));
   return JSON.parse(r.result) as Match[];
 }
 
@@ -119,8 +120,8 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
   /** A file the model may change: one in the working folder (one attached from outside is only read) */
   const inFolder = async (id: string) => {
     const f = await fdb.getFile(id);
-    if (!f) throw new Error(t('tool.notFound'));
-    if (!dir() || !isInside(f.name, dir())) throw new Error(t('tool.readOnly', { name: f.name }));
+    if (!f) throw new TranslatedError(() => t('tool.notFound'));
+    if (!dir() || !isInside(f.name, dir())) throw new TranslatedError(() => t('tool.readOnly', { name: f.name }));
     return f;
   };
   return makeFileTools(
@@ -136,7 +137,7 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
           const at = atPath(full);
           // One file per path: writing to a path the folder has replaces that file's text
           if (at?.kind === 'file') return { file: await fdb.setText(at.file.id, text, 'model'), replaced: true };
-          if (!pathFree(full, space)) throw new Error(t('tool.pathTaken', { name: path }));
+          if (!pathFree(full, space)) throw new TranslatedError(() => t('tool.pathTaken', { name: path }));
           const f = fdb.newFile({ id: newId(), name: full, origin: { kind: 'made' }, text, by: 'model', conversationId: conv.id });
           return { file: await fdb.createFile(f, text, !!conv.temporary), replaced: false };
         });
@@ -162,7 +163,7 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
         return withTakenPaths(async (space) => {
           // Read inside the queue: an edit waiting before this one is kept
           const f = await inFolder(id);
-          if (!pathFree(full, space, id)) throw new Error(t('tool.moveTaken', { name: to }));
+          if (!pathFree(full, space, id)) throw new TranslatedError(() => t('tool.moveTaken', { name: to }));
           return fdb.putFile({ ...f, name: full, mime: mimeFromName(full) });
         });
       },

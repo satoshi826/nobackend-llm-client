@@ -7,7 +7,7 @@ import { cleanFileName } from '../../lib/paths';
 import type { Tool } from '../../lib/tools/types';
 import { isProblem, type PageInspection } from '../../lib/sandbox/client';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
-import { formatNumber } from '../../lib/i18n';
+import { formatNumber, TranslatedError } from '../../lib/i18n';
 import { t } from './messages';
 import { fileBlock } from './transform';
 
@@ -111,18 +111,18 @@ const obj = (raw: unknown) => (raw && typeof raw === 'object' ? (raw as Record<s
 const int = (v: unknown, min: number) => (Number.isFinite(Number(v)) ? Math.max(min, Math.floor(Number(v))) : undefined);
 
 function checkSize(text: string) {
-  if (text.length > MAX_WRITE) throw new Error(t('tool.tooLong', { max: formatNumber(MAX_WRITE) }));
+  if (text.length > MAX_WRITE) throw new TranslatedError(() => t('tool.tooLong', { max: formatNumber(MAX_WRITE) }));
 }
 
 function requireId(r: Record<string, unknown>): string {
   const id = str(r, 'file_id').trim();
-  if (!id) throw new Error(t('tool.missingFileId'));
+  if (!id) throw new TranslatedError(() => t('tool.missingFileId'));
   return id;
 }
 
 async function mustGet(deps: FileToolDeps, ref: string): Promise<FileRecord> {
   const f = await deps.get(ref);
-  if (!f) throw new Error(t('tool.notInConversation', { id: ref }));
+  if (!f) throw new TranslatedError(() => t('tool.notInConversation', { id: ref }));
   return f;
 }
 
@@ -153,7 +153,7 @@ function checkGlob(glob: string) {
   try {
     new RegExp(globSource(glob));
   } catch {
-    throw new Error(t('tool.badGlob', { glob }));
+    throw new TranslatedError(() => t('tool.badGlob', { glob }));
   }
 }
 
@@ -208,11 +208,11 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     prepare(raw) {
       const r = obj(raw);
       const pattern = str(r, 'pattern');
-      if (!pattern) throw new Error(t('tool.missingPattern'));
+      if (!pattern) throw new TranslatedError(() => t('tool.missingPattern'));
       try {
         new RegExp(pattern);
       } catch (e) {
-        throw new Error(t('tool.badPattern', { message: (e as Error).message }));
+        throw new TranslatedError(() => t('tool.badPattern', { message: (e as Error).message }));
       }
       const glob = str(r, 'glob').trim().replace(/^\/+/, '');
       if (glob) checkGlob(glob);
@@ -289,14 +289,14 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     prepare(raw) {
       const r = obj(raw);
       // A missing name is the model's slip: told, so it writes the call again, rather than saved as untitled.md
-      if (!str(r, 'name').trim()) throw new Error(t('tool.missingName'));
+      if (!str(r, 'name').trim()) throw new TranslatedError(() => t('tool.missingName'));
       const name = cleanFileName(str(r, 'name'));
       const content = str(r, 'content');
       checkSize(content);
       // The working folder needs a name the model chose; a call without one is told, and written again
-      if (!hasFolder && !str(r, 'folder').trim()) throw new Error(t('tool.missingFolder'));
+      if (!hasFolder && !str(r, 'folder').trim()) throw new TranslatedError(() => t('tool.missingFolder'));
       // One level: a "/" could name a folder inside another chat's
-      if (!hasFolder && /[\\/]/.test(str(r, 'folder').trim().replace(/\/+$/, ''))) throw new Error(t('tool.folderOneLevel'));
+      if (!hasFolder && /[\\/]/.test(str(r, 'folder').trim().replace(/\/+$/, ''))) throw new TranslatedError(() => t('tool.folderOneLevel'));
       return { name, content, ...(!hasFolder ? { folder: str(r, 'folder') } : {}) };
     },
     async execute(i) {
@@ -332,8 +332,8 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const r = obj(raw);
       const file_id = requireId(r);
       const old_string = str(r, 'old_string');
-      if (!old_string) throw new Error(t('tool.missingOld'));
-      if (typeof r.new_string !== 'string') throw new Error(t('tool.missingNew'));
+      if (!old_string) throw new TranslatedError(() => t('tool.missingOld'));
+      if (typeof r.new_string !== 'string') throw new TranslatedError(() => t('tool.missingNew'));
       checkSize(r.new_string);
       return { file_id, old_string, new_string: r.new_string, replace_all: r.replace_all === true };
     },
@@ -341,7 +341,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
       const f = await mustGet(deps, i.file_id);
       const cur = await deps.text(f);
       const at = cur.indexOf(i.old_string);
-      if (at < 0) throw new Error(t('tool.findMissing'));
+      if (at < 0) throw new TranslatedError(() => t('tool.findMissing'));
       let next: string;
       let count = 1;
       if (i.replace_all) {
@@ -349,10 +349,10 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
         count = parts.length - 1;
         next = parts.join(i.new_string);
       } else {
-        if (cur.indexOf(i.old_string, at + 1) >= 0) throw new Error(t('tool.findAmbiguous'));
+        if (cur.indexOf(i.old_string, at + 1) >= 0) throw new TranslatedError(() => t('tool.findAmbiguous'));
         next = cur.slice(0, at) + i.new_string + cur.slice(at + i.old_string.length);
       }
-      if (next.length > MAX_FILE_CHARS) throw new Error(t('tool.fileTooBig'));
+      if (next.length > MAX_FILE_CHARS) throw new TranslatedError(() => t('tool.fileTooBig'));
       const u = await deps.update(f.id, next);
       return { content: `Saved ${shown(u)} (${count === 1 ? '1 replacement' : `${count} replacements`}, ${u.bytes} bytes).`, details: details(u) };
     }
@@ -380,7 +380,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     async execute(i) {
       const f = await mustGet(deps, i.file_id);
       const next = (await deps.text(f)) + i.content;
-      if (next.length > MAX_FILE_CHARS) throw new Error(t('tool.fileTooBig'));
+      if (next.length > MAX_FILE_CHARS) throw new TranslatedError(() => t('tool.fileTooBig'));
       const u = await deps.update(f.id, next, true);
       return { content: `Appended ${i.content.length} chars to ${shown(u)} (now ${u.bytes} bytes).`, details: details(u) };
     }
@@ -401,7 +401,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     prepare(raw) {
       const r = obj(raw);
       const file_id = requireId(r);
-      if (!str(r, 'to').trim()) throw new Error(t('tool.missingTo'));
+      if (!str(r, 'to').trim()) throw new TranslatedError(() => t('tool.missingTo'));
       return { file_id, to: cleanFileName(str(r, 'to')) };
     },
     async execute(i) {
@@ -454,7 +454,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     },
     async execute(i, ctx) {
       const f = await mustGet(deps, i.file_id);
-      if (!/\.html?$/i.test(f.name)) throw new Error(t('tool.notPage'));
+      if (!/\.html?$/i.test(f.name)) throw new TranslatedError(() => t('tool.notPage'));
       const r = await deps.inspect(f, i.wait_ms, i.script, ctx.signal);
       const out = [`Opened ${shown(f)} for ${i.wait_ms} ms.`];
       if (r.stuck) out.push('The page stopped answering (an endless loop?), and was closed.');
@@ -481,7 +481,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     summarize: (i) => i.url,
     prepare(raw) {
       const url = str(obj(raw), 'url').trim();
-      if (!fetchableUrl(url)) throw new Error(t('fetch.invalid'));
+      if (!fetchableUrl(url)) throw new TranslatedError(() => t('fetch.invalid'));
       return { url };
     },
     async execute(i, ctx) {

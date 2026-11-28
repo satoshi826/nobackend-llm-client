@@ -8,6 +8,8 @@ import type { ProviderConfig, Transport } from '../providers/types';
 import { exportAll, importAll, validate } from '../db/export';
 import { putConversation, putMessage, listMessages, listConversations, deleteConversation } from '../db/repo';
 import { providerConfigOf } from '../keys/accounts';
+import { setLang } from '../i18n';
+import { toOpenAIMessages } from '../providers/openai-compatible';
 
 function rec(id: string, parentId: string | null, role: 'user' | 'assistant', text: string, t: number, extra: Partial<MessageRecord> = {}): MessageRecord {
   return { id, conversationId: 'c', parentId, role, parts: [{ type: 'text', text }], createdAt: t, status: 'done', ...extra };
@@ -313,7 +315,47 @@ describe('tool execution loop', () => {
     });
     const tool = out.parts.find((p) => p.type === 'tool') as any;
     expect(tool.state).toBe('output-denied');
-    expect(bodies[1].messages.find((m: any) => m.role === 'tool').content).toContain('拒否');
+    expect(bodies[1].messages.find((m: any) => m.role === 'tool').content).toBe('The user denied running this tool. 不要');
+  });
+
+  it('gives the model tool errors and denials in English whatever the UI language, and the card the UI language', async () => {
+    const blocked: Tool = { ...echo, name: 'blocked', label: 'blocked' };
+    const calls = [{ choices: [{ delta: { tool_calls: [['nope', '{}'], ['blocked', '{}'], ['web_search', '{"query":""}'], ['echo', '{"q":']].map(([name, args], index) => ({ index, id: 'c' + index, function: { name, arguments: args } })) }, finish_reason: 'tool_calls' }] }];
+    const inLang = async (lang: 'ja' | 'en') => {
+      setLang(lang);
+      try {
+        return await run([calls, answer('ok')], { tools: [echo, blocked, webSearchTool], permissionFor: (tool) => (tool.name === 'blocked' ? 'deny' : 'allow') });
+      } finally {
+        setLang('ja');
+      }
+    };
+    const ja = await inLang('ja');
+    const en = await inLang('en');
+    expect(ja.bodies[1]).toEqual(en.bodies[1]);
+    expect(en.bodies[1].messages.filter((m: any) => m.role === 'tool').map((m: any) => m.content)).toEqual([
+      'The tool failed: The tool "nope" is not available.',
+      'The user denied running this tool. This tool is blocked in settings.',
+      expect.stringMatching(/^The tool failed: The search query \(query\) is empty\./),
+      expect.stringMatching(/^The tool failed: Could not parse the arguments: /)
+    ]);
+    const cards = ja.out.parts.filter((p) => p.type === 'tool') as any[];
+    expect(cards.map((p) => p.error ?? p.approval?.reason)).toEqual([
+      'ツール「nope」は使えません。',
+      '設定でこのツールは禁止されています。',
+      expect.stringContaining('検索'),
+      expect.stringMatching(/^引数を解析できませんでした: /)
+    ]);
+  });
+
+  it('gives the model the stored text of a failure stored without its English one', () => {
+    const msgs = buildRequestMessages(
+      [
+        rec('u', null, 'user', 'q', 0),
+        rec('a', 'u', 'assistant', '', 1, { parts: [{ type: 'tool', toolCallId: 'c', name: 'echo', argsText: '{}', state: 'output-error', error: '失敗' }] })
+      ],
+      ''
+    );
+    expect(toOpenAIMessages(msgs).find((m: any) => m.role === 'tool').content).toBe('The tool failed: 失敗');
   });
 
   it('stops when the same call repeats', async () => {

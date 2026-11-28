@@ -81,9 +81,7 @@ describe('skills sent to the model', () => {
     const ok = await tool.execute({ name: 'a' }, ctx);
     expect(ok.content).toContain('Body A');
     expect(ok.isError).toBeFalsy();
-    const ng = await tool.execute({ name: 'b' }, ctx);
-    expect(ng.isError).toBe(true);
-    expect(ng.content).toContain('a');
+    await expect(tool.execute({ name: 'b' }, ctx)).rejects.toMatchObject({ english: 'There is no skill "b". Available skills: a' });
   });
 });
 

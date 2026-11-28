@@ -3,6 +3,7 @@ import type { Skill } from '../../lib/db/schema';
 import { skillBlock, validateSkill, type SkillDraft } from '../../lib/skills/skill';
 import type { Tool } from '../../lib/tools/types';
 import { t } from './messages';
+import { TranslatedError } from '../../lib/i18n';
 
 export const LOAD_SKILL = 'load_skill';
 
@@ -21,12 +22,12 @@ export function makeSkillTool(list: Pick<Skill, 'name' | 'body'>[]): Tool<{ name
     summarize: (i) => i.name,
     prepare(raw) {
       const name = (raw as { name?: unknown })?.name;
-      if (typeof name !== 'string' || !name.trim()) throw new Error(t('tool.missingName'));
+      if (typeof name !== 'string' || !name.trim()) throw new TranslatedError(() => t('tool.missingName'));
       return { name: name.trim().replace(/^\//, '') };
     },
     async execute({ name }) {
       const s = list.find((x) => x.name === name);
-      if (!s) return { content: names.length ? t('tool.unknown', { name, names: names.join(', ') }) : t('tool.unknownNone', { name }), isError: true };
+      if (!s) throw new TranslatedError(() => (names.length ? t('tool.unknown', { name, names: names.join(', ') }) : t('tool.unknownNone', { name })));
       return { content: skillBlock(s), details: { name: s.name, chars: s.body.length } };
     }
   };
@@ -75,9 +76,9 @@ export function makeSaveSkillTool(deps: SaveSkillDeps): Tool<SaveSkillInput> {
         body: typeof r.body === 'string' ? r.body : '',
         model_invocable: r.model_invocable !== false
       };
-      const err = validateSkill({ name: input.name, description: input.description, body: input.body, modelInvocable: input.model_invocable });
-      if (err) throw new Error(err);
-      if (deps.find(input.name)?.builtin) throw new Error(t('tool.builtinReadOnly', { name: input.name }));
+      const draft = { name: input.name, description: input.description, body: input.body, modelInvocable: input.model_invocable };
+      if (validateSkill(draft)) throw new TranslatedError(() => validateSkill(draft)!);
+      if (deps.find(input.name)?.builtin) throw new TranslatedError(() => t('tool.builtinReadOnly', { name: input.name }));
       return input;
     },
     async execute(i) {

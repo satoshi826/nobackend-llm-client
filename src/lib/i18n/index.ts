@@ -66,6 +66,29 @@ export function defineMessages<K extends string>(ja: Record<K, string>, others: 
   };
 }
 
+/** fn's result with English as the language (text a model reads is in English whatever the UI language) */
+export function inEnglish<T>(fn: () => T): T {
+  const was = current;
+  current = 'en';
+  try {
+    return fn();
+  } finally {
+    current = was;
+  }
+}
+
+/**
+ * An error both the user and a model read (a tool's): its message is in the UI language, `english` is the same text
+ * in English, for the model. `text` makes the message, and is called once in each language
+ */
+export class TranslatedError extends Error {
+  readonly english: string;
+  constructor(text: () => string) {
+    super(text());
+    this.english = inEnglish(text);
+  }
+}
+
 /** BCP 47 locale for Intl formatting */
 export function locale(l: Lang = current): string {
   track();

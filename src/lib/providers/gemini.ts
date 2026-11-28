@@ -8,7 +8,7 @@
 import type { ChatMessage, ChatRequest, ModelInfo, Part, ProviderAdapter, ProviderEvent } from './types';
 import { parseSSE } from './sse';
 import { failureOf, isAbort } from './errors';
-import { send } from './openai-compatible';
+import { send, toolFailureText } from './openai-compatible';
 import { t as tp } from './messages';
 
 type ToolPart = Extract<Part, { type: 'tool' }>;
@@ -17,9 +17,8 @@ type ToolPart = Extract<Part, { type: 'tool' }>;
 export const geminiThinks = (model: string) => /gemini-(2\.5|[3-9]|\d{2})/.test(model) && !/-image/.test(model);
 
 function toolResult(t: ToolPart): unknown {
-  if (t.state === 'output-denied') return { error: tp('tool.denied', { reason: t.approval?.reason ?? '' }).trim() };
-  if (t.state === 'output-error') return { error: tp('tool.failed', { error: t.error ?? '' }) };
-  return { result: t.modelOutput ?? null };
+  const failure = toolFailureText(t);
+  return failure !== undefined ? { error: failure } : { result: t.modelOutput ?? null };
 }
 
 /** Normalized messages → Gemini systemInstruction and contents (roles user / model, alternating) */

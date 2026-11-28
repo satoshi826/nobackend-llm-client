@@ -47,7 +47,7 @@ export const t = defineMessages(
     'header.tempOffTitle': '一時チャットにする（保存しない）',
     'header.temp': '一時チャット',
     'header.tempOn': '一時チャット: オン',
-    'header.tempBadgeTitle': 'この会話は保存されません。タブを閉じるか別の会話を開くと消えます。',
+    'header.tempBadgeTitle': 'この会話は保存されません。タブを閉じるか再読み込みすると消えます。',
     'header.systemPromptTitle': 'システムプロンプト（この会話への指示）',
     'header.instructions': '指示',
     'opts.button': 'ツール・出力',
@@ -77,7 +77,7 @@ export const t = defineMessages(
     // Onboarding
     'onb.tempHeading': '一時チャット',
     'onb.emptyHeading': '何について話しましょう？',
-    'onb.tempText': 'この会話はどこにも保存されません。タブを閉じるか別の会話を開くと消えます。',
+    'onb.tempText': 'この会話はどこにも保存されません。タブを閉じるか再読み込みすると消えます。',
     'onb.emptyText': 'サーバーを持たないチャットアプリです。会話はこのブラウザにだけ保存されます。',
     'onb.welcome': 'はじめに',
     'onb.introAny':
@@ -146,7 +146,7 @@ export const t = defineMessages(
       'header.tempOffTitle': 'Make it a temporary chat (not saved)',
       'header.temp': 'Temporary chat',
       'header.tempOn': 'Temporary chat: on',
-      'header.tempBadgeTitle': "This conversation isn't saved. It disappears when you close the tab or open another conversation.",
+      'header.tempBadgeTitle': "This conversation isn't saved. It disappears when you close or reload the tab.",
       'header.systemPromptTitle': 'System prompt (instructions for this chat)',
       'header.instructions': 'Instructions',
       'opts.button': 'Tools & output',
@@ -175,7 +175,7 @@ export const t = defineMessages(
 
       'onb.tempHeading': 'Temporary chat',
       'onb.emptyHeading': 'What would you like to talk about?',
-      'onb.tempText': "This conversation isn't saved anywhere. It disappears when you close the tab or open another conversation.",
+      'onb.tempText': "This conversation isn't saved anywhere. It disappears when you close or reload the tab.",
       'onb.emptyText': 'A chat app with no server. Your conversations are stored only in this browser.',
       'onb.welcome': 'Getting started',
       'onb.introAny':
@@ -242,7 +242,7 @@ export const t = defineMessages(
       'header.tempOffTitle': '设为临时对话（不保存）',
       'header.temp': '临时对话',
       'header.tempOn': '临时对话：开',
-      'header.tempBadgeTitle': '此对话不会被保存。关闭标签页或打开其他对话后即会消失。',
+      'header.tempBadgeTitle': '此对话不会被保存。关闭或重新加载标签页后即会消失。',
       'header.systemPromptTitle': '系统提示词（对此对话的指令）',
       'header.instructions': '指令',
       'opts.button': '工具与输出',
@@ -271,7 +271,7 @@ export const t = defineMessages(
 
       'onb.tempHeading': '临时对话',
       'onb.emptyHeading': '想聊点什么？',
-      'onb.tempText': '此对话不会保存在任何地方。关闭标签页或打开其他对话后即会消失。',
+      'onb.tempText': '此对话不会保存在任何地方。关闭或重新加载标签页后即会消失。',
       'onb.emptyText': '这是一个没有服务器的聊天应用。对话只保存在此浏览器中。',
       'onb.welcome': '开始使用',
       'onb.introAny': '本应用没有服务器。对话只保存在此浏览器中，并使用你的 API 密钥直接连接 LLM 服务商。无需注册账号，不使用分析工具或外部脚本。',

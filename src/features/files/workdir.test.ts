@@ -91,6 +91,27 @@ describe('working folder', () => {
     expect((await attached.run('read_file', { file_id: 'out' })).content).toContain('secret');
     await expect(attached.run('edit_file', { file_id: 'out', old_string: 'secret', new_string: 'changed' })).rejects.toThrow(/読むことしか|only be read/);
   });
+
+  it('moves an image of its folder by path or id, only to a free path, and no image outside it', async () => {
+    const c = conv('c', { workDir: 'game/' });
+    conversations.value = [c];
+    const png = () => new Blob(['x'], { type: 'image/png' });
+    await putImage({ id: 'hero', mime: 'image/png', conversationId: 'c', folder: 'game/', name: 'hero.png' }, png(), false);
+    await putImage({ id: 'out', mime: 'image/png', conversationId: 'other', name: 'cat.png' }, png(), false);
+    await make({ id: 'p', name: 'game/index.html', origin: { kind: 'made' }, text: '<img src="hero.png">', by: 'model', conversationId: 'c' });
+    const tools = toolsFor(c);
+    const pathOf = async (id: string) => (await listImages()).find((im) => im.id === id)!.path;
+    await tools.run('move_file', { file_id: 'HERO.png', to: 'assets/hero.png' });
+    expect(await pathOf('hero')).toBe('game/assets/hero.png');
+    await expect(tools.run('move_file', { file_id: 'hero', to: 'index.html' })).rejects.toThrow(/拡張子|extension/);
+    await expect(tools.run('move_file', { file_id: 'hero', to: 'index.png' })).resolves.toBeTruthy();
+    await putImage({ id: 'other', mime: 'image/png', conversationId: 'c', folder: 'game/', name: 'b.png' }, png(), false);
+    await expect(tools.run('move_file', { file_id: 'other', to: 'index.png' })).rejects.toThrow(/使っています|is used/);
+    // Not one outside the folder, by id or by a path that leaves it
+    await expect(tools.run('move_file', { file_id: 'out', to: 'cat.png' })).rejects.toThrow(/移動できません|can't be moved/);
+    await expect(tools.run('move_file', { file_id: '../cat.png', to: 'cat.png' })).rejects.toThrow(/移動できません|can't be moved/);
+    expect(await pathOf('out')).toBe('cat.png');
+  });
 });
 
 describe('moving older data', () => {

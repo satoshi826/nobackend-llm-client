@@ -2,10 +2,10 @@
 import { effect } from '@preact/signals';
 import * as fdb from '../../../lib/db/files';
 import { moveIntoWorkDirs, renumberTakenPaths } from '../../../lib/db/paths';
-import { atPath, withTakenPaths } from '../../../lib/db/catalog';
+import { atPath, catalogImage, ensureCatalog, withTakenPaths, type ImageEntry } from '../../../lib/db/catalog';
 import { cleanFileName, cleanFolderName, extOf, folderNameFor, freeFolder, isInside, mimeFromName, pathFree, pathKey } from '../../../lib/paths';
 import { newId } from '../../../lib/db/repo';
-import { listImages } from '../../../lib/db/images';
+import { listImages, renameImages } from '../../../lib/db/images';
 import type { Conversation, FileRecord, MessageRecord } from '../../../lib/db/schema';
 import { conversations, currentConv, updateConversation } from '../../../state/conversations';
 import { registerDataLoader } from '../../../state/lifecycle';
@@ -78,6 +78,16 @@ async function readableFile(convId: string, history: MessageRecord[], ref: strin
   await fdb.listFiles();
   const at = atPath(dir + cleanFileName(ref, extOf(ref) || 'md'));
   return at?.kind === 'file' ? at.file : undefined;
+}
+
+/** An image in the conversation's working folder, by its id or its path there (else undefined) */
+async function folderImage(convId: string, ref: string): Promise<ImageEntry | undefined> {
+  const dir = workDirOf(convId);
+  if (!dir) return undefined;
+  await ensureCatalog();
+  const at = atPath(dir + cleanFileName(ref, extOf(ref) || 'png'));
+  const im = catalogImage(ref) ?? (at?.kind === 'image' ? at.image : undefined);
+  return im && isInside(im.path, dir) ? im : undefined;
 }
 
 /** A file this conversation's model may read (in its working folder, or attached): its path and text, for other features' tools */
@@ -166,6 +176,19 @@ function fileTools(conv: Conversation, history: MessageRecord[]) {
           const f = await inFolder(id);
           if (!pathFree(full, space, id)) throw new TranslatedError(() => t('tool.moveTaken', { name: to }));
           return fdb.putFile({ ...f, name: full, mime: mimeFromName(full) });
+        });
+      },
+      async image(ref) {
+        const im = await folderImage(conv.id, ref);
+        return im && { id: im.id, path: relativeTo(dir(), im.path), mime: im.mime };
+      },
+      async moveImage(id, to) {
+        const full = dir() + to;
+        await withTakenPaths(async (space) => {
+          // Checked again in the queue: a move waiting before this one may have taken it out
+          if (!(await folderImage(conv.id, id))) throw new TranslatedError(() => t('tool.moveNotHere', { id }));
+          if (!pathFree(full, space, id)) throw new TranslatedError(() => t('tool.moveTaken', { name: to }));
+          await renameImages([{ id, path: full }]);
         });
       },
       async remove(id) {

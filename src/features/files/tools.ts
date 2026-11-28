@@ -3,7 +3,7 @@
 // Everything stays in the browser. Pure definitions: storage and access rules come in through FileToolDeps.
 import type { FileRecord } from '../../lib/db/schema';
 import { MAX_FILE_CHARS } from '../../lib/db/files';
-import { cleanFileName } from '../../lib/paths';
+import { cleanFileName, extOf, extOfMime } from '../../lib/paths';
 import type { Tool } from '../../lib/tools/types';
 import { INSPECT_VIEW, isProblem, type PageInspection, type PageLayout } from '../../lib/sandbox/client';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
@@ -66,6 +66,14 @@ export interface FolderEntry {
   bytes: number;
 }
 
+/** An image move_file may move */
+export interface MovableImage {
+  id: string;
+  /** Its path relative to the working folder */
+  path: string;
+  mime: string;
+}
+
 /** A line search_files found */
 export interface Match {
   path: string;
@@ -91,6 +99,10 @@ export interface FileToolDeps {
   search(pattern: string, ignoreCase: boolean, only: string | null): Promise<Match[]>;
   /** Give a file in the working folder another path in it; throws when that path is taken */
   move(id: string, to: string): Promise<FileRecord>;
+  /** An image in the working folder, by its path there or its id; undefined otherwise */
+  image(ref: string): Promise<MovableImage | undefined>;
+  /** Give an image in the working folder another path in it; throws when that path is taken */
+  moveImage(id: string, to: string): Promise<void>;
   /** Delete a file in the working folder */
   remove(id: string): Promise<void>;
   /** Open a page of the working folder out of sight and read back what happened on it (nothing it stores is kept) */
@@ -404,10 +416,13 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
   const move: Tool<{ file_id: string; to: string }> = {
     name: MOVE_FILE,
     label: t('tool.move'),
-    description: 'Rename a file in the working folder, or move it into another folder inside it. Pages that refer to it by its old path need editing too.',
+    description: 'Rename a file or an image in the working folder, or move it into another folder inside it. An image keeps its type, so its extension stays. Pages that refer to it by its old path need editing too.',
     parameters: {
       type: 'object',
-      properties: { file_id: FILE_ID, to: { type: 'string', description: 'Its new path in the working folder, with an extension, e.g. "js/app.js".' } },
+      properties: {
+        file_id: { type: 'string', description: 'The path in the working folder of the file or image (e.g. "js/app.js"), or its id.' },
+        to: { type: 'string', description: 'Its new path in the working folder, with an extension, e.g. "js/app.js".' }
+      },
       required: ['file_id', 'to']
     },
     risk: 'write',
@@ -416,14 +431,26 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     prepare(raw) {
       const r = obj(raw);
       const file_id = requireId(r);
-      if (!str(r, 'to').trim()) throw new TranslatedError(() => t('tool.missingTo'));
-      return { file_id, to: cleanFileName(str(r, 'to')) };
+      const to = str(r, 'to').trim();
+      if (!to) throw new TranslatedError(() => t('tool.missingTo'));
+      return { file_id, to };
     },
     async execute(i) {
-      const f = await mustGet(deps, i.file_id);
-      const from = deps.pathOf(f);
-      const u = await deps.move(f.id, i.to);
-      return { content: `Moved ${JSON.stringify(from)} to ${shown(u)}.`, details: details(u) };
+      const f = await deps.get(i.file_id);
+      if (f) {
+        const from = deps.pathOf(f);
+        // A path given without an extension keeps the file's type
+        const u = await deps.move(f.id, cleanFileName(i.to, extOf(f.name) || 'md'));
+        return { content: `Moved ${JSON.stringify(from)} to ${shown(u)}.`, details: details(u) };
+      }
+      const im = await deps.image(i.file_id);
+      if (!im) throw new TranslatedError(() => t('tool.moveNotHere', { id: i.file_id }));
+      const ext = extOf(im.path) || extOfMime(im.mime);
+      const to = cleanFileName(i.to, ext);
+      // Its bytes stay as they are, so its extension keeps saying their type (in the Files tab, a zip, on a disk)
+      if (extOf(to) !== ext && extOf(to) !== extOfMime(im.mime)) throw new TranslatedError(() => t('tool.imageType', { name: to, ext }));
+      await deps.moveImage(im.id, to);
+      return { content: `Moved the image ${JSON.stringify(im.path)} to ${JSON.stringify(to)}. Pages that load it by its old path need editing.`, details: { name: to } };
     }
   };
 

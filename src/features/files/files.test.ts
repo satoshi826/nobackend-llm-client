@@ -14,7 +14,7 @@ import { registerMessageTransform } from '../../lib/chat/request';
 
 registerMessageTransform(attachmentsTransform);
 import { parseDelimited } from './csv';
-import { filesNote, globSource, makeFileTools, READ_LINES, type FileToolDeps } from './tools';
+import { filesNote, globSource, makeFileTools, READ_LINES, type FileToolDeps, type MovableImage } from './tools';
 
 const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
 
@@ -22,6 +22,7 @@ function memDeps(scope = new Set<string>()) {
   const files = new Map<string, FileRecord>();
   const texts = new Map<string, string>();
   const before = new Map<string, string>();
+  const images = new Map<string, MovableImage>();
   let n = 0;
   const deps: FileToolDeps = {
     // As the files feature does: one file per path, found by id or by path
@@ -82,6 +83,10 @@ function memDeps(scope = new Set<string>()) {
       files.set(id, next);
       return next;
     },
+    image: async (ref) => images.get(ref) ?? [...images.values()].find((im) => im.path === ref),
+    async moveImage(id, to) {
+      images.set(id, { ...images.get(id)!, path: to });
+    },
     async remove(id) {
       files.delete(id);
       scope.delete(id);
@@ -93,7 +98,7 @@ function memDeps(scope = new Set<string>()) {
       return { kind: 'file', file: (await deps.create('page.txt', 'fetched text')).file };
     }
   };
-  return { deps, files, texts, scope };
+  return { deps, files, texts, scope, images };
 }
 
 const tool = (deps: FileToolDeps, name: string) => makeFileTools(deps, { hasFolder: true }).find((t) => t.name === name)!;
@@ -252,10 +257,26 @@ describe('file tools', () => {
     await run(deps, 'move_file', { file_id: 'css/style.css', to: 'style.css' });
     expect(files.get(id)!.name).toBe('style.css');
     await expect(run(deps, 'move_file', { file_id: 'style.css', to: 'index.html' })).rejects.toThrow();
+    // A path without an extension keeps the file's type
+    await run(deps, 'move_file', { file_id: 'js/app.js', to: 'main' });
+    expect([...files.values()].some((f) => f.name === 'main.js')).toBe(true);
     // Deleting is asked every time
     expect(tool(deps, 'delete_file').alwaysAsk).toBe(true);
     await run(deps, 'delete_file', { file_id: 'style.css' });
     expect(files.has(id)).toBe(false);
+  });
+  it('moves an image by its path or id, keeping its type, and says pages need editing', async () => {
+    const { deps, images } = memDeps();
+    images.set('im1', { id: 'im1', path: 'hero.jpeg', mime: 'image/jpeg' });
+    const r = await run(deps, 'move_file', { file_id: 'hero.jpeg', to: 'assets/hero' });
+    expect(images.get('im1')!.path).toBe('assets/hero.jpeg');
+    expect(r.content).toBe('Moved the image "hero.jpeg" to "assets/hero.jpeg". Pages that load it by its old path need editing.');
+    // The extension its type has is fine too; another type's is refused, and nothing moves
+    await run(deps, 'move_file', { file_id: 'im1', to: 'assets/hero.jpg' });
+    expect(images.get('im1')!.path).toBe('assets/hero.jpg');
+    await expect(run(deps, 'move_file', { file_id: 'im1', to: 'hero.png' })).rejects.toThrow(/\.jpg/);
+    expect(images.get('im1')!.path).toBe('assets/hero.jpg');
+    await expect(run(deps, 'move_file', { file_id: 'nothing.png', to: 'a.png' })).rejects.toThrow(/移動できません|can't be moved/);
   });
   it('tries a page and reports its errors, the script’s result and its text', async () => {
     const { deps } = memDeps();

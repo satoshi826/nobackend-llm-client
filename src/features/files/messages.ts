@@ -51,6 +51,8 @@ export const t = defineMessages(
     'tool.notFound': 'ファイルが見つかりません。',
     'tool.readOnly': '{name} は作業フォルダの外にあるため、読むことしかできません。変えた内容は作業フォルダに新しいファイルとして作ってください。',
     'tool.pathTaken': '{name} は使えません（作業フォルダの中のフォルダや画像と同じ名前です）。別の名前にしてください。',
+    'tool.moveNotHere': '{id} は移動できません。移動できるのは、作業フォルダの中のファイルと画像（パスか ID で指定）だけです。',
+    'tool.imageType': '画像の種類は変わらないため、{name} にはできません。拡張子は .{ext} にしてください。',
 
     // reading files from the device
     'import.truncated': '「{name}」は長すぎるため、先頭 {n} 文字だけを取り込みました。',
@@ -260,6 +262,8 @@ export const t = defineMessages(
       'tool.notFound': 'File not found.',
       'tool.readOnly': '{name} is outside the working folder, so it can only be read. Write the changed text as a new file in the working folder.',
       'tool.pathTaken': "{name} can't be used (a folder or an image in the working folder has that name). Choose another name.",
+      'tool.moveNotHere': "{id} can't be moved. move_file moves only files and images in the working folder (given by path or id).",
+      'tool.imageType': "An image keeps its type, so it can't become {name}. Use the extension .{ext}.",
 
       'import.truncated': '"{name}" is too long, so only the first {n} characters were imported.',
       'import.done': 'Imported {n} files',
@@ -460,6 +464,8 @@ export const t = defineMessages(
       'tool.notFound': '找不到文件。',
       'tool.readOnly': '{name} 位于工作文件夹之外，只能读取。请把修改后的内容作为新文件写入工作文件夹。',
       'tool.pathTaken': '无法使用 {name}（与工作文件夹中的文件夹或图像同名）。请换一个名称。',
+      'tool.moveNotHere': '无法移动 {id}。只能移动工作文件夹中的文件和图像（用路径或 ID 指定）。',
+      'tool.imageType': '图像的类型不会改变，因此不能改为 {name}。请使用扩展名 .{ext}。',
 
       'import.truncated': '“{name}”过长，仅导入了前 {n} 个字符。',
       'import.done': '已导入 {n} 个文件',

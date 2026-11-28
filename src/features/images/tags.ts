@@ -24,11 +24,14 @@ export interface TagMatch {
   alias?: string;
 }
 
-/** The list file: lines of name, category, post count and comma-separated aliases, separated by tabs; # starts a comment */
+/**
+ * The list file: lines of name, category, post count and comma-separated aliases, separated by tabs. Lines without a
+ * tab are its header (a tag may start with #, as #compass does)
+ */
 export function parseTags(text: string): TagList {
   const list: TagList = { names: [], categories: [], counts: [], aliases: [] };
   for (const line of text.split('\n')) {
-    if (!line || line.startsWith('#')) continue;
+    if (!line.includes('\t')) continue;
     const [name, category, count, aliases] = line.split('\t');
     list.names.push(name);
     list.categories.push(CATEGORIES[category] ?? 'general');

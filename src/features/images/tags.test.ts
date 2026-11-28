@@ -12,7 +12,8 @@ const list = parseTags(
     'oppai_loli\t0\t10000\t',
     'hatsune_miku\t4\t150000\tmiku',
     'kaban_(kemono_friends)\t4\t5905\tkaban',
-    '^_^\t0\t30000\t'
+    '^_^\t0\t30000\t',
+    '#compass\t3\t462\t'
   ].join('\n')
 );
 
@@ -34,6 +35,9 @@ describe('Danbooru tags', () => {
     expect(searchTags(list, '  ')).toEqual([]);
     // The tag or alias typed in full comes first
     expect(searchTags(list, 'kaban')[0]).toMatchObject({ name: 'kaban_(kemono_friends)', alias: 'kaban' });
+    // Header lines (no tab) are skipped; a tag that starts with # is kept
+    expect(list.names).not.toContain('# comment');
+    expect(searchTags(list, '#comp')[0]).toMatchObject({ name: '#compass', category: 'copyright' });
   });
   it('write tags with spaces and escaped parentheses, keeping emoticons', () => {
     expect(tagText('long_hair')).toBe('long hair');

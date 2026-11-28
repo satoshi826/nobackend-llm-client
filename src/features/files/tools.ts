@@ -228,9 +228,16 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { h
       return { pattern };
     },
     async execute(i) {
-      const re = new RegExp(globSource(i.pattern), 'i');
-      const found = (await deps.list()).filter((e) => re.test(e.path)).sort((a, b) => a.path.localeCompare(b.path));
-      if (!found.length) return { content: `No files match ${JSON.stringify(i.pattern)}.` };
+      const all = await deps.list();
+      if (!all.length) return { content: 'The working folder is empty.' };
+      const matches = (glob: string) => all.filter((e) => new RegExp(globSource(glob), 'i').test(e.path));
+      const found = matches(i.pattern).sort((a, b) => a.path.localeCompare(b.path));
+      if (!found.length) {
+        // The usual miss: "*.js" for files in subfolders
+        const deeper = `**/${i.pattern}`;
+        const hint = i.pattern.includes('*') && !i.pattern.includes('**') && matches(deeper).length ? `; "*" does not cross folders: try ${JSON.stringify(deeper)}` : '';
+        return { content: `No files match ${JSON.stringify(i.pattern)} (the folder has ${all.length} ${all.length === 1 ? 'file' : 'files'}${hint}).` };
+      }
       const lines = found.slice(0, MAX_LISTED).map((e) => `${e.path} (${e.kind === 'image' ? 'image, ' : ''}${e.bytes} bytes)`);
       const more = found.length > MAX_LISTED ? `\n[${found.length - MAX_LISTED} more; narrow the pattern]` : '';
       return { content: lines.join('\n') + more };

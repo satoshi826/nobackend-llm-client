@@ -249,6 +249,10 @@ describe('file tools', () => {
     expect((await run(deps, 'list_files', { pattern: '**/*.js' })).content).toBe('js/app.js (43 bytes)');
     expect((await run(deps, 'list_files', {})).content.split('\n')).toHaveLength(3);
     expect((await run(deps, 'list_files', { pattern: '*.{html,css}' })).content).toBe('index.html (33 bytes)');
+    // A miss says how many files there are, and when "*" kept the pattern out of subfolders
+    expect((await run(deps, 'list_files', { pattern: '*.js' })).content).toBe('No files match "*.js" (the folder has 3 files; "*" does not cross folders: try "**/*.js").');
+    expect((await run(deps, 'list_files', { pattern: '**/*.py' })).content).toBe('No files match "**/*.py" (the folder has 3 files).');
+    expect((await run(deps, 'list_files', { pattern: '*.py' })).content).toBe('No files match "*.py" (the folder has 3 files).');
     const found = await run(deps, 'search_files', { pattern: 'render\\(', glob: '**/*.js' });
     expect(found.content).toBe('js/app.js:2: function render() {}\njs/app.js:3: render();');
     expect(() => tool(deps, 'search_files').prepare({ pattern: '(' })).toThrow(/正規表現/);
@@ -277,6 +281,9 @@ describe('file tools', () => {
     await expect(run(deps, 'move_file', { file_id: 'im1', to: 'hero.png' })).rejects.toThrow(/\.jpg/);
     expect(images.get('im1')!.path).toBe('assets/hero.jpg');
     await expect(run(deps, 'move_file', { file_id: 'nothing.png', to: 'a.png' })).rejects.toThrow(/移動できません|can't be moved/);
+  });
+  it('says when the working folder is empty', async () => {
+    expect((await run(memDeps().deps, 'list_files', { pattern: '*.js' })).content).toBe('The working folder is empty.');
   });
   it('tries a page and reports its errors, the script’s result and its text', async () => {
     const { deps } = memDeps();

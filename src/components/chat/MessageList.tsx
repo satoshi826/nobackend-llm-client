@@ -15,6 +15,8 @@ export function MessageList() {
   const scroller = useRef<HTMLDivElement>(null);
   const top = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  /** Where the last scroll left the list: moving up from it is the user's own scrolling */
+  const lastTop = useRef(0);
   /** Distance from the bottom of what was shown, kept while a page is added above */
   const anchor = useRef<number | null>(null);
   // How many of the oldest messages are not rendered (counted from the start, so new messages do not move it)
@@ -73,7 +75,11 @@ export function MessageList() {
       class="chat-scroll scroll-thin flex-1 overflow-y-auto [overflow-anchor:none]"
       onScroll={(e) => {
         const el = e.currentTarget as HTMLDivElement;
-        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        // Following the end stops only when the list moved up, away from it: content that grew a lot at once (an
+        // error with its buttons) before this event came is no reason to stop
+        const nearEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        stick.current = nearEnd || (stick.current && el.scrollTop >= lastTop.current);
+        lastTop.current = el.scrollTop;
       }}
     >
       <ScrollArea.Provider value={scroller}>

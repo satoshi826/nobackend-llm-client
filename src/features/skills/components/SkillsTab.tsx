@@ -1,5 +1,5 @@
 // Settings > Skills: list, create, edit, import/export SKILL.md
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { showToast } from '../../../state/ui';
 import type { Skill } from '../../../lib/db/schema';
 import { DESCRIPTION_MAX, NAME_MAX, type SkillDraft } from '../../../lib/skills/skill';
@@ -14,6 +14,9 @@ const EMPTY: SkillDraft = { name: '', description: '', body: '', modelInvocable:
 function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
   const [d, setD] = useState<SkillDraft>(skill ? { name: skill.name, description: skill.description, body: skill.body, modelInvocable: skill.modelInvocable } : EMPTY);
   const [error, setError] = useState('');
+  const box = useRef<HTMLDivElement>(null);
+  // Opened from the button at the top, the form may be below the screen (on a phone it always is): bring it into view
+  useEffect(() => box.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), []);
   const set = (patch: Partial<SkillDraft>) => setD({ ...d, ...patch });
   const save = async () => {
     try {
@@ -25,11 +28,11 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
     }
   };
   return (
-    <div class="space-y-3 rounded-lg border border-line p-3" role="group" aria-label={skill ? t('tab.editGroup') : t('tab.newSkill')}>
+    <div ref={box} class="scroll-mt-2 space-y-3 rounded-lg border border-line p-3" role="group" aria-label={skill ? t('tab.editGroup') : t('tab.newSkill')}>
       <label class="block text-sm">
         {t('name')}
         <TextField
-          class="mt-1 font-mono"
+          class="mt-1 block w-full font-mono"
           value={d.name}
           maxLength={NAME_MAX}
           placeholder="code-review"
@@ -40,7 +43,7 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
       <label class="block text-sm">
         {t('description')}
         <TextArea
-          class="mt-1"
+          class="mt-1 block w-full"
           rows={2}
           maxLength={DESCRIPTION_MAX}
           value={d.description}
@@ -52,7 +55,7 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
       <label class="block text-sm">
         {t('tab.bodyMarkdown')}
         <TextArea compact
-          class="mt-1 font-mono leading-5"
+          class="mt-1 block w-full font-mono leading-5"
           rows={12}
           value={d.body}
           placeholder={t('tab.bodyPlaceholder')}

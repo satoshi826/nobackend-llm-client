@@ -89,15 +89,15 @@ export function SkillApproval({ p }: { p: ToolPart }) {
         <div class="space-y-2">
           <label class="block text-xs">
             {t('name')}
-            <TextField compact class="mt-0.5 font-mono" value={d.name} onInput={(e) => set({ name: (e.target as HTMLInputElement).value })} />
+            <TextField compact class="mt-0.5 block w-full font-mono" value={d.name} onInput={(e) => set({ name: (e.target as HTMLInputElement).value })} />
           </label>
           <label class="block text-xs">
             {t('description')}
-            <TextArea compact class="mt-0.5" rows={2} value={d.description} onInput={(e) => set({ description: (e.target as HTMLTextAreaElement).value })} />
+            <TextArea compact class="mt-0.5 block w-full" rows={2} value={d.description} onInput={(e) => set({ description: (e.target as HTMLTextAreaElement).value })} />
           </label>
           <label class="block text-xs">
             {t('body')}
-            <TextArea compact class="mt-0.5 font-mono leading-5" rows={10} value={d.body} onInput={(e) => set({ body: (e.target as HTMLTextAreaElement).value })} />
+            <TextArea compact class="mt-0.5 block w-full font-mono leading-5" rows={10} value={d.body} onInput={(e) => set({ body: (e.target as HTMLTextAreaElement).value })} />
           </label>
           <Checkbox class="text-xs" checked={d.model_invocable} onChange={(v) => set({ model_invocable: v })}>
             {t('invocable')}

@@ -5,7 +5,7 @@ import type { FileRecord } from '../../lib/db/schema';
 import { MAX_FILE_CHARS } from '../../lib/db/files';
 import { cleanFileName, cleanFolderName, extOf, extOfMime, pathKey } from '../../lib/paths';
 import type { Tool } from '../../lib/tools/types';
-import { INSPECT_VIEW, isProblem, type PageInspection, type PageLayout } from '../../lib/sandbox/client';
+import { INSPECT_VIEW, isProblem, type PageInspection, type PageLayout, type PageLog } from '../../lib/sandbox/client';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
 import { formatNumber, TranslatedError } from '../../lib/i18n';
 import { t } from './messages';
@@ -58,6 +58,9 @@ const MAX_WRITE = 200_000;
 /** Paths listed and lines found at most */
 const MAX_LISTED = 500;
 export const MAX_MATCHES = 100;
+/** What preview_page gives back of a page at most: lines of its log, and characters of its text and of a script's result */
+const PAGE_LOG_LINES = 50;
+const PAGE_TEXT = 4000;
 
 /** A file or a named image in the working folder, as list_files gives it */
 export interface FolderEntry {
@@ -580,9 +583,9 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
       const r = await deps.inspect(f, { waitMs: i.wait_ms, script: i.script, layout: i.layout, freshStorage: i.fresh_storage }, ctx.signal);
       const out = [`Opened ${shown(f)} for ${i.wait_ms} ms.`];
       if (r.stuck) out.push('The page stopped answering (an endless loop?), and was closed.');
-      out.push(r.logs.length ? `Console and errors (${r.logs.length}):\n${r.logs.map((l) => `[${l.level}] ${l.text}`).join('\n')}` : 'No console output and no errors.');
-      if (i.script) out.push(r.scriptError ? `The script threw: ${r.scriptError}` : `The script returned: ${r.scriptResult ?? 'undefined'}`);
-      if (!r.stuck && i.include_text) out.push(r.text.trim() ? `Text on the page:\n${r.text}` : 'The page shows no text.');
+      out.push(r.logs.length ? `Console and errors (${r.logs.length}):\n${logText(r.logs)}` : 'No console output and no errors.');
+      if (i.script) out.push(r.scriptError ? `The script threw: ${r.scriptError}` : `The script returned: ${clip(r.scriptResult ?? 'undefined', 'the result')}`);
+      if (!r.stuck && i.include_text) out.push(r.text.trim() ? `Text on the page:\n${clip(r.text, 'the text')}` : 'The page shows no text.');
       if (!r.stuck && i.layout) out.push(r.layout ? layoutText(r.layout) : 'The layout could not be read.');
       return { content: out.join('\n\n'), details: { ...details(f), problems: r.logs.filter(isProblem).length } };
     }
@@ -617,6 +620,32 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
 
   return hasFolder ? [list, search, read, write, edit, append, move, del, preview, fetchFile] : [write, ...(madeImages ? [move] : []), fetchFile];
 }
+/** Text from a tried page, cut at PAGE_TEXT with a note saying so */
+const clip = (s: string, what: string) => (s.length > PAGE_TEXT ? `${s.slice(0, PAGE_TEXT)}\n[${what} is cut at ${PAGE_TEXT} of its ${s.length} characters]` : s);
+
+/**
+ * A tried page's log for the model: a line repeated in a row once with its count (a game logging every frame), and at
+ * most PAGE_LOG_LINES lines, the first ones and then the problems among the rest, which are never left out unsaid
+ */
+export function logText(logs: PageLog[]): string {
+  const runs: (PageLog & { n: number })[] = [];
+  for (const l of logs) {
+    const last = runs.at(-1);
+    if (last && last.level === l.level && last.text === l.text) last.n++;
+    else runs.push({ ...l, n: 1 });
+  }
+  const line = (r: (typeof runs)[number]) => `[${r.level}] ${r.text}${r.n > 1 ? ` (${r.n} times)` : ''}`;
+  if (runs.length <= PAGE_LOG_LINES) return runs.map(line).join('\n');
+  const head = runs.slice(0, PAGE_LOG_LINES - 10);
+  const rest = runs.length - head.length;
+  const problems = runs.slice(head.length).filter(isProblem);
+  const out = head.map(line);
+  if (!problems.length) out.push(`[… ${rest} more lines, none of them problems]`);
+  else out.push(`[… ${rest} more lines; the problems among them:]`, ...problems.slice(0, 10).map(line));
+  if (problems.length > 10) out.push(`[… and ${problems.length - 10} more problems]`);
+  return out.join('\n');
+}
+
 /** A tried page's key elements for the model, one a line: 'button#start "Start" at 412,300 200×48' */
 export function layoutText(l: PageLayout): string {
   const lines = l.boxes.map((b) => `${b.name}${b.label ? ` ${JSON.stringify(b.label)}` : ''} at ${b.x},${b.y} ${b.width}×${b.height}${b.hidden ? (b.hidden === 'hidden' ? ' (hidden)' : ' (outside the view)') : ''}`);

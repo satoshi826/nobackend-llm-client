@@ -15,7 +15,7 @@ import { registerMessageTransform } from '../../lib/chat/request';
 registerMessageTransform(attachmentsTransform);
 import { parseDelimited } from './csv';
 import { checkArguments } from '../../lib/tools/check';
-import { filesNote, globSource, makeFileTools, READ_CHUNK, READ_LINES, type FileToolDeps, type MovableImage } from './tools';
+import { filesNote, globSource, logText, makeFileTools, READ_CHUNK, READ_LINES, type FileToolDeps, type MovableImage } from './tools';
 
 const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
 
@@ -323,6 +323,20 @@ describe('file tools', () => {
     const laid = await run(deps, 'preview_page', { file_id: 'index.html', layout: true, include_text: false });
     expect(laid.content).toContain('Layout in the 1024×768 view (page 1024×1200;');
     expect(laid.content).toContain('button#add "+1" at 16,80 28×21\nimg "assets/hero.png" at 0,900 64×64 (outside the view)\n[3 more not listed]');
+  });
+  it('gives back a page’s log, text and script result within limits, saying what it left out', async () => {
+    const { deps } = memDeps();
+    await run(deps, 'write_file', { name: 'index.html', content: '<p>x</p>' });
+    const frames = Array.from({ length: 300 }, () => ({ level: 'log' as const, text: 'frame' }));
+    const many = Array.from({ length: 80 }, (_, i) => ({ level: 'log' as const, text: `step ${i}` }));
+    const loud = { ...deps, inspect: async () => ({ logs: [...frames, ...many, { level: 'exception' as const, text: 'TypeError: late' }], text: 'z'.repeat(5000), scriptResult: 'r'.repeat(4001) }) };
+    const r = await run(loud, 'preview_page', { file_id: 'index.html', script: 'return x' });
+    // A line repeated in a row comes once with its count; past the limit, the problems still come
+    expect(r.content).toContain('Console and errors (381):\n[log] frame (300 times)\n[log] step 0\n');
+    expect(r.content).toContain('[log] step 38\n[… 42 more lines; the problems among them:]\n[exception] TypeError: late\n');
+    expect(r.content).toContain(`The script returned: ${'r'.repeat(4000)}\n[the result is cut at 4000 of its 4001 characters]`);
+    expect(r.content).toContain(`Text on the page:\n${'z'.repeat(4000)}\n[the text is cut at 4000 of its 5000 characters]`);
+    expect(logText(many.slice(0, 60))).toMatch(/\[log\] step 39\n\[… 20 more lines, none of them problems\]$/);
   });
   it('turns globs into path patterns', () => {
     const m = (glob: string, path: string) => new RegExp(globSource(glob), 'i').test(path);

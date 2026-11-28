@@ -173,7 +173,7 @@ export function renderInFrame(frame: HTMLIFrameElement, html: string, onStuck: (
 // ---- trying a page: shown in a hidden frame, its log and text read back ----
 export interface PageInspection {
   logs: PageLog[];
-  /** The text the page shows (document.body.innerText), cut at INSPECT_TEXT */
+  /** The text the page shows (document.body.innerText) */
   text: string;
   /** What the script given returned, or the error it threw */
   scriptResult?: string;
@@ -183,9 +183,6 @@ export interface PageInspection {
   /** Where its key elements are, when asked for */
   layout?: PageLayout;
 }
-/** Characters of a tried page's text given back */
-export const INSPECT_TEXT = 4000;
-
 /** The size of a tried page's view: a desktop window */
 export const INSPECT_VIEW = { width: 1024, height: 768 };
 
@@ -308,7 +305,7 @@ export async function inspectPage(
     const boxes = layout ? await evalIn(LAYOUT_CODE, 2000) : undefined;
     // The last logs go out at most 0.2 s after they happen
     await sleep(250);
-    return { logs, text: (shown.result ?? '').slice(0, INSPECT_TEXT), scriptResult: ran?.result, scriptError: ran?.error, ...(boxes ? { layout: cleanLayout(boxes.result) } : {}) };
+    return { logs, text: shown.result ?? '', scriptResult: ran?.result, scriptError: ran?.error, ...(boxes ? { layout: cleanLayout(boxes.result) } : {}) };
   } finally {
     f.remove();
   }

@@ -257,7 +257,7 @@ const backup: Flow = {
 
 const files: Flow = {
   name: 'files',
-  label: 'a model writes an HTML page and its script with a tool → open the page from the Files tab → it is shown in standards mode, and the script it loads by a relative path runs, logs, and keeps its count in localStorage.json for the next showing → a script with a syntax error is told, and its fix shows the changed line → an image is saved at the path the model gives → one made in a chat without a working folder is moved in by its id, making the folder, and the page next to it shows it → a page the model tries with preview_page runs its animation frames',
+  label: 'a model writes an HTML page and its script with a tool → open the page from the Files tab → it is shown in standards mode, and the script it loads by a relative path runs, logs, and keeps its count in localStorage.json for the next showing → a script with a syntax error is told, and its fix shows the changed line → an image is saved at the path the model gives → one made in a chat without a working folder is moved in by its id, making the folder, and the page next to it shows it → a page the model tries with preview_page runs its animation frames → stopped while a call waits for approval, the chat goes on',
   async run({ page, url, a11y }) {
     await page.goto(url);
     await addVenice(page);
@@ -328,6 +328,15 @@ const files: Flow = {
     await settled(page);
     const frames = Number(/frames: (\d+)/.exec((await tried.textContent()) ?? '')?.[1] ?? 0);
     if (frames <= 30) throw new Error(`The tried page drew ${frames} animation frames in a second, not more than 30`);
+    // Stopped while a call waits for approval, the chat still goes on: the call goes to the next request with a result
+    // saying it did not run (the mock, like the real APIs, refuses a call without one)
+    await send(page, 'ゲームを作って');
+    await page.getByRole('button', { name: 'Run', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Stop' }).click();
+    await settled(page);
+    await send(page, 'こんにちは');
+    await page.locator('[data-message-id]').last().getByText('モック応答').waitFor();
+    await settled(page);
   }
 };
 

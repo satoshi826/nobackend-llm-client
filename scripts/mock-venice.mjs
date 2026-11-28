@@ -169,6 +169,18 @@ function cors(req, res) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** The id of a tool call no tool message right after its assistant message answers, else null */
+function unansweredCall(msgs) {
+  for (let i = 0; i < msgs.length; i++) {
+    const calls = (msgs[i].role === 'assistant' && msgs[i].tool_calls) || [];
+    const answered = new Set();
+    for (let j = i + 1; j < msgs.length && msgs[j].role === 'tool'; j++) answered.add(msgs[j].tool_call_id);
+    const missing = calls.find((c) => !answered.has(c.id));
+    if (missing) return missing.id;
+  }
+  return null;
+}
+
 function json(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(body));
@@ -578,6 +590,9 @@ const server = http.createServer(async (req, res) => {
   if (path === '/chat/completions' && req.method === 'POST') {
     if (!authed(req)) return json(res, 401, { error: 'Authentication failed' });
     const body = await readBody(req);
+    // As the real APIs do: a tool call must be followed by its result
+    const unanswered = unansweredCall(body.messages ?? []);
+    if (unanswered) return json(res, 400, { error: `An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'. Missing: ${unanswered}` });
     const last = [...(body.messages ?? [])].reverse().find((m) => m.role === 'user')?.content ?? '';
     const sys = (body.messages ?? []).find((m) => m.role === 'system')?.content;
     const vp = body.venice_parameters ?? {};

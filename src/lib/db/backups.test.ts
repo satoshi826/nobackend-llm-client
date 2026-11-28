@@ -27,7 +27,9 @@ describe('backups of every released version', () => {
     expect(await repo.getConversation('conv-1')).toMatchObject({ title: 'Trip plan', pinned: 1, tags: ['travel'], workDir: 'trip/', currentLeafId: 'm-7' });
     const byId = new Map((await repo.listMessages('conv-1')).map((m) => [m.id, m]));
     expect(byId.get('m-1')).toMatchObject({ skills: [{ name: 'planner' }], attachments: [{ fileId: 'file-1', name: 'trip/notes.md' }] });
-    expect(byId.get('m-2')?.parts.map((p) => p.type)).toEqual(['reasoning', 'text']);
+    expect(byId.get('m-2')?.parts.map((p) => p.type)).toEqual(['reasoning', 'server-tool', 'text', 'source']);
+    expect(byId.get('m-2')?.parts[3]).toMatchObject({ url: 'https://example.com/kyoto', title: 'Kyoto in two days' });
+    expect(byId.get('m-2')?.meta).toMatchObject({ providerId: 'venice', usage: { inputTokens: 120, outputTokens: 48 }, costUsd: 0.0012 });
     expect(byId.get('m-3')?.compaction).toMatchObject({ coversUntilId: 'm-2', count: 2 });
     expect(byId.get('m-4')?.imageRequest).toMatchObject({ op: 'generate', prompt: 'A temple at dusk', seed: 42 });
     expect(byId.get('m-5')?.parts[0]).toMatchObject({ type: 'file', blobId: 'img-1', mimeType: 'image/png' });

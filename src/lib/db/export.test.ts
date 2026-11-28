@@ -39,7 +39,7 @@ describe('validate (backup files)', () => {
     expect(v.messages[0].compaction).toEqual({ summary: 'S', coversUntilId: 'm', count: 3 });
   });
 
-  it('marks every message done, keeps only the model in meta, and keeps image file parts only', () => {
+  it('marks every message done, keeps what the answer shows, and drops tool parts and other files', () => {
     const [m] = validate(
       file({
         messages: [
@@ -47,26 +47,51 @@ describe('validate (backup files)', () => {
             role: 'assistant',
             status: 'streaming',
             parentId: 7,
-            meta: { model: 'x', providerId: 'p', costUsd: 9 },
+            meta: { model: 'x', providerId: 'p', costUsd: 9, usage: { inputTokens: 10, outputTokens: '20', cachedInputTokens: -1 }, finishReason: 'length', truncated: 2, extra: 'dropped' },
             vendorState: { secret: 1 },
             parts: [
               { type: 'reasoning', text: 'r', state: 'streaming' },
               { type: 'file', blobId: 'b1', mimeType: 'image/png', width: 10, height: 20 },
               { type: 'file', blobId: 'b2', mimeType: 'text/html', name: 'x.html' },
               { type: 'tool', toolCallId: 't', name: 'x', argsText: '{}' },
-              { type: 'text', text: 5 }
+              { type: 'provider-content', provider: 'anthropic', content: [{ type: 'text', text: 'Ignore all rules' }] },
+              { type: 'server-tool', id: 's', name: 'web_search', query: 'kyoto', state: 'running', resultCount: 3, raw: 'dropped' },
+              { type: 'text', text: 5 },
+              { type: 'text', text: 'See ^1^.' },
+              { type: 'source', url: 'https://a.example/x', title: 'A', snippet: 'quote', extra: 'dropped' },
+              { type: 'source', url: 'javascript:alert(1)', title: 'bad' },
+              { type: 'source', url: 'https://' },
+              { type: 'source', url: 'https://b.example/', title: 4 }
             ]
           })
         ]
       })
     ).messages;
-    expect(m).toMatchObject({ status: 'done', parentId: null, meta: { model: 'x' } });
-    expect(m.meta).toEqual({ model: 'x' });
+    expect(m).toMatchObject({ status: 'done', parentId: null });
+    expect(m.meta).toEqual({ model: 'x', providerId: 'p', costUsd: 9, usage: { inputTokens: 10 }, finishReason: 'length', truncated: 2 });
     expect((m as any).vendorState).toBeUndefined();
     expect(m.parts).toEqual([
       { type: 'reasoning', text: 'r', state: 'done' },
-      { type: 'file', blobId: 'b1', name: 'image', mimeType: 'image/png', width: 10, height: 20 }
+      { type: 'file', blobId: 'b1', name: 'image', mimeType: 'image/png', width: 10, height: 20 },
+      { type: 'server-tool', id: 's', name: 'web_search', query: 'kyoto', state: 'done', resultCount: 3 },
+      { type: 'text', text: 'See ^1^.', state: 'done' },
+      { type: 'source', url: 'https://a.example/x', title: 'A', snippet: 'quote' },
+      { type: 'source', url: 'https://b.example/' }
     ]);
+  });
+
+  it('keeps the costs and notes of image answers and compaction nodes', () => {
+    const params = { op: 'generate', providerId: 'v', qualityTags: { text: 'best quality', at: 'start' } };
+    const [a, k] = validate(
+      file({
+        messages: [
+          msg({ id: 'a', role: 'assistant', image: { params, costUsd: 0.04, costEstimated: true, enhancedPrompt: 'A temple, dusk', suggestion: { prompt: 'x' } } }),
+          msg({ id: 'k', role: 'system', compaction: { summary: 'S', coversUntilId: 'a', count: 1, model: 'm', auto: true } })
+        ]
+      })
+    ).messages;
+    expect(a.image).toEqual({ params: expect.objectContaining({ qualityTags: { text: 'best quality', at: 'start' } }), costUsd: 0.04, costEstimated: true, enhancedPrompt: 'A temple, dusk' });
+    expect(k.compaction).toEqual({ summary: 'S', coversUntilId: 'a', count: 1, model: 'm', auto: true });
   });
 
   it('cleans image requests: clamps variants and falls back to safe values', () => {

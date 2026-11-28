@@ -64,14 +64,32 @@
           "state": "done"
         },
         {
+          "type": "server-tool",
+          "id": "ws-1",
+          "name": "web_search",
+          "query": "Kyoto two days",
+          "state": "done",
+          "resultCount": 1
+        },
+        {
           "type": "text",
-          "text": "Day 1: Higashiyama. Day 2: Arashiyama.",
+          "text": "Day 1: Higashiyama^1^. Day 2: Arashiyama.",
           "state": "done"
+        },
+        {
+          "type": "source",
+          "url": "https://example.com/kyoto",
+          "title": "Kyoto in two days",
+          "snippet": "Start in Higashiyama."
         }
       ],
       "meta": {
         "providerId": "venice",
         "model": "venice-uncensored",
+        "usage": {
+          "inputTokens": 120,
+          "outputTokens": 48
+        },
         "costUsd": 0.0012
       }
     },

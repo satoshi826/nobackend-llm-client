@@ -4,6 +4,7 @@ import { validateSkill } from '../skills/skill';
 import { openValue, seal, unseal } from './sealed';
 import { DATA_TABLES } from './data-tables';
 import type { Attachment } from './schema';
+import type { Part } from '../providers/types';
 import { t } from './messages';
 import { cleanFolderName } from '../paths';
 
@@ -121,12 +122,12 @@ export async function importAll(raw: unknown): Promise<ImportResult> {
 /** Keep only well-formed image request fields */
 function cleanImageParams(x: any): ImageParams | undefined {
   if (!x || typeof x !== 'object' || !['generate', 'upscale', 'edit', 'remove-bg'].includes(x.op) || !isStr(x.providerId)) return undefined;
-  const str = (v: unknown) => (isStr(v) ? v : undefined);
   return {
     op: x.op,
     providerId: x.providerId,
     model: str(x.model) ?? '',
     prompt: str(x.prompt) ?? '',
+    qualityTags: isStr(x.qualityTags?.text) && (x.qualityTags.at === 'start' || x.qualityTags.at === 'end') ? { text: x.qualityTags.text, at: x.qualityTags.at } : undefined,
     negativePrompt: str(x.negativePrompt),
     size: str(x.size),
     aspectRatio: str(x.aspectRatio),
@@ -144,7 +145,6 @@ function cleanImageParams(x: any): ImageParams | undefined {
 
 function cleanVideoParams(x: any): VideoParams | undefined {
   if (!x || typeof x !== 'object' || !isStr(x.providerId) || !isStr(x.model) || !(Number(x.duration) > 0)) return undefined;
-  const str = (v: unknown) => (isStr(v) ? v : undefined);
   return {
     providerId: x.providerId,
     model: x.model,
@@ -167,6 +167,55 @@ function cleanAttachments(x: unknown): Attachment[] | undefined {
 
 function isStr(x: unknown): x is string {
   return typeof x === 'string';
+}
+const str = (v: unknown) => (isStr(v) ? v : undefined);
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined);
+
+/** An address a source may link to (http and https only: no javascript: or data: links) */
+function webUrl(v: unknown): v is string {
+  if (!isStr(v) || !/^https?:\/\//i.test(v)) return false;
+  try {
+    new URL(v);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What an answer shows: its text and reasoning, image and video file parts (the image or video itself may or may not
+ * be in the file), its sources and the provider's own searches. Tool calls and their results are not kept: they carry
+ * what a model or a page wrote for a model to read, and the app would send them back
+ */
+function cleanPart(p: any): Part | undefined {
+  if ((p?.type === 'text' || p?.type === 'reasoning') && isStr(p.text)) return { type: p.type, text: p.text, state: 'done' };
+  if (p?.type === 'file' && isStr(p.blobId) && isStr(p.mimeType) && /^(image|video)\//.test(p.mimeType))
+    return { type: 'file', blobId: p.blobId, name: isStr(p.name) ? p.name : 'image', mimeType: p.mimeType, ...(Number.isFinite(p.width) ? { width: p.width, height: p.height } : {}) };
+  if (p?.type === 'source' && webUrl(p.url)) return { type: 'source', url: p.url, title: str(p.title)?.slice(0, 500), snippet: str(p.snippet)?.slice(0, 1000) };
+  if (p?.type === 'server-tool' && isStr(p.id) && isStr(p.name))
+    return { type: 'server-tool', id: p.id, name: p.name, query: str(p.query)?.slice(0, 500), state: p.state === 'error' ? 'error' : 'done', resultCount: num(p.resultCount), error: str(p.error)?.slice(0, 500) };
+  return undefined;
+}
+
+/** The line under an answer: the model, its tokens and cost, and why it ended early */
+function cleanMeta(x: any): MessageRecord['meta'] {
+  if (!x || typeof x !== 'object') return undefined;
+  const u = x.usage && typeof x.usage === 'object' ? x.usage : undefined;
+  return {
+    providerId: str(x.providerId),
+    model: str(x.model),
+    usage: u && {
+      inputTokens: num(u.inputTokens),
+      cachedInputTokens: num(u.cachedInputTokens),
+      outputTokens: num(u.outputTokens),
+      reasoningTokens: num(u.reasoningTokens),
+      webSearches: num(u.webSearches),
+      priceFactor: num(u.priceFactor)
+    },
+    costUsd: num(x.costUsd),
+    finishReason: str(x.finishReason),
+    truncated: num(x.truncated)
+  };
 }
 
 export function validate(raw: unknown): ExportFile {
@@ -200,20 +249,18 @@ export function validate(raw: unknown): ExportFile {
       groupId: isStr(m.groupId) ? m.groupId : undefined,
       createdAt: typeof m.createdAt === 'number' ? m.createdAt : Date.now(),
       role: m.role,
-      // Text parts, plus image and video file parts (the image or video itself may or may not be in the file); tool
-      // parts have nothing to refer to
-      parts: m.parts
-        .filter((p: any) => ((p?.type === 'text' || p?.type === 'reasoning') && isStr(p.text)) || (p?.type === 'file' && isStr(p.blobId) && isStr(p.mimeType) && /^(image|video)\//.test(p.mimeType)))
-        .map((p: any) =>
-          p.type === 'file'
-            ? { type: 'file' as const, blobId: p.blobId, name: isStr(p.name) ? p.name : 'image', mimeType: p.mimeType, ...(Number.isFinite(p.width) ? { width: p.width, height: p.height } : {}) }
-            : { type: p.type, text: p.text, state: 'done' as const }
-        ),
+      parts: m.parts.map(cleanPart).filter((p) => !!p),
       status: 'done' as const,
-      meta: m.meta && typeof m.meta === 'object' ? { model: isStr((m.meta as any).model) ? (m.meta as any).model : undefined } : undefined,
+      meta: cleanMeta(m.meta),
       compaction:
         m.compaction && isStr(m.compaction.summary) && isStr(m.compaction.coversUntilId)
-          ? { summary: m.compaction.summary, coversUntilId: m.compaction.coversUntilId, count: Number(m.compaction.count) || 0 }
+          ? {
+              summary: m.compaction.summary,
+              coversUntilId: m.compaction.coversUntilId,
+              count: Number(m.compaction.count) || 0,
+              model: str(m.compaction.model),
+              auto: m.compaction.auto === true || undefined
+            }
           : undefined,
       skills: Array.isArray(m.skills)
         ? m.skills.filter((s: any) => s && isStr(s.name) && isStr(s.body)).map((s: any) => ({ name: s.name, body: s.body }))
@@ -225,7 +272,7 @@ export function validate(raw: unknown): ExportFile {
       video: m.video && cleanVideoParams(m.video.params)
         ? {
             params: cleanVideoParams(m.video.params)!,
-            costUsd: Number.isFinite(m.video.costUsd) ? m.video.costUsd : undefined,
+            costUsd: num(m.video.costUsd),
             costEstimated: !!m.video.costEstimated || undefined
           }
         : undefined,
@@ -234,7 +281,10 @@ export function validate(raw: unknown): ExportFile {
             params: cleanImageParams(m.image.params)!,
             seed: Number.isFinite(m.image.seed) ? m.image.seed : undefined,
             blurred: !!m.image.blurred || undefined,
-            violations: Number(m.image.violations) || undefined
+            violations: Number(m.image.violations) || undefined,
+            enhancedPrompt: str(m.image.enhancedPrompt),
+            costUsd: num(m.image.costUsd),
+            costEstimated: !!m.image.costEstimated || undefined
           }
         : undefined
     } as MessageRecord))

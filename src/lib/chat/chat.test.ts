@@ -134,7 +134,7 @@ describe('repo + export', () => {
       format: 'nobackend-llm-client/export',
       version: 1,
       conversations: [{ id: 'c', title: 't', createdAt: 1, updatedAt: 1 }],
-      messages: [{ id: 'm', conversationId: 'c', role: 'user', parts: [{ type: 'text', text: 'ok' }, { type: 'file', blobId: 'x' }] }],
+      messages: [{ id: 'm', conversationId: 'c', role: 'user', parts: [{ type: 'text', text: 'ok' }, { type: 'file', fileId: 'x' }] }],
       prompts: []
     });
     expect(v.messages[0].parts).toEqual([{ type: 'text', text: 'ok', state: 'done' }]);

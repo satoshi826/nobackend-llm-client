@@ -31,7 +31,7 @@ describe('quality tag presets', () => {
     expect(isPresetNegative('blurry')).toBe(false);
   });
   it('tell the chat model which quality tags the app adds', () => {
-    const tool = makeImageTool(async () => ({ blobIds: [], paths: [], inWorkDir: false, model: '', blurred: false }), { promptStyle: 'tags', qualityTags: 'masterpiece, best quality' });
+    const tool = makeImageTool(async () => ({ fileIds: [], paths: [], inWorkDir: false, model: '', blurred: false }), { promptStyle: 'tags', qualityTags: 'masterpiece, best quality' });
     expect(tool.description).toContain('"masterpiece, best quality" itself');
   });
 });

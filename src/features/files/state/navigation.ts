@@ -1,13 +1,13 @@
 // The file manager (#/files) and a file's or an image's page (#/f/<id>, #/i/<id>) in the main area
 import { signal } from '@preact/signals';
 import * as fdb from '../../../lib/db/files';
-import { catalogImage, ensureCatalog, isTemporary } from '../../../lib/db/catalog';
+import { catalogFile, ensureCatalog, isTemporary } from '../../../lib/db/catalog';
 import { cleanFolderName, folderOf } from '../../../lib/paths';
 import { getSetting, setSetting } from '../../../lib/db/repo';
 import { showChat } from '../../../state/conversations';
 import { mainView, sidebarOpen, sidebarTab, type MainViewState } from '../../../state/ui';
 import { pushHash, registerRoute, setHash } from '../../../state/router';
-import { imageList } from './lists';
+import { fileList } from './lists';
 
 export type FilerView = 'all' | 'text' | 'image' | 'document' | 'upload';
 export type FilerSort = 'updated' | 'name' | 'type' | 'size';
@@ -133,7 +133,7 @@ export const imageSiblings = signal<string[]>([]);
  * folder (newest first, as listed)
  */
 export function imagesToStep(id: string): string[] {
-  const images = imageList.value ?? [];
+  const images = (fileList.value ?? []).filter((f) => f.kind === 'image' || f.kind === 'video');
   const listed = imageSiblings.value.filter((s) => images.some((x) => x.id === s));
   if (listed.length) return listed;
   const own = images.find((x) => x.id === id);
@@ -159,7 +159,8 @@ registerRoute({
   pattern: /^#\/i\/([\w-]+)$/,
   open: async (m) => {
     await ensureCatalog();
-    if (!catalogImage(m[1])) return;
+    const f = catalogFile(m[1]);
+    if (f?.kind !== 'image' && f?.kind !== 'video') return;
     returnTo = { kind: 'files' };
     imageSiblings.value = [];
     sidebarTab.value = 'files';
@@ -177,7 +178,7 @@ export function closeFileView() {
 registerRoute({
   pattern: /^#\/f\/([\w-]+)$/,
   open: async (m) => {
-    if (!(await fdb.getFile(m[1]))) return;
+    if ((await fdb.getFile(m[1]))?.kind !== 'text') return;
     returnTo = { kind: 'files' };
     sidebarTab.value = 'files';
     mainView.value = { kind: 'file', id: m[1] };

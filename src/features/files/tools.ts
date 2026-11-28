@@ -1,7 +1,7 @@
 // File tools: the model works on the files of its conversation's working folder, much as a coding agent works in a
 // directory (list, search, read with line numbers, write, edit, append, move, delete), and saves files from the web.
 // Everything stays in the browser. Pure definitions: storage and access rules come in through FileToolDeps.
-import type { FileRecord } from '../../lib/db/schema';
+import type { TextEntry } from '../../lib/db/catalog';
 import { MAX_FILE_CHARS } from '../../lib/db/files';
 import { cleanFileName, cleanFolderName, extOf, extOfMime, pathKey } from '../../lib/paths';
 import type { Tool } from '../../lib/tools/types';
@@ -91,19 +91,19 @@ export interface FileToolDeps {
    * there, and this is its new text; unchanged: it had this text already, and nothing was saved (its text from before
    * the last change stays). folder: the working folder's name, used when this file makes it
    */
-  create(path: string, text: string, folder?: string): Promise<{ file: FileRecord; replaced: boolean; unchanged?: boolean }>;
+  create(path: string, text: string, folder?: string): Promise<{ file: TextEntry; replaced: boolean; unchanged?: boolean }>;
   /** A file the model may read (in the working folder, or attached), by id or by path; undefined otherwise */
-  get(ref: string): Promise<FileRecord | undefined>;
+  get(ref: string): Promise<TextEntry | undefined>;
   /** A file's current text, or the one before its last change (previous; '' when there is none) */
-  text(f: FileRecord, previous?: boolean): Promise<string>;
+  text(f: TextEntry, previous?: boolean): Promise<string>;
   /** Save a new text (append: the file's previous text stays as it was); throws for a file the model may only read */
-  update(id: string, text: string, append?: boolean): Promise<FileRecord>;
+  update(id: string, text: string, append?: boolean): Promise<TextEntry>;
   /** The files and named images in the working folder, paths relative to it */
   list(): Promise<FolderEntry[]>;
   /** Lines matching a regular expression in the folder's files whose path matches `only` (a RegExp source too) */
   search(pattern: string, ignoreCase: boolean, only: string | null): Promise<Match[]>;
   /** Give a file in the working folder another path in it; throws when that path is taken */
-  move(id: string, to: string): Promise<FileRecord>;
+  move(id: string, to: string): Promise<TextEntry>;
   /**
    * An image the model may move, undefined otherwise: one in the working folder (by its path there or its id), or one
    * made in this conversation and in no other chat's working folder (by its id)
@@ -117,14 +117,14 @@ export interface FileToolDeps {
   /** Delete a file in the working folder */
   remove(id: string): Promise<void>;
   /** Open a page of the working folder out of sight and read back what happened on it (nothing it stores is kept) */
-  inspect(f: FileRecord, o: { waitMs: number; script?: string; layout?: boolean; freshStorage?: boolean }, signal: AbortSignal): Promise<PageInspection>;
+  inspect(f: TextEntry, o: { waitMs: number; script?: string; layout?: boolean; freshStorage?: boolean }, signal: AbortSignal): Promise<PageInspection>;
   /**
    * Fetch an address through the fetch page (the user is asked there). null when declined or failed. A file comes with
    * its links (a page's, or the addresses written in a text), kept with the result as addresses the model may fetch next
    */
-  fetch(url: string, signal: AbortSignal): Promise<{ kind: 'file'; file: FileRecord; links: string[] } | { kind: 'image'; name: string } | null>;
+  fetch(url: string, signal: AbortSignal): Promise<{ kind: 'file'; file: TextEntry; links: string[] } | { kind: 'image'; name: string } | null>;
   /** How the model sees a file's path: relative to the working folder (whole for a file outside it) */
-  pathOf(f: FileRecord): string;
+  pathOf(f: TextEntry): string;
   /** The first syntax error in a file's text, for the kinds checked (syntax.ts); undefined when none */
   syntax(path: string, text: string): Promise<SyntaxProblem | undefined>;
 }
@@ -135,7 +135,7 @@ export interface FileToolDetails {
   name: string;
 }
 
-const details = (f: FileRecord): FileToolDetails => ({ fileId: f.id, name: f.name });
+const details = (f: TextEntry): FileToolDetails => ({ fileId: f.id, name: f.path });
 const str = (r: Record<string, unknown>, k: string) => (typeof r[k] === 'string' ? (r[k] as string) : '');
 const obj = (raw: unknown) => (raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {});
 const int = (v: unknown, min: number) => (Number.isFinite(Number(v)) ? Math.max(min, Math.floor(Number(v))) : undefined);
@@ -151,15 +151,15 @@ function requireId(r: Record<string, unknown>): string {
 }
 
 /** What a write tells the model about the file's syntax: the first error found, or nothing */
-async function syntaxNote(deps: FileToolDeps, f: FileRecord, text: string): Promise<string> {
-  const p = await deps.syntax(f.name, text);
+async function syntaxNote(deps: FileToolDeps, f: TextEntry, text: string): Promise<string> {
+  const p = await deps.syntax(f.path, text);
   if (!p) return '';
   const at = `${deps.pathOf(f)}${p.line ? `:${p.line}:${p.col}` : ''}`;
   return `\nSyntax error${p.inline ? ' in an inline script' : ''} at ${at}: ${p.message}. The file is saved as written: fix it, unless append_file adds the rest.`;
 }
 
 /** A text file the model may use, else why not: an image at that path, or no such file within its reach */
-async function mustGet(deps: FileToolDeps, ref: string): Promise<FileRecord> {
+async function mustGet(deps: FileToolDeps, ref: string): Promise<TextEntry> {
   const f = await deps.get(ref);
   if (f) return f;
   const im = await deps.image(ref);
@@ -243,7 +243,7 @@ const FILE_ID = { type: 'string', description: 'The file\'s path in the working 
  */
 export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: boolean }): Tool[] {
   const hasFolder = !!deps.folder();
-  const shown = (f: FileRecord) => JSON.stringify(deps.pathOf(f));
+  const shown = (f: TextEntry) => JSON.stringify(deps.pathOf(f));
 
   const list: Tool<{ pattern: string }> = {
     name: LIST_FILES,
@@ -501,7 +501,7 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
       if (f) {
         const from = deps.pathOf(f);
         // A path given without an extension keeps the file's type
-        const u = await deps.move(f.id, cleanFileName(i.to, extOf(f.name) || 'md'));
+        const u = await deps.move(f.id, cleanFileName(i.to, extOf(f.path) || 'md'));
         return { content: `Moved ${JSON.stringify(from)} to ${shown(u)}.${ignored()}`, details: details(u) };
       }
       const im = await deps.image(i.file_id);
@@ -533,7 +533,7 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
       const f = await mustGet(deps, i.file_id);
       const path = deps.pathOf(f);
       await deps.remove(f.id);
-      return { content: `Deleted ${JSON.stringify(path)}.`, details: { name: f.name } };
+      return { content: `Deleted ${JSON.stringify(path)}.`, details: { name: f.path } };
     }
   };
 
@@ -565,7 +565,7 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
     },
     async execute(i, ctx) {
       const f = await mustGet(deps, i.file_id);
-      if (!/\.html?$/i.test(f.name)) throw new TranslatedError(() => t('tool.notPage'));
+      if (!/\.html?$/i.test(f.path)) throw new TranslatedError(() => t('tool.notPage'));
       const r = await deps.inspect(f, { waitMs: i.wait_ms, script: i.script, layout: i.layout, freshStorage: i.fresh_storage }, ctx.signal);
       const out = [`Opened ${shown(f)} for ${i.wait_ms} ms.`];
       if (r.stuck) out.push('The page stopped answering (an endless loop?), and was closed.');

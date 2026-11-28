@@ -2,12 +2,12 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { cleanFiles, createFile, deleteFiles, getFile, listFiles, newFile, readText, setText } from '../../lib/db/files';
 import { baseName, cleanFileName, folderOf } from '../../lib/paths';
-import { resetCatalog } from '../../lib/db/catalog';
+import { entryOf, resetCatalog, type TextEntry } from '../../lib/db/catalog';
 import { seal, setDataKey, unseal } from '../../lib/db/sealed';
 import { generateDataKey } from '../../lib/crypto/data';
 import { exportBackup, type ExportFile, importAll } from '../../lib/db/export';
 import { db } from '../../lib/db/schema';
-import { textBytes, type FileRecord, type MessageRecord } from '../../lib/db/schema';
+import { textBytes, type MessageRecord } from '../../lib/db/schema';
 import { buildRequestMessages } from '../../lib/chat/request';
 import { attachmentsTransform, fileBlock, withAttachments } from './transform';
 import { registerMessageTransform } from '../../lib/chat/request';
@@ -18,10 +18,13 @@ import { checkArguments } from '../../lib/tools/check';
 import { filesNote, globSource, logText, makeFileTools, type FileToolDeps, type MovableImage } from './tools';
 import { READ_CHUNK, READ_LINES } from '../../lib/tools/lines';
 
+/** A text file's entry, as the catalog keeps it */
+const textEntry = (o: Parameters<typeof newFile>[0]) => entryOf(newFile(o)) as TextEntry;
+
 const ctx = { signal: new AbortController().signal, toolCallId: 't', transport: {} as never, authFor: () => undefined };
 
 function memDeps(scope = new Set<string>(), folder = 'work/') {
-  const files = new Map<string, FileRecord>();
+  const files = new Map<string, TextEntry>();
   const texts = new Map<string, string>();
   const before = new Map<string, string>();
   const images = new Map<string, MovableImage>();
@@ -30,15 +33,15 @@ function memDeps(scope = new Set<string>(), folder = 'work/') {
     folder: () => folder,
     // As the files feature does: one file per path, found by id or by path
     async create(name, text) {
-      const same = [...files.values()].find((f) => scope.has(f.id) && f.name === name);
+      const same = [...files.values()].find((f) => scope.has(f.id) && f.path === name);
       if (same) return { file: await deps.update(same.id, text), replaced: true };
-      const f = newFile({ id: `f${++n}`, name, origin: { kind: 'made' }, text, by: 'model' });
+      const f = textEntry({ id: `f${++n}`, path: name, origin: { kind: 'made' }, text, by: 'model' });
       files.set(f.id, f);
       texts.set(f.id, text);
       scope.add(f.id);
       return { file: f, replaced: false };
     },
-    get: async (ref) => (scope.has(ref) ? files.get(ref) : [...files.values()].find((f) => scope.has(f.id) && f.name === ref)),
+    get: async (ref) => (scope.has(ref) ? files.get(ref) : [...files.values()].find((f) => scope.has(f.id) && f.path === ref)),
     text: async (f, previous) => (previous ? before : texts).get(f.id) ?? '',
     // As the files feature does: the text a change replaces is kept, except when appending
     async update(id, text, append) {
@@ -50,7 +53,7 @@ function memDeps(scope = new Set<string>(), folder = 'work/') {
       texts.set(id, text);
       return next;
     },
-    pathOf: (f) => f.name,
+    pathOf: (f) => f.path,
     // As the sandbox would find it: a .js file whose text has "oops" fails at its first line
     syntax: async (path, text) => (path.endsWith('.js') && text.includes('oops') ? { line: 1, col: 5, message: "Unexpected identifier 'oops'" } : undefined),
     // As the sandbox would report a page that throws while it starts
@@ -72,18 +75,18 @@ function memDeps(scope = new Set<string>(), folder = 'work/') {
           }
         : {})
     }),
-    list: async () => [...files.values()].filter((f) => scope.has(f.id)).map((f) => ({ path: f.name, kind: 'file' as const, bytes: f.bytes })),
+    list: async () => [...files.values()].filter((f) => scope.has(f.id)).map((f) => ({ path: f.path, kind: 'file' as const, bytes: f.bytes })),
     // As the sandbox worker does it (state/workdir.ts)
     async search(pattern, ignoreCase, only) {
       const re = new RegExp(pattern, ignoreCase ? 'i' : '');
       const pick = only ? new RegExp(only, 'i') : null;
       return [...files.values()]
-        .filter((f) => scope.has(f.id) && (!pick || pick.test(f.name)))
-        .flatMap((f) => (texts.get(f.id) ?? '').split('\n').flatMap((text: string, i: number) => (re.test(text) ? [{ path: f.name, line: i + 1, text }] : [])));
+        .filter((f) => scope.has(f.id) && (!pick || pick.test(f.path)))
+        .flatMap((f) => (texts.get(f.id) ?? '').split('\n').flatMap((text: string, i: number) => (re.test(text) ? [{ path: f.path, line: i + 1, text }] : [])));
     },
     async move(id, to) {
-      if ([...files.values()].some((f) => f.name === to)) throw new Error('taken');
-      const next = { ...files.get(id)!, name: to };
+      if ([...files.values()].some((f) => f.path === to)) throw new Error('taken');
+      const next = { ...files.get(id)!, path: to };
       files.set(id, next);
       return next;
     },
@@ -225,7 +228,7 @@ describe('file tools', () => {
   it('cannot touch files outside the conversation', async () => {
     const scope = new Set<string>();
     const { deps, files } = memDeps(scope);
-    files.set('other', newFile({ id: 'other', name: 'secret.md', origin: { kind: 'upload' }, text: 'secret', by: 'upload' }));
+    files.set('other', textEntry({ id: 'other', path: 'secret.md', origin: { kind: 'upload' }, text: 'secret', by: 'upload' }));
     await expect(run(deps, 'read_file', { file_id: 'other' })).rejects.toThrow(/ありません/);
     await expect(run(deps, 'append_file', { file_id: 'other', content: 'x' })).rejects.toThrow(/ありません/);
   });
@@ -273,13 +276,13 @@ describe('file tools', () => {
     expect(found.content).toBe('js/app.js:2: function render() {}\njs/app.js:3: render();');
     expect(() => tool(deps, 'search_files').prepare({ pattern: '(' })).toThrow(/正規表現/);
     expect(() => tool(deps, 'list_files').prepare({ pattern: '*.{html,css' })).toThrow(/波かっこ/);
-    const id = [...files.values()].find((f) => f.name === 'css/style.css')!.id;
+    const id = [...files.values()].find((f) => f.path === 'css/style.css')!.id;
     await run(deps, 'move_file', { file_id: 'css/style.css', to: 'style.css' });
-    expect(files.get(id)!.name).toBe('style.css');
+    expect(files.get(id)!.path).toBe('style.css');
     await expect(run(deps, 'move_file', { file_id: 'style.css', to: 'index.html' })).rejects.toThrow();
     // A path without an extension keeps the file's type
     await run(deps, 'move_file', { file_id: 'js/app.js', to: 'main' });
-    expect([...files.values()].some((f) => f.name === 'main.js')).toBe(true);
+    expect([...files.values()].some((f) => f.path === 'main.js')).toBe(true);
     // Deleting is asked every time
     expect(tool(deps, 'delete_file').alwaysAsk).toBe(true);
     await run(deps, 'delete_file', { file_id: 'style.css' });
@@ -445,13 +448,13 @@ describe('csv preview', () => {
 
 describe('file storage and backups', () => {
   it('keeps texts apart from records, one previous text, and round-trips through export / import', { timeout: 30_000 }, async () => {
-    const f = newFile({ id: 'file-1', name: 'notes.md', origin: { kind: 'made' }, text: 'one', by: 'model', conversationId: 'c1' });
+    const f = newFile({ id: 'file-1', path: 'notes.md', origin: { kind: 'made' }, text: 'one', by: 'model', conversationId: 'c1' });
     await createFile(f, 'one');
     await setText('file-1', 'two', 'user');
     // Appending keeps the text before the change as it was
     await setText('file-1', 'two!', 'model', true);
     const now = (await getFile('file-1'))!;
-    expect(now.preview).toBe('two!');
+    expect(now.kind === 'text' && now.preview).toBe('two!');
     expect(now.previous?.by).toBe('model');
     expect(await readText('file-1')).toBe('two!');
     expect(await readText('file-1', 'previous')).toBe('one');
@@ -460,7 +463,7 @@ describe('file storage and backups', () => {
     const dump: ExportFile = JSON.parse(await (await exportBackup()).text());
     expect((dump.files as { id: string }[] | undefined)?.map((x) => x.id)).toContain('file-1');
     await db().files.clear();
-    await db().fileTexts.clear();
+    await db().fileData.clear();
     resetCatalog();
     const r = await importAll(JSON.parse(JSON.stringify(dump)));
     expect(r.tables.files).toBe(1);
@@ -469,7 +472,7 @@ describe('file storage and backups', () => {
     expect(await readText('file-1')).toBe('two!');
     expect(await readText('file-1', 'previous')).toBe('one');
     await deleteFiles(['file-1']);
-    expect(await db().fileTexts.where('fileId').equals('file-1').count()).toBe(0);
+    expect(await db().fileData.where('fileId').equals('file-1').count()).toBe(0);
   });
   it('converts records in older shapes as the catalog loads (encrypted too)', { timeout: 30_000 }, async () => {
     const key = await generateDataKey();
@@ -481,10 +484,10 @@ describe('file storage and backups', () => {
       const v9 = { id: 'v9', name: 'v9.md', mime: 'text/markdown', kind: 'document', url: 'https://example.com/a', createdAt: 1, updatedAt: 2, size: 1, current: { v: 3, at: 3, text: 'c', by: 'user', note: 'x' }, history: [{ v: 1, at: 1, by: 'model' }, { v: 2, at: 2, by: 'model' }] };
       // Then: the current text inside, the previous one in a row '<id>'
       const v10 = { id: 'v10', name: 'v10.md', mime: 'text/markdown', kind: 'document', createdAt: 1, updatedAt: 2, size: 1, current: { at: 3, text: 'now', by: 'model' }, previous: { at: 2, by: 'user' } };
-      // v11 at first: today's shape, sized in characters
+      // v11 at first: named, not given a path, and sized in characters
       const sized = { id: 'v11', name: 'v11.md', mime: 'text/markdown', origin: { kind: 'made' }, createdAt: 1, updatedAt: 2, size: 2, preview: 'あい', current: { at: 2, by: 'model' } };
       await db().files.bulkPut([await seal('files', legacy as never), await seal('files', v9 as never), await seal('files', v10 as never), await seal('files', sized as never)]);
-      await db().fileTexts.put(await seal('fileTexts', { id: 'v11:current', fileId: 'v11', text: 'あい' }));
+      await db().fileData.put(await seal('fileData', { id: 'v11:current', fileId: 'v11', text: 'あい' }));
       await db().fileVersions.bulkPut([
         await seal('fileVersions', { id: 'v9:1', fileId: 'v9', v: 1, text: 'a' } as never),
         await seal('fileVersions', { id: 'v9:2', fileId: 'v9', v: 2, text: 'b' } as never),
@@ -493,7 +496,7 @@ describe('file storage and backups', () => {
       resetCatalog();
       const old = (await getFile('old-1'))!;
       expect(old.origin).toEqual({ kind: 'upload' });
-      expect(old.fromPdf).toBe(true);
+      expect('fromPdf' in old).toBe(false);
       expect(await readText('old-1')).toBe('new');
       expect(await readText('old-1', 'previous')).toBe('first');
       const g = (await getFile('v9'))!;
@@ -505,6 +508,7 @@ describe('file storage and backups', () => {
       // Sizes are in UTF-8 bytes
       expect(old.bytes).toBe(3);
       expect((await getFile('v11'))!.bytes).toBe(6);
+      expect((await getFile('v11'))!.path).toBe('v11.md');
       expect(await readText('v11')).toBe('あい');
       expect('size' in (await unseal((await db().files.get('v11'))!))).toBe(false);
       // Written back in today's shape, encrypted; the old rows are gone
@@ -512,7 +516,7 @@ describe('file storage and backups', () => {
       expect((raw as unknown as Record<string, unknown>).versions).toBeUndefined();
       expect(JSON.stringify(raw)).not.toContain('first');
       expect(await db().fileVersions.count()).toBe(0);
-      expect((await db().fileTexts.get('old-1:current'))?.text).toBeUndefined();
+      expect(JSON.stringify(await db().fileData.get('old-1:current'))).not.toContain('new');
     } finally {
       setDataKey(null);
     }

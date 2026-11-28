@@ -31,10 +31,11 @@ export const PLAIN_FIELDS = {
   prompts: ['id', 'createdAt', 'updatedAt'],
   // The name stays plain: skills are listed by it and kept unique through its index
   skills: ['id', 'name', 'createdAt', 'updatedAt'],
-  // data: the file's bytes, encrypted apart as bytes (lib/db/skill-files.ts)
+  // data: the file's bytes, encrypted apart as bytes (lib/db/bytes.ts)
   skillFiles: ['id', 'skillId', 'data'],
   files: ['id', 'conversationId', 'createdAt', 'updatedAt'],
-  fileTexts: ['id', 'fileId'],
+  // A text goes into enc with the rest; bytes (data) are encrypted apart
+  fileData: ['id', 'fileId', 'data'],
   fileVersions: ['id', 'fileId']
 } as const;
 

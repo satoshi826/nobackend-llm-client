@@ -1,10 +1,11 @@
-// Stored images and videos (lib/db/images), whatever made them: an image or video answer, the generate_image tool, a
-// chat model's own image output, or the user. Here: storing a reply's images, what the viewer shows, deleting.
+// Stored images and videos (files: lib/db/files.ts), whatever made them: an image or video answer, the generate_image
+// tool, a chat model's own image output, or the user. Here: storing a reply's images, what the viewer shows, and
+// deleting files, which empties the slots of the answers that showed them.
 import { signal } from '@preact/signals';
 import type { Conversation } from '../lib/db/schema';
 import type { Part } from '../lib/providers/types';
-import { deleteImageRecords, getImage, getImageMeta, getImageThumb, putImage } from '../lib/db/images';
-import { catalogImage } from '../lib/db/catalog';
+import { deleteFiles, getFile, readBytes, readThumb, storeBytes } from '../lib/db/files';
+import { catalogFile } from '../lib/db/catalog';
 import { baseName, folderOf } from '../lib/paths';
 import * as repo from '../lib/db/repo';
 import { base64ToBlob } from '../lib/base64';
@@ -31,12 +32,12 @@ async function imageSizeOf(blob: Blob): Promise<{ width?: number; height?: numbe
 export async function storeImages(conv: Conversation, messageId: string, blobs: Blob[], paths?: string[]): Promise<FilePart[]> {
   const parts: FilePart[] = [];
   for (const [i, blob] of blobs.entries()) {
-    const blobId = repo.newId();
+    const fileId = repo.newId();
     const mime = blob.type || 'image/png';
     const at = paths?.[i];
     const named = at ? { folder: (conv.workDir ?? '') + folderOf(at), name: baseName(at) } : { folder: conv.workDir };
-    const path = await putImage({ id: blobId, conversationId: conv.id, messageId, mime, ...named }, blob, !!conv.temporary);
-    parts.push({ type: 'file', blobId, name: baseName(path), mimeType: mime, ...(await imageSizeOf(blob)) });
+    const f = await storeBytes({ id: fileId, conversationId: conv.id, messageId, mime, origin: { kind: 'made' }, ...named }, blob, !!conv.temporary);
+    parts.push({ type: 'file', fileId, name: baseName(f.path), mimeType: mime, ...(await imageSizeOf(blob)) });
   }
   return parts;
 }
@@ -51,7 +52,7 @@ export async function saveReplyImage(conv: Conversation, messageId: string, data
 
 /** An image or a video in the viewer; one brought in by the user belongs to no conversation */
 export interface MediaItem {
-  blobId: string;
+  fileId: string;
   conversationId?: string;
   messageId?: string;
   /** Its path in the Files tab, when the caller knows it */
@@ -64,15 +65,15 @@ export interface MediaItem {
 export const lightbox = signal<{ items: MediaItem[]; index: number } | null>(null);
 
 /** Open the viewer on one of the images of a message */
-export function openLightbox(parts: { blobId: string }[], index: number, owner: { conversationId: string; messageId: string }) {
-  lightbox.value = { items: parts.map((p) => ({ blobId: p.blobId, ...owner })), index };
+export function openLightbox(parts: { fileId: string }[], index: number, owner: { conversationId: string; messageId: string }) {
+  lightbox.value = { items: parts.map((p) => ({ fileId: p.fileId, ...owner })), index };
 }
 
 /** An item's bytes: the whole, or the small copy grids show (null when not stored in this browser) */
-export const loadMedia = (id: string, size: 'full' | 'thumb' = 'full'): Promise<Blob | null> => (size === 'thumb' ? getImageThumb(id) : getImage(id));
+export const loadMedia = (id: string, size: 'full' | 'thumb' = 'full'): Promise<Blob | null> => (size === 'thumb' ? readThumb(id) : readBytes(id));
 
 /** Where an item is saved in the Files tab */
-export const savedPathOf = (id: string): string | undefined => catalogImage(id)?.path;
+export const savedPathOf = (id: string): string | undefined => catalogFile(id)?.path;
 
 /** The prompt an item was made from ('' when it was not made from one here) */
 export function promptOf(item: MediaItem): string {
@@ -95,33 +96,33 @@ export async function openChatOf(item: MediaItem) {
 }
 
 /**
- * Delete images and videos: the bytes are removed and the answers that showed them keep an empty slot ("deleted"), so
- * the conversation still reads correctly
+ * Delete files: their contents are removed, and the answers that showed one (an image or a video a chat made) keep an
+ * empty slot ("deleted"), so the conversation still reads correctly
  */
-export async function deleteMedia(ids: string[]) {
+export async function removeFiles(ids: string[]) {
   const gone = new Set(ids);
   const byConv = new Map<string, Set<string>>();
   for (const id of ids) {
-    const meta = await getImageMeta(id);
-    // Brought-in images belong to no answer
-    if (!meta?.conversationId || !meta.messageId) continue;
-    const g = byConv.get(meta.conversationId) ?? new Set<string>();
-    g.add(meta.messageId);
-    byConv.set(meta.conversationId, g);
+    const f = await getFile(id);
+    // Brought-in files belong to no answer
+    if (!f?.conversationId || !f.messageId) continue;
+    const g = byConv.get(f.conversationId) ?? new Set<string>();
+    g.add(f.messageId);
+    byConv.set(f.conversationId, g);
   }
   for (const [convId, g] of byConv) {
     const list = convId === currentId.value ? messages.value : await repo.listMessages(convId);
     for (const m of list) {
       if (!g.has(m.id)) continue;
       const parts = m.parts
-        .filter((p) => !(p.type === 'file' && gone.has(p.blobId)))
+        .filter((p) => !(p.type === 'file' && gone.has(p.fileId)))
         .map((p) => {
-          if (p.type !== 'tool' || !p.uiDetails || !Array.isArray((p.uiDetails as { blobIds?: unknown }).blobIds)) return p;
-          const d = p.uiDetails as { blobIds: string[] };
-          return { ...p, uiDetails: { ...d, blobIds: d.blobIds.filter((b) => !gone.has(b)), deleted: true } };
+          if (p.type !== 'tool' || !p.uiDetails || !Array.isArray((p.uiDetails as { fileIds?: unknown }).fileIds)) return p;
+          const d = p.uiDetails as { fileIds: string[] };
+          return { ...p, uiDetails: { ...d, fileIds: d.fileIds.filter((b) => !gone.has(b)), deleted: true } };
         });
       await saveMessage({ ...m, parts });
     }
   }
-  await deleteImageRecords(ids);
+  await deleteFiles(ids);
 }

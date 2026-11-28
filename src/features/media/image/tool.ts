@@ -18,7 +18,7 @@ export interface ImageToolInput {
 
 export interface ImageToolRun {
   /** paths: where they were saved, relative to the working folder when inWorkDir (else in the Files tab) */
-  (input: ImageToolInput, signal: AbortSignal): Promise<{ blobIds: string[]; paths: string[]; inWorkDir: boolean; model: string; blurred: boolean; request?: Record<string, unknown> }>;
+  (input: ImageToolInput, signal: AbortSignal): Promise<{ fileIds: string[]; paths: string[]; inWorkDir: boolean; model: string; blurred: boolean; request?: Record<string, unknown> }>;
 }
 
 /**
@@ -31,10 +31,10 @@ export function imageStems(path: string, count: number): string[] {
 }
 
 /** The images' paths with their ids: '"assets/hero.png" (id: b1)' */
-const listed = (r: { paths: string[]; blobIds: string[] }) => r.paths.map((n, i) => `${JSON.stringify(n)} (id: ${r.blobIds[i]})`).join(', ');
+const listed = (r: { paths: string[]; fileIds: string[] }) => r.paths.map((n, i) => `${JSON.stringify(n)} (id: ${r.fileIds[i]})`).join(', ');
 
 /** Where the images went, for the model: the paths to load them by, and why they differ from the path it gave */
-function savedNote(asked: string | undefined, r: { paths: string[]; blobIds: string[]; inWorkDir: boolean }): string {
+function savedNote(asked: string | undefined, r: { paths: string[]; fileIds: string[]; inWorkDir: boolean }): string {
   if (!r.inWorkDir)
     return `Saved in the Files tab as ${listed(r)}, outside any working folder${asked ? ' (there is none yet), so the path was ignored' : ''}. For a page to load one, move it into the working folder with move_file and its id${asked ? ' (to that path)' : ''}.`;
   const stems = asked ? imageStems(asked, r.paths.length) : [];
@@ -95,9 +95,9 @@ export function makeImageTool(run: ImageToolRun, model?: ImageToolModel): Tool<I
       const r = await run(input, ctx.signal);
       return {
         // For the model only: English, like the descriptions
-        content: `Created ${r.blobIds.length} image(s) with ${r.model}; they are shown to the user.${r.blurred ? ' The provider blurred them (safe mode).' : ''} You cannot see them, so do not describe them as if you could. ${savedNote(input.path, r)}`,
+        content: `Created ${r.fileIds.length} image(s) with ${r.model}; they are shown to the user.${r.blurred ? ' The provider blurred them (safe mode).' : ''} You cannot see them, so do not describe them as if you could. ${savedNote(input.path, r)}`,
         // request: what was sent and what it cost (shown in full on the card)
-        details: { blobIds: r.blobIds, model: r.model, blurred: r.blurred, request: r.request }
+        details: { fileIds: r.fileIds, model: r.model, blurred: r.blurred, request: r.request }
       };
     }
   };

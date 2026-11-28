@@ -1,9 +1,8 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createFile, getFile, listFiles, newFile, readText } from '../../lib/db/files';
+import { createFile, getFile, listFiles, newFile, readText, storeBytes, type NewBytes } from '../../lib/db/files';
 import { resetCatalog } from '../../lib/db/catalog';
 import { folderNameFor } from '../../lib/paths';
-import { listImages, putImage } from '../../lib/db/images';
 import { moveIntoWorkDirs, renumberTakenPaths } from '../../lib/db/paths';
 import { db, type Conversation, type MessageRecord } from '../../lib/db/schema';
 import { putConversation } from '../../lib/db/repo';
@@ -11,7 +10,7 @@ import { conversations } from '../../state/conversations';
 import { contributedTools } from '../../state/tool-registry';
 import { checkArguments } from '../../lib/tools/check';
 import type { ModelInfo } from '../../lib/providers/types';
-import { moveItems, planRemoval, refreshFiles, refreshImages, siteOf, siteSignature, workDirOf, writeAsPage } from './state';
+import { moveItems, planRemoval, refreshFiles, siteOf, siteSignature, workDirOf, writeAsPage } from './state';
 import { pageApi } from './state/page-api';
 import { setText } from '../../lib/db/files';
 
@@ -33,6 +32,9 @@ function toolsFor(c: Conversation, history: MessageRecord[] = []) {
 
 /** Save a new file with its text */
 const make = (o: Parameters<typeof newFile>[0]) => createFile(newFile(o), o.text);
+/** Save an image (made in a chat unless said) and give its path */
+const putImage = async (meta: Omit<NewBytes, 'origin'> & Partial<Pick<NewBytes, 'origin'>>, blob: Blob) => (await storeBytes({ origin: { kind: 'made' }, ...meta }, blob, false)).path;
+const listImages = async () => (await listFiles()).filter((f) => f.kind === 'image');
 
 beforeEach(async () => {
   await Promise.all(db().tables.map((t) => t.clear()));
@@ -54,7 +56,7 @@ describe('working folder', () => {
     // Paths are relative to the folder; a leading "/" means the folder too. A model that keeps naming the folder is
     // not refused: the name is ignored
     await next.run('write_file', { name: '/js/app.js', content: 'x', folder: 'Todo App' });
-    expect((await listFiles()).map((f) => f.name).sort()).toEqual(['Todo App/index.html', 'Todo App/js/app.js']);
+    expect((await listFiles()).map((f) => f.path).sort()).toEqual(['Todo App/index.html', 'Todo App/js/app.js']);
     expect((await next.run('read_file', { file_id: 'JS/APP.js' })).content).toContain('x');
     // The same path again is the same file
     const again = await next.run('write_file', { name: 'index.html', content: '<p>2</p>' });
@@ -82,15 +84,15 @@ describe('working folder', () => {
   it('reaches only its own folder; a file attached from outside is read but not changed', async () => {
     const c = conv('c', { workDir: 'mine/' });
     conversations.value = [c];
-    await make({ id: 'out', name: 'theirs/secret.md', origin: { kind: 'made' }, text: 'secret', by: 'model', conversationId: 'other' });
-    await make({ id: 'in', name: 'mine/a.md', origin: { kind: 'made' }, text: 'a', by: 'model', conversationId: 'c' });
+    await make({ id: 'out', path: 'theirs/secret.md', origin: { kind: 'made' }, text: 'secret', by: 'model', conversationId: 'other' });
+    await make({ id: 'in', path: 'mine/a.md', origin: { kind: 'made' }, text: 'a', by: 'model', conversationId: 'c' });
     const plain = toolsFor(c);
     await expect(plain.run('read_file', { file_id: 'out' })).rejects.toThrow(/ありません|No file "out"/);
     await expect(plain.run('read_file', { file_id: '../theirs/secret.md' })).rejects.toThrow();
     // A file written to a path outside lands inside: there is no way to name another folder
     await plain.run('write_file', { name: '../theirs/secret.md', content: 'overwrite?' });
     expect(await readText('out')).toBe('secret');
-    expect((await listFiles()).some((f) => f.name === 'mine/theirs/secret.md')).toBe(true);
+    expect((await listFiles()).some((f) => f.path === 'mine/theirs/secret.md')).toBe(true);
     const history = [{ attachments: [{ fileId: 'out' }], parts: [] } as unknown as MessageRecord];
     const attached = toolsFor(c, history);
     expect((await attached.run('read_file', { file_id: 'out' })).content).toContain('secret');
@@ -101,9 +103,9 @@ describe('working folder', () => {
     const c = conv('c', { workDir: 'game/' });
     conversations.value = [c];
     const png = () => new Blob(['x'], { type: 'image/png' });
-    await putImage({ id: 'hero', mime: 'image/png', conversationId: 'c', folder: 'game/', name: 'hero.png' }, png(), false);
-    await putImage({ id: 'out', mime: 'image/png', conversationId: 'other', name: 'cat.png' }, png(), false);
-    await make({ id: 'p', name: 'game/index.html', origin: { kind: 'made' }, text: '<img src="hero.png">', by: 'model', conversationId: 'c' });
+    await putImage({ id: 'hero', mime: 'image/png', conversationId: 'c', folder: 'game/', name: 'hero.png' }, png());
+    await putImage({ id: 'out', mime: 'image/png', conversationId: 'other', name: 'cat.png' }, png());
+    await make({ id: 'p', path: 'game/index.html', origin: { kind: 'made' }, text: '<img src="hero.png">', by: 'model', conversationId: 'c' });
     const tools = toolsFor(c);
     const pathOf = async (id: string) => (await listImages()).find((im) => im.id === id)!.path;
     // The text tools tell an image from a missing file
@@ -114,7 +116,7 @@ describe('working folder', () => {
     expect(await pathOf('hero')).toBe('game/assets/hero.png');
     await expect(tools.run('move_file', { file_id: 'hero', to: 'index.html' })).rejects.toThrow(/拡張子|extension/);
     await expect(tools.run('move_file', { file_id: 'hero', to: 'index.png' })).resolves.toBeTruthy();
-    await putImage({ id: 'other', mime: 'image/png', conversationId: 'c', folder: 'game/', name: 'b.png' }, png(), false);
+    await putImage({ id: 'other', mime: 'image/png', conversationId: 'c', folder: 'game/', name: 'b.png' }, png());
     await expect(tools.run('move_file', { file_id: 'other', to: 'index.png' })).rejects.toThrow(/使っています|is used/);
     // Not one outside the folder, by id or by a path that leaves it
     await expect(tools.run('move_file', { file_id: 'out', to: 'cat.png' })).rejects.toThrow(/移動できません|can't be moved/);
@@ -127,13 +129,13 @@ describe('working folder', () => {
     const o = conv('o', { workDir: 'theirs/' });
     conversations.value = [c, o];
     const png = () => new Blob(['x'], { type: 'image/png' });
-    const at = await putImage({ id: 'made', mime: 'image/png', conversationId: 'c' }, png(), false);
-    await putImage({ id: 'foreign', mime: 'image/png', conversationId: 'o' }, png(), false);
+    const at = await putImage({ id: 'made', mime: 'image/png', conversationId: 'c' }, png());
+    await putImage({ id: 'foreign', mime: 'image/png', conversationId: 'o' }, png());
     // Made here, but the user put it in another chat's folder: theirs now
-    await putImage({ id: 'given', mime: 'image/png', conversationId: 'c', folder: 'theirs/', name: 'g.png' }, png(), false);
+    await putImage({ id: 'given', mime: 'image/png', conversationId: 'c', folder: 'theirs/', name: 'g.png' }, png());
     // Offered without a folder only once the chat made images with a tool
     expect(toolsFor(c).names).toEqual(['write_file', 'fetch_file']);
-    const made = [{ parts: [{ type: 'tool', name: 'generate_image', uiDetails: { blobIds: ['made'] } }] } as unknown as MessageRecord];
+    const made = [{ parts: [{ type: 'tool', name: 'generate_image', uiDetails: { fileIds: ['made'] } }] } as unknown as MessageRecord];
     const tools = toolsFor(c, made);
     expect(tools.names).toEqual(['write_file', 'move_file', 'fetch_file']);
     await expect(tools.run('move_file', { file_id: 'foreign', to: 'cat.png', folder: 'cat-page' })).rejects.toThrow(/移動できません|can't be moved/);
@@ -157,26 +159,26 @@ describe('moving older data', () => {
     const loose = conv('loose');
     await putConversation(site);
     await putConversation(loose);
-    await make({ id: 'p', name: 'site/index.html', origin: { kind: 'made' }, text: '<link href="style.css">', by: 'model', conversationId: 'site' });
-    await make({ id: 's', name: 'site/style.css', origin: { kind: 'made' }, text: 'p{}', by: 'model', conversationId: 'site' });
-    await make({ id: 'c', name: 'counter.html', origin: { kind: 'made' }, text: '<p>', by: 'model', conversationId: 'loose' });
-    await make({ id: 'j', name: 'js/app.js', origin: { kind: 'made' }, text: '1', by: 'model', conversationId: 'loose' });
+    await make({ id: 'p', path: 'site/index.html', origin: { kind: 'made' }, text: '<link href="style.css">', by: 'model', conversationId: 'site' });
+    await make({ id: 's', path: 'site/style.css', origin: { kind: 'made' }, text: 'p{}', by: 'model', conversationId: 'site' });
+    await make({ id: 'c', path: 'counter.html', origin: { kind: 'made' }, text: '<p>', by: 'model', conversationId: 'loose' });
+    await make({ id: 'j', path: 'js/app.js', origin: { kind: 'made' }, text: '1', by: 'model', conversationId: 'loose' });
     // An image attached in the chat stays where the user put it
-    await putImage({ id: 'img', mime: 'image/png', conversationId: 'loose', origin: { kind: 'upload' }, name: 'cat.png' }, new Blob(['x'], { type: 'image/png' }), false);
-    await make({ id: 'n1', name: 'Notes.md', origin: { kind: 'upload' }, text: '1', by: 'upload' });
-    await make({ id: 'n2', name: 'notes.md', origin: { kind: 'upload' }, text: '2', by: 'upload' });
+    await putImage({ id: 'img', mime: 'image/png', conversationId: 'loose', origin: { kind: 'upload' }, name: 'cat.png' }, new Blob(['x'], { type: 'image/png' }));
+    await make({ id: 'n1', path: 'Notes.md', origin: { kind: 'upload' }, text: '1', by: 'upload' });
+    await make({ id: 'n2', path: 'notes.md', origin: { kind: 'upload' }, text: '2', by: 'upload' });
     const moved = await moveIntoWorkDirs([site, loose]);
     expect(moved.map((x) => x.workDir)).toEqual(['site/', 'counter/']);
     expect((await db().conversations.get('site'))!.workDir).toBe('site/');
-    expect((await getFile('p'))!.name).toBe('site/index.html');
+    expect((await getFile('p'))!.path).toBe('site/index.html');
     // Moved together, so references between them still hold
-    expect((await getFile('c'))!.name).toBe('counter/counter.html');
-    expect((await getFile('j'))!.name).toBe('counter/js/app.js');
+    expect((await getFile('c'))!.path).toBe('counter/counter.html');
+    expect((await getFile('j'))!.path).toBe('counter/js/app.js');
     expect((await listImages()).find((im) => im.id === 'img')!.path).toBe('cat.png');
     // Done once: a conversation with a folder is left alone
     expect(await moveIntoWorkDirs(moved)).toEqual([]);
     expect(await renumberTakenPaths()).toBe(1);
-    const notes = (await listFiles()).map((f) => f.name).filter((n) => /notes/i.test(n));
+    const notes = (await listFiles()).map((f) => f.path).filter((n) => /notes/i.test(n));
     expect(notes).toHaveLength(2);
     expect(notes.filter((n) => n.endsWith(' (2).md'))).toHaveLength(1);
   });
@@ -184,12 +186,12 @@ describe('moving older data', () => {
   it('moves a conversation whose top folder holds other files too', async () => {
     const c = conv('mixed');
     await putConversation(c);
-    await make({ id: 'a', name: 'shared/a.md', origin: { kind: 'made' }, text: 'a', by: 'model', conversationId: 'mixed' });
-    await make({ id: 'b', name: 'shared/b.md', origin: { kind: 'upload' }, text: 'b', by: 'upload' });
+    await make({ id: 'a', path: 'shared/a.md', origin: { kind: 'made' }, text: 'a', by: 'model', conversationId: 'mixed' });
+    await make({ id: 'b', path: 'shared/b.md', origin: { kind: 'upload' }, text: 'b', by: 'upload' });
     const [m] = await moveIntoWorkDirs([c]);
     expect(m.workDir).toBe('a/');
-    expect((await getFile('a'))!.name).toBe('a/shared/a.md');
-    expect((await getFile('b'))!.name).toBe('shared/b.md');
+    expect((await getFile('a'))!.path).toBe('a/shared/a.md');
+    expect((await getFile('b'))!.path).toBe('shared/b.md');
   });
 });
 
@@ -207,35 +209,33 @@ describe('sites', () => {
 
 describe('moving into folders', () => {
   it('moves files and images with their names, still as made, and numbers a taken one', async () => {
-    const at = await putImage({ id: 'made', mime: 'image/png', conversationId: 'c' }, new Blob(['x'], { type: 'image/png' }), false);
-    await make({ id: 'f', name: 'pics/notes.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
-    await moveItems([{ id: 'made', type: 'image' }, { id: 'f', type: 'file' }], 'pics/');
+    const at = await putImage({ id: 'made', mime: 'image/png', conversationId: 'c' }, new Blob(['x'], { type: 'image/png' }));
+    await make({ id: 'f', path: 'pics/notes.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
+    await moveItems(['made', 'f'], 'pics/');
     const im = (await listImages()).find((i) => i.id === 'made')!;
     expect([im.path, im.origin]).toEqual([`pics/${at}`, { kind: 'made' }]);
     // Already there: stays as it is
-    expect((await getFile('f'))!.name).toBe('pics/notes.md');
-    await make({ id: 'g', name: 'other/notes.md', origin: { kind: 'made' }, text: 'y', by: 'model' });
-    await moveItems([{ id: 'g', type: 'file' }], 'pics/');
-    expect((await getFile('g'))!.name).toBe('pics/notes (2).md');
+    expect((await getFile('f'))!.path).toBe('pics/notes.md');
+    await make({ id: 'g', path: 'other/notes.md', origin: { kind: 'made' }, text: 'y', by: 'model' });
+    await moveItems(['g'], 'pics/');
+    expect((await getFile('g'))!.path).toBe('pics/notes (2).md');
   });
   it('plans a delete: a folder goes with everything inside it, chosen items once', async () => {
-    await make({ id: 'a', name: 'pics/a.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
-    await make({ id: 'b', name: 'pics/deep/b.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
-    await make({ id: 'c', name: 'other/c.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
-    await putImage({ id: 'i', mime: 'image/png', folder: 'pics/' }, new Blob(['x'], { type: 'image/png' }), false);
+    await make({ id: 'a', path: 'pics/a.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
+    await make({ id: 'b', path: 'pics/deep/b.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
+    await make({ id: 'c', path: 'other/c.md', origin: { kind: 'made' }, text: 'x', by: 'model' });
+    await putImage({ id: 'i', mime: 'image/png', folder: 'pics/' }, new Blob(['x'], { type: 'image/png' }));
     await refreshFiles();
-    await refreshImages();
-    const r = planRemoval(['pics/'], [{ id: 'a', type: 'file' }, { id: 'c', type: 'file' }]);
-    expect([r.fileIds.sort(), r.imageIds]).toEqual([['a', 'b', 'c'], ['i']]);
+    const r = planRemoval(['pics/'], ['a', 'c']);
+    expect(r.ids.sort()).toEqual(['a', 'b', 'c', 'i']);
   });
 });
 
 describe('pages\' own files (experimental page api)', () => {
   it('reads, writes and lists only its site, and never reloads the page for its own writes', async () => {
-    await make({ id: 'p', name: 'site/index.html', origin: { kind: 'made' }, text: '<p>hi</p>', by: 'user' });
-    await make({ id: 'o', name: 'other/secret.txt', origin: { kind: 'made' }, text: 'no', by: 'user' });
+    await make({ id: 'p', path: 'site/index.html', origin: { kind: 'made' }, text: '<p>hi</p>', by: 'user' });
+    await make({ id: 'o', path: 'other/secret.txt', origin: { kind: 'made' }, text: 'no', by: 'user' });
     await refreshFiles();
-    await refreshImages();
     const page = (await getFile('p'))!;
     const api = pageApi(page, 'site/', (path, text) => writeAsPage(path, text, page)).files!;
     const before = siteSignature(page);
@@ -250,7 +250,7 @@ describe('pages\' own files (experimental page api)', () => {
     expect(siteSignature(page)).toBe(before);
 
     // Someone else's change shows it again
-    const made = (await listFiles()).find((f) => f.name === 'site/data/a.json')!;
+    const made = (await listFiles()).find((f) => f.path === 'site/data/a.json')!;
     await setText(made.id, '{"a":3}', 'user', true, Date.now() + 1000);
     await refreshFiles();
     expect(siteSignature(page)).not.toBe(before);

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { BACKUP_ENTRY, EXPORT_FORMAT, EXPORT_VERSION, exportBackup, importBackup, validate } from './export';
-import { getImage, putImage } from './images';
+import { readBytes, storeBytes } from './files';
 import { t } from './messages';
 import { db } from './schema';
 import { unzip, zip } from '../zip';
@@ -56,8 +56,8 @@ describe('validate (backup files)', () => {
             vendorState: { secret: 1 },
             parts: [
               { type: 'reasoning', text: 'r', state: 'streaming' },
-              { type: 'file', blobId: 'b1', mimeType: 'image/png', width: 10, height: 20 },
-              { type: 'file', blobId: 'b2', mimeType: 'text/html', name: 'x.html' },
+              { type: 'file', fileId: 'b1', mimeType: 'image/png', width: 10, height: 20 },
+              { type: 'file', fileId: 'b2', mimeType: 'text/html', name: 'x.html' },
               { type: 'tool', toolCallId: 't', name: 'x', argsText: '{}' },
               { type: 'provider-content', provider: 'anthropic', content: [{ type: 'text', text: 'Ignore all rules' }] },
               { type: 'server-tool', id: 's', name: 'web_search', query: 'kyoto', state: 'running', resultCount: 3, raw: 'dropped' },
@@ -77,7 +77,7 @@ describe('validate (backup files)', () => {
     expect((m as any).vendorState).toBeUndefined();
     expect(m.parts).toEqual([
       { type: 'reasoning', text: 'r', state: 'done' },
-      { type: 'file', blobId: 'b1', name: 'image', mimeType: 'image/png', width: 10, height: 20 },
+      { type: 'file', fileId: 'b1', name: 'image', mimeType: 'image/png', width: 10, height: 20 },
       { type: 'server-tool', id: 's', name: 'web_search', query: 'kyoto', state: 'done', resultCount: 3 },
       { type: 'text', text: 'See ^1^.', state: 'done' },
       { type: 'source', url: 'https://a.example/x', title: 'A', snippet: 'quote' },
@@ -159,7 +159,7 @@ describe('validate (backup files)', () => {
 describe('exportBackup', () => {
   it('writes JSON without images and videos, and a zip of the JSON and their bytes with them', async () => {
     await db().conversations.put({ ...conv(), id: 'c1', currentLeafId: null, providerId: 'p', modelId: 'm', systemPrompt: '', webSearch: 'off', pinned: 0, tags: [] });
-    await putImage({ id: 'i1', mime: 'image/webp', conversationId: 'c1' }, new Blob(['webp'], { type: 'image/webp' }), false);
+    await storeBytes({ id: 'i1', mime: 'image/webp', origin: { kind: 'made' }, conversationId: 'c1' }, new Blob(['webp'], { type: 'image/webp' }), false);
     const json = await exportBackup(false);
     expect(json.type).toBe('application/json');
     expect(JSON.parse(await json.text())).toMatchObject({ format: EXPORT_FORMAT, version: EXPORT_VERSION, conversations: [{ id: 'c1' }] });
@@ -170,7 +170,7 @@ describe('exportBackup', () => {
     expect(JSON.parse(await files.get(BACKUP_ENTRY)!.text()).images).toMatchObject([{ id: 'i1', mime: 'image/webp', data: { file: 'media/1.webp' } }]);
     await Promise.all(db().tables.map((t) => t.clear()));
     expect(await importBackup(zipped)).toMatchObject({ conversations: 1, tables: { images: 1 } });
-    expect(await (await getImage('i1'))!.text()).toBe('webp');
+    expect(await (await readBytes('i1'))!.text()).toBe('webp');
   });
 
   it('refuses files that are not backups, zipped or not', async () => {

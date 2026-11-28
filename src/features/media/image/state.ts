@@ -4,7 +4,7 @@
 import { computed, effect, signal } from '@preact/signals';
 import * as repo from '../../../lib/db/repo';
 import type { Conversation, ImageParams, ImageResult, MessageError, MessageRecord } from '../../../lib/db/schema';
-import { getImage } from '../../../lib/db/images';
+import { readBytes } from '../../../lib/db/files';
 import { providerConfigOf } from '../../../lib/keys/accounts';
 import { plainTransport } from '../../../lib/providers/transport';
 import { vaultTransport as transport } from '../../../lib/vault/client';
@@ -332,7 +332,7 @@ async function addUserRequest(conv: Conversation, p: ImageParams, text: string) 
 }
 
 /** Upscale / remove the background of / edit an image. from: the provider and model that made it (see editTargetFor) */
-export async function imageAction(op: EditOp, sourceBlobId: string, opts: { scale?: 2 | 4; prompt?: string; from?: { providerId?: string; model?: string } } = {}) {
+export async function imageAction(op: EditOp, sourceFileId: string, opts: { scale?: 2 | 4; prompt?: string; from?: { providerId?: string; model?: string } } = {}) {
   const target = editTargetFor(op, opts.from);
   if (!target) return;
   const text = op === 'upscale' ? t('request.upscaleText', { scale: opts.scale ?? 2 }) : op === 'remove-bg' ? t('request.removeBgText') : (opts.prompt ?? '').trim();
@@ -347,7 +347,7 @@ export async function imageAction(op: EditOp, sourceBlobId: string, opts: { scal
     variants: 1,
     safeMode: false,
     format: 'png',
-    sourceBlobId,
+    sourceFileId,
     ...(op === 'upscale' ? { scale: opts.scale ?? 2 } : {})
   };
   await addUserRequest(conv, p, text);
@@ -401,7 +401,7 @@ async function call(p: ImageParams, signal: AbortSignal): Promise<{ blobs: Blob[
     const r = await provider.generate({ ...p, prompt: sentPrompt(p) }, imageModelOf(p.providerId, p.model), ctx);
     return { blobs: r.images, result: { seed: p.seed, blurred: r.blurred || undefined, violations: r.violations || undefined, enhancedPrompt: r.enhancedPrompt }, costUsd: r.costUsd };
   }
-  const source = p.sourceBlobId ? await getImage(p.sourceBlobId) : null;
+  const source = p.sourceFileId ? await readBytes(p.sourceFileId) : null;
   if (!source) throw new ImageApiError({ kind: 'bad-request', message: t('err.noSource') });
   if (!provider[EDIT_METHOD[p.op]]) throw new ImageApiError({ kind: 'bad-request', message: t('err.opUnsupported', { provider: provider.label }) });
   const blob = p.op === 'upscale' ? await provider.upscale!(source, p.scale ?? 2, ctx) : p.op === 'edit' ? await provider.edit!(source, p, ctx) : await provider.removeBackground!(source, ctx);
@@ -516,8 +516,8 @@ async function runImageTool(conv: Conversation, messageId: string, input: ImageT
   const parts = await storeImages(now, messageId, r.images, stems?.map((s, i) => `${s}.${extOfMime(r.images[i].type || 'image/png')}`));
   const cost = recordImageUsage(now, p, r.images.length, r.costUsd);
   return {
-    blobIds: parts.map((x) => x.blobId),
-    paths: parts.map((x) => (savedPathOf(x.blobId) ?? x.name).slice(dir.length)),
+    fileIds: parts.map((x) => x.fileId),
+    paths: parts.map((x) => (savedPathOf(x.fileId) ?? x.name).slice(dir.length)),
     inWorkDir: !!dir,
     model: model?.name ?? p.model,
     blurred: !!r.blurred,

@@ -1,6 +1,7 @@
 // How much each kind of stored data takes, for Settings → プライバシーとデータ. Sizes are estimates of the records;
 // the browser's own files are larger (it frees deleted data only later, and keeps its own bookkeeping)
 import { db } from './schema';
+import { catalogFile, ensureCatalog, type FileKind } from './catalog';
 
 export interface StorageUse {
   count: number;
@@ -12,9 +13,9 @@ export interface StorageBreakdown {
   conversations: StorageUse;
   /** Images with their thumbnails */
   images: StorageUse;
-  /** Videos (kept with the images) with their thumbnails */
+  /** Videos with their thumbnails */
   videos: StorageUse;
-  /** Files with their earlier versions (count: files) */
+  /** Text files with their earlier versions (count: files) */
   files: StorageUse;
   /** Bytes of the settings, the model lists, the usage log, saved prompts and skills with their files */
   other: number;
@@ -40,23 +41,30 @@ async function measure(tables: string[], counted: string): Promise<StorageUse> {
   return { count: await db().table(counted).count(), bytes };
 }
 
-/** Images and videos share one table */
-async function media(): Promise<{ images: StorageUse; videos: StorageUse }> {
-  const images = { count: 0, bytes: 0 };
-  const videos = { count: 0, bytes: 0 };
-  await db().blobs.each((r) => {
-    const into = r.mime.startsWith('video/') ? videos : images;
-    into.count++;
-    into.bytes += approxBytes(r);
+/**
+ * Files by what they hold (text files, images, videos), with every content they keep (the one before the last change,
+ * thumbnails). Kinds come from the catalog: with a passphrase a file's type is encrypted in its record
+ */
+async function files(): Promise<Pick<StorageBreakdown, 'files' | 'images' | 'videos'>> {
+  const out = { files: { count: 0, bytes: 0 }, images: { count: 0, bytes: 0 }, videos: { count: 0, bytes: 0 } };
+  const into = (kind: FileKind | undefined) => (kind === 'image' ? out.images : kind === 'video' ? out.videos : out.files);
+  await ensureCatalog();
+  const kinds = new Map<string, FileKind>();
+  await db().files.each((r) => {
+    const kind = catalogFile(r.id)?.kind;
+    if (kind) kinds.set(r.id, kind);
+    const use = into(kind);
+    use.count++;
+    use.bytes += approxBytes(r);
   });
-  return { images, videos };
+  await db().fileData.each((r) => void (into(kinds.get(r.fileId)).bytes += approxBytes(r)));
+  return out;
 }
 
 export async function storageBreakdown(): Promise<StorageBreakdown> {
   return {
     conversations: await measure(['conversations', 'messages'], 'conversations'),
-    ...(await media()),
-    files: await measure(['files', 'fileTexts'], 'files'),
+    ...(await files()),
     other: (await measure(['settings', 'models', 'usage', 'prompts', 'skills', 'skillFiles'], 'settings')).bytes
   };
 }

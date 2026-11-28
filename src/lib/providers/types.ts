@@ -60,7 +60,8 @@ export type ToolState =
 export type Part =
   | { type: 'text'; text: string; state?: 'streaming' | 'done' }
   | { type: 'reasoning'; text: string; state?: 'streaming' | 'done' }
-  | { type: 'file'; blobId: string; name: string; mimeType: string; width?: number; height?: number }
+  /** An image or a video stored in the app (a stored file, by its id) */
+  | { type: 'file'; fileId: string; name: string; mimeType: string; width?: number; height?: number }
   | { type: 'source'; url: string; title?: string; snippet?: string }
   /** A tool the chat provider ran on its own servers (native web search). Shown, never executed by the app */
   | { type: 'server-tool'; id: string; name: string; query?: string; state: 'running' | 'done' | 'error'; resultCount?: number; error?: string }

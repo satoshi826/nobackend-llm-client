@@ -2,7 +2,7 @@
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { baseName, extOf, folderOf } from '../../../lib/paths';
-import type { FileRecord } from '../../../lib/db/schema';
+import type { TextEntry } from '../../../lib/db/catalog';
 import { showChat } from '../../../state/conversations';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
@@ -16,13 +16,13 @@ import { SandboxFrame, svgPage } from '../../../components/SandboxFrame';
 import { isProblem, type PageLog, type SandboxPage } from '../../../lib/sandbox/client';
 import { settings } from '../../../state/settings';
 import { parseDelimited } from '../csv';
-import { attachExisting, closeFileView, fileReturnsToChat, openFolder, deleteFiles, downloadFile, fileList, getFile, imageList, pageOf, readText, refreshFiles, refreshImages, renameFile, saveUserText, siteSignature } from '../state';
+import { attachExisting, closeFileView, fileReturnsToChat, openFolder, deleteFiles, downloadFile, fileList, getFile, pageOf, readText, refreshFiles, renameFile, saveUserText, siteSignature } from '../state';
 import { ActionMenu, FileIcon, FolderCrumbs, SourceChat, SubBar, typeLabel } from './common';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 
 export function FileView({ id = '' }: { id?: string }) {
-  const [f, setF] = useState<FileRecord | null | undefined>(undefined);
+  const [f, setF] = useState<TextEntry | null | undefined>(undefined);
   // Its text, read with it (records carry no texts); the record's date tells whether it is the text read
   const [text, setText] = useState<{ at: number; text: string } | null>(null);
   // The text edited in place of its view, the name in place of its button; the keyboard comes back to each button
@@ -36,10 +36,11 @@ export function FileView({ id = '' }: { id?: string }) {
   const version = filesVersion.value;
   useEffect(() => {
     let alive = true;
-    void getFile(id).then(async (x) => {
+    void getFile(id).then(async (got) => {
+      const x = got?.kind === 'text' ? got : null;
       const body = x ? await readText(x.id) : '';
       if (!alive) return;
-      setF(x ?? null);
+      setF(x);
       if (x) setText({ at: x.updatedAt, text: body });
     });
     return () => {
@@ -73,7 +74,7 @@ export function FileView({ id = '' }: { id?: string }) {
     );
 
   const shown = text!;
-  const ext = extOf(f.name);
+  const ext = extOf(f.path);
 
   const print = () => {
     const src = body.current;
@@ -82,7 +83,7 @@ export function FileView({ id = '' }: { id?: string }) {
     const root = document.createElement('div');
     root.id = 'print-root';
     const h = document.createElement('h1');
-    h.textContent = f.name;
+    h.textContent = f.path;
     root.append(h, src.cloneNode(true));
     document.body.append(root);
     const done = () => {
@@ -98,11 +99,11 @@ export function FileView({ id = '' }: { id?: string }) {
       <FilesHeader
         title={
           <div class="flex min-w-0 flex-1 items-center px-1">
-            <FolderCrumbs folder={folderOf(f.name)} />
+            <FolderCrumbs folder={folderOf(f.path)} />
           </div>
         }
-        searchIn={folderOf(f.name)}
-        onSearch={() => openFolder(folderOf(f.name) || null)}
+        searchIn={folderOf(f.path)}
+        onSearch={() => openFolder(folderOf(f.path) || null)}
       />
       <SubBar
         start={
@@ -142,7 +143,7 @@ export function FileView({ id = '' }: { id?: string }) {
               variant="remove"
               label={t('file.deleteTitle')}
               onClick={async () => {
-                if (await askConfirm({ title: t('file.deleteTitle'), message: t('file.deleteMessage', { name: f.name }), confirmLabel: t('delete'), danger: true })) await deleteFiles([f.id]);
+                if (await askConfirm({ title: t('file.deleteTitle'), message: t('file.deleteMessage', { name: f.path }), confirmLabel: t('delete'), danger: true })) await deleteFiles([f.id]);
               }}
             >
               <Icon name="trash" />
@@ -164,7 +165,7 @@ export function FileView({ id = '' }: { id?: string }) {
                 onSubmit={(e) => {
                   e.preventDefault();
                   rename.close(true);
-                  if (name.trim() && name.trim() !== baseName(f.name)) void renameFile(f.id, folderOf(f.name) + name.trim());
+                  if (name.trim() && name.trim() !== baseName(f.path)) void renameFile(f.id, folderOf(f.path) + name.trim());
                 }}
               >
                 <TextField compact
@@ -184,12 +185,12 @@ export function FileView({ id = '' }: { id?: string }) {
                 class="flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left hover:bg-glass-strong"
                 data-tip={t('file.rename')}
                 onClick={() => {
-                  setName(baseName(f.name));
+                  setName(baseName(f.path));
                   rename.show();
                 }}
               >
                 <FileIcon f={f} class="size-4 shrink-0 text-muted" />
-                <span class="truncate text-sm font-medium text-ink-strong">{baseName(f.name)}</span>
+                <span class="truncate text-sm font-medium text-ink-strong">{baseName(f.path)}</span>
               </button>
             )}
             <Badge>{typeLabel(f)}</Badge>
@@ -212,7 +213,6 @@ export function FileView({ id = '' }: { id?: string }) {
           </a>
         </p>
       )}
-      {f.fromPdf && <p class="border-b border-line px-4 py-1.5 text-xs text-muted">{t('file.pdfNote')}</p>}
       {edit.open ? (
         <div class="flex min-h-0 flex-1 flex-col gap-2 p-3">
           <textarea
@@ -251,7 +251,7 @@ export function FileView({ id = '' }: { id?: string }) {
   );
 }
 
-function FileBody({ file, text, ext }: { file: FileRecord; text: string; ext: string }) {
+function FileBody({ file, text, ext }: { file: TextEntry; text: string; ext: string }) {
   if (ext === 'md' || ext === 'markdown') return <Markdown text={text} />;
   if (ext === 'html' || ext === 'htm' || ext === 'svg') return <PageBody file={file} text={text} svg={ext === 'svg'} />;
   if (ext === 'csv' || ext === 'tsv') {
@@ -306,7 +306,7 @@ const LOG_LABELS: Record<PageLog['level'], () => string> = {
  * An HTML or SVG file: shown as a page in the sandbox (its scripts run there, without network), or as its code. The
  * page can start again (reload) and open over the whole window (its own run of the page)
  */
-function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: boolean }) {
+function PageBody({ file, text, svg }: { file: TextEntry; text: string; svg: boolean }) {
   const [view, setView] = useState<'preview' | 'code'>(settings.value.htmlFilePreview ? 'preview' : 'code');
   const [run, setRun] = useState(0);
   const [full, setFull] = useState(false);
@@ -316,10 +316,9 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
   const [files, setFiles] = useState<SandboxPage | undefined>(undefined);
   useEffect(() => {
     void refreshFiles();
-    void refreshImages();
   }, []);
-  // Waits for both lists, so the page is not shown once before they arrive and again after
-  const ready = !!fileList.value && !!imageList.value;
+  // Waits for the list, so the page is not shown once before it arrives and again after
+  const ready = !!fileList.value;
   const signature = siteSignature(file);
   // The newest record, but loaded again only for another page or site, not for each change of this record
   const latestFile = useRef(file);
@@ -331,7 +330,7 @@ function PageBody({ file, text, svg }: { file: FileRecord; text: string; svg: bo
     return () => {
       alive = false;
     };
-  }, [file.id, file.name, signature, svg, ready]);
+  }, [file.id, file.path, signature, svg, ready]);
   // What the shown page logged and what went wrong on it, for its current render
   const [log, setLog] = useState<{ render: string; entries: PageLog[] }>({ render: '', entries: [] });
   const onLog = (entries: PageLog[], render: string) =>

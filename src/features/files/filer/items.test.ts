@@ -1,20 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { newFile } from '../../../lib/db/files';
 import { conversationsWithItems, filterItems, previewText, sortItems, toItems } from './items';
-import type { ImageEntry } from '../../../lib/db/catalog';
+import { entryOf, type FileEntry } from '../../../lib/db/catalog';
 
 const now = Date.UTC(2026, 10, 25, 12);
 const day = 86400_000;
-const file = (id: string, name: string, kind: 'document' | 'upload', text: string, updatedAt: number, conversationId?: string) => ({
-  ...newFile({ id, name, origin: kind === 'upload' ? { kind: 'upload' } : { kind: 'made' }, text, by: kind === 'upload' ? 'upload' : 'model', conversationId }),
-  updatedAt
-});
-const img = (id: string, path: string, createdAt: number, conversationId: string, size = 2048): ImageEntry => ({ id, path, conversationId, messageId: 'm', createdAt, mime: 'image/png', size, origin: { kind: 'made' } });
+const file = (id: string, path: string, kind: 'document' | 'upload', text: string, updatedAt: number, conversationId?: string) =>
+  entryOf({ ...newFile({ id, path, origin: kind === 'upload' ? { kind: 'upload' } : { kind: 'made' }, text, by: kind === 'upload' ? 'upload' : 'model', conversationId }), updatedAt });
+const img = (id: string, path: string, at: number, conversationId: string, bytes = 2048): FileEntry =>
+  entryOf({ id, path, conversationId, messageId: 'm', createdAt: at, updatedAt: at, mime: 'image/png', bytes, origin: { kind: 'made' }, current: { at, by: 'model' } });
 
-const items = toItems(
-  [file('a', 'report.md', 'document', '# Market\nApples are up', now - day, 'c1'), file('b', 'scores.csv', 'upload', 'name,score\nsato,80', now - 10 * day), file('c', 'notes.txt', 'document', 'zzz', now - 2 * day, 'c2')],
-  [img('i1', 'fruit-20261127-160816.png', now - 3 * day, 'c1'), img('i2', 'misc.png', now - 20 * day, 'c2', 10)]
-);
+const items = toItems([
+  file('a', 'report.md', 'document', '# Market\nApples are up', now - day, 'c1'),
+  file('b', 'scores.csv', 'upload', 'name,score\nsato,80', now - 10 * day),
+  file('c', 'notes.txt', 'document', 'zzz', now - 2 * day, 'c2'),
+  img('i1', 'fruit-20261127-160816.png', now - 3 * day, 'c1'),
+  img('i2', 'misc.png', now - 20 * day, 'c2', 10)
+]);
 
 describe('file manager items', () => {
   it('lists an image by its path', () => {

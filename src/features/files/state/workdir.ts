@@ -2,11 +2,10 @@
 import { effect } from '@preact/signals';
 import * as fdb from '../../../lib/db/files';
 import { moveIntoWorkDirs, renumberTakenPaths } from '../../../lib/db/paths';
-import { atPath, catalogImage, ensureCatalog, withTakenPaths, type ImageEntry } from '../../../lib/db/catalog';
+import { atPath, catalogFile, ensureCatalog, withTakenPaths, type FileEntry, type TextEntry } from '../../../lib/db/catalog';
 import { cleanFileName, cleanFolderName, extOf, folderNameFor, freeFolder, isInside, mimeFromName, pathFree, pathKey } from '../../../lib/paths';
 import { newId } from '../../../lib/db/repo';
-import { listImages, renameImages } from '../../../lib/db/images';
-import type { Conversation, FileRecord, MessageRecord } from '../../../lib/db/schema';
+import type { Conversation, MessageRecord } from '../../../lib/db/schema';
 import { conversations, currentConv, updateConversation } from '../../../state/conversations';
 import { registerDataLoader } from '../../../state/lifecycle';
 import { defineFeatureSettings, pickLegacy } from '../../../state/feature-settings';
@@ -18,7 +17,7 @@ import { checkFetch } from '../../../state/fetch-check';
 import type { Fetched } from '../../../lib/fetcher/protocol';
 import { inspectPage, runJavaScript } from '../../../lib/sandbox/client';
 import { importImage, importOne } from './imports';
-import { fileList, imageList, refreshFiles, refreshImages } from './lists';
+import { fileList, refreshFiles } from './lists';
 import { deleteFiles } from './manage';
 import { pageOf } from './pages';
 import { TranslatedError } from '../../../lib/i18n';
@@ -28,7 +27,7 @@ import { parseInSandbox, syntaxProblem } from '../syntax';
 export const fileSettings = defineFeatureSettings('files', { fileTools: true }, { legacy: (old) => pickLegacy(old, { fileTools: true }) });
 
 /** Keep what was fetched in the conversation's working folder (so its tools can read it): a file, or an image */
-async function saveFetched(r: Fetched, conv: Conversation): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null> {
+async function saveFetched(r: Fetched, conv: Conversation): Promise<{ kind: 'file'; file: TextEntry } | { kind: 'image'; name: string } | null> {
   const file = new File([r.data], r.name, { type: r.mime });
   const id = newId();
   const dir = await ensureWorkDir(conv.id, r.name);
@@ -68,17 +67,18 @@ async function ensureWorkDir(convId: string, firstFile: string, name = ''): Prom
 /**
  * Write a text file at `path` (cleaned, relative to the working folder, which this makes when there is none: named
  * `folder`, else after the file), as write_file writes: one file per path, so a path the folder has gets the new text
- * (the one before stays for undo; the same text again saves nothing). Throws when an image or a folder has the path
+ * (the one before stays for undo; the same text again saves nothing). Throws when a file that is not text, or a folder,
+ * has the path
  */
-async function writeInWorkDir(conv: Conversation, path: string, text: string, folder?: string): Promise<{ file: FileRecord; replaced: boolean; unchanged?: boolean }> {
+async function writeInWorkDir(conv: Conversation, path: string, text: string, folder?: string): Promise<{ file: TextEntry; replaced: boolean; unchanged?: boolean }> {
   const d = await ensureWorkDir(conv.id, path, folder);
   return withTakenPaths(async (space) => {
     const full = d + path;
     const at = atPath(full);
-    if (at?.kind === 'file' && (await fdb.readText(at.file.id)) === text) return { file: at.file, replaced: true, unchanged: true };
-    if (at?.kind === 'file') return { file: await fdb.setText(at.file.id, text, 'model'), replaced: true };
+    if (at?.kind === 'text' && (await fdb.readText(at.id)) === text) return { file: at, replaced: true, unchanged: true };
+    if (at?.kind === 'text') return { file: await fdb.setText(at.id, text, 'model'), replaced: true };
     if (!pathFree(full, space)) throw new TranslatedError(() => t('tool.pathTaken', { name: path }));
-    const f = fdb.newFile({ id: newId(), name: full, origin: { kind: 'made' }, text, by: 'model', conversationId: conv.id });
+    const f = fdb.newFile({ id: newId(), path: full, origin: { kind: 'made' }, text, by: 'model', conversationId: conv.id });
     return { file: await fdb.createFile(f, text, !!conv.temporary), replaced: false };
   });
 }
@@ -105,7 +105,7 @@ export async function filesInWorkDir(conv: Conversation, paths: string[]): Promi
   const dir = workDirOf(conv.id);
   if (!dir) return new Set();
   await fdb.listFiles();
-  return new Set(paths.filter((p) => atPath(dir + p)?.kind === 'file'));
+  return new Set(paths.filter((p) => atPath(dir + p)?.kind === 'text'));
 }
 
 /** Files attached to the conversation's messages: the model may read them, wherever they are */
@@ -114,37 +114,37 @@ function attachedIds(history: MessageRecord[]): Set<string> {
 }
 
 /** A file the model of a conversation may read: by id, or by path in its working folder (else undefined) */
-async function readableFile(convId: string, history: MessageRecord[], ref: string): Promise<FileRecord | undefined> {
+async function readableFile(convId: string, history: MessageRecord[], ref: string): Promise<TextEntry | undefined> {
   const dir = workDirOf(convId);
   const byId = await fdb.getFile(ref);
-  if (byId) return (dir && isInside(byId.name, dir)) || attachedIds(history).has(byId.id) ? byId : undefined;
+  if (byId) return byId.kind === 'text' && ((dir && isInside(byId.path, dir)) || attachedIds(history).has(byId.id)) ? byId : undefined;
   if (!dir) return undefined;
   await fdb.listFiles();
   const at = atPath(dir + cleanFileName(ref, extOf(ref) || 'md'));
-  return at?.kind === 'file' ? at.file : undefined;
+  return at?.kind === 'text' ? at : undefined;
 }
 
 /**
  * An image the conversation's model may move (else undefined): one in its working folder, by its id or its path there,
  * or one made in the conversation, by its id, while it lies in no other chat's working folder (that is theirs now)
  */
-async function movableImage(convId: string, ref: string): Promise<ImageEntry | undefined> {
+async function movableImage(convId: string, ref: string): Promise<FileEntry | undefined> {
   const dir = workDirOf(convId);
   await ensureCatalog();
-  const at = dir ? atPath(dir + cleanFileName(ref, extOf(ref) || 'png')) : undefined;
-  const im = catalogImage(ref) ?? (at?.kind === 'image' ? at.image : undefined);
+  const isImage = (f: FileEntry | undefined) => (f?.kind === 'image' || f?.kind === 'video' ? f : undefined);
+  const im = isImage(catalogFile(ref)) ?? (dir ? isImage(atPath(dir + cleanFileName(ref, extOf(ref) || 'png'))) : undefined);
   if (!im || (dir && isInside(im.path, dir))) return im;
   const others = conversations.value.some((c) => c.id !== convId && c.workDir && isInside(im.path, c.workDir));
   return im.conversationId === convId && !others ? im : undefined;
 }
 
 /** Whether these messages show images a tool made (generate_image's card), which move_file may bring into the folder */
-const showsToolImages = (msgs: MessageRecord[]) => msgs.some((m) => m.parts.some((p) => p.type === 'tool' && !!(p.uiDetails as { blobIds?: string[] } | undefined)?.blobIds?.length));
+const showsToolImages = (msgs: MessageRecord[]) => msgs.some((m) => m.parts.some((p) => p.type === 'tool' && !!(p.uiDetails as { fileIds?: string[] } | undefined)?.fileIds?.length));
 
 /** A file this conversation's model may read (in its working folder, or attached): its path and text, for other features' tools */
 export async function conversationFile(conv: Conversation, history: MessageRecord[], ref: string): Promise<{ name: string; text: string } | undefined> {
   const f = await readableFile(conv.id, history, ref);
-  return f && { name: relativeTo(workDirOf(conv.id), f.name), text: await fdb.readText(f.id) };
+  return f && { name: relativeTo(workDirOf(conv.id), f.path), text: await fdb.readText(f.id) };
 }
 
 /** A path as the model sees it: relative to the working folder (whole when outside it) */
@@ -157,10 +157,10 @@ const relativeTo = (dir: string, path: string) => (dir && isInside(path, dir) ? 
 async function searchFolder(dir: string, pattern: string, ignoreCase: boolean, only: string | null): Promise<Match[]> {
   if (!dir) return [];
   const pick = only ? new RegExp(only, 'i') : null;
-  const inDir = (await fdb.listFiles()).filter((f) => isInside(f.name, dir) && (!pick || pick.test(f.name.slice(dir.length))));
+  const inDir = (await fdb.listFiles()).filter((f) => f.kind === 'text' && isInside(f.path, dir) && (!pick || pick.test(f.path.slice(dir.length))));
   const texts = await fdb.readTexts(inDir.map((f) => f.id));
   const files: Record<string, string> = {};
-  for (const f of inDir) files[f.name.slice(dir.length)] = texts.get(f.id) ?? '';
+  for (const f of inDir) files[f.path.slice(dir.length)] = texts.get(f.id) ?? '';
   const code = `const re = new RegExp(${JSON.stringify(pattern)}, ${JSON.stringify(ignoreCase ? 'i' : '')});
 const out = [];
 for (const [path, text] of Object.entries(files).sort(([a], [b]) => a.localeCompare(b))) {
@@ -182,8 +182,8 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
   /** A file the model may change: one in the working folder (one attached from outside is only read) */
   const inFolder = async (id: string) => {
     const f = await fdb.getFile(id);
-    if (!f) throw new TranslatedError(() => t('tool.notFound'));
-    if (!dir() || !isInside(f.name, dir())) throw new TranslatedError(() => t('tool.readOnly', { name: f.name }));
+    if (f?.kind !== 'text') throw new TranslatedError(() => t('tool.notFound'));
+    if (!dir() || !isInside(f.path, dir())) throw new TranslatedError(() => t('tool.readOnly', { name: f.path }));
     return f;
   };
   return makeFileTools(
@@ -207,11 +207,9 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
       async list() {
         const d = dir();
         if (!d) return [];
-        const [files, images] = await Promise.all([fdb.listFiles(), listImages()]);
-        return [
-          ...files.filter((f) => isInside(f.name, d)).map((f) => ({ path: f.name.slice(d.length), kind: 'file' as const, bytes: f.bytes })),
-          ...images.filter((im) => isInside(im.path, d)).map((im) => ({ path: im.path.slice(d.length), kind: 'image' as const, bytes: im.size }))
-        ];
+        return (await fdb.listFiles())
+          .filter((f) => isInside(f.path, d))
+          .map((f) => ({ path: f.path.slice(d.length), kind: f.kind === 'text' ? ('file' as const) : ('image' as const), bytes: f.bytes }));
       },
       search: (pattern, ignoreCase, only) => searchFolder(dir(), pattern, ignoreCase, only),
       async move(id, to) {
@@ -221,7 +219,7 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
           // Read inside the queue: an edit waiting before this one is kept
           const f = await inFolder(id);
           if (!pathFree(full, space, id)) throw new TranslatedError(() => t('tool.moveTaken', { name: to }));
-          return fdb.putFile({ ...f, name: full, mime: mimeFromName(full) });
+          return fdb.putFile({ ...f, path: full, mime: mimeFromName(full) });
         });
       },
       async image(ref) {
@@ -234,7 +232,8 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
           // Checked again in the queue: a move waiting before this one may have taken it elsewhere
           if (!(await movableImage(conv.id, id))) throw new TranslatedError(() => t('tool.moveNotHere', { id }));
           if (!pathFree(full, space, id)) throw new TranslatedError(() => t('tool.moveTaken', { name: to }));
-          await renameImages([{ id, path: full }]);
+          const im = await fdb.getFile(id);
+          if (im) await fdb.putFile({ ...im, path: full });
         });
       },
       async remove(id) {
@@ -248,7 +247,7 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
         // Its data as the user's preview has it (empty with o.freshStorage), but what it stores while being tried is not kept
         return inspectPage(await fdb.readText(f.id), { ...page, storage: { items: () => items, save: () => {} } }, { ...o, signal });
       },
-      pathOf: (f) => relativeTo(dir(), f.name),
+      pathOf: (f) => relativeTo(dir(), f.path),
       syntax: (path, text) => syntaxProblem(path, text, parseInSandbox)
     },
     { madeImages: showsToolImages(turn ? [...history, turn] : history) }
@@ -269,7 +268,7 @@ registerToolProvider({
     const dir = workDirOf(conv.id);
     if (!fileSettings.value.value.fileTools || !dir) return undefined;
     // The list is loaded with the conversation (below); while it loads, only the folder is named
-    const files = fileList.value?.filter((f) => isInside(f.name, dir)).map((f) => ({ id: f.id, path: f.name.slice(dir.length), bytes: f.bytes })) ?? null;
+    const files = fileList.value?.filter((f) => f.kind === 'text' && isInside(f.path, dir)).map((f) => ({ id: f.id, path: f.path.slice(dir.length), bytes: f.bytes })) ?? null;
     return filesNote(dir, files, NOTE_FILES);
   }
 });
@@ -287,5 +286,4 @@ registerDataLoader(async () => {
   if (moved.length) conversations.value = conversations.value.map((c) => moved.find((m) => m.id === c.id) ?? c);
   await renumberTakenPaths();
   if (fileList.peek()) await refreshFiles();
-  if (imageList.peek()) await refreshImages();
 });

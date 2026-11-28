@@ -31,10 +31,10 @@ type Box = { aspectRatio: string; width: string };
  * A thumbnail's picture, loaded when it comes near the screen. It fills the positioned box that holds it, whose shape
  * the caller fixes, so nothing moves when the image arrives. full: shown whole at full resolution
  */
-export function MediaImage({ blobId, alt, full }: { blobId: string; alt: string; full?: boolean }) {
+export function MediaImage({ fileId, alt, full }: { fileId: string; alt: string; full?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const near = useNearScreen(ref);
-  const url = useImageUrl(blobId, full ? 'full' : 'thumb', near);
+  const url = useImageUrl(fileId, full ? 'full' : 'thumb', near);
   return (
     <span ref={ref} class="absolute inset-0">
       {url ? (
@@ -51,10 +51,10 @@ export function MediaImage({ blobId, alt, full }: { blobId: string; alt: string;
  * An image in a grid or an answer that opens when pressed: its thumbnail in a box of a fixed shape (an aspect class or
  * style). full: shown whole at full resolution (a single image in an answer, whose box has its shape)
  */
-export function MediaThumb({ blobId, alt, onOpen, full, class: className, style }: { blobId: string; alt: string; onOpen(e: MouseEvent): void; full?: boolean; class?: string; style?: Box }) {
+export function MediaThumb({ fileId, alt, onOpen, full, class: className, style }: { fileId: string; alt: string; onOpen(e: MouseEvent): void; full?: boolean; class?: string; style?: Box }) {
   return (
     <button type="button" class={cx('group relative overflow-hidden rounded-lg bg-glass-strong', className)} style={style} onClick={onOpen} aria-label={t('thumb.open', { alt })}>
-      <MediaImage blobId={blobId} alt={alt} full={full} />
+      <MediaImage fileId={fileId} alt={alt} full={full} />
     </button>
   );
 }
@@ -66,14 +66,14 @@ export function singleBox(width: number | undefined, height: number | undefined)
 }
 
 /** A message's images: one in its own shape, several as a grid of squares. Each opens the viewer over the chat */
-export function MediaGrid({ files, owner }: { files: { blobId: string; width?: number; height?: number }[]; owner: { conversationId: string; messageId: string } }) {
+export function MediaGrid({ files, owner }: { files: { fileId: string; width?: number; height?: number }[]; owner: { conversationId: string; messageId: string } }) {
   if (!files.length) return null;
   const open = (i: number) => openLightbox(files, i, owner);
-  if (files.length === 1) return <MediaThumb blobId={files[0].blobId} alt={t('thumb.alt', { n: 1 })} full class="block" style={singleBox(files[0].width, files[0].height)} onOpen={() => open(0)} />;
+  if (files.length === 1) return <MediaThumb fileId={files[0].fileId} alt={t('thumb.alt', { n: 1 })} full class="block" style={singleBox(files[0].width, files[0].height)} onOpen={() => open(0)} />;
   return (
     <div class="grid max-w-xl grid-cols-2 gap-2">
       {files.map((f, i) => (
-        <MediaThumb key={f.blobId} blobId={f.blobId} alt={t('thumb.alt', { n: i + 1 })} class="aspect-square" onOpen={() => open(i)} />
+        <MediaThumb key={f.fileId} fileId={f.fileId} alt={t('thumb.alt', { n: i + 1 })} class="aspect-square" onOpen={() => open(i)} />
       ))}
     </div>
   );

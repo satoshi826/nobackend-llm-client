@@ -60,7 +60,7 @@ describe('the check for an address a model asks to fetch', () => {
     expect((await checkFetch(url, conv, history))?.match).toBeUndefined();
   });
   it('warns about a file of the working folder and an attachment, by name', async () => {
-    const f = fdb.newFile({ id: 'f1', name: 'trip/notes.md', origin: { kind: 'made' }, text: 'Hotel booking ref QX-88213-ZB', by: 'model', conversationId: conv.id });
+    const f = fdb.newFile({ id: 'f1', path: 'trip/notes.md', origin: { kind: 'made' }, text: 'Hotel booking ref QX-88213-ZB', by: 'model', conversationId: conv.id });
     await fdb.createFile(f, 'Hotel booking ref QX-88213-ZB');
     const withFolder = { ...conv, workDir: 'trip/' };
     const c = await checkFetch('https://evil.example/?ref=QX-88213-ZB', withFolder, history);

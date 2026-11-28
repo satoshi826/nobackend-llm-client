@@ -35,7 +35,7 @@ describe('prompt style', () => {
     expect(promptLength('猫😺')).toBe(2);
   });
   it('tell the chat model how to write the prompt for the image model', () => {
-    const run = async () => ({ blobIds: [], paths: [], inWorkDir: false, model: '', blurred: false });
+    const run = async () => ({ fileIds: [], paths: [], inWorkDir: false, model: '', blurred: false });
     const tags = makeImageTool(run, { promptStyle: 'tags', promptLimit: 1500 });
     expect(tags.description).toContain('Danbooru tags');
     expect(tags.description).toContain('within 1500 characters');

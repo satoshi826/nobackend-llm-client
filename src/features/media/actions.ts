@@ -36,7 +36,7 @@ export function registerMediaActions() {
       const name = e.model ? (imageModelOf(e.provider.id, e.model)?.name ?? e.model) : e.provider.label;
       return { title: ti('lb.editTitle', { model: name, cost: costText({ op: 'edit', providerId: e.provider.id, model: e.model }) }) };
     },
-    run: (item, text) => imageAction('edit', item.blobId, { prompt: text, from: madeBy(item) })
+    run: (item, text) => imageAction('edit', item.fileId, { prompt: text, from: madeBy(item) })
   });
   for (const scale of [2, 4] as const)
     registerMediaAction({
@@ -47,7 +47,7 @@ export function registerMediaActions() {
         const e = target('upscale', item);
         return e && { title: ti('lb.upscaleTitle', { scale, cost: costText({ op: 'upscale', providerId: e.provider.id, scale }) }) };
       },
-      run: (item) => imageAction('upscale', item.blobId, { scale, from: madeBy(item) })
+      run: (item) => imageAction('upscale', item.fileId, { scale, from: madeBy(item) })
     });
   registerMediaAction({
     id: 'remove-bg',
@@ -57,13 +57,13 @@ export function registerMediaActions() {
       const e = target('remove-bg', item);
       return e && { title: ti('lb.removeBgTitle', { cost: costText({ op: 'remove-bg', providerId: e.provider.id }) }) };
     },
-    run: (item) => imageAction('remove-bg', item.blobId, { from: madeBy(item) })
+    run: (item) => imageAction('remove-bg', item.fileId, { from: madeBy(item) })
   });
   registerMediaAction({
     id: 'make-video',
     icon: 'video',
     label: () => tv('action.makeVideo'),
     offer: () => (videoReady.value ? { title: tv('action.makeVideoTitle') } : undefined),
-    run: (item) => makeVideoFrom(item.blobId, item.name)
+    run: (item) => makeVideoFrom(item.fileId, item.name)
   });
 }

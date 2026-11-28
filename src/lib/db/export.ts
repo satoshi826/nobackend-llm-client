@@ -6,6 +6,7 @@ import { db, type Conversation, type ImageParams, type MessageRecord, type Saved
 import { FRONTMATTER_MAX, validateSkill } from '../skills/skill';
 import { openValue, seal, unseal } from './sealed';
 import { DATA_TABLES } from './data-tables';
+import { renameFields } from './convert';
 import type { Attachment } from './schema';
 import type { Part } from '../providers/types';
 import { t } from './messages';
@@ -78,7 +79,7 @@ export async function exportBackup(includeImages = false): Promise<Blob> {
   };
   // Data stored encrypted is decrypted here; the caller may encrypt the whole file with a backup password (state/data.ts)
   list('conversations', await openAll(await d.conversations.toArray()));
-  list('messages', await openAll(await d.messages.toArray()));
+  list('messages', (await openAll(await d.messages.toArray())).map(renameFields));
   list('prompts', await openAll(await d.prompts.toArray()));
   list('skills', await openAll(await d.skills.toArray()));
   for (const table of DATA_TABLES) {
@@ -195,7 +196,7 @@ function cleanImageParams(x: any): ImageParams | undefined {
     enhancePrompt: !!x.enhancePrompt || undefined,
     safeMode: x.safeMode !== false,
     format: x.format === 'png' || x.format === 'jpeg' ? x.format : 'webp',
-    sourceBlobId: str(x.sourceBlobId),
+    sourceFileId: str(x.sourceFileId ?? x.sourceBlobId),
     scale: x.scale === 4 ? 4 : x.scale === 2 ? 2 : undefined
   };
 }
@@ -210,7 +211,7 @@ function cleanVideoParams(x: any): VideoParams | undefined {
     resolution: str(x.resolution),
     aspectRatio: str(x.aspectRatio),
     audio: x.audio === true || undefined,
-    startBlobId: str(x.startBlobId)
+    startFileId: str(x.startFileId ?? x.startBlobId)
   };
 }
 
@@ -246,8 +247,9 @@ function webUrl(v: unknown): v is string {
  */
 function cleanPart(p: any): Part | undefined {
   if ((p?.type === 'text' || p?.type === 'reasoning') && isStr(p.text)) return { type: p.type, text: p.text, state: 'done' };
-  if (p?.type === 'file' && isStr(p.blobId) && isStr(p.mimeType) && /^(image|video)\//.test(p.mimeType))
-    return { type: 'file', blobId: p.blobId, name: isStr(p.name) ? p.name : 'image', mimeType: p.mimeType, ...(Number.isFinite(p.width) ? { width: p.width, height: p.height } : {}) };
+  const fileId = p?.fileId ?? p?.blobId;
+  if (p?.type === 'file' && isStr(fileId) && isStr(p.mimeType) && /^(image|video)\//.test(p.mimeType))
+    return { type: 'file', fileId, name: isStr(p.name) ? p.name : 'image', mimeType: p.mimeType, ...(Number.isFinite(p.width) ? { width: p.width, height: p.height } : {}) };
   if (p?.type === 'source' && webUrl(p.url)) return { type: 'source', url: p.url, title: str(p.title)?.slice(0, 500), snippet: str(p.snippet)?.slice(0, 1000) };
   if (p?.type === 'server-tool' && isStr(p.id) && isStr(p.name))
     return { type: 'server-tool', id: p.id, name: p.name, query: str(p.query)?.slice(0, 500), state: p.state === 'error' ? 'error' : 'done', resultCount: num(p.resultCount), error: str(p.error)?.slice(0, 500) };

@@ -127,7 +127,7 @@ export function VideoStart() {
       {frame ? (
         <>
           <span data-tip={tv('bar.frameName', { name: frame.name ?? tv('bar.frameImage') })} class="p-1">
-            <MediaThumb blobId={frame.blobId} alt={tv('bar.frame')} class="block size-7 rounded-full!" onOpen={() => input.current?.click()} />
+            <MediaThumb fileId={frame.fileId} alt={tv('bar.frame')} class="block size-7 rounded-full!" onOpen={() => input.current?.click()} />
           </span>
           <IconButton class="-ml-1 rounded-full! p-1.5! text-muted hover:text-ink" label={tv('bar.frameClear')} onClick={() => (firstFrame.value = null)}>
             <Icon name="x" class="size-3.5" />

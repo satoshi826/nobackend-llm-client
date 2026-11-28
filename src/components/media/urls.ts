@@ -45,34 +45,34 @@ export function releaseMediaUrls(ids: string[]) {
 }
 
 /** The URL of an image: the whole, or its thumbnail. Loads only once `enabled` (e.g. near the screen) */
-export function useImageUrl(blobId: string | undefined, size: 'full' | 'thumb' = 'full', enabled = true): string | null | undefined {
+export function useImageUrl(fileId: string | undefined, size: 'full' | 'thumb' = 'full', enabled = true): string | null | undefined {
   const [url, setUrl] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     setUrl(undefined);
-    if (!blobId || !enabled) return;
+    if (!fileId || !enabled) return;
     let alive = true;
-    const key = `${size}:${blobId}`;
-    void acquireUrl(key, () => loadMedia(blobId, size)).then((u) => alive && setUrl(u));
+    const key = `${size}:${fileId}`;
+    void acquireUrl(key, () => loadMedia(fileId, size)).then((u) => alive && setUrl(u));
     return () => {
       alive = false;
       releaseUrl(key);
     };
-  }, [blobId, size, enabled]);
+  }, [fileId, size, enabled]);
   return url;
 }
 
 /**
- * The URL of stored bytes (the whole, or the small copy), made when blobId is set and freed when it changes or the
+ * The URL of stored bytes (the whole, or the small copy), made when fileId is set and freed when it changes or the
  * component goes: for videos, too large to keep in the image cache
  */
-export function useBlobUrl(blobId: string | undefined, size: 'full' | 'thumb' = 'full'): string | null | undefined {
+export function useBlobUrl(fileId: string | undefined, size: 'full' | 'thumb' = 'full'): string | null | undefined {
   const [url, setUrl] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     setUrl(undefined);
-    if (!blobId) return;
+    if (!fileId) return;
     let made: string | null = null;
     let alive = true;
-    void loadMedia(blobId, size)
+    void loadMedia(fileId, size)
       .then((b) => {
         made = b ? URL.createObjectURL(b) : null;
         if (alive) setUrl(made);
@@ -83,6 +83,6 @@ export function useBlobUrl(blobId: string | undefined, size: 'full' | 'thumb' = 
       alive = false;
       if (made) URL.revokeObjectURL(made);
     };
-  }, [blobId, size]);
+  }, [fileId, size]);
   return url;
 }

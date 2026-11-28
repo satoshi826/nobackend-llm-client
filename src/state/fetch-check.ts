@@ -45,9 +45,9 @@ async function content(conv: Conversation, msgs: MessageRecord[], latest: Messag
   // The folder as it is now: the reply may have made it
   const dir = conversations.value.find((c) => c.id === conv.id)?.workDir ?? conv.workDir;
   if (dir) {
-    const files = (await fdb.listFiles()).filter((f) => isInside(f.name, dir));
+    const files = (await fdb.listFiles()).filter((f) => f.kind === 'text' && isInside(f.path, dir));
     const texts = await fdb.readTexts(files.map((f) => f.id));
-    for (const f of files) out.push({ place: { kind: 'file', name: f.name.slice(dir.length) }, text: texts.get(f.id) ?? '' });
+    for (const f of files) out.push({ place: { kind: 'file', name: f.path.slice(dir.length) }, text: texts.get(f.id) ?? '' });
   }
   return out;
 }

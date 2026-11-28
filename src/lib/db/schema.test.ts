@@ -70,7 +70,9 @@ describe('database upgrades', () => {
     const bytes = new Uint8Array([0, 1, 2, 3, 4]);
     expect((await db.messages.get('sealed')) as unknown).toMatchObject({ enc: bytes });
     expect(await db.messages.get('plain')).toMatchObject({ parts: [] });
-    expect((await db.fileTexts.get('t')) as unknown).toMatchObject({ enc: bytes });
+    // v14 moved the texts into fileData, and dropped fileTexts
+    expect((await db.fileData.get('t')) as unknown).toMatchObject({ enc: bytes });
+    expect(db.tables.map((t) => t.name)).not.toContain('fileTexts');
     const image = await db.blobs.get('i');
     expect(image!.infoEnc).toEqual(bytes);
     expect(image!.enc!.iv).toEqual(new Uint8Array([0, 1, 2]));

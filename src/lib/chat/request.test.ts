@@ -45,7 +45,7 @@ describe('buildRequestMessages with a summary', () => {
 describe('requestMessage', () => {
   it('sends only text and tool parts', () => {
     const tool: Part = { type: 'tool', toolCallId: 't', name: 'x', argsText: '{}', state: 'output-available', modelOutput: 'ok' };
-    const m = rec('a', 'assistant', [{ type: 'reasoning', text: 'r' }, text('hi'), tool, { type: 'source', url: 'https://x.example' }, { type: 'file', blobId: 'b', name: 'i.png', mimeType: 'image/png' }]);
+    const m = rec('a', 'assistant', [{ type: 'reasoning', text: 'r' }, text('hi'), tool, { type: 'source', url: 'https://x.example' }, { type: 'file', fileId: 'b', name: 'i.png', mimeType: 'image/png' }]);
     expect(requestMessage(m)?.parts).toEqual([text('hi'), tool]);
   });
 

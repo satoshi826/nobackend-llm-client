@@ -6,6 +6,7 @@ import { currentDataKey, openValue, seal, sealValue, unseal, type SealedTable } 
 import type { Sealed } from '../crypto/data';
 import type { DataKey } from '../crypto/data';
 import { DATA_TABLES } from './data-tables';
+import { renameFields } from './convert';
 
 const memConversations = new Map<string, Conversation>();
 const memMessages = new Map<string, MessageRecord>();
@@ -70,7 +71,7 @@ export async function listMessages(conversationId: string): Promise<MessageRecor
   if (memConversations.has(conversationId)) {
     return [...memMessages.values()].filter((m) => m.conversationId === conversationId);
   }
-  return Promise.all((await db().messages.where('conversationId').equals(conversationId).toArray()).map((m) => unseal(m)));
+  return Promise.all((await db().messages.where('conversationId').equals(conversationId).toArray()).map(async (m) => renameFields(await unseal(m))));
 }
 
 /** Save a message; a temporary conversation's (its conversation saved before it) stays in memory */
@@ -276,7 +277,7 @@ export async function wipeAll(): Promise<void> {
 /** Row counts per table (diagnostics; reads no content) */
 export async function tableCounts(): Promise<Record<string, number>> {
   const d = db();
-  const names = ['conversations', 'messages', 'files', 'fileTexts', 'blobs', 'skills', 'skillFiles', 'prompts', 'usage', 'models'] as const;
+  const names = ['conversations', 'messages', 'files', 'fileData', 'blobs', 'skills', 'skillFiles', 'prompts', 'usage', 'models'] as const;
   const out: Record<string, number> = {};
   for (const n of names) out[n] = await d.table(n).count();
   return out;

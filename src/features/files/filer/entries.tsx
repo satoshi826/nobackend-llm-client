@@ -213,7 +213,7 @@ export const Card = memo(function Card({ it, picked, api }: { it: FilerItem; pic
       <div aria-hidden="true" class={cx('relative aspect-[4/3] w-full cursor-pointer overflow-hidden', it.type === 'image' ? 'bg-glass-strong' : 'bg-sunken px-3 pt-3')} onClick={entry.click}>
         {it.type === 'image' ? (
           <>
-            <MediaImage blobId={it.id} alt="" />
+            <MediaImage fileId={it.id} alt="" />
             {it.video && (
               <span class="absolute inset-0 grid place-items-center">
                 <span class="grid size-10 place-items-center rounded-full bg-black/60 text-white">

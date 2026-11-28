@@ -2,11 +2,11 @@
 // A job runs for minutes: it is saved on its answer as soon as the provider takes it, so waiting goes on after a
 // reload (Gemini answers in one request and cannot be resumed). Stopping only stops waiting, and so does a check
 // that keeps failing (network, the provider's own trouble): the answer keeps the job, and waiting can start again
-// from it. Videos are stored with the images (lib/db/images.ts).
+// from it. Videos are stored as files (lib/db/files.ts).
 import { computed, effect, signal } from '@preact/signals';
 import * as repo from '../../../lib/db/repo';
 import type { Conversation, MessageRecord, VideoParams } from '../../../lib/db/schema';
-import { getImage, putImage } from '../../../lib/db/images';
+import { readBytes, storeBytes } from '../../../lib/db/files';
 import { baseName } from '../../../lib/paths';
 import { providerConfigOf } from '../../../lib/keys/accounts';
 import { plainTransport } from '../../../lib/providers/transport';
@@ -77,13 +77,13 @@ export function videoModelOf(providerId: string | undefined, id: string | undefi
 
 // ---- video mode ----
 /** The first frame chosen in video mode (an image of the Files tab); models are then those that start from an image */
-export const firstFrame = signal<{ blobId: string; name?: string } | null>(null);
+export const firstFrame = signal<{ fileId: string; name?: string } | null>(null);
 
 /** Use an image from the user's device as the first frame: kept in the Files tab like any image brought in */
 export async function pickFirstFrame(file: File) {
   const id = repo.newId();
-  await putImage({ id, mime: file.type, origin: { kind: 'upload' }, name: file.name }, file, false);
-  firstFrame.value = { blobId: id, name: file.name };
+  await storeBytes({ id, mime: file.type, origin: { kind: 'upload' }, name: file.name }, file, false);
+  firstFrame.value = { fileId: id, name: file.name };
 }
 // It belongs to the conversation it was chosen in
 effect(() => {
@@ -134,7 +134,7 @@ export function modeParams(prompt: string): VideoParams {
     resolution: pick(m?.resolutions ?? [], d.resolution),
     aspectRatio: firstFrame.value ? undefined : pick(m?.aspects ?? [], d.aspectRatio),
     audio: m?.audio === 'optional' ? d.audio : m?.audio === 'always',
-    startBlobId: firstFrame.value?.blobId
+    startFileId: firstFrame.value?.fileId
   };
 }
 
@@ -145,7 +145,7 @@ effect(() => {
   if (!currentConv.value.videoMode || !videoReady.value) return;
   const p = modeParams('');
   const m = videoModelOf(p.providerId, p.model);
-  const key = JSON.stringify({ ...p, startBlobId: undefined });
+  const key = JSON.stringify({ ...p, startFileId: undefined });
   if (!m || modeQuote.peek().key === key) return;
   modeQuote.value = { key, asking: true };
   clearTimeout(quoteTimer);
@@ -166,8 +166,8 @@ export async function setVideoMode(on: boolean) {
 }
 
 /** Start video mode from an image: video mode with it as the first frame */
-export async function makeVideoFrom(blobId: string, name?: string) {
-  firstFrame.value = { blobId, name };
+export async function makeVideoFrom(fileId: string, name?: string) {
+  firstFrame.value = { fileId, name };
   await setVideoMode(true);
 }
 
@@ -289,8 +289,8 @@ async function follow(conv: Conversation, msg: MessageRecord) {
     if (!cur.video?.job) {
       // The price shown before sending, recorded unless the provider reports what it charged
       const quote = await provider.quote(p, model, ctx).catch(() => undefined);
-      const frame = p.startBlobId ? await getImage(p.startBlobId) : null;
-      if (p.startBlobId && !frame) throw new VideoApiError({ kind: 'bad-request', message: t('err.noFrame') });
+      const frame = p.startFileId ? await readBytes(p.startFileId) : null;
+      if (p.startFileId && !frame) throw new VideoApiError({ kind: 'bad-request', message: t('err.noFrame') });
       const started = await provider.start(p, model, frame, ctx);
       const video = { ...cur.video!, costUsd: quote, costEstimated: !provider.quoteIsPrice };
       if (isDone(started)) {
@@ -344,10 +344,10 @@ async function follow(conv: Conversation, msg: MessageRecord) {
 async function storeVideo(conv: Conversation, messageId: string, video: Blob) {
   const blob = video.type.startsWith('video/') ? video : new Blob([video], { type: 'video/mp4' });
   const { poster, width, height } = await posterOf(blob);
-  const blobId = repo.newId();
+  const fileId = repo.newId();
   // In the chat's working folder (the top without one), named by the time it is saved
-  const path = await putImage({ id: blobId, conversationId: conv.id, messageId, mime: blob.type, folder: conv.workDir }, blob, !!conv.temporary, poster ?? undefined);
-  return { type: 'file' as const, blobId, name: baseName(path), mimeType: blob.type, ...(width ? { width, height } : {}) };
+  const { path } = await storeBytes({ id: fileId, conversationId: conv.id, messageId, mime: blob.type, origin: { kind: 'made' }, folder: conv.workDir }, blob, !!conv.temporary, poster ?? undefined);
+  return { type: 'file' as const, fileId, name: baseName(path), mimeType: blob.type, ...(width ? { width, height } : {}) };
 }
 
 // After a reload (or unlocking), go on waiting for the jobs that were running

@@ -44,7 +44,7 @@ registerToolView({
   icon: 'image',
   editableField: { key: 'prompt', label: () => ti('tool.promptField') },
   approvalNote: () => imageToolNote(),
-  doneStatus: (p) => imageCount((p.uiDetails as { blobIds?: string[] } | undefined)?.blobIds?.length ?? 0),
+  doneStatus: (p) => imageCount((p.uiDetails as { fileIds?: string[] } | undefined)?.fileIds?.length ?? 0),
   Detail: ImageToolDetail
 });
 registerSettingsTab({ id: 'images', label: () => ti('settings.title'), icon: 'image', Component: lazyComponent(() => import('./components/Settings').then((m) => m.ImageSettings)) });

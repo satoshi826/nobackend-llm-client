@@ -264,14 +264,14 @@ describe('images in replies', () => {
       imageOutput: true,
       saveImage: async (data, mimeType) => {
         saved.push(data);
-        return { type: 'file', blobId: 'b1', name: 'image-1.png', mimeType };
+        return { type: 'file', fileId: 'b1', name: 'image-1.png', mimeType };
       },
       signal: new AbortController().signal,
       onUpdate() {},
       async persist() {}
     });
     expect(saved).toEqual(['iVBO']);
-    expect(out.parts.find((p) => p.type === 'file')).toMatchObject({ blobId: 'b1' });
+    expect(out.parts.find((p) => p.type === 'file')).toMatchObject({ fileId: 'b1' });
     expect(out.parts.find((p) => p.type === 'text')).toMatchObject({ text: 'どうぞ' });
   });
 });

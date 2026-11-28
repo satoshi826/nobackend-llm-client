@@ -1,6 +1,7 @@
 // Files inside the chat: the card under a file tool call, and the files attached to a user message
 import { useEffect, useState } from 'preact/hooks';
-import type { FileRecord, MessageRecord } from '../../../lib/db/schema';
+import type { MessageRecord } from '../../../lib/db/schema';
+import type { FileEntry } from '../../../lib/db/catalog';
 import type { Part } from '../../../lib/providers/types';
 import { Icon } from '../../../components/ui';
 import { getFile, openFile } from '../state';
@@ -13,8 +14,8 @@ import { t } from '../messages';
 type ToolPart = Extract<Part, { type: 'tool' }>;
 
 /** A file as it is now in the Files tab (looked up again after any change): null once deleted, undefined until known */
-function useFile(id: string): FileRecord | null | undefined {
-  const [file, setFile] = useState<FileRecord | null | undefined>(undefined);
+function useFile(id: string): FileEntry | null | undefined {
+  const [file, setFile] = useState<FileEntry | null | undefined>(undefined);
   const v = filesVersion.value;
   useEffect(() => {
     let alive = true;

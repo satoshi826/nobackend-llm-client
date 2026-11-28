@@ -1,6 +1,6 @@
 // Input box pieces: the attach button (device / saved files) and the list of attached files
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { Conversation, FileRecord } from '../../../lib/db/schema';
+import type { Conversation } from '../../../lib/db/schema';
 import { Button, EmptyState, Icon, Modal, SearchField, Spinner, cx } from '../../../components/ui';
 import { MenuItem, Popover } from '../../../components/menu';
 import { ATTACH_INLINE_CHARS, attachExisting, detach, fileList, openFolder, pendingAttachments, refreshFiles, uploadFiles } from '../state';
@@ -78,9 +78,9 @@ function FilePicker({ onClose }: { onClose(): void }) {
   useEffect(() => {
     void refreshFiles();
   }, []);
-  const list = fileList.value;
+  const list = fileList.value?.filter((f) => f.kind === 'text');
   const ql = q.trim().toLowerCase();
-  const shown = (list ?? []).filter((f) => !ql || f.name.toLowerCase().includes(ql));
+  const shown = (list ?? []).filter((f) => !ql || f.path.toLowerCase().includes(ql));
   const picked = new Set(pendingAttachments.value.map((a) => a.fileId));
   return (
     <Modal fixed title={t('picker.title')} onClose={onClose}>
@@ -94,7 +94,7 @@ function FilePicker({ onClose }: { onClose(): void }) {
         <EmptyState icon={list.length ? 'search' : 'files'}>{list.length ? t('picker.noMatch') : t('picker.empty')}</EmptyState>
       ) : (
         <ul class="space-y-1">
-          {shown.map((f: FileRecord) => (
+          {shown.map((f) => (
             <li key={f.id}>
               <button
                 type="button"
@@ -106,7 +106,7 @@ function FilePicker({ onClose }: { onClose(): void }) {
                 }}
               >
                 <FileIcon f={f} class="size-4 shrink-0 text-muted" />
-                <span class="min-w-0 flex-1 truncate">{f.name}</span>
+                <span class="min-w-0 flex-1 truncate">{f.path}</span>
                 <span class="shrink-0 text-xs text-muted tabular-nums">
                   {typeLabel(f)} · {formatBytes(f.bytes)} · {formatDate(f.updatedAt)}
                 </span>

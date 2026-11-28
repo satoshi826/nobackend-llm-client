@@ -4,8 +4,8 @@ import 'fake-indexeddb/auto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as repo from './repo';
-import { listFiles, readText } from './files';
-import { getImage, listImages } from './images';
+import { listFiles, readBytes, readText } from './files';
+import { resetCatalog } from './catalog';
 import { listSkillFiles, readSkillFileData } from './skills';
 import { EXPORT_VERSION, importBackup } from './export';
 import { db } from './schema';
@@ -21,6 +21,7 @@ const versions = [...backups.keys()];
 describe('backups of every released version', () => {
   beforeEach(async () => {
     await Promise.all(db().tables.map((t) => t.clear()));
+    resetCatalog();
   });
 
   it('has a backup of the version the app writes now', () => {
@@ -39,15 +40,16 @@ describe('backups of every released version', () => {
     expect(byId.get('m-2')?.meta).toMatchObject({ providerId: 'venice', usage: { inputTokens: 120, outputTokens: 48 }, costUsd: 0.0012 });
     expect(byId.get('m-3')?.compaction).toMatchObject({ coversUntilId: 'm-2', count: 2 });
     expect(byId.get('m-4')?.imageRequest).toMatchObject({ op: 'generate', prompt: 'A temple at dusk', seed: 42 });
-    expect(byId.get('m-5')?.parts[0]).toMatchObject({ type: 'file', blobId: 'img-1', mimeType: 'image/png' });
+    expect(byId.get('m-5')?.parts[0]).toMatchObject({ type: 'file', fileId: 'img-1', mimeType: 'image/png' });
     expect(byId.get('m-7')?.video).toMatchObject({ params: { model: 'wan', duration: 5 }, costUsd: 0.25 });
     expect(await db().skills.get('s-1')).toMatchObject({ name: 'planner', createdBy: 'model' });
-    const [file] = await listFiles();
-    expect(file.name).toBe('trip/notes.md');
+    const files = await listFiles();
+    const [file] = files.filter((f) => f.kind === 'text');
+    expect(file.path).toBe('trip/notes.md');
     expect(await readText(file.id)).toBe('# Notes\nTemples');
-    expect((await listImages()).map((im) => im.path)).toEqual(v >= 7 ? ['trip/leaves.mp4', 'trip/temple.png'] : ['trip/temple.png']);
-    expect((await getImage('img-1'))?.size).toBeGreaterThan(0);
-    if (v >= 7) expect(await getImage('vid-1')).toMatchObject({ size: 8, type: 'video/mp4' });
+    expect(files.filter((f) => f.kind !== 'text').map((im) => im.path)).toEqual(v >= 7 ? ['trip/leaves.mp4', 'trip/temple.png'] : ['trip/temple.png']);
+    expect((await readBytes('img-1'))?.size).toBeGreaterThan(0);
+    if (v >= 7) expect(await readBytes('vid-1')).toMatchObject({ size: 8, type: 'video/mp4' });
     const skillFiles = await listSkillFiles('s-1');
     expect(skillFiles.map((f) => [f.path, f.mime])).toEqual(v >= 8 ? [['reference/places.md', 'text/markdown'], ['scripts/route.js', 'text/javascript']] : []);
     if (v >= 8) {

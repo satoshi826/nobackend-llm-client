@@ -1,7 +1,7 @@
-// The file manager's items: files and images in one list, with filtering and sorting (pure)
+// The file manager's items: every file in one list, with filtering and sorting (pure)
 import { extOf, extOfMime, isInside } from '../../../lib/paths';
-import type { FileRecord, Origin } from '../../../lib/db/schema';
-import type { ImageEntry } from '../../../lib/db/catalog';
+import type { Origin } from '../../../lib/db/schema';
+import type { FileEntry, TextEntry } from '../../../lib/db/catalog';
 import type { FilerOrder, FilerSort, FilerView } from '../state';
 import { locale } from '../../../lib/i18n';
 
@@ -10,30 +10,25 @@ export type ItemKind = 'document' | 'upload';
 const kindOf = (o: Origin): ItemKind => (o.kind === 'made' ? 'document' : 'upload');
 
 export type FilerItem =
-  | { type: 'file'; key: string; id: string; name: string; kind: ItemKind; ext: string; size: number; updatedAt: number; conversationId?: string; file: FileRecord }
-  | { type: 'image'; key: string; id: string; name: string; kind: ItemKind; ext: string; size: number; updatedAt: number; conversationId?: string; messageId?: string; origin: Origin; video: boolean };
+  | { type: 'file'; key: string; id: string; name: string; kind: ItemKind; ext: string; size: number; updatedAt: number; conversationId?: string; file: TextEntry }
+  | { type: 'image'; key: string; id: string; name: string; kind: ItemKind; ext: string; size: number; updatedAt: number; conversationId?: string; messageId?: string; origin: Origin; video: boolean; file: FileEntry };
 
-/** Each record's item, made once: the catalog keeps a record until it changes, so an entry that did not change gets the same item and is not drawn again */
-const made = new WeakMap<FileRecord | ImageEntry, FilerItem>();
+/** Each entry's item, made once: the catalog keeps an entry until it changes, so an entry that did not change gets the same item and is not drawn again */
+const made = new WeakMap<FileEntry, FilerItem>();
 
-function fileItem(f: FileRecord): FilerItem {
-  return { type: 'file', key: `f:${f.id}`, id: f.id, name: f.name, kind: kindOf(f.origin), ext: f.fromPdf ? 'pdf' : extOf(f.name) || 'txt', size: f.bytes, updatedAt: f.updatedAt, conversationId: f.conversationId, file: f };
+function itemOf(f: FileEntry): FilerItem {
+  const base = { id: f.id, name: f.path, kind: kindOf(f.origin), size: f.bytes, updatedAt: f.updatedAt, conversationId: f.conversationId };
+  if (f.kind === 'text') return { ...base, type: 'file', key: `f:${f.id}`, ext: extOf(f.path) || 'txt', file: f };
+  return { ...base, type: 'image', key: `i:${f.id}`, ext: extOfMime(f.mime), messageId: f.messageId, origin: f.origin, video: f.kind === 'video', file: f };
 }
 
-function imageItem(im: ImageEntry): FilerItem {
-  const video = im.mime.startsWith('video/');
-  return { type: 'image', key: `i:${im.id}`, id: im.id, name: im.path, ext: extOfMime(im.mime), kind: kindOf(im.origin), size: im.size, updatedAt: im.createdAt, conversationId: im.conversationId, messageId: im.messageId, origin: im.origin, video };
-}
-
-function itemOf<T extends FileRecord | ImageEntry>(record: T, make: (r: T) => FilerItem): FilerItem {
-  let it = made.get(record);
-  if (!it) made.set(record, (it = make(record)));
-  return it;
-}
-
-/** Files, then stored images and videos (videos are kept with the images) */
-export function toItems(files: FileRecord[], images: ImageEntry[]): FilerItem[] {
-  return [...files.map((f) => itemOf(f, fileItem)), ...images.map((im) => itemOf(im, imageItem))];
+/** Every file's item: text files, images and videos */
+export function toItems(files: FileEntry[]): FilerItem[] {
+  return files.map((f) => {
+    let it = made.get(f);
+    if (!it) made.set(f, (it = itemOf(f)));
+    return it;
+  });
 }
 
 export function inView(it: FilerItem, view: FilerView): boolean {

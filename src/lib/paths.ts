@@ -1,4 +1,4 @@
-// Paths of files and named images: one namespace across the whole app. A path is a name with folders
+// Paths of files: one namespace across the whole app. A path is a name with folders
 // ('todo-app/js/app.js'); a folder is the shared start of names, with a closing '/'. Two paths are the same when they
 // match in NFC with case folded (so 'Todo/' and 'todo/' are never two folders, which would collide on a disk or in a
 // zip), and a file's path is never another's folder. Pure functions: what is taken comes in as a PathSpace.
@@ -30,6 +30,9 @@ export function extOf(name: string): string {
 export function mimeFromName(name: string): string {
   return MIME[extOf(name)] ?? 'text/plain';
 }
+
+/** Whether a file of this type holds text (it opens as text, and a model reads it as text) */
+export const isTextMime = (mime: string): boolean => mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml' || mime === 'image/svg+xml';
 
 /** The parts of a raw path: NFC, no control characters, `\` as `/`, without empty, `.`, `..` and drive-letter parts */
 function pathParts(raw: string): string[] {
@@ -105,7 +108,7 @@ export function folderNameFor(path: string, at: number): string {
   return cleanFolderName(dot > 0 ? base.slice(0, dot) : base) || dateFolder(at);
 }
 
-/** Something that has a path: a file or a named image */
+/** Something that has a path: a file */
 export interface PathOwner {
   id: string;
   path: string;

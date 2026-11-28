@@ -7,7 +7,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { startPerfCounting } from '../../../perf/counter';
 import { createFile, newFile } from '../../../lib/db/files';
-import { filerView, refreshFiles, refreshImages } from '../state';
+import { filerView, refreshFiles } from '../state';
 import { Filer } from './Filer';
 
 // jsdom has no IntersectionObserver (the list draws in batches with one) or ResizeObserver (a selected row's highlight)
@@ -27,9 +27,8 @@ beforeAll(() => {
 
 describe('the file manager draws only what changed', () => {
   it('draws only the card that changed: one picked, one saved', async () => {
-    for (let i = 0; i < 40; i++) await createFile(newFile({ id: `f${i}`, name: `notes-${i}.md`, origin: { kind: 'made' }, text: `text ${i}`, by: 'model' }), `text ${i}`);
+    for (let i = 0; i < 40; i++) await createFile(newFile({ id: `f${i}`, path: `notes-${i}.md`, origin: { kind: 'made' }, text: `text ${i}`, by: 'model' }), `text ${i}`);
     await refreshFiles();
-    await refreshImages();
     filerView.value = 'text';
     const box = document.createElement('div');
     document.body.append(box);
@@ -48,7 +47,7 @@ describe('the file manager draws only what changed', () => {
 
     // A file saved while the list is open (each save makes the list anew)
     const before = drawn('Card');
-    await createFile(newFile({ id: 'new', name: 'notes-new.md', origin: { kind: 'made' }, text: 'new', by: 'model' }), 'new');
+    await createFile(newFile({ id: 'new', path: 'notes-new.md', origin: { kind: 'made' }, text: 'new', by: 'model' }), 'new');
     await settle();
     expect(box.querySelectorAll('[data-entry]')).toHaveLength(41);
     expect(drawn('Card') - before).toBe(1);

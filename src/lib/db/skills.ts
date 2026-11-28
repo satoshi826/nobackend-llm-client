@@ -1,9 +1,10 @@
 // Skill storage with its files: a skill's record (skills) and its files (skillFiles: bytes at paths inside the skill's
 // folder). With a passphrase a file's path, type and size are encrypted like any record (sealed.ts), and its bytes are
 // encrypted apart, as bytes. A file's bytes are read only when they are needed.
-import { db, type SealedBytes, type Skill, type SkillFileRecord } from './schema';
-import { currentDataKey, DataLockedError, seal, unseal } from './sealed';
-import { openBytes, sealBytes, type DataKey } from '../crypto/data';
+import { db, type Skill, type SkillFileRecord } from './schema';
+import { currentDataKey, seal, unseal } from './sealed';
+import type { DataKey } from '../crypto/data';
+import { isStoredAs, openStored, storedBytes } from './bytes';
 import type { DataTable } from './data-tables';
 import { cleanSkillPath, MAX_SKILL_FILE_BYTES, skillFilesProblem, type SkillFile } from '../skills/files';
 import { pathKey } from '../paths';
@@ -16,18 +17,6 @@ export interface SkillFileEntry extends SkillFile {
 
 /** A file a skill is saved with: one it has (by id, maybe at a new path), or new bytes */
 export type SkillFileWrite = { id: string; path: string } | { path: string; mime: string; data: Blob };
-
-async function storedBytes(data: Blob, key: DataKey | null): Promise<Blob | SealedBytes> {
-  if (!key) return data;
-  const s = await sealBytes(key, await data.arrayBuffer());
-  return { iv: s.iv, data: new Blob([s.data]) };
-}
-
-async function openStored(data: Blob | SealedBytes, mime: string, key: DataKey | null): Promise<Blob> {
-  if (data instanceof Blob) return data.slice(0, data.size, mime);
-  if (!key) throw new DataLockedError();
-  return new Blob([await openBytes(key, { iv: data.iv, data: await data.data.arrayBuffer() })], { type: mime });
-}
 
 /** Skills by name */
 export const listSkills = async (): Promise<Skill[]> => Promise.all((await db().skills.orderBy('name').toArray()).map((s) => unseal(s)));
@@ -95,8 +84,7 @@ async function resealSkillFiles(from: DataKey | null, to: DataKey | null, onProg
   let done = 0;
   for (const id of ids) {
     const row = await db().skillFiles.get(id);
-    const already = to ? !!(row as { enc?: unknown } | undefined)?.enc && from === to : row?.data instanceof Blob;
-    if (row && !already) {
+    if (row && !isStoredAs(row.data, from, to)) {
       const r = await unseal(row, from);
       const data = await openStored(r.data, r.mime, from);
       await db().skillFiles.put(await seal('skillFiles', { ...r, data: await storedBytes(data, to) }, to));

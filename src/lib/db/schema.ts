@@ -55,8 +55,8 @@ export interface ImageParams {
   enhancePrompt?: boolean;
   safeMode: boolean;
   format: 'webp' | 'png' | 'jpeg';
-  /** Source image (upscale / edit / remove-bg) */
-  sourceBlobId?: string;
+  /** Source image (upscale / edit / remove-bg): a stored file */
+  sourceFileId?: string;
   scale?: 2 | 4;
 }
 
@@ -87,8 +87,8 @@ export interface VideoParams {
   aspectRatio?: string;
   /** With sound (models that make it on request) */
   audio?: boolean;
-  /** The first frame: a stored image */
-  startBlobId?: string;
+  /** The first frame: a stored image file */
+  startFileId?: string;
 }
 
 /** A video job at the provider, kept while it runs so waiting can go on after a reload */
@@ -131,7 +131,7 @@ export interface MessageRecord extends ChatMessage {
   video?: VideoResult;
   /** Image request (user message) */
   imageRequest?: ImageParams;
-  /** Image result (assistant message); the images themselves are file parts pointing at the blobs table */
+  /** Image result (assistant message); the images themselves are file parts pointing at stored files */
   image?: ImageResult;
   /** Skills the user picked in the input box (body saved as of sending, so regeneration sends the same content) */
   skills?: { name: string; body: string }[];
@@ -149,55 +149,60 @@ export interface Attachment {
   totalChars: number;
 }
 
-/** Where a file or an image came from: made in a chat (by a model, or a page saving its data), the user's device, or the web */
+/** Where a file came from: made in a chat (by a model, or a page saving its data), the user's device, or the web */
 export type Origin = { kind: 'made' } | { kind: 'upload' } | { kind: 'web'; url: string };
 
-/** Who saved a file's text: a model, the user (editing, or a page of theirs saving its data), or an upload */
+/** Who saved a version of a file: a model, the user (editing, or a page of theirs saving its data), or an upload or a fetch */
 export type SavedBy = 'model' | 'user' | 'upload';
 
-/** When and by whom a text was saved */
-export interface TextStamp {
+/** When and by whom a version was saved */
+export interface Stamp {
   at: number;
   by: SavedBy;
 }
 
 /**
- * A text file, without its text (lists never load texts): documents a model wrote, files the user brought in, data a
- * page saved. Its name is its path (lib/paths.ts). With a passphrase name, origin and preview are encrypted.
+ * A stored file of any type, without its content (lists never load contents): documents a model wrote, images and
+ * videos a chat made, files the user brought in, data a page saved. With a passphrase everything but id,
+ * conversationId and the times is encrypted
  */
 export interface FileRecord {
   id: string;
-  name: string;
+  /** Its path in the whole app (lib/paths.ts): 'trip/notes.md'; a file in no folder is at the top: '20261127-160816.webp' */
+  path: string;
+  /** Its type. Whether it is text is isTextMime(mime): nothing else says so */
   mime: string;
   origin: Origin;
-  /** The text was extracted from a PDF (an upload or a fetch) */
-  fromPdf?: boolean;
-  /** Conversation it was made or attached in (the file outlives the conversation) */
+  /** The conversation it was made in or brought into (the file outlives it) */
   conversationId?: string;
+  /** The answer that shows it (images and videos a chat made): deleting the file empties its slot there */
+  messageId?: string;
   createdAt: number;
   updatedAt: number;
-  /** The current text's size in UTF-8 bytes (what it takes on a disk; images count theirs the same way) */
+  /** The current content's size in bytes (a text's in UTF-8) */
   bytes: number;
-  /** The current text's first characters, for cards and lists */
-  preview: string;
-  current: TextStamp;
-  /** The text before the last change, kept for undo */
-  previous?: TextStamp;
+  current: Stamp;
+  /** The content before the last change, kept for undo */
+  previous?: Stamp;
+  /** Text files only: the current text's first PREVIEW_CHARS characters, for cards and name search */
+  preview?: string;
 }
 
-/** Characters of a file's text kept in its record, for cards and lists */
+/** Characters of a text file kept in its record, for cards and lists */
 export const PREVIEW_CHARS = 300;
 
 /** A text's size in UTF-8 bytes */
 export const textBytes = (text: string): number => new TextEncoder().encode(text).length;
 
-/** A file's text: its current one, and the one before its last change. Encrypted with a passphrase */
-export interface FileText {
-  /** `<fileId>:current` or `<fileId>:previous` */
-  id: string;
-  fileId: string;
-  text: string;
-}
+/**
+ * A file's content (`<fileId>:current`, or `<fileId>:previous` before its last change) or its thumbnail
+ * (`<fileId>:thumb`). With a passphrase a text is encrypted with the record (enc), and bytes apart, as bytes
+ */
+export type FileData =
+  /** A text file's version */
+  | { id: string; fileId: string; text: string }
+  /** Any other file's version, or a thumbnail */
+  | { id: string; fileId: string; data: Blob | SealedBytes };
 
 /** A row of the table before fileTexts (read only while stored data is converted; goes before release) */
 export interface FileVersionText {
@@ -263,15 +268,9 @@ export interface SealedBytes {
   data: Blob;
 }
 
-/** An image's path (named by the time it was saved when it came with no name) and where it came from */
-export interface ImageInfo {
-  path: string;
-  origin: Origin;
-}
-
 /**
- * A stored image. With a passphrase the bytes are encrypted (enc) instead of kept as a Blob, and so is its
- * info (infoEnc). Images made in a chat belong to a conversation and message; brought-in images to none.
+ * A stored image or video in the table before files held every file (read only while stored data is converted: goes
+ * before release). With a passphrase the bytes (enc), the thumbnail and the info (infoEnc) were encrypted
  */
 export interface BlobRecord {
   id: string;
@@ -282,9 +281,8 @@ export interface BlobRecord {
   size: number;
   blob?: Blob;
   enc?: SealedBytes;
-  /** A small copy for grids and previews (encrypted like the image); made when first needed for older images */
   thumb?: Blob | SealedBytes;
-  info?: ImageInfo;
+  info?: { path?: string; origin?: Origin };
   infoEnc?: Sealed;
 }
 
@@ -304,7 +302,7 @@ export class AppDB extends Dexie {
   usage!: Table<UsageRecord, string>;
   files!: Table<FileRecord, string>;
   fileVersions!: Table<FileVersionText, string>;
-  fileTexts!: Table<FileText, string>;
+  fileData!: Table<FileData, string>;
 
   constructor(name = 'nobackend-llm-client') {
     super(name);
@@ -362,6 +360,15 @@ export class AppDB extends Dexie {
     });
     // v13: a skill's files (SKILL.md's folder); a skill stored before has none
     this.version(13).stores({ skillFiles: 'id, skillId' });
+    // v14 (development only, goes before the first release): every file's content in one table, images and videos
+    // too. Texts move as they are (their ciphertext is bound to no table); the records of images (blobs) are
+    // encrypted, so they move after unlock (lib/db/convert.ts). Dexie drops fileTexts only after this upgrade ran
+    this.version(14)
+      .stores({ fileData: 'id, fileId', fileTexts: null })
+      .upgrade(async (tx) => {
+        const rows = await tx.table('fileTexts').toArray();
+        if (rows.length) await tx.table('fileData').bulkPut(rows);
+      });
     this.version(8)
       .stores({ blobs: 'id, conversationId, createdAt' })
       .upgrade((tx) =>

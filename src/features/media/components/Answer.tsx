@@ -141,8 +141,8 @@ function VideoAnswerBody({ m }: { m: MessageRecord }) {
   const file = filesOf(m)[0];
   // The poster first; the video itself (megabytes) only once it is played
   const [playing, setPlaying] = useState(false);
-  const poster = useBlobUrl(file?.blobId, 'thumb');
-  const src = useBlobUrl(playing ? file?.blobId : undefined);
+  const poster = useBlobUrl(file?.fileId, 'thumb');
+  const src = useBlobUrl(playing ? file?.fileId : undefined);
   const resumable = !!videoProviderOf(p.providerId)?.check;
   if (m.status === 'streaming') return <Working label={tv('answer.making')} since={m.createdAt} progress={videoProgress.value[m.id]} note={resumable ? tv('answer.waitNote') : tv('answer.waitNoteOnce')} />;
   // Waiting again and making again need the provider's key
@@ -216,7 +216,7 @@ export function UserMediaRequest({ m }: { m: MessageRecord }) {
         : r.op === 'edit'
           ? ti('request.edit')
           : ti('request.removeBg')
-    : [tv('request.video'), seconds(v!.duration), v!.resolution, v!.aspectRatio, v!.startBlobId && tv('request.fromImage')].filter(Boolean).join(' · ');
+    : [tv('request.video'), seconds(v!.duration), v!.resolution, v!.aspectRatio, v!.startFileId && tv('request.fromImage')].filter(Boolean).join(' · ');
   return (
     <div class="mb-1 flex items-center gap-1 text-xs text-accent-text" data-tip={r ? (r.qualityTags ? `${ti('request.title')}\n${r.qualityTags.text}` : ti('request.title')) : tv('request.title')}>
       <Icon name={r ? 'image' : 'video'} class="size-3.5" />

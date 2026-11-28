@@ -1,6 +1,6 @@
 // Settings → プライバシーとデータ: destinations, storage, backups, deleting keys and everything
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { BackupPasswordNeeded, downloadExport, imageUsage, importFromFile, storageBreakdown, wipeEverything, type StorageBreakdown } from '../../state/data';
+import { BackupPasswordNeeded, downloadExport, binaryUsage, importFromFile, storageBreakdown, wipeEverything, type StorageBreakdown } from '../../state/data';
 import { vaultState } from '../../state/keys';
 import { enabledProviders, hostOfProvider } from '../../state/models';
 import { saveSettings, settings } from '../../state/settings';
@@ -47,7 +47,7 @@ export function PrivacyTab() {
   };
   const [imgUsage, setImgUsage] = useState<{ count: number; bytes: number } | null>(null);
   useEffect(() => {
-    void imageUsage().then(setImgUsage);
+    void binaryUsage().then(setImgUsage);
   }, []);
   const s = settings.value;
   useEffect(() => {

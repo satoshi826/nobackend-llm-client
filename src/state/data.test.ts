@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { encryptFile, encryptSecret, MIN_ITERATIONS } from '../lib/crypto/passphrase';
 import { exportBackup } from '../lib/db/export';
-import { getImage, putImage } from '../lib/db/images';
+import { readBytes, storeBytes } from '../lib/db/files';
 import { db } from '../lib/db/schema';
 import { BackupPasswordNeeded, ENCRYPTED_BACKUP_FORMAT, importFromFile } from './data';
 
@@ -43,14 +43,14 @@ describe('encrypted backups', () => {
 
   it('encrypts a zip backup with its images, and opens it again', { timeout: 30_000 }, async () => {
     await chat();
-    await putImage({ id: 'i1', mime: 'image/png', conversationId: 'c1', name: 'cat.png' }, new Blob(['png bytes'], { type: 'image/png' }), false);
+    await storeBytes({ id: 'i1', mime: 'image/png', origin: { kind: 'made' }, conversationId: 'c1', name: 'cat.png' }, new Blob(['png bytes'], { type: 'image/png' }), false);
     const plain = await exportBackup(true);
     expect(plain.type).toBe('application/zip');
     const file = new File([await encryptFile(plain, 'backup-pass', ENCRYPTED_BACKUP_FORMAT, MIN_ITERATIONS)], 'b.encrypted');
     await Promise.all(db().tables.map((t) => t.clear()));
     const r = await importFromFile(file, 'backup-pass');
     expect(r).toMatchObject({ conversations: 1, tables: { images: 1 } });
-    expect(await (await getImage('i1'))?.text()).toBe('png bytes');
+    expect(await (await readBytes('i1'))?.text()).toBe('png bytes');
   });
 });
 

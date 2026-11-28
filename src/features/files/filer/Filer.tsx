@@ -16,7 +16,6 @@ import {
   chatInFolder,
   createFolder,
   downloadFile,
-  downloadImage,
   filerConversation,
   filerFolder,
   filerPrefs,
@@ -54,7 +53,6 @@ const NO_ITEMS: FilerItem[] = [];
 /** Entries drawn at first, and added each time the list scrolls near its end */
 const BATCH = 120;
 
-const downloadItem = (it: FilerItem) => (it.type === 'file' ? downloadFile(it.file) : downloadImage(it.id, it.name));
 
 /** Folders in the order the items are sorted in: by name, or by when something in them last changed */
 function sortFolders(folders: FolderItem[], sort: FilerSort, order: FilerOrder): FolderItem[] {
@@ -163,25 +161,27 @@ export function Filer() {
 
   /** Move entries into a folder (a folder takes everything in it along) */
   const moveInto = async (target: string, entryKeys: string[]) => {
-    await moveEntries(entryKeys.map(folderOfKey).filter((f) => !!f), entryKeys.map(itemOfKey).filter((i) => !!i), target);
+    await moveEntries(entryKeys.map(folderOfKey).filter((f) => !!f), entryKeys.flatMap((k) => itemOfKey(k)?.id ?? []), target);
     setPicked(new Set());
   };
 
   /** Delete entries, a folder with all it holds, after the user confirms what goes */
   const remove = async (entryKeys: string[]) => {
     const fs = entryKeys.map(folderOfKey).filter((f) => !!f);
-    const r = planRemoval(fs.map((f) => f.path), entryKeys.map(itemOfKey).filter((i) => !!i));
+    const r = planRemoval(fs.map((f) => f.path), entryKeys.flatMap((k) => itemOfKey(k)?.id ?? []));
+    const texts = r.ids.filter((id) => all?.find((i) => i.id === id)?.type === 'file').length;
+    const images = r.ids.length - texts;
     // Images alone: asked and deleted as everywhere else images are
-    if (!fs.length && !r.fileIds.length) {
-      if (r.imageIds.length) await confirmDeleteMedia(r.imageIds);
+    if (!fs.length && !texts) {
+      if (images) await confirmDeleteMedia(r.ids);
     } else {
       const ok = await askConfirm({
         title: entryKeys.length === 1 ? t('filer.deleteTitleOne') : t('filer.deleteTitle', { n: formatNumber(entryKeys.length) }),
         message: fs.length
-          ? t('filer.confirmFolders', { folders: formatList(fs.map((f) => t('filer.folderName', { name: f.name }))), files: formatNumber(r.fileIds.length), images: formatNumber(r.imageIds.length) })
-          : r.imageIds.length
-            ? t('filer.confirmFilesImages', { files: formatNumber(r.fileIds.length), images: formatNumber(r.imageIds.length) })
-            : t('filer.confirmFiles', { files: formatNumber(r.fileIds.length) }),
+          ? t('filer.confirmFolders', { folders: formatList(fs.map((f) => t('filer.folderName', { name: f.name }))), files: formatNumber(texts), images: formatNumber(images) })
+          : images
+            ? t('filer.confirmFilesImages', { files: formatNumber(texts), images: formatNumber(images) })
+            : t('filer.confirmFiles', { files: formatNumber(texts) }),
         confirmLabel: t('delete'),
         danger: true
       });
@@ -211,7 +211,7 @@ export function Filer() {
         ...(here === null || pathKey(at) !== pathKey(here) ? [{ icon: 'folder' as const, label: at ? t('filer.showFolder', { name: at.slice(0, -1) }) : t('filer.showTop'), run: () => openFolder(at || null) }] : []),
         { icon: 'edit', label: t('filer.rename'), run: () => setDialog({ kind: 'renameItem', item: it }) },
         { icon: 'folder', label: t('filer.moveEllipsis'), run: () => setDialog({ kind: 'move', keys: [key] }) },
-        { icon: 'download', label: t('download'), run: () => void downloadItem(it) },
+        { icon: 'download', label: t('download'), run: () => void downloadFile(it.file) },
         { icon: 'trash', label: t('delete'), run: () => void remove([key]), danger: true }
       ];
     },
@@ -308,7 +308,7 @@ export function Filer() {
                 <Icon name="folder" class="size-3.5" />
                 <span class="hidden sm:inline">{t('filer.move')}</span>
               </Button>
-              <Button class="text-xs" disabled={!selected.length} title={t('download')} aria-label={t('download')} onClick={() => void Promise.all(selected.map(downloadItem))}>
+              <Button class="text-xs" disabled={!selected.length} title={t('download')} aria-label={t('download')} onClick={() => void Promise.all(selected.map((i) => downloadFile(i.file)))}>
                 <Icon name="download" class="size-3.5" />
                 <span class="hidden sm:inline">{t('download')}</span>
               </Button>
@@ -398,7 +398,7 @@ export function Filer() {
         />
       )}
       {dialog?.kind === 'renameFolder' && <RenameDialog title={t('folder.rename')} label={t('folder.renameLabel')} note={t('folder.renameNote')} initial={dialog.path.slice(0, -1)} onClose={() => setDialog(null)} onSave={(v) => renameFolder(dialog.path, v)} />}
-      {dialog?.kind === 'renameItem' && <RenameDialog title={t('filer.rename')} label={t('filer.renameLabel')} initial={baseName(dialog.item.name)} onClose={() => setDialog(null)} onSave={(v) => renameItem(dialog.item, v)} />}
+      {dialog?.kind === 'renameItem' && <RenameDialog title={t('filer.rename')} label={t('filer.renameLabel')} initial={baseName(dialog.item.name)} onClose={() => setDialog(null)} onSave={(v) => renameItem({ id: dialog.item.id, path: dialog.item.name }, v)} />}
       {dialog?.kind === 'newFolder' && <RenameDialog title={t('folder.new')} label={t('folder.newLabel')} initial="" onClose={() => setDialog(null)} onSave={(v) => createFolder(inFolder ?? '', v)} />}
       {dragging && (
         <div class="pointer-events-none absolute inset-2 grid place-items-center rounded-[22px] border-2 border-dashed border-accent bg-accent-soft text-sm font-medium text-ink-strong backdrop-blur-sm">

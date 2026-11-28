@@ -35,7 +35,7 @@ export function ImagePage({ id = '' }: { id?: string }) {
       </main>
     );
   const folder = folderOf(it.name);
-  const item: MediaItem = { blobId: it.id, conversationId: it.conversationId, messageId: it.messageId, name: it.name, video: it.video };
+  const item: MediaItem = { fileId: it.id, conversationId: it.conversationId, messageId: it.messageId, name: it.name, video: it.video };
   return (
     <main class="flex min-w-0 flex-1 flex-col">
       <FilesHeader

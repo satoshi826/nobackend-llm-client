@@ -4,8 +4,8 @@ import * as fdb from '../../../lib/db/files';
 import { withTakenPaths } from '../../../lib/db/catalog';
 import { cleanFileName, freePath } from '../../../lib/paths';
 import { newId } from '../../../lib/db/repo';
-import { putImage } from '../../../lib/db/images';
-import type { Attachment, Conversation, FileRecord, Origin } from '../../../lib/db/schema';
+import type { TextEntry } from '../../../lib/db/catalog';
+import type { Attachment, Conversation, Origin } from '../../../lib/db/schema';
 import { currentConv, showChat, updateConversation } from '../../../state/conversations';
 import { showToast } from '../../../state/ui';
 import { extractText } from '../extract';
@@ -34,13 +34,13 @@ const setPending = (id: string, patch: Partial<PendingAttachment> | null) => {
 export const importing = signal<{ id: string; name: string }[]>([]);
 
 /** Read one file from the user's device (or the web) into `folder` ('' or 'a/'); returns the record, or null (after a toast) */
-export async function importOne(file: File, id: string, temporary: boolean, url?: string, conversationId?: string, folder = ''): Promise<FileRecord | null> {
+export async function importOne(file: File, id: string, temporary: boolean, url?: string, conversationId?: string, folder = ''): Promise<TextEntry | null> {
   try {
     const ex = await extractText(file);
     const rec = await withTakenPaths(async (space) => {
       // A name already in use gets a number: 'notes (2).md'
-      const name = freePath(cleanFileName(folder + file.name, 'txt'), space);
-      const rec = fdb.newFile({ id, name, origin: url ? { kind: 'web', url } : { kind: 'upload' }, text: ex.text, by: 'upload', fromPdf: ex.fromPdf, conversationId });
+      const path = freePath(cleanFileName(folder + file.name, 'txt'), space);
+      const rec = fdb.newFile({ id, path, origin: url ? { kind: 'web', url } : { kind: 'upload' }, text: ex.text, by: 'upload', conversationId });
       // A pdf's text is stored as text; keep the original extension visible but treat it as plain text
       if (rec.mime === 'application/pdf') rec.mime = 'text/plain';
       return fdb.createFile(rec, ex.text, temporary);
@@ -66,7 +66,7 @@ export async function importImage(file: File, id: string, origin: Origin, conv?:
     showToast(t('extract.tooBig', { max: formatNumber(MAX_IMAGE_BYTES / 1024 / 1024) }), 'error');
     return null;
   }
-  return putImage({ id, mime: file.type, conversationId: conv?.id, origin, folder, name: file.name }, file, !!conv?.temporary);
+  return (await fdb.storeBytes({ id, mime: file.type, conversationId: conv?.id, origin, folder, name: file.name }, file, !!conv?.temporary)).path;
 }
 
 /** Upload from the file manager into `folder` ('' is the top; not attached to anything): images as images, the rest as text (PDFs too) */
@@ -85,7 +85,7 @@ export async function importFromDevice(files: File[], folder = '') {
 }
 
 /** An attachment's size as the input box shows it: bytes, and whether only its beginning goes with the message (counted in characters) */
-async function sizeOf(f: FileRecord): Promise<Pick<PendingAttachment, 'bytes' | 'long'>> {
+async function sizeOf(f: TextEntry): Promise<Pick<PendingAttachment, 'bytes' | 'long'>> {
   return { bytes: f.bytes, long: (await fdb.readText(f.id)).length > ATTACH_INLINE_CHARS };
 }
 
@@ -115,7 +115,7 @@ export async function attachExisting(id: string) {
   if (conv.imageMode || conv.videoMode) await updateConversation({ imageMode: false, videoMode: false });
   if (pendingAttachments.value.some((a) => a.fileId === id)) return;
   const f = await fdb.getFile(id);
-  if (f) pendingAttachments.value = [...pendingAttachments.value, { fileId: f.id, name: f.name, ...(await sizeOf(f)) }];
+  if (f?.kind === 'text') pendingAttachments.value = [...pendingAttachments.value, { fileId: f.id, name: f.path, ...(await sizeOf(f)) }];
 }
 
 export function detach(id: string) {
@@ -134,7 +134,7 @@ export async function takeAttachments(): Promise<Attachment[]> {
     const text = await fdb.readText(f.id);
     // A long one is cut after a whole line, so the model can go on with read_file from the next line
     const cut = text.length > ATTACH_INLINE_CHARS ? text.slice(0, text.lastIndexOf('\n', ATTACH_INLINE_CHARS) + 1 || ATTACH_INLINE_CHARS) : text;
-    out.push({ fileId: f.id, name: f.name, mime: f.mime, text: cut, totalChars: text.length });
+    out.push({ fileId: f.id, name: f.path, mime: f.mime, text: cut, totalChars: text.length });
   }
   return out;
 }

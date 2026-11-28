@@ -104,10 +104,9 @@ export function formatDate(ts: number): string {
   return d.toDateString() === today.toDateString() ? formatTime(ts) : fmtDate(ts, { year: 'numeric', month: 'numeric', day: 'numeric' });
 }
 
-/** Short type label from the file name */
-export function typeLabel(f: Pick<FileRecord, 'name' | 'fromPdf'>): string {
-  if (f.fromPdf) return 'PDF';
-  return (extOf(f.name) || 'txt').toUpperCase();
+/** Short type label from the file's path */
+export function typeLabel(f: Pick<FileRecord, 'path'>): string {
+  return (extOf(f.path) || 'txt').toUpperCase();
 }
 
 /** One folder of a path, as a way back up to it ('' is the top); the Files tab's header and a file's header show paths with these */

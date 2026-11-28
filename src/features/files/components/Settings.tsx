@@ -9,7 +9,7 @@ import { t } from '../messages';
 export function FilesSettings() {
   const [usage, setUsage] = useState<{ count: number; bytes: number } | null>(null);
   useEffect(() => {
-    void fileUsage().then(setUsage);
+    void fileUsage(true).then(setUsage);
   }, []);
   return (
     <div class="space-y-8">

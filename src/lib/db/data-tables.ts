@@ -1,9 +1,8 @@
-// Stored data beyond the core tables (files, images, skills' files). Each storage module says how its table is backed up,
+// Stored data beyond the core tables (files, skills' files). Each storage module says how its table is backed up,
 // restored, re-encrypted and cleaned up with a conversation; the backup code, the passphrase switch and conversation
 // deletion go through this list.
 import type { DataKey } from '../crypto/data';
-import { filesTable } from './files';
-import { imagesTable } from './images';
+import { filesTable, imagesTable } from './files';
 import { skillFilesTable } from './skills';
 
 export interface DataTable<Row = unknown> {

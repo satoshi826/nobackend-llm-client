@@ -4,7 +4,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { baseName } from '../../lib/paths';
-import { deleteMedia, lightbox, openChatOf, promptOf, savedPathOf, type MediaItem } from '../../state/media';
+import { removeFiles, lightbox, openChatOf, promptOf, savedPathOf, type MediaItem } from '../../state/media';
 import { isStreaming } from '../../state/runs';
 import { showToast } from '../../state/ui';
 import { askConfirm } from '../ConfirmDialog';
@@ -24,7 +24,7 @@ export async function confirmDeleteMedia(ids: string[]): Promise<boolean> {
     danger: true
   });
   if (!ok) return false;
-  await deleteMedia(ids);
+  await removeFiles(ids);
   releaseMediaUrls(ids);
   showToast(ids.length > 1 ? t('delete.doneMany', { n: ids.length }) : t('delete.doneOne'));
   return true;
@@ -50,15 +50,15 @@ export function MediaViewer({
   /** Beside its name (e.g. a link to the chat it was made in) */
   aside?: ComponentChildren;
 }) {
-  const imageUrl = useImageUrl(item.video ? undefined : item.blobId);
-  const videoUrl = useBlobUrl(item.video ? item.blobId : undefined);
+  const imageUrl = useImageUrl(item.video ? undefined : item.fileId);
+  const videoUrl = useBlobUrl(item.video ? item.fileId : undefined);
   const url = item.video ? videoUrl : imageUrl;
   const [asking, setAsking] = useState<MediaAction | null>(null);
   const [text, setText] = useState('');
   useEffect(() => {
     setAsking(null);
     setText('');
-  }, [item.blobId]);
+  }, [item.fileId]);
   const many = at.total > 1;
   // Arrow keys step (not while typing)
   useEffect(() => {
@@ -73,7 +73,7 @@ export function MediaViewer({
   });
   const swipe = useSwipeStep(many ? step : undefined);
 
-  const path = item.name ?? savedPathOf(item.blobId);
+  const path = item.name ?? savedPathOf(item.fileId);
   const prompt = promptOf(item);
   // Made from an image whose bytes are here; each runs in the image's chat
   const actions = !item.video && url ? mediaActions.flatMap((a) => {
@@ -90,11 +90,11 @@ export function MediaViewer({
     if (!url) return;
     const link = document.createElement('a');
     link.href = url;
-    link.download = path ? baseName(path) : `${item.video ? 'video' : 'image'}-${item.blobId.slice(0, 8)}.${item.video ? 'mp4' : 'png'}`;
+    link.download = path ? baseName(path) : `${item.video ? 'video' : 'image'}-${item.fileId.slice(0, 8)}.${item.video ? 'mp4' : 'png'}`;
     link.click();
   };
   const remove = async () => {
-    if (await confirmDeleteMedia([item.blobId])) deleted();
+    if (await confirmDeleteMedia([item.fileId])) deleted();
   };
 
   return (
@@ -213,7 +213,7 @@ export function Lightbox() {
     if (cur) lightbox.value = { ...cur, index: (cur.index + d + cur.items.length) % cur.items.length };
   };
   const deleted = () => {
-    const items = lb.items.filter((x) => x.blobId !== item.blobId);
+    const items = lb.items.filter((x) => x.fileId !== item.fileId);
     lightbox.value = items.length ? { items, index: Math.min(lb.index, items.length - 1) } : null;
   };
   return (

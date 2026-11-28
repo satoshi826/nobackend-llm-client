@@ -1,14 +1,14 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildGenerateBody, mapImageModel, sizeFor, veniceEditCost, veniceImageProvider } from './providers/venice';
-import { getImage, imageUsage, listImages, putImage, resealImages, exportImages, importImages } from '../../../lib/db/images';
-import { setDataKey } from '../../../lib/db/sealed';
+import { exportImages, fileUsage, filesTable, forgetTemporaryFiles, getFile, importImages, listFiles, newFile, createFile, readBytes, readThumb, storeBytes, type NewBytes } from '../../../lib/db/files';
+import { setDataKey, unseal } from '../../../lib/db/sealed';
 import { resetCatalog } from '../../../lib/db/catalog';
-import { generateDataKey } from '../../../lib/crypto/data';
+import { convertImage } from '../../../lib/db/convert';
+import { generateDataKey, sealBytes, sealJSON } from '../../../lib/crypto/data';
 import { db, type ImageParams, type MessageRecord } from '../../../lib/db/schema';
 import * as repo from '../../../lib/db/repo';
-import { getFile, newFile, createFile } from '../../../lib/db/files';
-import { onStoreChange } from '../../../lib/db/changes';
+import { onFilesChange } from '../../../lib/db/changes';
 import { buildRequestMessages, registerMessageTransform } from '../../../lib/chat/request';
 import { imageNote } from './transform';
 
@@ -29,8 +29,15 @@ const params = (o: Partial<ImageParams> = {}): ImageParams => ({ op: 'generate',
 
 afterEach(async () => {
   setDataKey(null);
-  await db().blobs.clear();
+  await Promise.all([db().blobs.clear(), db().files.clear(), db().fileData.clear()]);
+  forgetTemporaryFiles('tmp');
+  resetCatalog();
 });
+
+/** Save an image (made in a chat unless said) and give its path */
+const putImage = async (meta: Omit<NewBytes, 'origin'> & Partial<Pick<NewBytes, 'origin'>>, blob: Blob, temporary: boolean) => (await storeBytes({ origin: { kind: 'made' }, ...meta }, blob, temporary)).path;
+const listImages = async () => (await listFiles()).filter((f) => f.kind === 'image');
+const getImage = readBytes;
 
 describe('Venice image API', () => {
   it('maps image models', () => {
@@ -89,27 +96,32 @@ describe('image storage', () => {
   it('stores, encrypts at rest, decrypts on read, and exports/imports', async () => {
     await putImage(meta('i1'), new Blob(['hello'], { type: 'image/png' }), false);
     const key = await generateDataKey();
-    await resealImages(null, key);
-    const raw = await db().blobs.get('i1');
-    expect(raw?.blob).toBeUndefined();
-    expect(raw?.enc).toBeDefined();
+    await filesTable.reseal!(null, key);
+    const raw = await db().fileData.get('i1:current');
+    expect(raw && 'data' in raw && !(raw.data instanceof Blob)).toBe(true);
+    // Its type is in the encrypted record only
+    expect(JSON.stringify(await db().files.get('i1'))).not.toContain('image/png');
     setDataKey(key);
     expect(await (await getImage('i1'))!.text()).toBe('hello');
-    expect((await imageUsage()).count).toBe(1);
+    expect((await getImage('i1'))!.type).toBe('image/png');
+    expect((await fileUsage(false)).count).toBe(1);
     expect((await listImages())[0]).toMatchObject({ id: 'i1', conversationId: 'c1' });
     const ex = await exportImages();
     expect(await ex[0].data.text()).toBe('hello');
-    await db().blobs.clear();
+    await Promise.all([db().files.clear(), db().fileData.clear()]);
+    resetCatalog();
     expect(await importImages(ex)).toBe(1);
     expect(await importImages(ex)).toBe(0);
-    expect((await db().blobs.get('i1'))?.enc).toBeDefined();
+    const back = await db().fileData.get('i1:current');
+    expect(back && 'data' in back && !(back.data instanceof Blob)).toBe(true);
     // Temporary chats stay in memory
     await putImage({ ...meta('t1'), conversationId: 'tmp' }, new Blob(['x']), true);
-    expect(await db().blobs.get('t1')).toBeUndefined();
+    expect(await db().files.get('t1')).toBeUndefined();
     expect(await (await getImage('t1'))!.text()).toBe('x');
-    await resealImages(key, null);
+    await filesTable.reseal!(key, null);
     setDataKey(null);
-    expect((await db().blobs.get('i1'))?.blob).toBeDefined();
+    const plain = await db().fileData.get('i1:current');
+    expect(plain && 'data' in plain && plain.data instanceof Blob).toBe(true);
   });
   it('names an image that comes with no name by the second it is saved, in the folder given', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -123,27 +135,64 @@ describe('image storage', () => {
       vi.useRealTimers();
     }
   });
-  it('gives an image stored without a path (made before images had one) its time name as the data loads', async () => {
+  it('moves images from the table before files held them all, as the data loads, giving one without a path its time name', async () => {
     const at = new Date(2026, 0, 2, 3, 4, 5).getTime();
     await db().blobs.put({ id: 'old', mime: 'image/png', createdAt: at, size: 1, blob: new Blob(['x'], { type: 'image/png' }) });
     resetCatalog();
     expect((await listImages()).find((i) => i.id === 'old')?.path).toBe('20260102-030405.png');
-    // Written back, so it keeps that name
-    expect((await db().blobs.get('old'))?.info?.path).toBe('20260102-030405.png');
+    // Written as a file, so it keeps that name; the old row is gone
+    expect((await db().files.get('old'))?.path).toBe('20260102-030405.png');
+    expect(await db().blobs.count()).toBe(0);
+    expect(await (await getImage('old'))!.text()).toBe('x');
+  });
+  it('moves encrypted images as they are (bytes and thumbnail not encrypted again), and goes on after a stop halfway', async () => {
+    const key = await generateDataKey();
+    setDataKey(key);
+    const sealed = async (text: string) => {
+      const s = await sealBytes(key, new TextEncoder().encode(text).buffer);
+      return { iv: s.iv, data: new Blob([s.data], { type: 'image/png' }) };
+    };
+    const row = async (id: string, path: string) => ({
+      id,
+      conversationId: 'c1',
+      messageId: 'm1',
+      createdAt: 5,
+      mime: 'image/png',
+      size: 3,
+      enc: await sealed(`${id}-bytes`),
+      thumb: await sealed(`${id}-thumb`),
+      infoEnc: await sealJSON(key, { path, origin: { kind: 'web', url: 'https://a.example/x.png' } })
+    });
+    await db().blobs.bulkPut([await row('a', 'pics/a.png'), await row('b', 'pics/b.png')]);
+    // One moved, then the app stopped: the next load moves the other
+    const space = { ownerOf: () => undefined, holds: () => false };
+    expect((await convertImage('a', space))?.path).toBe('pics/a.png');
+    resetCatalog();
+    expect((await listImages()).map((i) => i.path).sort()).toEqual(['pics/a.png', 'pics/b.png']);
+    expect(await db().blobs.count()).toBe(0);
+    const b = (await getFile('b'))!;
+    expect(b).toMatchObject({ mime: 'image/png', messageId: 'm1', origin: { kind: 'web', url: 'https://a.example/x.png' }, bytes: 3, updatedAt: 5 });
+    expect(await (await getImage('b'))!.text()).toBe('b-bytes');
+    expect(await (await readThumb('b'))!.text()).toBe('b-thumb');
+    // Its record is encrypted; the encrypted bytes carry no type
+    expect(JSON.stringify(await db().files.get('b'))).not.toContain('pics');
+    const moved = await db().fileData.get('b:current');
+    expect(moved && 'data' in moved && !(moved.data instanceof Blob) && moved.data.data.type).toBe('');
   });
   it('keeps a brought-in image\'s name and origin, encrypted with a passphrase', async () => {
     const key = await generateDataKey();
     setDataKey(key);
     const info = { path: 'cat.png', origin: { kind: 'web' as const, url: 'https://upload.example/cat.png' } };
     await putImage({ id: 'w1', mime: 'image/png', origin: info.origin, name: info.path }, new Blob(['png'], { type: 'image/png' }), false);
-    const raw = await db().blobs.get('w1');
-    expect(raw?.info).toBeUndefined();
-    expect(raw?.infoEnc).toBeDefined();
-    expect(raw?.conversationId).toBeUndefined();
+    const raw = (await db().files.get('w1'))!;
+    expect(JSON.stringify(raw)).not.toContain('cat.png');
+    expect((await unseal(raw)).path).toBe('cat.png');
+    expect(raw.conversationId).toBeUndefined();
     const listed = () => listImages().then((l) => l.find((i) => i.id === 'w1'));
     expect([(await listed())?.path, (await listed())?.origin]).toEqual([info.path, info.origin]);
     const ex = await exportImages();
-    await db().blobs.clear();
+    await Promise.all([db().files.clear(), db().fileData.clear()]);
+    resetCatalog();
     expect(await importImages(ex)).toBe(1);
     expect([(await listed())?.path, (await listed())?.origin]).toEqual([info.path, info.origin]);
   });
@@ -155,15 +204,15 @@ describe('image storage', () => {
   it('deletes a conversation’s images and files with it when asked, and counts them first', async () => {
     await repo.putConversation({ id: 'c2', title: 'c2', createdAt: 1, updatedAt: 1, currentLeafId: null, providerId: 'p', modelId: 'm', systemPrompt: '', webSearch: 'off', pinned: 0, tags: [] });
     await putImage({ ...meta('d1'), conversationId: 'c2' }, new Blob(['x']), false);
-    await createFile(newFile({ id: 'f1', name: 'a.md', origin: { kind: 'made' }, text: 'hi', by: 'model', conversationId: 'c2' }), 'hi');
-    await createFile(newFile({ id: 'f2', name: 'b.md', origin: { kind: 'made' }, text: 'other', by: 'user' }), 'other');
+    await createFile(newFile({ id: 'f1', path: 'a.md', origin: { kind: 'made' }, text: 'hi', by: 'model', conversationId: 'c2' }), 'hi');
+    await createFile(newFile({ id: 'f2', path: 'b.md', origin: { kind: 'made' }, text: 'other', by: 'user' }), 'other');
     expect(await repo.countMadeIn('c2')).toBe(2);
-    // Lists of images and files hear about it, whichever code deleted them
-    const heard: string[] = [];
-    const stop = onStoreChange((store) => heard.push(store));
+    // Lists of files hear about it, whichever code deleted them
+    let heard = 0;
+    const stop = onFilesChange(() => heard++);
     await repo.deleteConversation('c2', true);
     stop();
-    expect(heard.sort()).toEqual(['files', 'images']);
+    expect(heard).toBeGreaterThan(0);
     expect(await getImage('d1')).toBeNull();
     expect(await getFile('f1')).toBeUndefined();
     expect(await getFile('f2')).toBeDefined();
@@ -177,7 +226,7 @@ describe('images in conversations', () => {
       conversationId: 'c',
       parentId: 'u',
       role: 'assistant',
-      parts: [{ type: 'file', blobId: 'b', name: 'image-1.webp', mimeType: 'image/webp' }],
+      parts: [{ type: 'file', fileId: 'b', name: 'image-1.webp', mimeType: 'image/webp' }],
       createdAt: 1,
       status: 'done',
       image: { params: params() }
@@ -193,30 +242,30 @@ describe('images in conversations', () => {
       conversations: [{ id: 'c', title: 't', createdAt: 1, updatedAt: 1 }],
       messages: [
         { id: 'u', conversationId: 'c', role: 'user', parts: [{ type: 'text', text: 'a cat' }], imageRequest: params({ op: 'bogus' as never }) },
-        { id: 'a', conversationId: 'c', role: 'assistant', parts: [{ type: 'file', blobId: 'b', name: 'x', mimeType: 'image/png', width: 8, height: 8 }, { type: 'file', blobId: 'z', mimeType: 'text/html' }], image: { params: params(), seed: 3 } }
+        { id: 'a', conversationId: 'c', role: 'assistant', parts: [{ type: 'file', fileId: 'b', name: 'x', mimeType: 'image/png', width: 8, height: 8 }, { type: 'file', fileId: 'z', mimeType: 'text/html' }], image: { params: params(), seed: 3 } }
       ],
       prompts: [],
       images: [{ id: 'b', conversationId: 'c', messageId: 'a', createdAt: 1, mime: 'image/png', data: 'AA==' }, { id: 'bad' }]
     });
     expect(v.messages[0].imageRequest).toBeUndefined();
-    expect(v.messages[1].parts).toEqual([{ type: 'file', blobId: 'b', name: 'x', mimeType: 'image/png', width: 8, height: 8 }]);
+    expect(v.messages[1].parts).toEqual([{ type: 'file', fileId: 'b', name: 'x', mimeType: 'image/png', width: 8, height: 8 }]);
     expect(v.messages[1].image).toMatchObject({ params: { op: 'generate', prompt: 'a cat' }, seed: 3 });
     expect(v.images).toHaveLength(1);
   });
 
   it('generate_image tool validates input', async () => {
-    const tool = makeImageTool(async (input) => ({ blobIds: ['b1'], paths: ['20261127-160816.webp'], inWorkDir: true, model: 'Flux', blurred: false, ...(input as object) }) as never);
+    const tool = makeImageTool(async (input) => ({ fileIds: ['b1'], paths: ['20261127-160816.webp'], inWorkDir: true, model: 'Flux', blurred: false, ...(input as object) }) as never);
     // The chat model reads the app's own errors in English, whatever the UI language
     expect(() => tool.prepare({})).toThrow(TranslatedError);
     expect(tool.prepare({ prompt: ' a cat ', aspect_ratio: '5:7' })).toEqual({ prompt: 'a cat' });
     const r = await tool.execute({ prompt: 'a cat' }, { signal: new AbortController().signal } as never);
-    expect(r.details).toMatchObject({ blobIds: ['b1'] });
+    expect(r.details).toMatchObject({ fileIds: ['b1'] });
     // The model learns where it went, to use it from a page in the working folder
     expect(r.content).toContain('Saved in the working folder as "20261127-160816.webp"');
   });
 
   it('generate_image saves at the path the model gives, cleaned as write_file cleans names', async () => {
-    const ran = (paths: string[], inWorkDir = true) => makeImageTool(async () => ({ blobIds: paths.map((_, i) => `b${i + 1}`), paths, inWorkDir, model: 'Flux', blurred: false }));
+    const ran = (paths: string[], inWorkDir = true) => makeImageTool(async () => ({ fileIds: paths.map((_, i) => `b${i + 1}`), paths, inWorkDir, model: 'Flux', blurred: false }));
     const tool = ran([]);
     expect(tool.prepare({ prompt: 'a', path: '../assets//hero' })).toEqual({ prompt: 'a', path: 'assets/hero.png' });
     expect(tool.prepare({ prompt: 'a', path: ' ' })).toEqual({ prompt: 'a' });
@@ -242,10 +291,10 @@ describe('images in conversations', () => {
     const png = () => new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' });
     const [a] = await storeImages(conv, 'm', [png()], ['assets/hero.png']);
     const [b] = await storeImages(conv, 'm', [png()], ['assets/hero.png']);
-    expect(savedPathOf(a.blobId)).toBe('game/assets/hero.png');
-    expect(savedPathOf(b.blobId)).toBe('game/assets/hero (2).png');
+    expect(savedPathOf(a.fileId)).toBe('game/assets/hero.png');
+    expect(savedPathOf(b.fileId)).toBe('game/assets/hero (2).png');
     // Without paths: named by the time, at the top of the working folder
     const [c] = await storeImages(conv, 'm', [png()]);
-    expect(savedPathOf(c.blobId)).toMatch(/^game\/\d{8}-\d{6}( \(\d+\))?\.png$/);
+    expect(savedPathOf(c.fileId)).toMatch(/^game\/\d{8}-\d{6}( \(\d+\))?\.png$/);
   });
 });

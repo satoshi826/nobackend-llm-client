@@ -1,8 +1,7 @@
 // Tools a performance measurement drives (scripts/perf/run.ts, or by hand in the console with `?perf`), as window.__perf.
 // Loaded only in perf mode (src/main.tsx), where the app uses a database of its own: nothing here touches real data.
 import * as repo from '../lib/db/repo';
-import { createFile, newFile } from '../lib/db/files';
-import { putImage } from '../lib/db/images';
+import { createFile, newFile, storeBytes } from '../lib/db/files';
 import { db, type Conversation, type MessageRecord } from '../lib/db/schema';
 import { currentId, currentPath, showMessage, touchConversation } from '../state/conversations';
 import { beginRun, endRun } from '../state/runs';
@@ -124,8 +123,8 @@ async function seed(spec: SeedSpec) {
   for (let i = 0; i < (spec.files ?? 0); i++) {
     const text = fileText(i);
     const c = spec.filesInConversations && spec.conversations ? i % spec.conversations : null;
-    const name = c === null ? `folder-${i % folders}/notes-${i}.md` : `work-${c}/notes-${i}.md`;
-    await createFile(newFile({ id: `perf-f${i}`, name, origin: { kind: 'made' }, text, by: 'model', conversationId: c === null ? undefined : `perf-c${c}` }), text);
+    const path = c === null ? `folder-${i % folders}/notes-${i}.md` : `work-${c}/notes-${i}.md`;
+    await createFile(newFile({ id: `perf-f${i}`, path, origin: { kind: 'made' }, text, by: 'model', conversationId: c === null ? undefined : `perf-c${c}` }), text);
   }
   if (spec.usage) {
     const n = spec.usage;
@@ -159,7 +158,7 @@ async function seed(spec: SeedSpec) {
       }))
     );
   if (spec.models) await repo.replaceModels(PERF_PROVIDER, Array.from({ length: spec.models }, (_, i) => model(i)));
-  for (let i = 0; i < (spec.images ?? 0); i++) await putImage({ id: `perf-i${i}`, mime: 'image/png', origin: { kind: 'upload' }, name: `image-${i}.png` }, await tinyImage(i), false);
+  for (let i = 0; i < (spec.images ?? 0); i++) await storeBytes({ id: `perf-i${i}`, mime: 'image/png', origin: { kind: 'upload' }, name: `image-${i}.png` }, await tinyImage(i), false);
 }
 
 /**
@@ -195,7 +194,7 @@ function touch(id: string) {
 async function addFiles(n: number) {
   for (let i = 0; i < n; i++) {
     const text = fileText(i);
-    await createFile(newFile({ id: `perf-added-${i}`, name: `added/notes-${i}.md`, origin: { kind: 'made' }, text, by: 'model' }), text);
+    await createFile(newFile({ id: `perf-added-${i}`, path: `added/notes-${i}.md`, origin: { kind: 'made' }, text, by: 'model' }), text);
   }
 }
 

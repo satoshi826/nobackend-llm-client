@@ -1,6 +1,7 @@
 // Data management (backup, import, delete all)
 import * as repo from '../lib/db/repo';
 import { exportBackup, importBackup } from '../lib/db/export';
+import { fileUsage } from '../lib/db/files';
 import { saveSettings, settings } from './settings';
 import { loadConversations } from './conversations';
 import { loadFeatureData } from './lifecycle';
@@ -12,8 +13,8 @@ import { t } from './messages';
 export type { StorageBreakdown } from '../lib/db/storage-usage';
 /** What each kind of data takes in this browser's storage */
 export { storageBreakdown } from '../lib/db/storage-usage';
-/** How many images and videos are kept, and their bytes (they make backups large) */
-export { imageUsage } from '../lib/db/images';
+/** How many files other than text are kept, and their bytes (they make backups large) */
+export const binaryUsage = () => fileUsage(false);
 
 /**
  * Backup file encrypted with a password (PBKDF2 + AES-GCM, same scheme as the key vault): the backup file (JSON or

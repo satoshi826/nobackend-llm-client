@@ -76,15 +76,15 @@ function ToolRequestDetails({ p, ran }: { p: ToolPart; ran?: ToolRequest & { mod
 
 /** Under a generate_image tool card: the full request (prompt, model, cost), then the images (or the "deleted" note) */
 export function ImageToolDetail({ p, owner }: { p: ToolPart; owner?: { conversationId: string; messageId: string } }) {
-  const d = (p.uiDetails ?? {}) as { blobIds?: string[]; deleted?: boolean; model?: string; request?: ToolRequest };
+  const d = (p.uiDetails ?? {}) as { fileIds?: string[]; deleted?: boolean; model?: string; request?: ToolRequest };
   const ran = d.request && d.model ? { ...d.request, model: d.model } : undefined;
   return (
     <>
       {(ran || (p.input != null && !p.state.startsWith('output-'))) && <ToolRequestDetails p={p} ran={ran} />}
-      {p.state === 'output-available' && d.deleted && !d.blobIds?.length && <p class="border-t border-line px-3 py-2 text-muted">{t('deleted')}</p>}
-      {p.state === 'output-available' && !!d.blobIds?.length && owner && (
+      {p.state === 'output-available' && d.deleted && !d.fileIds?.length && <p class="border-t border-line px-3 py-2 text-muted">{t('deleted')}</p>}
+      {p.state === 'output-available' && !!d.fileIds?.length && owner && (
         <div class="border-t border-line px-3 py-2">
-          <MediaGrid files={d.blobIds.map((blobId) => ({ blobId }))} owner={owner} />
+          <MediaGrid files={d.fileIds.map((fileId) => ({ fileId }))} owner={owner} />
         </div>
       )}
     </>

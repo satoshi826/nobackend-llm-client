@@ -3,8 +3,7 @@
 // (fetch). Pages a model tries (preview_page) get none of it.
 import * as fdb from '../../../lib/db/files';
 import { newId } from '../../../lib/db/repo';
-import { getImage, listImages } from '../../../lib/db/images';
-import type { FileRecord } from '../../../lib/db/schema';
+import type { FileEntry } from '../../../lib/db/catalog';
 import { isInside, pathKey } from '../../../lib/paths';
 import { getPreset } from '../../../lib/providers/registry';
 import { completeText } from '../../../lib/chat/extract';
@@ -31,8 +30,8 @@ function sitePath(site: string, raw: string): string {
   return path;
 }
 
-/** write: a text file of the site written as its pages do (false: the path is taken by an image or a folder) */
-export function pageApi(page: FileRecord, site: string, write: (path: string, text: string) => Promise<boolean>): PageApi {
+/** write: a text file of the site written as its pages do (false: the path is taken by a file that is not text, or a folder) */
+export function pageApi(page: FileEntry, site: string, write: (path: string, text: string) => Promise<boolean>): PageApi {
   const chats: number[] = [];
   return {
     ...(PAGE_WEB
@@ -45,21 +44,22 @@ export function pageApi(page: FileRecord, site: string, write: (path: string, te
         }
       : {}),
     files: {
-      list: async () => {
-        const [files, images] = await Promise.all([fdb.listFiles(), listImages()]);
-        return [...files.map((f) => f.name), ...images.map((im) => im.path)].filter((p) => isInside(p, site)).map((p) => p.slice(site.length)).sort();
-      },
+      list: async () =>
+        (await fdb.listFiles())
+          .map((f) => f.path)
+          .filter((p) => isInside(p, site))
+          .map((p) => p.slice(site.length))
+          .sort(),
       read: async (raw) => {
         const key = pathKey(sitePath(site, raw));
-        const file = (await fdb.listFiles()).find((f) => pathKey(f.name) === key);
-        if (file) return fdb.readText(file.id);
-        const image = (await listImages()).find((im) => pathKey(im.path) === key);
-        return image ? getImage(image.id) : null;
+        const file = (await fdb.listFiles()).find((f) => pathKey(f.path) === key);
+        if (!file) return null;
+        return file.kind === 'text' ? fdb.readText(file.id) : fdb.readBytes(file.id);
       },
       write: async (raw, text) => {
         const path = sitePath(site, raw);
         if (text.length > fdb.MAX_FILE_CHARS) throw new Error(`Too long for a file (${fdb.MAX_FILE_CHARS} characters at most).`);
-        if (!(await write(path, text))) throw new Error(`An image or a folder is already at ${raw}.`);
+        if (!(await write(path, text))) throw new Error(`A file that is not text, or a folder, is already at ${raw}.`);
       }
     },
     // The model of the next new chat, as the app would choose it

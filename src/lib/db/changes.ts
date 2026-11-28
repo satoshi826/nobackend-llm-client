@@ -1,14 +1,12 @@
-// Stored images and files tell listeners when they change (any write, delete, import or forget), so lists that
-// show them reload no matter which code changed them (state/stored.ts turns this into signals)
-export type StoreName = 'images' | 'files';
+// Stored files tell listeners when they change (any write, delete, import or forget), so lists that show them reload
+// no matter which code changed them (state/stored.ts turns this into a signal)
+const listeners = new Set<() => void>();
 
-const listeners = new Set<(store: StoreName) => void>();
-
-export function onStoreChange(fn: (store: StoreName) => void): () => void {
+export function onFilesChange(fn: () => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
 
-export function storeChanged(store: StoreName) {
-  for (const fn of listeners) fn(store);
+export function filesChanged() {
+  for (const fn of listeners) fn();
 }

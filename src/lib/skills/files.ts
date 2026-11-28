@@ -1,7 +1,7 @@
 // A skill's files: what a skill keeps beside its SKILL.md (scripts/fill.js, reference/forms.md, assets/logo.png), at
 // paths inside the skill's folder. Pure functions: cleaning a path, the limits, and whether a file is text.
 import { formatBytes, formatNumber, TranslatedError } from '../i18n';
-import { baseName, extOf, folderOf, mimeFromName, pathKey } from '../paths';
+import { baseName, extOf, folderOf, isTextMime, mimeFromName, pathKey } from '../paths';
 import { t } from './messages';
 
 /** One file's size, all of a skill's files together, and how many files one skill keeps */
@@ -98,8 +98,7 @@ const BINARY_MIME: Record<string, string> = {
   zip: 'application/zip'
 };
 
-/** Whether a file of this type holds text (it opens as text, and a model reads it as text) */
-export const isTextMime = (mime: string): boolean => mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml' || mime === 'image/svg+xml';
+export { isTextMime };
 
 /** A file's type: a text type when its bytes are UTF-8 with no NUL, else one by its extension (application/octet-stream when unknown) */
 export async function skillFileMime(path: string, data: Blob): Promise<string> {

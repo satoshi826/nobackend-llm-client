@@ -1,7 +1,7 @@
 // End-to-end tests on the production build: builds the app against the mock providers, serves it with the real
-// security headers (CSP, Trusted Types), and runs each flow in a fresh browser with no CSP violation, console error or
-// uncaught error allowed in any of its pages (the app, the key vault, the fetch page, the sandbox), and accessibility
-// checks on the screens they reach (a11y.ts).
+// security headers (CSP, Trusted Types), and runs each flow in a fresh browser with no CSP violation, console error,
+// uncaught error or request to another origin than the app's and the mock's allowed in any of its pages (the app, the
+// key vault, the fetch page, the sandbox) and workers, and accessibility checks on the screens they reach (a11y.ts).
 //
 //   npm run e2e                       every flow
 //   npm run e2e -- --flows chat,lock  some of them
@@ -14,7 +14,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, renameSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
-import { chromium, type Browser, type BrowserContext } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Request } from 'playwright';
 import { check, describe, failing, report, type Finding } from './a11y.ts';
 import { FLOWS } from './flows.ts';
 
@@ -74,11 +74,26 @@ const EXPECTED = [
 
 /**
  * Collects what must not happen in any page or frame of the context: console errors, which include every CSP and
- * Trusted Types violation (the sandbox's too), and uncaught errors and rejections. The violation listener adds a
- * plain line naming the directive and the page; the browser runs it before each document's own scripts, out of the
- * CSP's reach (not in the sandbox, which has no origin)
+ * Trusted Types violation (the sandbox's too), uncaught errors and rejections, and requests (fetches, navigations,
+ * windows, workers' and the Service Worker's requests, web sockets) to an origin not in allowed. The violation
+ * listener adds a plain line naming the directive and the page; the browser runs it before each document's own
+ * scripts, out of the CSP's reach (not in the sandbox, which has no origin)
  */
-async function watch(context: BrowserContext, problems: Set<string>) {
+async function watch(context: BrowserContext, problems: Set<string>, allowed: Set<string>) {
+  const leaves = (url: string, from: string) => {
+    const u = new URL(url);
+    if (/^(https?|wss?):$/.test(u.protocol) && !allowed.has(u.origin.replace(/^ws/, 'http'))) problems.add(`request to ${u.origin}${u.pathname} from ${from}`);
+  };
+  const by = (r: Request) => {
+    if (r.serviceWorker()) return 'the Service Worker';
+    try {
+      return r.frame().url().split(/[?#]/)[0] || 'a new page';
+    } catch {
+      return 'a navigation';
+    }
+  };
+  context.on('request', (r) => leaves(r.url(), by(r)));
+  context.on('page', (p) => p.on('websocket', (w) => leaves(w.url(), p.url())));
   context.on('console', (m) => {
     if (m.type() === 'error' && !EXPECTED.some((x) => m.text().includes(x))) problems.add(`console error${m.location().url ? ` in ${m.location().url}` : ''}: ${m.text()}`);
   });
@@ -89,10 +104,10 @@ async function watch(context: BrowserContext, problems: Set<string>) {
 }
 
 /** A fresh, watched browser context. English, so the flows can find things by their labels */
-async function newContext(browser: Browser, problems: Set<string>) {
+async function newContext(browser: Browser, problems: Set<string>, allowed: Set<string>) {
   const context = await browser.newContext({ locale: 'en-US', viewport: { width: 1280, height: 860 }, acceptDownloads: true });
   context.setDefaultTimeout(10_000);
-  await watch(context, problems);
+  await watch(context, problems, allowed);
   return context;
 }
 
@@ -128,6 +143,9 @@ async function main() {
     children.push(spawn('node', [join(ROOT, 'scripts/serve-with-headers.mjs'), live, String(port)], { stdio: 'ignore' }));
     const url = `http://localhost:${port}/`;
     if (!(await up(url))) throw new Error(`The build is not served at ${url}`);
+    // Where requests may go: the app (with the vault and the fetch page on its origin) and the providers it was built
+    // with, all answered by the mock
+    const allowed = new Set([new URL(url).origin, ...Object.values(mockEnv(mock)).map((u) => new URL(u).origin)]);
 
     const screens = screensDir();
     const browser = await chromium.launch({ headless: !o.headed });
@@ -138,7 +156,7 @@ async function main() {
       const problems = new Set<string>();
       const contexts: BrowserContext[] = [];
       const open = async () => {
-        contexts.push(await newContext(browser, problems));
+        contexts.push(await newContext(browser, problems, allowed));
         return contexts.at(-1)!;
       };
       const page = await (await open()).newPage();

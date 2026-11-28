@@ -5,6 +5,7 @@ import type { FileRecord } from '../../lib/db/schema';
 import { MAX_FILE_CHARS } from '../../lib/db/files';
 import { cleanFileName, cleanFolderName, extOf, extOfMime, pathKey } from '../../lib/paths';
 import type { Tool } from '../../lib/tools/types';
+import { READ_CHUNK, READ_LINES, readLines } from '../../lib/tools/lines';
 import { INSPECT_VIEW, isProblem, type PageInspection, type PageLayout, type PageLog } from '../../lib/sandbox/client';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
 import { formatNumber, TranslatedError } from '../../lib/i18n';
@@ -48,9 +49,6 @@ const LABEL_KEYS = {
 /** Tool card title for a file tool (undefined for other tools) */
 export const fileToolLabel = (name: string): string | undefined => (name in LABEL_KEYS ? t(LABEL_KEYS[name as keyof typeof LABEL_KEYS]) : undefined);
 
-/** Lines returned by one read_file call at most, and characters (a line is given whole unless it alone is longer) */
-export const READ_LINES = 2000;
-export const READ_CHUNK = 20_000;
 /** Characters of one line shown by search_files */
 const LINE_CHARS = 2000;
 /** Characters accepted in one write call */
@@ -336,27 +334,12 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
     async execute(i) {
       const f = await mustGet(deps, i.file_id);
       if (i.previous && !f.previous) return { content: `${deps.pathOf(f)} has no earlier text: it has not changed since it was made.`, details: details(f) };
-      const all = (await deps.text(f, i.previous)).split('\n');
-      const lines = (k: number) => (k === 1 ? '1 line' : `${k} lines`);
-      if (i.offset > all.length) return { content: `offset=${i.offset} is past the end of ${shown(f)}, which has ${lines(all.length)}.`, details: details(f) };
-      const out: string[] = [];
-      let chars = 0;
-      let n = i.offset;
-      // Only a line longer than a whole read is cut (it is then the only line of the read)
-      let cut = '';
-      for (; n <= all.length && n < i.offset + i.limit; n++) {
-        const text = all[n - 1];
-        const line = `${String(n).padStart(6)}\t${text.length > READ_CHUNK ? `${text.slice(0, READ_CHUNK)}…` : text}`;
-        if (out.length && chars + line.length > READ_CHUNK) break;
-        if (text.length > READ_CHUNK) cut = `\n[line ${n} is cut at ${READ_CHUNK} of its ${text.length} characters]`;
-        out.push(line);
-        chars += line.length + 1;
-      }
-      const more = cut + (n <= all.length ? `\n[lines ${i.offset}-${n - 1} of ${all.length}; continue with offset=${n}]` : `\n[end of file; ${lines(all.length)}]`);
+      const got = readLines(await deps.text(f, i.previous), i.offset, i.limit, shown(f));
+      if ('past' in got) return { content: got.past, details: details(f) };
       // Text the user brought in or fetched from the web is marked as data; documents written here are not
-      const block = fileBlock({ name: deps.pathOf(f), id: f.id, text: out.join('\n'), outside: f.origin.kind !== 'made' });
+      const block = fileBlock({ name: deps.pathOf(f), id: f.id, text: got.lines, outside: f.origin.kind !== 'made' });
       const which = i.previous ? `[the text from before the last change, saved ${new Date(f.previous!.at).toISOString()}; the current text is another]\n` : '';
-      return { content: which + block + more, details: details(f) };
+      return { content: which + block + got.note, details: details(f) };
     }
   };
 

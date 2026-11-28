@@ -15,7 +15,8 @@ import { registerMessageTransform } from '../../lib/chat/request';
 registerMessageTransform(attachmentsTransform);
 import { parseDelimited } from './csv';
 import { checkArguments } from '../../lib/tools/check';
-import { filesNote, globSource, logText, makeFileTools, READ_CHUNK, READ_LINES, type FileToolDeps, type MovableImage } from './tools';
+import { filesNote, globSource, logText, makeFileTools, type FileToolDeps, type MovableImage } from './tools';
+import { READ_CHUNK, READ_LINES } from '../../lib/tools/lines';
 
 const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
 

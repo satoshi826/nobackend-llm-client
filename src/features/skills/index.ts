@@ -1,4 +1,5 @@
-// Skills feature (SKILL.md-compatible instructions; load_skill, save_skill via skill-creator).
+// Skills feature (SKILL.md-compatible instructions with the files of their folder; load_skill, read_skill_file,
+// save_skill via skill-creator).
 // Importing this module registers it with the core through extension points.
 import { registerComposerAddon, registerSettingsTab, registerToolView, registerUserMessageExtra } from '../../components/extensions';
 import { registerMessageTransform } from '../../lib/chat/request';
@@ -7,7 +8,7 @@ import { SkillButton, SkillsAbove, UserSkills, skillKeys } from './components/Co
 import { SkillApproval } from './components/SkillApproval';
 import { lazyComponent } from '../../components/lazy';
 import { attachedSkills, takeAttachedSkills } from './state';
-import { LOAD_SKILL, SAVE_SKILL } from './tools';
+import { LOAD_SKILL, READ_SKILL_FILE, SAVE_SKILL } from './tools';
 import { t } from './messages';
 
 export { allSkills } from './state';
@@ -26,6 +27,16 @@ registerToolView({
   label: () => t('skill'),
   icon: 'book',
   editableField: { key: 'name', label: () => t('nameField') },
+  doneStatus: () => t('tool.loaded')
+});
+registerToolView({
+  names: [READ_SKILL_FILE],
+  label: () => t('tool.readFile'),
+  icon: 'book',
+  summary: (p) => {
+    const i = (p.input ?? {}) as { skill?: string; path?: string };
+    return i.skill && i.path !== undefined ? `${i.skill}/${i.path || '.'}` : undefined;
+  },
   doneStatus: () => t('tool.loaded')
 });
 registerToolView({

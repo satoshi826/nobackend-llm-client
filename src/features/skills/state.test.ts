@@ -4,6 +4,9 @@ import { db } from '../../lib/db/schema';
 import { readSkillSources } from '../../lib/skills/package';
 import { zip } from '../../lib/zip';
 import { loadSkills, readSkillFile, reviewImport, saveImported, saveSkill, skillFileList, skills } from './state';
+import { contributedDynamicTools } from '../../state/tool-registry';
+import type { Conversation, MessageRecord } from '../../lib/db/schema';
+import type { ModelInfo } from '../../lib/providers/types';
 
 const md = (body: string, extra = '') => `---\nname: forms\ndescription: Fills forms.\n${extra}---\n${body}\n`;
 const blob = (s: string | Uint8Array) => new Blob([s as BlobPart]);
@@ -66,5 +69,21 @@ describe('skills brought in, and their files for the tools', () => {
     const saved = await saveSkill({ name: 'forms', description: 'Fills forms.', body: 'Better steps.', modelInvocable: true }, s.id, 'model');
     expect(saved.frontmatter).toBe('license: MIT');
     expect((await skillFileList(s.id)).map((f) => f.path)).toEqual(['a.md']);
+  });
+
+  it('offers read_skill_file once a skill with files is loaded in the conversation, over those skills only', async () => {
+    await saveImported(await pkgOf({ 'SKILL.md': md('Steps.'), 'a.md': 'A' }));
+    await saveSkill({ name: 'plain', description: 'Plain.', body: 'Plain steps.', modelInvocable: true });
+    const ctx = { conv: { id: 'c' } as Conversation, messageId: 'm', model: { capabilities: { tools: true } } as ModelInfo, history: [] as MessageRecord[] };
+    const msg = (o: Partial<MessageRecord>): MessageRecord => ({ id: 'x', conversationId: 'c', parentId: null, role: 'user', parts: [], createdAt: 1, status: 'done', ...o });
+    const loaded = (name: string) => msg({ role: 'assistant', parts: [{ type: 'tool', toolCallId: 't', name: 'load_skill', argsText: '', input: { name }, state: 'output-available' }] });
+    const names = (turn: MessageRecord, history: MessageRecord[] = []) => contributedDynamicTools({ ...ctx, history }, turn).map((x) => x.name);
+    expect(names(msg({ role: 'assistant' }))).toEqual([]);
+    expect(names(loaded('plain'))).toEqual([]);
+    expect(names(loaded('forms'))).toEqual(['read_skill_file']);
+    // Picked in the input box of an earlier message
+    const tool = contributedDynamicTools({ ...ctx, history: [msg({ skills: [{ name: 'forms', body: 'Steps.' }] })] }, msg({ role: 'assistant' }))[0];
+    expect((tool.parameters as any).properties.skill.enum).toEqual(['forms']);
+    expect((await tool.execute(tool.prepare({ skill: 'forms', path: 'a.md' }), { signal: new AbortController().signal } as any)).content).toContain('     1\tA');
   });
 });

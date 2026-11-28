@@ -1,10 +1,11 @@
 // Skill list, editing (with the skill's files), import/export, the skills attached to the next send, and what skills
-// contribute to a reply (load_skill, the catalog in the system prompt, save_skill once unlocked)
+// contribute to a reply (load_skill, the catalog in the system prompt, read_skill_file once a skill with files is
+// loaded, save_skill once unlocked)
 import { computed, signal } from '@preact/signals';
 import * as repo from '../../lib/db/repo';
 import { deleteSkill, listSkillFiles, listSkills, putSkill, readSkillFileData, type SkillFileEntry, type SkillFileWrite } from '../../lib/db/skills';
-import type { Skill } from '../../lib/db/schema';
-import { serializeSkillMd, skillCatalog, unlockedTools, validateSkill, type SkillDraft } from '../../lib/skills/skill';
+import type { MessageRecord, Skill } from '../../lib/db/schema';
+import { loadedSkills, serializeSkillMd, skillCatalog, unlockedTools, validateSkill, type SkillDraft } from '../../lib/skills/skill';
 import { cleanSkillPath, isTextMime, SKILL_MD, type SkillFile } from '../../lib/skills/files';
 import type { SkillPackage } from '../../lib/skills/package';
 import { pathKey } from '../../lib/paths';
@@ -13,12 +14,15 @@ import { BUILTIN_NAMES, BUILTIN_SKILLS } from '../../lib/skills/builtin';
 import { defineFeatureSettings } from '../../state/feature-settings';
 import { registerDataLoader } from '../../state/lifecycle';
 import { registerToolProvider } from '../../state/tool-registry';
-import { makeSaveSkillTool, makeSkillTool } from './tools';
+import { makeReadSkillFileTool, makeSaveSkillTool, makeSkillTool } from './tools';
 import { t } from './messages';
 import { TranslatedError } from '../../lib/i18n';
 
 /** Skills created by the user (and the model) */
 export const skills = signal<Skill[]>([]);
+/** Each user skill's files, by skill id (built-in skills have none): what the tools offer depends on them */
+const filesBySkill = signal<Record<string, SkillFile[]>>({});
+const filesOf = (id: string): SkillFile[] => filesBySkill.value[id] ?? [];
 /** Built-in skills (including ones turned off) */
 export const builtinSkills: Skill[] = BUILTIN_SKILLS.map((b) => ({
   id: `builtin:${b.name}`,
@@ -54,7 +58,9 @@ export async function setBuiltinEnabled(name: string, on: boolean) {
 }
 
 export async function loadSkills() {
-  skills.value = await listSkills();
+  const list = await listSkills();
+  filesBySkill.value = Object.fromEntries(await Promise.all(list.map(async (s) => [s.id, await skillFileList(s.id)] as const)));
+  skills.value = list;
 }
 
 const byName = (a: Skill, b: Skill) => a.name.localeCompare(b.name);
@@ -76,6 +82,7 @@ export async function saveSkill(draft: SkillDraft, id?: string, by?: 'model', fi
   const frontmatter = draft.frontmatter ?? prev?.frontmatter;
   const s: Skill = { id: prev?.id ?? repo.newId(), createdAt: prev?.createdAt ?? now, updatedAt: now, ...d, ...(createdBy ? { createdBy } : {}), ...(frontmatter ? { frontmatter } : {}) };
   await putSkill(s, files);
+  if (files) filesBySkill.value = { ...filesBySkill.value, [s.id]: await skillFileList(s.id) };
   skills.value = [...skills.value.filter((x) => x.id !== s.id), s].sort(byName);
   return s;
 }
@@ -87,6 +94,8 @@ export async function setModelInvocable(id: string, on: boolean) {
 
 export async function removeSkill(id: string) {
   await deleteSkill(id);
+  const { [id]: _, ...rest } = filesBySkill.value;
+  filesBySkill.value = rest;
   skills.value = skills.value.filter((s) => s.id !== id);
   attachedSkillIds.value = attachedSkillIds.value.filter((x) => x !== id);
 }
@@ -176,20 +185,36 @@ export function takeAttachedSkills(): { name: string; body: string }[] {
   return list;
 }
 
+const fileList = async (id: string) => filesOf(id);
+
+/** read_skill_file, over the skills loaded in the conversation that have files (none: not offered) */
+function skillFileTools(messages: MessageRecord[]) {
+  const loaded = loadedSkills(messages);
+  const withFiles = allSkills.value.filter((s) => loaded.has(s.name) && filesOf(s.id).length);
+  if (!withFiles.length) return [];
+  return [makeReadSkillFileTool({ skills: withFiles, files: fileList, read: readSkillFile })];
+}
+
 registerToolProvider({
   id: 'skills',
   label: () => t('tabLabel'),
-  tools: () => (modelSkills.value.length ? [makeSkillTool(modelSkills.value, skillFileList)] : []),
-  // skill-creator unlocks save_skill (and load_skill over every skill) in the conversation that loaded it
+  tools: () => (modelSkills.value.length ? [makeSkillTool(modelSkills.value, fileList)] : []),
+  // A loaded skill with files brings the tools for its files, from the step after it was loaded; skill-creator unlocks
+  // save_skill (and load_skill over every skill) in the conversation that loaded it
   dynamicTools: ({ history }, turn) => {
-    const unlocked = unlockedTools([...history, turn], allSkills.value);
-    if (!unlocked.has('save_skill')) return [];
+    const messages = [...history, turn];
+    const unlocked = unlockedTools(messages, allSkills.value);
     return [
-      makeSkillTool(allSkills.value, skillFileList),
-      makeSaveSkillTool({
-        find: (name) => allSkills.value.find((s) => s.name === name),
-        save: (draft, id) => saveSkill(draft, id, 'model')
-      })
+      ...skillFileTools(messages),
+      ...(unlocked.has('save_skill')
+        ? [
+            makeSkillTool(allSkills.value, fileList),
+            makeSaveSkillTool({
+              find: (name) => allSkills.value.find((s) => s.name === name),
+              save: (draft, id) => saveSkill(draft, id, 'model')
+            })
+          ]
+        : [])
     ];
   },
   systemNote: ({ model }) => (model?.capabilities.tools ? skillCatalog(modelSkills.value) || undefined : undefined)

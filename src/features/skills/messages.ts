@@ -30,6 +30,10 @@ export const t = defineMessages(
     'tool.unknown': 'スキル「{name}」はありません。使えるスキル: {names}',
     'tool.unknownNone': 'スキル「{name}」はありません。使えるスキルはありません。',
     'tool.builtinReadOnly': '「{name}」は組み込みスキルなので変更できません。別の名前にしてください。',
+    'tool.readFile': 'スキルのファイルの読み込み',
+    'tool.missingPath': 'path（ファイルのパス）がありません。',
+    'tool.noFile': 'スキル「{skill}」にファイル「{path}」はありません。load_skill の結果に並ぶパスを指定してください。',
+    'tool.binary': '「{path}」はテキストのファイルではないため読めません（{mime}、{size}）。',
 
     // saving and importing
     'state.builtinName': '「{name}」は組み込みスキルの名前なので使えません。別の名前にしてください。',
@@ -160,6 +164,10 @@ export const t = defineMessages(
       'tool.unknown': 'There is no skill "{name}". Available skills: {names}',
       'tool.unknownNone': 'There is no skill "{name}", and no skills are available.',
       'tool.builtinReadOnly': "\"{name}\" is a built-in skill and can't be changed. Use a different name.",
+      'tool.readFile': 'Read skill file',
+      'tool.missingPath': "path (the file's path) is missing.",
+      'tool.noFile': 'The skill "{skill}" has no file "{path}". Use a path listed in load_skill\'s result.',
+      'tool.binary': '"{path}" is not a text file, so it can\'t be read ({mime}, {size}).',
 
       'state.builtinName': '"{name}" is the name of a built-in skill. Use a different name.',
       'state.duplicate': 'A skill named "{name}" already exists. Use a different name.',
@@ -284,6 +292,10 @@ export const t = defineMessages(
       'tool.unknown': '没有技能“{name}”。可用的技能：{names}',
       'tool.unknownNone': '没有技能“{name}”，也没有可用的技能。',
       'tool.builtinReadOnly': '“{name}”是内置技能，无法修改。请使用其他名称。',
+      'tool.readFile': '读取技能文件',
+      'tool.missingPath': '缺少 path（文件路径）。',
+      'tool.noFile': '技能“{skill}”中没有文件“{path}”。请使用 load_skill 结果中列出的路径。',
+      'tool.binary': '“{path}”不是文本文件，无法读取（{mime}，{size}）。',
 
       'state.builtinName': '“{name}”是内置技能的名称，无法使用。请使用其他名称。',
       'state.duplicate': '已存在名为“{name}”的技能。请使用其他名称。',

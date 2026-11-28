@@ -112,22 +112,23 @@ export function serializeSkillMd(s: SkillDraft): string {
 
 // ---- Tools that skills make available ----
 
-/**
- * Tools that became available in this conversation:
- * - from skills the user picked in the input box (MessageRecord.skills)
- * - from skills the model loaded with load_skill
- * whichever of those have allowedTools (e.g. built-in skill-creator → save_skill)
- */
-export function unlockedTools(messages: MessageRecord[], list: Pick<Skill, 'name' | 'allowedTools'>[]): Set<string> {
+/** Skills loaded in this conversation: picked in the input box (MessageRecord.skills), or loaded by the model with load_skill */
+export function loadedSkills(messages: MessageRecord[]): Set<string> {
   const out = new Set<string>();
-  const add = (name: unknown) => {
-    for (const t of list.find((s) => s.name === name)?.allowedTools ?? []) out.add(t);
-  };
   for (const m of messages) {
-    if (m.role === 'user') for (const s of m.skills ?? []) add(s.name);
-    for (const p of m.parts) if (p.type === 'tool' && p.name === 'load_skill' && p.state === 'output-available') add((p.input as { name?: unknown } | undefined)?.name);
+    if (m.role === 'user') for (const s of m.skills ?? []) out.add(s.name);
+    for (const p of m.parts) {
+      const name = p.type === 'tool' && p.name === 'load_skill' && p.state === 'output-available' ? (p.input as { name?: unknown } | undefined)?.name : undefined;
+      if (typeof name === 'string') out.add(name);
+    }
   }
   return out;
+}
+
+/** Tools that became available in this conversation: those of its loaded skills that have allowedTools (e.g. built-in skill-creator → save_skill) */
+export function unlockedTools(messages: MessageRecord[], list: Pick<Skill, 'name' | 'allowedTools'>[]): Set<string> {
+  const loaded = loadedSkills(messages);
+  return new Set(list.flatMap((s) => (loaded.has(s.name) ? (s.allowedTools ?? []) : [])));
 }
 
 // ---- Text passed to the model ----

@@ -48,10 +48,10 @@ const LABEL_KEYS = {
 /** Tool card title for a file tool (undefined for other tools) */
 export const fileToolLabel = (name: string): string | undefined => (name in LABEL_KEYS ? t(LABEL_KEYS[name as keyof typeof LABEL_KEYS]) : undefined);
 
-/** Lines returned by one read_file call at most, and characters (long lines count whole until this) */
+/** Lines returned by one read_file call at most, and characters (a line is given whole unless it alone is longer) */
 export const READ_LINES = 2000;
 export const READ_CHUNK = 20_000;
-/** Characters of one line shown by read_file and search_files */
+/** Characters of one line shown by search_files */
 const LINE_CHARS = 2000;
 /** Characters accepted in one write call */
 const MAX_WRITE = 200_000;
@@ -334,16 +334,22 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
       const f = await mustGet(deps, i.file_id);
       if (i.previous && !f.previous) return { content: `${deps.pathOf(f)} has no earlier text: it has not changed since it was made.`, details: details(f) };
       const all = (await deps.text(f, i.previous)).split('\n');
+      const lines = (k: number) => (k === 1 ? '1 line' : `${k} lines`);
+      if (i.offset > all.length) return { content: `offset=${i.offset} is past the end of ${shown(f)}, which has ${lines(all.length)}.`, details: details(f) };
       const out: string[] = [];
       let chars = 0;
       let n = i.offset;
+      // Only a line longer than a whole read is cut (it is then the only line of the read)
+      let cut = '';
       for (; n <= all.length && n < i.offset + i.limit; n++) {
-        const line = `${String(n).padStart(6)}\t${all[n - 1].length > LINE_CHARS ? `${all[n - 1].slice(0, LINE_CHARS)}…` : all[n - 1]}`;
+        const text = all[n - 1];
+        const line = `${String(n).padStart(6)}\t${text.length > READ_CHUNK ? `${text.slice(0, READ_CHUNK)}…` : text}`;
         if (out.length && chars + line.length > READ_CHUNK) break;
+        if (text.length > READ_CHUNK) cut = `\n[line ${n} is cut at ${READ_CHUNK} of its ${text.length} characters]`;
         out.push(line);
         chars += line.length + 1;
       }
-      const more = n <= all.length ? `\n[lines ${i.offset}-${n - 1} of ${all.length}; continue with offset=${n}]` : `\n[end of file; ${all.length} lines]`;
+      const more = cut + (n <= all.length ? `\n[lines ${i.offset}-${n - 1} of ${all.length}; continue with offset=${n}]` : `\n[end of file; ${lines(all.length)}]`);
       // Text the user brought in or fetched from the web is marked as data; documents written here are not
       const block = fileBlock({ name: deps.pathOf(f), id: f.id, text: out.join('\n'), outside: f.origin.kind !== 'made' });
       const which = i.previous ? `[the text from before the last change, saved ${new Date(f.previous!.at).toISOString()}; the current text is another]\n` : '';

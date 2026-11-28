@@ -15,7 +15,7 @@ import { registerMessageTransform } from '../../lib/chat/request';
 registerMessageTransform(attachmentsTransform);
 import { parseDelimited } from './csv';
 import { checkArguments } from '../../lib/tools/check';
-import { filesNote, globSource, makeFileTools, READ_LINES, type FileToolDeps, type MovableImage } from './tools';
+import { filesNote, globSource, makeFileTools, READ_CHUNK, READ_LINES, type FileToolDeps, type MovableImage } from './tools';
 
 const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
 
@@ -243,6 +243,18 @@ describe('file tools', () => {
     expect(second.content).toContain(`${next}\tline ${next}`);
     expect(second.content).toContain(`continue with offset=${next + 2}`);
     expect((await run(deps, 'read_file', { file_id: id, offset: total - 1 })).content).toContain(`end of file; ${total} lines`);
+    expect((await run(deps, 'read_file', { file_id: id, offset: total + 5 })).content).toBe(`offset=${total + 5} is past the end of "long.txt", which has ${total} lines.`);
+  });
+  it('reads a long line whole, and cuts only one longer than a whole read, saying so', async () => {
+    const { deps } = memDeps();
+    // localStorage.json, a minified script: one long line
+    await run(deps, 'write_file', { name: 'one.json', content: JSON.stringify({ a: 'x'.repeat(5000) }) });
+    const whole = await run(deps, 'read_file', { file_id: 'one.json' });
+    expect(whole.content).toContain(`${'x'.repeat(5000)}"}`);
+    expect(whole.content).toContain('[end of file; 1 line]');
+    await run(deps, 'write_file', { name: 'huge.txt', content: `${'y'.repeat(READ_CHUNK + 10)}\nnext` });
+    const cut = await run(deps, 'read_file', { file_id: 'huge.txt' });
+    expect(cut.content).toContain(`[line 1 is cut at ${READ_CHUNK} of its ${READ_CHUNK + 10} characters]\n[lines 1-1 of 2; continue with offset=2]`);
   });
   it('lists by glob, searches lines, moves and deletes', async () => {
     const { deps, files } = memDeps();

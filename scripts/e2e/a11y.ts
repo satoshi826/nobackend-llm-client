@@ -86,8 +86,11 @@ async function backFrames(page: Page): Promise<() => Promise<unknown>> {
   const viewport = page.viewportSize()!;
   for (const frame of page.mainFrame().childFrames()) {
     const element = await frame.frameElement();
+    if (await element.evaluate((e: Element, sandbox) => e.matches(sandbox), SANDBOX)) continue;
+    // A frame below the fold (the key vault's at the phone size) is checked too: what is behind it is read in view
+    await element.scrollIntoViewIfNeeded();
     const box = await element.boundingBox();
-    if (!box || (await element.evaluate((e: Element, sandbox) => e.matches(sandbox), SANDBOX))) continue;
+    if (!box) continue;
     // The part in the viewport
     const x = Math.max(box.x, 0);
     const y = Math.max(box.y, 0);

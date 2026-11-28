@@ -28,22 +28,33 @@ function useNearScreen(ref: { current: Element | null }): boolean {
 type Box = { aspectRatio: string; width: string };
 
 /**
- * An image in a grid or an answer: its thumbnail, loaded when it comes near the screen. The caller gives the box a
- * fixed shape (an aspect class or style), so nothing moves when the image arrives. full: shown whole at full
- * resolution (a single image in an answer, whose box has its shape)
+ * A thumbnail's picture, loaded when it comes near the screen. It fills the positioned box that holds it, whose shape
+ * the caller fixes, so nothing moves when the image arrives. full: shown whole at full resolution
  */
-export function MediaThumb({ blobId, alt, onOpen, full, class: className, style }: { blobId: string; alt: string; onOpen(e: MouseEvent): void; full?: boolean; class?: string; style?: Box }) {
-  const ref = useRef<HTMLButtonElement>(null);
+export function MediaImage({ blobId, alt, full }: { blobId: string; alt: string; full?: boolean }) {
+  const ref = useRef<HTMLSpanElement>(null);
   const near = useNearScreen(ref);
   const url = useImageUrl(blobId, full ? 'full' : 'thumb', near);
   return (
-    <button ref={ref} type="button" class={cx('group relative overflow-hidden rounded-lg bg-glass-strong', className)} style={style} onClick={onOpen} aria-label={t('thumb.open', { alt })}>
+    <span ref={ref} class="absolute inset-0">
       {url ? (
         // Not draggable itself: dragging moves what holds it (a file card onto a folder), not a copy of the picture
         <img src={url} alt={alt} draggable={false} class={cx('h-full w-full transition group-hover:scale-[1.02]', full ? 'object-contain' : 'object-cover')} decoding="async" />
       ) : url === null ? (
         <span class="grid h-full w-full place-items-center text-xs text-faint">{t('thumb.failed')}</span>
       ) : null}
+    </span>
+  );
+}
+
+/**
+ * An image in a grid or an answer that opens when pressed: its thumbnail in a box of a fixed shape (an aspect class or
+ * style). full: shown whole at full resolution (a single image in an answer, whose box has its shape)
+ */
+export function MediaThumb({ blobId, alt, onOpen, full, class: className, style }: { blobId: string; alt: string; onOpen(e: MouseEvent): void; full?: boolean; class?: string; style?: Box }) {
+  return (
+    <button type="button" class={cx('group relative overflow-hidden rounded-lg bg-glass-strong', className)} style={style} onClick={onOpen} aria-label={t('thumb.open', { alt })}>
+      <MediaImage blobId={blobId} alt={alt} full={full} />
     </button>
   );
 }

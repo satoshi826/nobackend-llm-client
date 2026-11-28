@@ -3,7 +3,7 @@
 import type { ComponentChildren } from 'preact';
 import { useRef, useState } from 'preact/hooks';
 import { memo } from 'preact/compat';
-import { MediaThumb } from '../../../components/media/Thumb';
+import { MediaImage } from '../../../components/media/Thumb';
 import { Checkbox, Icon, cx, type IconName } from '../../../components/ui';
 import { formatBytes, formatNumber } from '../../../lib/i18n';
 import { previewText, type FilerItem, type FolderItem } from './items';
@@ -139,14 +139,14 @@ export function useDropTarget(folder: string, api: EntryApi) {
 }
 
 /**
- * An entry's "…" menu: shown under the pointer, while open, and always on touch screens. A function, not a component,
- * so an entry mounts and draws nothing more for it
+ * An entry's "…" menu, named after the entry: shown under the pointer, while open, and always on touch screens. A
+ * function, not a component, so an entry mounts and draws nothing more for it
  */
-function entryMenu(entry: ReturnType<typeof useEntry>, cls?: string) {
+function entryMenu(entry: ReturnType<typeof useEntry>, name: string, cls?: string) {
   return (
     <ActionMenu
       compact
-      label={t('filer.itemActions')}
+      label={t('filer.itemActions', { name })}
       actions={entry.actions}
       open={entry.menu}
       onOpenChange={entry.setMenu}
@@ -190,7 +190,7 @@ export const FolderTile = memo(function FolderTile({ f, picked, api }: { f: Fold
           <span class="block truncate text-xs text-muted tabular-nums">{f.count ? `${t('folder.count', { n: formatNumber(f.count) })} · ${formatDate(f.updatedAt)}` : t('folder.isEmpty')}</span>
         </span>
       </button>
-      {entryMenu(entry)}
+      {entryMenu(entry, f.name)}
     </div>
   );
 });
@@ -208,12 +208,14 @@ export const Card = memo(function Card({ it, picked, api }: { it: FilerItem; pic
       {...entry.handlers}
     >
       <Checkbox round checked={picked} label={t('filer.select', { name: it.name })} onChange={(_, e) => entry.pick(e)} class={cx('absolute top-2 left-2 z-10', hoverCheck(picked))} />
-      <div class="relative">
+      {/* The picture or the text's beginning opens it too, under the pointer or a finger; for the keyboard and screen
+          readers the name below is the card's one control */}
+      <div aria-hidden="true" class={cx('relative aspect-[4/3] w-full cursor-pointer overflow-hidden', it.type === 'image' ? 'bg-glass-strong' : 'bg-sunken px-3 pt-3')} onClick={entry.click}>
         {it.type === 'image' ? (
           <>
-            <MediaThumb blobId={it.id} alt={it.name} class="aspect-[4/3] w-full rounded-none!" onOpen={entry.click} />
+            <MediaImage blobId={it.id} alt="" />
             {it.video && (
-              <span class="pointer-events-none absolute inset-0 grid place-items-center">
+              <span class="absolute inset-0 grid place-items-center">
                 <span class="grid size-10 place-items-center rounded-full bg-black/60 text-white">
                   <Icon name="play" class="size-4" />
                 </span>
@@ -221,18 +223,16 @@ export const Card = memo(function Card({ it, picked, api }: { it: FilerItem; pic
             )}
           </>
         ) : (
-          <button type="button" class="block aspect-[4/3] w-full overflow-hidden bg-sunken px-3 pt-3 text-left" onClick={entry.click} aria-label={t('filer.openItem', { name: it.name })}>
-            <pre
-              class={cx(
-                'pointer-events-none h-full overflow-hidden text-[11px] leading-snug whitespace-pre-wrap text-muted [overflow-wrap:anywhere] [mask-image:linear-gradient(to_bottom,black_55%,transparent)]',
-                it.ext === 'md' || it.ext === 'txt' ? 'font-sans' : 'font-mono'
-              )}
-            >
-              {previewText(it.file.preview, it.ext)}
-            </pre>
-          </button>
+          <pre
+            class={cx(
+              'h-full overflow-hidden text-[11px] leading-snug whitespace-pre-wrap text-muted [overflow-wrap:anywhere] [mask-image:linear-gradient(to_bottom,black_55%,transparent)]',
+              it.ext === 'md' || it.ext === 'txt' ? 'font-sans' : 'font-mono'
+            )}
+          >
+            {previewText(it.file.preview, it.ext)}
+          </pre>
         )}
-        <span class="pointer-events-none absolute top-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white uppercase">{it.ext || 'txt'}</span>
+        <span class="absolute top-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-semibold tracking-wide text-white uppercase">{it.ext || 'txt'}</span>
       </div>
       <div class="flex min-w-0 flex-1 items-start">
         <button type="button" class="flex min-w-0 flex-1 items-start gap-2 py-2 pl-2.5 text-left" onClick={entry.click}>
@@ -246,7 +246,7 @@ export const Card = memo(function Card({ it, picked, api }: { it: FilerItem; pic
             </span>
           </span>
         </button>
-        {entryMenu(entry, 'mt-1 mr-1')}
+        {entryMenu(entry, it.name, 'mt-1 mr-1')}
       </div>
     </div>
   );
@@ -297,7 +297,7 @@ function ListRow({
       <td class="py-1.5 text-xs text-muted tabular-nums">{details[2]}</td>
       <td class="hidden truncate py-1.5 text-xs text-muted lg:table-cell">{details[3]}</td>
       <td class="w-9 py-1 text-right">
-        {entryMenu(entry)}
+        {entryMenu(entry, label)}
       </td>
     </tr>
   );

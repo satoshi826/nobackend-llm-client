@@ -481,7 +481,7 @@ function FolderPath({ folder, api, add }: { folder: string; api: EntryApi; add: 
           )}
         </span>
       ))}
-      <ActionMenu compact start label={t('filer.itemActions')} actions={actions} />
+      <ActionMenu compact start label={t('filer.itemActions', { name: parts[parts.length - 1] })} actions={actions} />
       <ActionMenu compact start icon="plus" label={t('folder.addHere')} actions={add} />
     </nav>
   );

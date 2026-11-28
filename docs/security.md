@@ -156,7 +156,7 @@ Only the fetch page (`fetch/main.ts`) may reach any `https` address. Models use 
 
 ### 3.7 Tool approvals
 
-Each tool is *ask*, *allow* or *deny* in Settings. Defaults (`src/state/settings.ts`, tool definitions):
+Each tool is *ask*, *allow* or *deny* in Settings; a tool set to *deny* is not offered to the model at all. Defaults (`src/state/settings.ts`, tool definitions):
 
 | Tool | Default | Notes |
 |---|---|---|
@@ -164,7 +164,7 @@ Each tool is *ask*, *allow* or *deny* in Settings. Defaults (`src/state/settings
 | `fetch_url`, `fetch_file` | confirmed in the fetch page | the app does not ask again; *deny* in settings still blocks them; "always allow" exists only in the fetch page, per site |
 | `run_javascript`, `preview_page`, `generate_image` | ask | `generate_image` costs money |
 | file tools | allow | only inside the conversation's working folder |
-| `delete_file`, `save_skill` | ask every time | whatever the settings say |
+| `delete_file`, `save_skill` | ask every time | whatever the settings say, unless set to *deny* |
 | `load_skill` | allow | |
 
 A reply may take at most 8 tool steps (`src/lib/chat/runner.ts`). Tool results, search results and attached or fetched files are marked as untrusted for the model, and the system prompt tells it never to follow instructions in them nor to put anything from the conversation into an address (`src/state/tool-registry.ts`).

@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { OUTSIDE_CONTENT_NOTE, contributedBuiltinWebSearch, contributedSystemNotes, contributedTools, registerToolProvider, systemPromptFor, toolGroups } from './tool-registry';
+import { OUTSIDE_CONTENT_NOTE, contributedBuiltinWebSearch, contributedSystemNotes, contributedTools, permissionOf, registerToolProvider, systemPromptFor, toolGroups } from './tool-registry';
+import { DEFAULT_SETTINGS, settings } from './settings';
 import { setChatOptions, moveChatOptions, chatOptionsOf } from './chat-options';
 import type { Tool } from '../lib/tools/types';
 import type { Conversation, MessageRecord } from '../lib/db/schema';
@@ -56,6 +57,32 @@ describe('a chat’s tool options', () => {
     expect(contributedBuiltinWebSearch(ctx('c1'))).toBe('off');
     // Other chats are not touched
     expect(names('c0')).toEqual(['a1', 'a2', 'b1']);
+  });
+
+  it('leaves out the tools set to “Don’t use”, with the note of a group that has none left', () => {
+    settings.value = { ...settings.value, toolPermissions: { ...settings.value.toolPermissions, a1: 'deny', b1: 'deny' } };
+    try {
+      expect(names('c3')).toEqual(['a2']);
+      expect(toolGroups(ctx('c3')).map((g) => g.tools.map((x) => x.name))).toEqual([['a2']]);
+      expect(contributedSystemNotes(ctx('c3'))).toBe('note A');
+      expect(contributedBuiltinWebSearch(ctx('c3'))).toBe('off');
+    } finally {
+      settings.value = { ...settings.value, toolPermissions: DEFAULT_SETTINGS.toolPermissions };
+    }
+  });
+
+  it('asks or not as the settings say; “Don’t use” holds even for a tool that always asks or asks itself', () => {
+    const perms = (p: Record<string, 'allow' | 'ask' | 'deny'>) => (settings.value = { ...settings.value, toolPermissions: p });
+    const always = { ...tool('del'), alwaysAsk: true };
+    const itself = { ...tool('fetch'), confirmsItself: true };
+    try {
+      perms({ del: 'allow', fetch: 'ask' });
+      expect([permissionOf(always), permissionOf(itself), permissionOf({ ...tool('x'), defaultPermission: 'allow' })]).toEqual(['ask', 'allow', 'allow']);
+      perms({ del: 'deny', fetch: 'deny' });
+      expect([permissionOf(always), permissionOf(itself)]).toEqual(['deny', 'deny']);
+    } finally {
+      settings.value = { ...settings.value, toolPermissions: DEFAULT_SETTINGS.toolPermissions };
+    }
   });
 
   it('moves the new chat’s options to the chat it becomes', () => {

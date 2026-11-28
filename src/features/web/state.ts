@@ -8,7 +8,6 @@ import type { ToolResult } from '../../lib/tools/types';
 import { vaultTransport as transport } from '../../lib/vault/client';
 import { authFor, keyReady, keyStatus } from '../../state/keys';
 import { accountInUse, modelOf, providerById } from '../../state/models';
-import { settings } from '../../state/settings';
 import { fetchFromWeb } from '../../state/fetch-page';
 import { parseModelRef, providerOptionsFor, recordUsage } from '../../state/request-helpers';
 import { defineFeatureSettings } from '../../state/feature-settings';
@@ -96,15 +95,13 @@ function pageReader(conv: Conversation) {
   };
 }
 
-/** Reading pages is on unless turned off in settings (fetch_url set to "使わない") */
-const readsPages = () => settings.value.toolPermissions.fetch_url !== 'deny';
-
 registerToolProvider({
   id: 'web',
   label: () => t('tabLabel'),
   tools: ({ conv, model }) => [
     ...(searchRouteFor(conv.providerId, conv.modelId) === 'tools' ? [webSearchTool] : []),
-    ...(model?.capabilities.tools && readsPages() ? [makeFetchUrlTool(pageReader(conv))] : [])
+    // Only for models that call tools: for the others web offers no tool, and keeps its own search when fetch_url is off
+    ...(model?.capabilities.tools ? [makeFetchUrlTool(pageReader(conv))] : [])
   ],
   // The provider's own search is not a tool sent to the model; the chat can still turn it off, as web_search
   switches: ({ conv }) => (searchRouteFor(conv.providerId, conv.modelId) === 'native' ? [{ name: webSearchTool.name, label: webSearchTool.label }] : []),

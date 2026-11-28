@@ -2,19 +2,16 @@
 // (Showing HTML / SVG and running code blocks are in the core: components/SandboxFrame, components/CodeRun.)
 import { registerSettingsTab, registerToolView } from '../../components/extensions';
 import { lazyComponent } from '../../components/lazy';
-import { settings } from '../../state/settings';
 import { registerToolProvider } from '../../state/tool-registry';
 import { RunOutput } from './RunOutput';
 import { conversationFile } from '../files';
 import { makeRunJavaScriptTool, RUN_JAVASCRIPT } from './tool';
 import { t } from './messages';
 
-// Turned off in settings ("使わない"), the tool is not offered at all
 registerToolProvider({
   id: 'sandbox',
   label: () => t('tabLabel'),
-  tools: ({ conv, model, history }) =>
-    model?.capabilities.tools && settings.value.toolPermissions[RUN_JAVASCRIPT] !== 'deny' ? [makeRunJavaScriptTool((id) => conversationFile(conv, history, id))] : []
+  tools: ({ conv, history }) => [makeRunJavaScriptTool((id) => conversationFile(conv, history, id))]
 });
 // Its own tab: the sandbox serves both chat (code blocks, the tool) and files (HTML / SVG previews)
 registerSettingsTab({ id: 'sandbox', label: () => t('tabLabel'), icon: 'code', Component: lazyComponent(() => import('./Settings').then((m) => m.SandboxSettings)) });

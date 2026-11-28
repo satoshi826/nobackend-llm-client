@@ -15,7 +15,7 @@ import { conversations, currentConv, currentId, endWriting, messages, persistDra
 import { openSettings, showToast } from './ui';
 import { chatOptionsOf } from './chat-options';
 import type { ChatParams } from '../lib/providers/types';
-import { contributedBuiltinWebSearch, contributedDynamicTools, contributedTools, requestHandlerFor, systemPromptFor, type ToolProviderContext } from './tool-registry';
+import { contributedBuiltinWebSearch, contributedDynamicTools, contributedTools, permissionOf, requestHandlerFor, systemPromptFor, type ToolProviderContext } from './tool-registry';
 import { beginRun, endRun, runs } from './runs';
 import { observeProviderBalance } from './balance';
 import { recordingTransport } from './sent-requests';
@@ -148,10 +148,7 @@ async function generateReply(convId: string, parentUserId: string) {
       tools,
       dynamicTools: (turn) => contributedDynamicTools(toolCtx, turn),
       toolContext: { transport, authFor },
-      permissionFor: (tool) => {
-        const set = settings.value.toolPermissions[tool.name] ?? tool.defaultPermission ?? 'ask';
-        return tool.alwaysAsk ? 'ask' : tool.confirmsItself ? (set === 'deny' ? 'deny' : 'allow') : set;
-      },
+      permissionFor: permissionOf,
       requestApproval: waitForApproval,
       draft,
       signal: ctrl.signal,

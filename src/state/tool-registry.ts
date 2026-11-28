@@ -2,9 +2,10 @@
 // generation.ts, so the generation loop does not need to know about images, files, web search or skills.
 import type { Conversation, MessageRecord } from '../lib/db/schema';
 import type { ModelInfo } from '../lib/providers/types';
-import type { Tool } from '../lib/tools/types';
+import type { Permission, Tool } from '../lib/tools/types';
 import { estimateTokens } from '../lib/chat/context';
 import { chatOptionsOf, toolOn } from './chat-options';
+import { settings } from './settings';
 
 export interface ToolProviderContext {
   conv: Conversation;
@@ -42,21 +43,31 @@ export function registerToolProvider(p: ToolProvider) {
 
 const canCallTools = (ctx: ToolProviderContext) => !!ctx.model?.capabilities.tools;
 
-/** A provider's tools for this reply that the chat has not turned off */
+/**
+ * Whether a tool runs without asking, asks, or is not used: the user's setting, else the tool's default. "Don't use"
+ * (deny) holds for every tool; otherwise a tool that always asks asks, and one that asks the user itself (in the fetch
+ * page) is not asked about again
+ */
+export function permissionOf(tool: Tool): Permission {
+  const set = settings.value.toolPermissions[tool.name] ?? tool.defaultPermission ?? 'ask';
+  if (set === 'deny') return 'deny';
+  return tool.alwaysAsk ? 'ask' : tool.confirmsItself ? 'allow' : set;
+}
+
+/** A provider's tools for this reply that are not set to "Don't use" and that the chat has not turned off */
 const offeredBy = (p: ToolProvider, ctx: ToolProviderContext, list: Tool[]) => {
   const o = chatOptionsOf(ctx.conv.id);
-  return list.filter((t) => toolOn(o, p.id, t.name));
+  return list.filter((t) => permissionOf(t) !== 'deny' && toolOn(o, p.id, t.name));
 };
 
 /**
- * Whether the chat turned off everything this provider offers. Then its system note and built-in search go too:
- * they only make sense with its tools (a provider that offers no tools now keeps them)
+ * Whether the chat turned off (or the settings set to "Don't use") everything this provider offers. Then its system
+ * note and built-in search go too: they only make sense with its tools (a provider that offers no tools now keeps them)
  */
 function allOff(p: ToolProvider, ctx: ToolProviderContext): boolean {
-  const o = chatOptionsOf(ctx.conv.id);
-  if (o.off.has(p.id)) return true;
+  if (chatOptionsOf(ctx.conv.id).off.has(p.id)) return true;
   const list = p.tools?.(ctx) ?? [];
-  return list.length > 0 && list.every((t) => !toolOn(o, p.id, t.name));
+  return list.length > 0 && offeredBy(p, ctx, list).length === 0;
 }
 
 export function contributedTools(ctx: ToolProviderContext): Tool[] {
@@ -94,8 +105,9 @@ export interface ToolGroup {
 }
 
 /**
- * Every group of tools this chat could be offered now, whether turned off or not (the chat's tool options list
- * them). A model that cannot call tools has only the switches (its provider's own search)
+ * Every group of tools this chat could be offered now, whether turned off in it or not (the chat's tool options list
+ * them); not the tools set to "Don't use" in settings. A model that cannot call tools has only the switches (its
+ * provider's own search)
  */
 export function toolGroups(ctx: ToolProviderContext): ToolGroup[] {
   const tools = canCallTools(ctx);
@@ -104,7 +116,9 @@ export function toolGroups(ctx: ToolProviderContext): ToolGroup[] {
       id: p.id,
       label: p.label(),
       tools: [
-        ...(tools ? (p.tools?.(ctx) ?? []) : []).map((t) => ({ name: t.name, label: t.label, tokens: estimateTokens(JSON.stringify({ name: t.name, description: t.description, parameters: t.parameters })) })),
+        ...(tools ? (p.tools?.(ctx) ?? []) : [])
+          .filter((t) => permissionOf(t) !== 'deny')
+          .map((t) => ({ name: t.name, label: t.label, tokens: estimateTokens(JSON.stringify({ name: t.name, description: t.description, parameters: t.parameters })) })),
         ...(p.switches?.(ctx) ?? []).map((x) => ({ ...x, tokens: 0 }))
       ]
     }))

@@ -63,7 +63,7 @@ Threats the design holds against, and the rule that holds each one.
 
 ## 6. Language
 
-- The UI is in Japanese (reference), English and Simplified Chinese; every text exists in all three. Prompts the app sends to models follow the UI language. Wording rules: [writing.md](writing.md).
+- The UI is in Japanese (reference), English and Simplified Chinese; every text exists in all three. Prompts the app sends to models are in English, and ask for answers the user reads in the conversation's language. Wording rules: [writing.md](writing.md).
 
 ## 7. Verifying a change
 

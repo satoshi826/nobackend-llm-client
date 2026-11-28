@@ -15,6 +15,8 @@ export type Lang = 'ja' | 'en' | 'zh';
 export const LANGS: readonly Lang[] = ['ja', 'en', 'zh'];
 /** Names shown in the language picker (each in its own language) */
 export const LANG_NAMES: Record<Lang, string> = { ja: '日本語', en: 'English', zh: '简体中文' };
+/** Names in English, for prompts that ask a model to answer in the UI language (prompts are in English) */
+export const LANG_ENGLISH_NAMES: Record<Lang, string> = { ja: 'Japanese', en: 'English', zh: 'Simplified Chinese' };
 
 let current: Lang = 'ja';
 

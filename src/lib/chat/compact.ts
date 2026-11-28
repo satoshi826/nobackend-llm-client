@@ -5,6 +5,7 @@
 import type { MessageRecord } from '../db/schema';
 import type { AuthRef, ChatMessage, Part, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
 import { getAdapter } from '../providers/registry';
+import { getLang, LANG_ENGLISH_NAMES } from '../i18n';
 import { estimateTokens, inputBudget } from './context';
 import { afterCompaction, requestMessage } from './request';
 import { t as tc } from './messages';
@@ -46,9 +47,23 @@ export function planCompaction(path: MessageRecord[], keepRecent = KEEP_RECENT):
   return { previousSummary, toSummarize, kept: candidates.length - cut, coversUntilId: toSummarize[toSummarize.length - 1].id };
 }
 
-/** The summarizing instruction (in the UI language) */
+/**
+ * The summarizing instruction. In English like every prompt (the request is the same in every UI language); the summary
+ * is written in the conversation's language, the UI language when that is unclear (the user reads it too)
+ */
 export function summaryInstruction(): string {
-  return tc('summary.instruction');
+  return `You summarize a conversation so that it can go on from the summary alone, without losing anything needed to continue it.
+Write in the language of the conversation (if unclear, in ${LANG_ENGLISH_NAMES[getLang()]}), mainly as bullet points, under these headings in that language:
+
+## Goal and topic
+## Key facts and assumptions (names, numbers, conditions, the user's preferences and constraints)
+## Decisions and conclusions
+## Open points and next steps
+## Most recent flow
+
+- Write nothing that is not in the conversation.
+- Keep exactly what may be needed exactly later: code, commands, settings, file names, URLs.
+- Output only the summary, with no preamble.`;
 }
 
 export function buildTranscript(plan: CompactionPlan, maxTokens?: number | null): string {
@@ -58,15 +73,15 @@ export function buildTranscript(plan: CompactionPlan, maxTokens?: number | null)
       .filter((p) => p.type === 'text')
       .map((p) => (p as { text: string }).text)
       .join('');
-    lines.push(`${tc(m.role === 'user' ? 'summary.userLabel' : 'summary.assistantLabel')}\n${text}`);
+    lines.push(`${m.role === 'user' ? '[User]' : '[Assistant]'}\n${text}`);
   }
   let body = lines.join('\n\n');
   // If it may exceed the summarizing model's context length, cut the old end (the previous summary covers it, so older parts are the safest to lose)
   if (maxTokens && estimateTokens(body) > maxTokens) {
     while (lines.length > 1 && estimateTokens(lines.join('\n\n')) > maxTokens) lines.shift();
-    body = tc('summary.omitted') + '\n\n' + lines.join('\n\n');
+    body = '(Earlier messages left out: too long)\n\n' + lines.join('\n\n');
   }
-  return (plan.previousSummary ? `${tc('summary.previousHeading')}\n${plan.previousSummary}\n\n${tc('summary.sinceHeading')}\n` : `${tc('summary.conversationHeading')}\n`) + body;
+  return (plan.previousSummary ? `# Summary so far\n${plan.previousSummary}\n\n# Conversation since then\n` : '# Conversation\n') + body;
 }
 
 export interface SummarizeOptions {

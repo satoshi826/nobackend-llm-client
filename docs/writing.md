@@ -2,7 +2,7 @@
 
 Rules for every text the app shows, in all three languages. It states what is true now; the history is in git.
 
-Languages: Japanese (reference), English, Simplified Chinese. The language setting is in Settings → 表示 (auto follows the browser). Text only the model reads (tool descriptions, system notes, the framing of tool results) is in English whatever the UI language: models follow English descriptions most reliably, and the request does not change with the language. Prompts whose output the user reads (titles, reply suggestions, summaries) follow the UI language, so answers come back in it.
+Languages: Japanese (reference), English, Simplified Chinese. The language setting is in Settings → 表示 (auto follows the browser). Text the model reads is in English whatever the UI language: tool descriptions, system notes, the framing of tool results, and the prompts of side jobs (summaries, reply suggestions, reading a page). Models follow English most reliably, and the request does not change with the language. A prompt whose answer the user reads asks for it in the conversation's language, and in the UI language when that is unclear. Text the user also sees (tool errors on a card, the built-in skills) is translated.
 
 ## Code
 

@@ -65,13 +65,13 @@ describe('buildTranscript', () => {
     const out = buildTranscript(plan(['question', 'answer']), 10_000);
     expect(out).toContain('question');
     expect(out).toContain('answer');
-    expect(out).not.toContain('省略');
+    expect(out).not.toContain('left out');
   });
 
   it('drops the oldest messages first when the transcript is over the limit, and says so', () => {
     const lines = ['oldest '.repeat(40), 'middle '.repeat(40), 'newest '.repeat(40)];
     const out = buildTranscript(plan(lines), 100);
-    expect(out).toContain('省略');
+    expect(out).toContain('left out');
     expect(out).not.toContain('oldest');
     expect(out).toContain('newest');
   });

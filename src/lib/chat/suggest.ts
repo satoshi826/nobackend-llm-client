@@ -3,7 +3,7 @@
 import type { AuthRef, ChatMessage, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
 import type { MessageRecord } from '../db/schema';
 import { getAdapter } from '../providers/registry';
-import { t as tc } from './messages';
+import { getLang, LANG_ENGLISH_NAMES } from '../i18n';
 
 /** Max characters sent per message (long answers keep their tail) */
 const MAX_CHARS = 3000;
@@ -31,21 +31,31 @@ export function recentExchanges(path: MessageRecord[], turns: number): string {
   let users = 0;
   for (let i = msgs.length - 1; i >= 0; i--) {
     const m = msgs[i];
-    out.unshift(`${tc(m.role === 'user' ? 'suggest.user' : 'suggest.assistant')}: ${clip(textOf(m))}`);
+    out.unshift(`${m.role === 'user' ? 'User' : 'Assistant'}: ${clip(textOf(m))}`);
     if (m.role === 'user' && ++users >= turns) break;
   }
   return out.join('\n\n');
 }
 
-/** The instruction asks for suggestions in the UI language */
+/**
+ * The instruction, in English like every prompt (the request is the same in every UI language). Suggestions are messages
+ * the user sends, so they are in the language the user writes in; the UI language only when that is unclear
+ */
 export function suggestionInstruction(count: number): string {
-  return tc('suggest.instruction', { count });
+  return [
+    'You suggest replies that the user is likely to send next in a chat.',
+    `Given the end of the conversation, write ${count} messages the user is likely to send next.`,
+    '- Write as the user, to the assistant (not as the assistant).',
+    '- Keep each to one short sentence, and make them go in different directions.',
+    `- Write in the language the user writes in (if unclear, in ${LANG_ENGLISH_NAMES[getLang()]}).`,
+    '- Output only a JSON array of strings (e.g. ["…", "…"]), with no explanation or preamble.'
+  ].join('\n');
 }
 
 export function suggestionMessages(path: MessageRecord[], turns: number, count: number): ChatMessage[] {
   return [
     { id: 'sys', role: 'system', parts: [{ type: 'text', text: suggestionInstruction(count) }] },
-    { id: 'u', role: 'user', parts: [{ type: 'text', text: `${tc('suggest.conversation')}\n\n${recentExchanges(path, turns)}` }] }
+    { id: 'u', role: 'user', parts: [{ type: 'text', text: `Conversation:\n\n${recentExchanges(path, turns)}` }] }
   ];
 }
 
@@ -65,7 +75,7 @@ export function parseSuggestions(text: string, count: number): string[] {
   if (!list.length) {
     list = text
       .split(/\r?\n/)
-      .map((l) => l.replace(/^\s*(?:[-*・•]|\d+[.)．、])\s*/, '').replace(/^["「『]|["」』],?$/g, '').trim())
+      .map((l) => l.replace(/^\s*(?:[-*・•]|\d+[.)．、])\s*/, '').replace(/^["“「『]|["”」』],?$/g, '').trim())
       .filter((l) => l && !l.startsWith('```'));
   }
   const seen = new Set<string>();

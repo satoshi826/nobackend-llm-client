@@ -110,7 +110,7 @@ export const t = defineMessages(
       'スキルは、特定の作業のやり方をまとめた指示書です。依頼に合うときにモデルが読み込みます。入力欄の「スキル」や「/名前」で、自分で指定することもできます。',
     'tab.warning':
       'スキルの指示はそのままモデルに渡ります。他の人が作ったスキルは、中身を確認してから取り込んでください。',
-    'tab.details': 'モデルには名前と説明だけを渡し、本文は依頼に合うときだけ読み込ませます（ツール呼び出しに対応したモデルのみ）。会話の中で「この手順をスキルにして」と頼むと、組み込みの skill-creator を使ってモデルが下書きし、あなたの確認のあとで保存します（既存のスキルの手直しも同じ）。Claude のスキル（SKILL.md と、同じフォルダのスクリプトや参照ファイル）を取り込めます。ファイルはスキルと一緒に保存され、書き出しとバックアップにも含まれます。',
+    'tab.details': 'モデルには名前と説明だけを渡し、本文は依頼に合うときだけ読み込ませます（ツール呼び出しに対応したモデルのみ）。会話の中で「この手順をスキルにして」と頼むと、組み込みの skill-creator を使ってモデルが下書きし、あなたの確認のあとで保存します（既存のスキルの手直しも同じ）。Claude のスキル（SKILL.md と、同じフォルダのスクリプトや参照ファイル）を取り込めます。ファイルはスキルと一緒に保存され、書き出しとバックアップにも含まれます。スキルを読み込んだ会話では、モデルがそのファイルを読み、JavaScript のスクリプトを隔離された環境で実行できます（実行は毎回確認し、書き出したファイルを保存するかも確認します）。',
     'tab.about': 'スキルについて',
     'tab.import': 'ファイルから取り込む',
     'tab.importFolder': 'フォルダから取り込む',
@@ -257,7 +257,7 @@ export const t = defineMessages(
       'tab.warning':
         "A skill's instructions go to the model as they are. Check skills made by others before you import them.",
       'tab.details':
-        'Models get only a skill\'s name and description, and load the instructions when a request matches (models with tool calling only). Ask in a conversation to "turn these steps into a skill" and a model drafts it with the built-in skill-creator; it is saved after you confirm (fixing an existing skill works the same way). You can import Claude skills (a SKILL.md with the scripts and reference files in its folder). The files are saved with the skill and included when you export it or back up.',
+        'Models get only a skill\'s name and description, and load the instructions when a request matches (models with tool calling only). Ask in a conversation to "turn these steps into a skill" and a model drafts it with the built-in skill-creator; it is saved after you confirm (fixing an existing skill works the same way). You can import Claude skills (a SKILL.md with the scripts and reference files in its folder). The files are saved with the skill and included when you export it or back up. In a conversation that loaded the skill, the model can read its files and run its JavaScript scripts in an isolated space (you confirm every run, and whether to save the files a script writes).',
       'tab.about': 'About skills',
       'tab.import': 'Import from files',
       'tab.importFolder': 'Import a folder',
@@ -400,7 +400,7 @@ export const t = defineMessages(
         '技能是把某类工作的做法整理成的指令。请求相符时，模型会加载它。也可以通过输入框中的“技能”或输入“/名称”自行指定。',
       'tab.warning':
         '技能的指令会原样传给模型。导入他人制作的技能前，请先检查其内容。',
-      'tab.details': '模型只会收到技能的名称和描述，仅在请求相符时才加载正文（仅限支持工具调用的模型）。在对话中让模型“把这些步骤做成技能”，模型会用内置的 skill-creator 起草，经你确认后保存（修改现有技能也一样）。可以导入 Claude 的技能（SKILL.md 及同一文件夹中的脚本和参考文件）。文件与技能一起保存，导出和备份时也会包含。',
+      'tab.details': '模型只会收到技能的名称和描述，仅在请求相符时才加载正文（仅限支持工具调用的模型）。在对话中让模型“把这些步骤做成技能”，模型会用内置的 skill-creator 起草，经你确认后保存（修改现有技能也一样）。可以导入 Claude 的技能（SKILL.md 及同一文件夹中的脚本和参考文件）。文件与技能一起保存，导出和备份时也会包含。在加载了该技能的对话中，模型可以读取其文件，并在隔离的环境中运行其 JavaScript 脚本（每次运行都需你确认，是否保存脚本写出的文件也由你确认）。',
       'tab.about': '关于技能',
       'tab.import': '从文件导入',
       'tab.importFolder': '从文件夹导入',

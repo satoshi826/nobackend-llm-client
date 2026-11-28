@@ -129,7 +129,7 @@ Without a passphrase, keys and data are stored as they are. With one:
 
 ### 3.5 The sandbox
 
-HTML and SVG files, runnable code blocks and the `run_javascript` and `preview_page` tools run in `sandbox/sandbox.html`, framed with `sandbox="allow-scripts allow-forms"` (`src/lib/sandbox/client.ts`):
+HTML and SVG files, runnable code blocks and the `run_javascript`, `run_skill_script` and `preview_page` tools run in `sandbox/sandbox.html`, framed with `sandbox="allow-scripts allow-forms"` (`src/lib/sandbox/client.ts`):
 
 - **No origin.** It cannot reach the app's storage, the key vault or the page around it. It has no popups, no top navigation and no downloads.
 - **No network.** Its CSP blocks every request (`connect-src 'none'`, `form-action 'none'`, `frame-src 'none'`); images and media come only from `data:` and `blob:`, fonts only from `data:`. The app's `frame-src` keeps the frame from navigating to another site.
@@ -164,8 +164,8 @@ Each tool is *ask*, *allow* or *deny* in Settings; a tool set to *deny* is not o
 | `fetch_url`, `fetch_file` | confirmed in the fetch page | the app does not ask again; *deny* in settings still blocks them; "always allow" exists only in the fetch page, per site |
 | `run_javascript`, `preview_page`, `generate_image` | ask | `generate_image` costs money |
 | file tools | allow | only inside the conversation's working folder |
-| `delete_file`, `save_skill` | ask every time | whatever the settings say, unless set to *deny* |
-| `load_skill` | allow | |
+| `delete_file`, `save_skill`, `run_skill_script` | ask every time | whatever the settings say, unless set to *deny*; saving the files a skill's script wrote is asked on its card every time too |
+| `load_skill`, `read_skill_file` | allow | |
 
 A reply may take at most 8 tool steps (`src/lib/chat/runner.ts`). Tool results, search results and attached or fetched files are marked as untrusted for the model, and the system prompt tells it never to follow instructions in them nor to put anything from the conversation into an address (`src/state/tool-registry.ts`).
 
@@ -179,7 +179,7 @@ A reply may take at most 8 tool steps (`src/lib/chat/runner.ts`). Tool results, 
 
 ### 3.9 Skills
 
-A skill's instructions go to the model as they are: a skill is trusted text. A skill is imported from a `SKILL.md`, a zip or a folder (`src/lib/skills/package.ts`), and nothing is saved before you have seen it: its `SKILL.md` and every file with its size, each text file readable, and, when it replaces a skill of the same name, the changes to the instructions and which files are added, changed or removed. Import keeps the name, description, body and whether models may load it on their own; other front matter keys (`allowed-tools` among them) are kept only as text written back when the skill is exported, and do nothing; a skill cannot unlock tools (`src/lib/skills/skill.ts`). A skill's files stay inside its folder: a path that leaves it (`..`, a leading `/`, a drive letter) refuses the whole skill, and so do more than 200 files, a file over 5 MiB, more than 20 MiB in all, or a zip entry that inflates past the size it gives, which is checked before anything is read (`src/lib/skills/files.ts`, `src/lib/zip.ts`). The app stores a skill's files and never runs them. A model can create or change a skill only through `save_skill`, which asks every time and lets you read and edit the draft first.
+A skill's instructions go to the model as they are: a skill is trusted text. A skill is imported from a `SKILL.md`, a zip or a folder (`src/lib/skills/package.ts`), and nothing is saved before you have seen it: its `SKILL.md` and every file with its size, each text file readable, and, when it replaces a skill of the same name, the changes to the instructions and which files are added, changed or removed. Import keeps the name, description, body and whether models may load it on their own; other front matter keys (`allowed-tools` among them) are kept only as text written back when the skill is exported, and do nothing; a skill cannot unlock tools (`src/lib/skills/skill.ts`). A skill's files stay inside its folder: a path that leaves it (`..`, a leading `/`, a drive letter) refuses the whole skill, and so do more than 200 files, a file over 5 MiB, more than 20 MiB in all, or a zip entry that inflates past the size it gives, which is checked before anything is read (`src/lib/skills/files.ts`, `src/lib/zip.ts`). A model reads a skill's files with `read_skill_file` and runs its JavaScript with `run_skill_script`, both offered only in a conversation that loaded a skill with files. A script runs only when you approve it, every time, in a sandbox worker of its own (§3.5) under a Node-like shim (`sandbox/node.js`): it gets copies, in memory, of its skill's files and of the working-folder files the model names, and writes only into that memory; it reaches nothing else of the app and no network, and runs only CommonJS JavaScript (no Python, shell or installed packages; libraries the app registers in `src/lib/sandbox/libraries.ts` are loaded by the app and handed over). What comes out is its exit code, what it printed (to the model and on its card) and the files it wrote: of those, only the text files you tick on the card are saved in the conversation's working folder, as `write_file` saves them (a replaced file keeps its earlier text). A model can create or change a skill only through `save_skill`, which asks every time and lets you read and edit the draft first.
 
 ### 3.10 Backups
 
@@ -235,7 +235,7 @@ Only one tab uses the data at a time (Web Locks, `src/state/tab.ts`). Another ta
 - Never store an admin, management or provisioning key (such as an OpenRouter provisioning key or an OpenAI admin key). The vault sends a key only to the API paths the app uses, but in the same-origin setup a script running in the app can read the key itself and use whatever it is allowed to do (§3.2).
 - Set a **passphrase** of several words, and an **auto-lock** time. Lock before leaving the device.
 - **Encrypt backups** with a password, and keep them where only you can read them.
-- **Read what you approve**: the address in the fetch page, the code before you run it, the skill draft before you save it.
+- **Read what you approve**: the address in the fetch page, the code or skill script before you run it, the files a script wrote before you save them, the skill draft before you save it.
 - Allow a site without asking only if you trust it with anything the model might put in an address.
 - Import skills and backups only from people you trust.
 - Ask for **persistent storage** in Settings → Privacy and data.

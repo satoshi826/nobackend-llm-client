@@ -37,6 +37,18 @@ export function ProviderChooser() {
         <p class="mt-2 text-sm leading-6 text-muted">
           {t('onb.introAny')}
         </p>
+        <ol class="mt-5 space-y-2">
+          {[t('onb.step1'), t('onb.step2'), t('onb.step3')].map((step, i) => (
+            <li key={i} class="flex gap-3 text-sm leading-6">
+              <span class="grid size-6 shrink-0 place-items-center rounded-full bg-glass-strong text-xs font-semibold">{i + 1}</span>
+              {step}
+            </li>
+          ))}
+        </ol>
+        <p class="mt-4 flex gap-2 rounded-lg bg-ok-soft p-3 text-xs leading-5 text-ok">
+          <Icon name="shield" class="mt-0.5 size-3.5 shrink-0" />
+          {t('onb.keySafety')}
+        </p>
         <h2 class="mt-6 mb-2 text-sm font-semibold">{t('onb.chooseProvider')}</h2>
         <AddConnection heading={false} onAdded={(id) => void updateConversation({ providerId: id, modelId: '' })} />
         <p class="mt-4 text-xs text-muted">{t('onb.addLater')}</p>

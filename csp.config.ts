@@ -78,6 +78,15 @@ export function sandboxCsp(frameAncestors = true): string {
 }
 
 /**
+ * CSP for a worker started from the app's files (the PDF reader, pdf.js): a worker gets the CSP of its own script's
+ * response, not the page's. It loads nothing, reaches nothing and compiles nothing (no eval, no WebAssembly): the
+ * page fetches what pdf.js needs (character maps) and passes it in
+ */
+export function workerCsp(): string {
+  return ["default-src 'none'", "require-trusted-types-for 'script'", "trusted-types 'none'"].join('; ');
+}
+
+/**
  * CSP for the fetch page: the one document that may reach any https address (it asks the user before each fetch).
  * appOrigins are the apps allowed to embed it ('self' when hosted same-origin)
  */
@@ -116,7 +125,8 @@ export function vaultCsp(env: Env, appOrigins: string[]): string {
 
 /**
  * _headers for deploying the app (format shared by Cloudflare Pages and Workers static assets).
- * CSP is applied per document: the app page (/ and /index.html) and the same-origin vault (under /vault/).
+ * CSP is applied per document: the app page (/ and /index.html) and the same-origin vault (under /vault/), and to
+ * workers: on assets/, where it only takes effect on a script that runs as a worker.
  * Writing "app CSP on /*, removed on /vault/*" would depend on "! Header" support,
  * and if removal fails the two CSPs stack and block the vault's requests, so we avoid it.
  * The app switches views via #, so no other path ever returns HTML (404).
@@ -135,6 +145,9 @@ export function appHeadersFile(env: Env, base = '/'): string {
     '',
     `${base}index.html`,
     app,
+    '',
+    `${base}assets/*`,
+    `  Content-Security-Policy: ${workerCsp()}`,
     '',
     `${base}sandbox/*`,
     `  Content-Security-Policy: ${sandboxCsp()}`,

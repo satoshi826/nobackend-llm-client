@@ -101,7 +101,11 @@ async function readPdf(data: ArrayBuffer): Promise<string> {
     cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
     cMapPacked: true,
     disableFontFace: true,
-    useSystemFonts: false
+    useSystemFonts: false,
+    // The worker's CSP (csp.config.ts workerCsp) lets it fetch and compile nothing: the page fetches the character
+    // maps, and code in a PDF (PostScript functions) is interpreted, never compiled to WebAssembly
+    useWorkerFetch: false,
+    useWasm: false
   });
   failed.catch(() => {});
   const doc = await Promise.race([task.promise, failed]);

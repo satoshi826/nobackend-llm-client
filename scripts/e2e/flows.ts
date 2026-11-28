@@ -1,7 +1,7 @@
 // The flows npm run e2e runs (run.ts), each in a fresh browser context on the production build with mock providers.
 // They find things the way a user does: by role and visible (English) label.
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BrowserContext, Page } from 'playwright';
 
@@ -262,4 +262,53 @@ const fetchPage: Flow = {
   }
 };
 
-export const FLOWS: Flow[] = [chat, lock, backup, files, images, fetchPage];
+/**
+ * A one-page PDF with a line in a standard font and a line in a Japanese font that is not embedded, whose text pdf.js
+ * can only read with its character maps (UniJIS-UCS2-H, Adobe-Japan1-UCS2)
+ */
+function samplePdf(): string {
+  const content = 'BT /F1 14 Tf 20 150 Td (Hello from a PDF) Tj ET\nBT /F2 14 Tf 20 120 Td <30533093306B3061306F> Tj ET';
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Type /Font /Subtype /Type0 /BaseFont /HeiseiMin-W3 /Encoding /UniJIS-UCS2-H /DescendantFonts [7 0 R] >>',
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    '<< /Type /Font /Subtype /CIDFontType0 /BaseFont /HeiseiMin-W3 /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 2 >> /FontDescriptor 8 0 R >>',
+    '<< /Type /FontDescriptor /FontName /HeiseiMin-W3 /Flags 4 /FontBBox [0 -200 1000 900] /ItalicAngle 0 /Ascent 880 /Descent -120 /CapHeight 700 /StemV 80 >>'
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = objects.map((o, i) => {
+    const at = pdf.length;
+    pdf += `${i + 1} 0 obj\n${o}\nendobj\n`;
+    return at;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  return pdf + `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+}
+
+/** Attaches the sample PDF from the device and waits until its text, both lines, is read and stored */
+async function attachPdf(page: Page, tmp: string) {
+  const file = join(tmp, 'sample.pdf');
+  writeFileSync(file, samplePdf());
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Attach' }).click();
+  await page.getByRole('menuitem', { name: 'From this device…' }).click();
+  await (await chooser).setFiles(file);
+  await page.getByRole('button', { name: 'Remove sample.pdf' }).waitFor();
+  await until('the PDF text to be stored', async () => (await stored(page, 'Hello from a PDF')) && stored(page, 'こんにちは'));
+}
+
+const pdf: Flow = {
+  name: 'pdf',
+  label: 'attach a PDF → its text, Japanese too, is read by the PDF worker under its own CSP',
+  async run({ page, url, tmp }) {
+    await page.goto(url);
+    await addVenice(page);
+    await attachPdf(page, tmp);
+  }
+};
+
+export const FLOWS: Flow[] = [chat, lock, backup, files, images, fetchPage, pdf];

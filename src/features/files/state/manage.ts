@@ -2,11 +2,11 @@
 import { effect, signal } from '@preact/signals';
 import * as fdb from '../../../lib/db/files';
 import { moveFolder } from '../../../lib/db/paths';
-import {  catalogImage, catalogSpace, withTakenPaths } from '../../../lib/db/catalog';
+import { catalogImage, catalogSpace, withTakenPaths } from '../../../lib/db/catalog';
 import { baseName, cleanFileName, cleanFolderName, extOf, folderOf, freeFolder, freePath, isInside, mimeFromName, pathFree, pathKey } from '../../../lib/paths';
 import { getImage, renameImages } from '../../../lib/db/images';
 import { deleteMedia } from '../../../state/media';
-import type {  FileRecord } from '../../../lib/db/schema';
+import type { FileRecord } from '../../../lib/db/schema';
 import { conversations, showChat, startNewChat, updateConversation } from '../../../state/conversations';
 import { mainView, showToast } from '../../../state/ui';
 import { t } from '../messages';

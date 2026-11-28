@@ -1,12 +1,12 @@
 // The working folder: the one folder a conversation's model reads and writes, its file tools, and loading the data
 import { effect } from '@preact/signals';
 import * as fdb from '../../../lib/db/files';
-import {  moveIntoWorkDirs, renumberTakenPaths } from '../../../lib/db/paths';
+import { moveIntoWorkDirs, renumberTakenPaths } from '../../../lib/db/paths';
 import { atPath, withTakenPaths } from '../../../lib/db/catalog';
-import {  cleanFileName, cleanFolderName, extOf, folderNameFor, freeFolder, isInside, mimeFromName, pathFree, pathKey } from '../../../lib/paths';
-import {  newId } from '../../../lib/db/repo';
-import {  listImages } from '../../../lib/db/images';
-import type {  Conversation, FileRecord, MessageRecord } from '../../../lib/db/schema';
+import { cleanFileName, cleanFolderName, extOf, folderNameFor, freeFolder, isInside, mimeFromName, pathFree, pathKey } from '../../../lib/paths';
+import { newId } from '../../../lib/db/repo';
+import { listImages } from '../../../lib/db/images';
+import type { Conversation, FileRecord, MessageRecord } from '../../../lib/db/schema';
 import { conversations, currentConv, updateConversation } from '../../../state/conversations';
 import { registerDataLoader } from '../../../state/lifecycle';
 import { defineFeatureSettings, pickLegacy } from '../../../state/feature-settings';
@@ -15,7 +15,7 @@ import { filesNote, makeFileTools, MAX_MATCHES, type Match } from '../tools';
 import { t } from '../messages';
 import { fetchFromWeb } from '../../../state/fetch-page';
 import type { Fetched } from '../../../lib/fetcher/protocol';
-import {  inspectPage, runJavaScript } from '../../../lib/sandbox/client';
+import { inspectPage, runJavaScript } from '../../../lib/sandbox/client';
 import { importImage, importOne } from './imports';
 import { fileList, imageList, refreshFiles, refreshImages } from './lists';
 import { deleteFiles } from './manage';

@@ -1,9 +1,9 @@
 // What lists show: files and images without their contents, from the catalog (lib/db/catalog.ts), and searching them
 import { effect, signal } from '@preact/signals';
 import * as fdb from '../../../lib/db/files';
-import {  listImages } from '../../../lib/db/images';
+import { listImages } from '../../../lib/db/images';
 import type { ImageEntry } from '../../../lib/db/catalog';
-import type {  FileRecord } from '../../../lib/db/schema';
+import type { FileRecord } from '../../../lib/db/schema';
 import { filesVersion, imagesVersion } from '../../../state/stored';
 
 export const fileList = signal<FileRecord[] | null>(null);

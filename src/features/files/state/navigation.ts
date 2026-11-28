@@ -1,10 +1,10 @@
 // The file manager (#/files) and a file's or an image's page (#/f/<id>, #/i/<id>) in the main area
-import {  signal } from '@preact/signals';
+import { signal } from '@preact/signals';
 import * as fdb from '../../../lib/db/files';
-import {  catalogImage, ensureCatalog, isTemporary } from '../../../lib/db/catalog';
-import {  cleanFolderName, folderOf } from '../../../lib/paths';
+import { catalogImage, ensureCatalog, isTemporary } from '../../../lib/db/catalog';
+import { cleanFolderName, folderOf } from '../../../lib/paths';
 import { getSetting, setSetting } from '../../../lib/db/repo';
-import {  showChat } from '../../../state/conversations';
+import { showChat } from '../../../state/conversations';
 import { mainView, sidebarOpen, sidebarTab, type MainViewState } from '../../../state/ui';
 import { pushHash, registerRoute, setHash } from '../../../state/router';
 import { imageList } from './lists';

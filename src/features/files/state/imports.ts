@@ -1,13 +1,13 @@
 // Bringing files in: from the device into a folder, and as attachments of the next message
-import {  signal } from '@preact/signals';
+import { signal } from '@preact/signals';
 import * as fdb from '../../../lib/db/files';
-import {  withTakenPaths } from '../../../lib/db/catalog';
-import {  cleanFileName, freePath } from '../../../lib/paths';
-import {  newId } from '../../../lib/db/repo';
-import {  putImage } from '../../../lib/db/images';
+import { withTakenPaths } from '../../../lib/db/catalog';
+import { cleanFileName, freePath } from '../../../lib/paths';
+import { newId } from '../../../lib/db/repo';
+import { putImage } from '../../../lib/db/images';
 import type { Attachment, Conversation, FileRecord, Origin } from '../../../lib/db/schema';
-import {  currentConv, showChat, updateConversation } from '../../../state/conversations';
-import {  showToast } from '../../../state/ui';
+import { currentConv, showChat, updateConversation } from '../../../state/conversations';
+import { showToast } from '../../../state/ui';
 import { extractText } from '../extract';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';

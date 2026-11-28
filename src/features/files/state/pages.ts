@@ -2,11 +2,11 @@
 import { effect } from '@preact/signals';
 import * as fdb from '../../../lib/db/files';
 import { atPath, withTakenPaths } from '../../../lib/db/catalog';
-import {  folderOf, isInside, pathFree, pathKey } from '../../../lib/paths';
-import {  newId } from '../../../lib/db/repo';
+import { folderOf, isInside, pathFree, pathKey } from '../../../lib/paths';
+import { newId } from '../../../lib/db/repo';
 import { getImage, listImages } from '../../../lib/db/images';
-import type {  FileRecord } from '../../../lib/db/schema';
-import {  showToast } from '../../../state/ui';
+import type { FileRecord } from '../../../lib/db/schema';
+import { showToast } from '../../../state/ui';
 import { t } from '../messages';
 import { cleanStorage, type SandboxPage } from '../../../lib/sandbox/client';
 import { PAGE_API } from '../../../lib/fetcher/config';

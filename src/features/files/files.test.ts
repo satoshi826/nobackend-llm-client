@@ -147,12 +147,49 @@ describe('file tools', () => {
   it('rejects ambiguous or missing find text, and both modes at once', async () => {
     const { deps } = memDeps();
     const id = ((await run(deps, 'write_file', { name: 'a.txt', content: 'x x' })).details as { fileId: string }).fileId;
-    await expect(run(deps, 'edit_file', { file_id: id, old_string: 'x', new_string: 'y' })).rejects.toThrow(/複数/);
+    await expect(run(deps, 'edit_file', { file_id: id, old_string: 'x', new_string: 'y' })).rejects.toThrow(/2 か所あります（1 行目）/);
     await expect(run(deps, 'edit_file', { file_id: id, old_string: 'zzz', new_string: 'y' })).rejects.toThrow(/見つかりません/);
     expect(() => tool(deps, 'edit_file').prepare({ file_id: id, old_string: 'x' })).toThrow(/new_string/);
     // Every occurrence, when asked
     const r = await run(deps, 'edit_file', { file_id: id, old_string: 'x', new_string: 'y', replace_all: true });
     expect(r.content).toContain('2 replacements');
+  });
+  it('shows the lines an edit changed, with 3 lines around, numbered as in the new text', async () => {
+    const { deps } = memDeps();
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`);
+    await run(deps, 'write_file', { name: 'a.js', content: lines.join('\n') });
+    // The lines old_string copies unchanged count as context
+    const r = await run(deps, 'edit_file', { file_id: 'a.js', old_string: 'line 9\nline 10\nline 11', new_string: 'line 9\nten\nmore\nline 11' });
+    expect(r.content.split('\n').slice(1).join('\n')).toBe(
+      ['     7\tline 7', '     8\tline 8', '     9\tline 9', '-     \tline 10', '+   10\tten', '+   11\tmore', '    12\tline 11', '    13\tline 12', '    14\tline 13'].map((l) => (l[0] === ' ' ? ` ${l.slice(1)}` : l)).join('\n')
+    );
+    // A deletion, at the start of the file
+    const d = await run(deps, 'edit_file', { file_id: 'a.js', old_string: 'line 1\n', new_string: '' });
+    expect(d.content).toContain('-     \tline 1\n     1\tline 2');
+    expect((await run(deps, 'edit_file', { file_id: 'a.js', old_string: 'line 5', new_string: 'line 5' })).content).toContain('nothing changed');
+  });
+  it('shows changes that are close as one, and at most 40 lines of them', async () => {
+    const { deps } = memDeps();
+    await run(deps, 'write_file', { name: 'b.txt', content: Array.from({ length: 200 }, (_, i) => (i % 4 === 0 ? 'x' : `l${i}`)).join('\n') });
+    const r = await run(deps, 'edit_file', { file_id: 'b.txt', old_string: 'x', new_string: 'y', replace_all: true });
+    const view = r.content.split('\n').slice(1);
+    // Every fourth line changed: one block, no "…" between changes
+    expect(view.slice(0, 3)).toEqual(['-     \tx', '+    1\ty', '     2\tl1']);
+    expect(view).not.toContain('…');
+    expect(view.length).toBeLessThanOrEqual(41);
+    expect(view.at(-1)).toMatch(/^\[… \d+ more changes not shown; check with read_file\]$/);
+    // Far apart: separate blocks
+    await run(deps, 'write_file', { name: 'c.txt', content: Array.from({ length: 30 }, (_, i) => (i === 2 || i === 25 ? 'x' : `l${i}`)).join('\n') });
+    expect((await run(deps, 'edit_file', { file_id: 'c.txt', old_string: 'x', new_string: 'y', replace_all: true })).content).toContain('\n…\n');
+  });
+  it('says where text that differs only in whitespace is, and where old_string occurs when it occurs more than once', async () => {
+    const { deps } = memDeps();
+    await run(deps, 'write_file', { name: 'g.js', content: 'function f() {\n    return 1;\n}\nf();\nf();' });
+    const near = run(deps, 'edit_file', { file_id: 'g.js', old_string: 'function f() {\n  return 1;\n}', new_string: 'x' });
+    await expect(near).rejects.toThrow(/1〜3 行目/);
+    await expect(near).rejects.toMatchObject({ english: expect.stringContaining('lines 1-3 differ from it only in spaces') });
+    await expect(near).rejects.toMatchObject({ english: expect.stringContaining('     2\t    return 1;') });
+    await expect(run(deps, 'edit_file', { file_id: 'g.js', old_string: 'f();', new_string: 'g();' })).rejects.toMatchObject({ english: expect.stringContaining('occurs 2 times in the file (lines 4, 5)') });
   });
   it('cannot touch files outside the conversation', async () => {
     const scope = new Set<string>();

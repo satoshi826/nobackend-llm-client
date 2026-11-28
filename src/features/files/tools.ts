@@ -10,6 +10,7 @@ import { fetchableUrl } from '../../lib/fetcher/protocol';
 import { formatNumber, TranslatedError } from '../../lib/i18n';
 import { t } from './messages';
 import { fileBlock } from './transform';
+import { editView, nearMatch, occurrenceLines } from './edit-view';
 
 export const LIST_FILES = 'list_files';
 export const SEARCH_FILES = 'search_files';
@@ -314,7 +315,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     name: EDIT_FILE,
     label: t('tool.edit'),
     description:
-      'Replace text in a file in the working folder. old_string must be copied exactly from the current text (same spaces, indentation and line breaks, without line numbers or the <file> tag) and occur exactly once, so include a few surrounding lines if needed; or set replace_all to change every occurrence. Read the file first if you have not seen its current text. To rewrite a whole file, use write_file.',
+      'Replace text in a file in the working folder. old_string must be copied exactly from the current text (same spaces, indentation and line breaks, without line numbers or the <file> tag) and occur exactly once, so include a few surrounding lines if needed; or set replace_all to change every occurrence. Read the file first if you have not seen its current text. The result shows the changed lines with 3 lines around each: check them there (a leftover line, a change in the wrong place) instead of reading the file again. To rewrite a whole file, use write_file.',
     parameters: {
       type: 'object',
       properties: {
@@ -340,21 +341,26 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder }: { hasFolder: bo
     async execute(i) {
       const f = await mustGet(deps, i.file_id);
       const cur = await deps.text(f);
-      const at = cur.indexOf(i.old_string);
-      if (at < 0) throw new TranslatedError(() => t('tool.findMissing'));
-      let next: string;
-      let count = 1;
-      if (i.replace_all) {
-        const parts = cur.split(i.old_string);
-        count = parts.length - 1;
-        next = parts.join(i.new_string);
-      } else {
-        if (cur.indexOf(i.old_string, at + 1) >= 0) throw new TranslatedError(() => t('tool.findAmbiguous'));
-        next = cur.slice(0, at) + i.new_string + cur.slice(at + i.old_string.length);
+      const at: number[] = [];
+      for (let p = cur.indexOf(i.old_string); p >= 0 && (i.replace_all || at.length < 2); p = cur.indexOf(i.old_string, p + i.old_string.length)) at.push(p);
+      if (!at.length) {
+        const near = nearMatch(cur, i.old_string);
+        if (near) throw new TranslatedError(() => t('tool.findNear', { from: near.from, to: near.to, count: near.count, lines: near.lines }));
+        throw new TranslatedError(() => t('tool.findMissing'));
       }
+      if (at.length > 1 && !i.replace_all) {
+        const lines = occurrenceLines(cur, i.old_string);
+        const count = cur.split(i.old_string).length - 1;
+        throw new TranslatedError(() => t('tool.findAmbiguous', { count, lines: lines.slice(0, 10).join(', ') + (lines.length > 10 ? ', …' : '') }));
+      }
+      const next = cur.split(i.old_string).join(i.new_string);
       if (next.length > MAX_FILE_CHARS) throw new TranslatedError(() => t('tool.fileTooBig'));
       const u = await deps.update(f.id, next);
-      return { content: `Saved ${shown(u)} (${count === 1 ? '1 replacement' : `${count} replacements`}, ${u.bytes} bytes).`, details: details(u) };
+      const view = editView(cur, next, at, i.old_string.length, i.new_string.length);
+      return {
+        content: `Saved ${shown(u)} (${at.length === 1 ? '1 replacement' : `${at.length} replacements`}, ${u.bytes} bytes). ${view ? `The changed lines (numbers in the new text; - removed, + added):\n${view}` : 'new_string is the same as old_string: nothing changed.'}`,
+        details: details(u)
+      };
     }
   };
 

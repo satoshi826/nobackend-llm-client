@@ -10,7 +10,7 @@ import { t } from './messages';
 /** A fetch in progress, else the fetch page's settings (the Jina Reader key, the sites not asked about) when open */
 export function FetchDialog() {
   const req = fetchRequest.value;
-  if (req) return <FetchFrame key={req.url + req.mode} title={t('fetchPage.title')} src={fetchPageUrl({ url: req.url, mode: req.mode })} done={req.done} />;
+  if (req) return <FetchFrame key={req.url + req.mode} title={t('fetchPage.title')} src={fetchPageUrl({ url: req.url, mode: req.mode, check: req.check })} done={req.done} />;
   if (fetchSettingsOpen.value) return <FetchFrame key="settings" title={t('fetchPage.settings')} src={fetchPageUrl({ view: 'settings' })} done={() => (fetchSettingsOpen.value = false)} />;
   return null;
 }
@@ -36,14 +36,16 @@ function FetchFrame({ title, src, done }: { title: string; src: string; done(r: 
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
   }, []);
+  // Bare: the frame shrinks to the room the dialog has and the page scrolls inside it, where its controls are (a dialog
+  // body scrolling around a frame has nothing of its own to focus)
   return (
-    <Modal title={title} onClose={() => done(null)}>
+    <Modal title={title} onClose={() => done(null)} bare>
       <iframe
         ref={ref}
         src={src}
         title={title}
         referrerpolicy="no-referrer"
-        class="block w-full border-0"
+        class="m-5 block min-h-0 border-0"
         style={{ height: `${height}px` }}
         onLoad={() => ref.current?.contentWindow?.postMessage(FETCH_HELLO, FETCH_ORIGIN)}
       />

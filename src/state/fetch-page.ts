@@ -2,22 +2,23 @@
 // and asks the user (or remembers a site they allowed). Both reading a page (fetch_url) and saving a file
 // (fetch_file) ask here; the FetchDialog shows the page for the current request.
 import { signal } from '@preact/signals';
-import type { Fetched } from '../lib/fetcher/protocol';
+import type { FetchCheck, Fetched } from '../lib/fetcher/protocol';
 
 /** The fetch page's own settings are open (over the app's settings; the FetchDialog shows them) */
 export const fetchSettingsOpen = signal(false);
 
-/** The address being fetched; the FetchDialog shows the fetch page for it */
-export const fetchRequest = signal<{ url: string; mode: 'read' | 'save'; done(r: Fetched | null): void } | null>(null);
+/** The address being fetched, with what the app found about it (fetch-check.ts); the FetchDialog shows the fetch page for it */
+export const fetchRequest = signal<{ url: string; mode: 'read' | 'save'; check?: FetchCheck; done(r: Fetched | null): void } | null>(null);
 
 /** Ask the user (in the fetch page) and fetch. null when they cancel or the reply is stopped (signal) */
-export function fetchFromWeb(url: string, mode: 'read' | 'save', signal?: AbortSignal): Promise<Fetched | null> {
+export function fetchFromWeb(url: string, mode: 'read' | 'save', signal?: AbortSignal, check?: FetchCheck): Promise<Fetched | null> {
   fetchRequest.value?.done(null);
   return new Promise((resolve) => {
     if (signal?.aborted) return resolve(null);
     const req = {
       url,
       mode,
+      check,
       done: (r: Fetched | null) => {
         signal?.removeEventListener('abort', stop);
         if (fetchRequest.value === req) fetchRequest.value = null;

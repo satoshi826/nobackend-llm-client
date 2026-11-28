@@ -1,6 +1,8 @@
 // The fetch page. The app opens it in a frame: #url=<address>&mode=read|save&app=<app origin>&lang=..&theme=..
 // It is the only page allowed to reach any https address (its own CSP), and it asks the user before every fetch,
-// unless they chose not to be asked again for that site and mode (kept in this page's storage). A redirect to another
+// unless they chose not to be asked again for that site and mode (kept in this page's storage) and the address came
+// from the conversation as it is: one the model put together is always asked about, its new parts marked (the app's
+// check, #check=, composed.ts). A redirect to another
 // site is asked about the same way (redirect.ts).
 // read: a page for a model to read. Straight from the site, then through the user's relay, and as text from Jina
 // Reader when neither works or the HTML holds almost no text (a page drawn by scripts). save: a file, kept as it is.
@@ -10,8 +12,10 @@
 // app can fetch without the user (fully so when this page is on its own origin, VITE_FETCH_URL).
 // No dependencies on the app. The DOM is built with createElement and textContent only (no innerHTML).
 import { detectLang, formatNumber, getLang, setLang } from '../src/lib/i18n';
-import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, pagesReachWeb, type FetchMode, type FromFetcher, type ToPageFetcher } from '../src/lib/fetcher/protocol';
+import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, pagesReachWeb, parseCheck, type FetchCheck, type FetchMode, type FromFetcher, type ToPageFetcher } from '../src/lib/fetcher/protocol';
 import '../vault/style.css';
+import './style.css';
+import { markedPieces, skipsQuestion } from './composed';
 import { t } from './messages';
 import { MAX_REDIRECTS, redirectStep } from './redirect';
 
@@ -40,6 +44,8 @@ document.documentElement.classList.toggle('dark', params.get('theme') !== 'light
 const appOrigin = params.get('app') ?? '';
 const target = window.parent !== window && APP_ORIGINS.includes(appOrigin) ? appOrigin : null;
 const url = fetchableUrl(params.get('url') ?? '');
+/** What the app found about the address: put together by the model (null: it came from the conversation as it is) */
+const check = url && parseCheck(params.get('check'), url.href);
 const mode: FetchMode = params.get('mode') === 'read' ? 'read' : params.get('mode') === 'page' ? 'page' : 'save';
 /** Opened from the app's settings to manage what this page keeps, instead of to fetch */
 const settingsView = params.get('view') === 'settings';
@@ -452,9 +458,19 @@ function render() {
 /** Sites ticked "without asking" during this fetch (the address asked first and any redirect asked about): kept once it succeeds */
 const toRemember: string[] = [];
 
+/** The address as shown in a question, the parts the model put together marked */
+const address = (u: URL, c: FetchCheck | null) =>
+  h('p', { class: 'mono secret' }, ...markedPieces(u.href, c?.composed ?? []).map((p) => (p.marked ? h('mark', {}, p.text) : p.text)));
+
+/** Why an address the model put together is asked about */
+const composedNote = (u: URL, remembered: boolean) =>
+  h('div', { class: 'caution' }, h('p', {}, t('composed')), remembered && h('p', {}, t('composedRemembered', { host: u.host })));
+
 /** The question for one address (read or save); a redirect to a site that is not allowed asks again about where it leads */
 function question(r: Req) {
   const u = r.url;
+  // The app's check is about the address the model asked for, not where a redirect leads
+  const c = r.hops === 0 ? check : null;
   const status = h('p', { class: 'muted', role: 'status', 'aria-live': 'polite' });
   const cancel = h('button', { type: 'button', class: 'btn outline', onClick: close }, t('cancel'));
   const go = h('button', { type: 'button', class: 'btn primary' }, t(mode === 'read' ? 'read' : 'fetch'));
@@ -494,7 +510,8 @@ function question(r: Req) {
       { class: 'card stack' },
       h('strong', {}, t(mode === 'read' ? 'titleRead' : 'title')),
       h('div', {}, h('span', { class: 'muted' }, `${t('from')}: `), h('strong', {}, u.host)),
-      h('p', { class: 'mono secret' }, u.href),
+      address(u, c),
+      c && composedNote(u, allowed.includes(u.host)),
       redirectNote(r),
       h('p', { class: 'muted' }, t('noteDirect', { host: u.host })),
       RELAY && h('p', { class: 'muted' }, t('noteRelay', { host: u.host, relay: new URL(RELAY).host })),
@@ -508,14 +525,15 @@ function question(r: Req) {
     )
   );
   // A site the user chose not to be asked about again (for this mode): fetch right away (the request still shows while it
-  // runs). Never so for a hidden redirect: where it leads is not that site
-  if (!r.blind && allowed.includes(u.host)) {
+  // runs). Never so for a hidden redirect (where it leads is not that site), nor for an address the model put together
+  if (skipsQuestion(u.host, allowed, { blind: r.blind, check: c })) {
     remember.checked = true;
     void run();
     return;
   }
-  // Fetching needs the user's own action; start on the button that does it (no focus on touch, like the vault)
-  if (!matchMedia('(pointer: coarse)').matches) go.focus();
+  // Fetching needs the user's own action; start on the button that does it (no focus on touch, like the vault), with the
+  // address and any note at the top still in view
+  if (!matchMedia('(pointer: coarse)').matches) go.focus({ preventScroll: true });
 }
 
 // Nothing is shown until the frame's parent proves it is the app it claims to be (it says hello once this page has

@@ -118,8 +118,11 @@ export interface FileToolDeps {
   remove(id: string): Promise<void>;
   /** Open a page of the working folder out of sight and read back what happened on it (nothing it stores is kept) */
   inspect(f: FileRecord, o: { waitMs: number; script?: string; layout?: boolean; freshStorage?: boolean }, signal: AbortSignal): Promise<PageInspection>;
-  /** Fetch an address through the fetch page (the user is asked there). null when declined or failed */
-  fetch(url: string, signal: AbortSignal): Promise<{ kind: 'file'; file: FileRecord } | { kind: 'image'; name: string } | null>;
+  /**
+   * Fetch an address through the fetch page (the user is asked there). null when declined or failed. A file comes with
+   * its links (a page's, or the addresses written in a text), kept with the result as addresses the model may fetch next
+   */
+  fetch(url: string, signal: AbortSignal): Promise<{ kind: 'file'; file: FileRecord; links: string[] } | { kind: 'image'; name: string } | null>;
   /** How the model sees a file's path: relative to the working folder (whole for a file outside it) */
   pathOf(f: FileRecord): string;
   /** The first syntax error in a file's text, for the kinds checked (syntax.ts); undefined when none */
@@ -597,7 +600,7 @@ export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: 
       const r = await deps.fetch(i.url, ctx.signal);
       if (!r) return { content: 'The user declined the fetch, or it did not complete. Nothing was saved.' };
       if (r.kind === 'image') return { content: `Saved the image ${JSON.stringify(r.name)} from ${i.url} in the user's Files tab. You cannot see it.`, details: { name: r.name } };
-      return { content: `Saved ${shown(r.file)} from ${i.url} as a file (id: ${r.file.id}, ${r.file.bytes} bytes). Read it with read_file.`, details: details(r.file) };
+      return { content: `Saved ${shown(r.file)} from ${i.url} as a file (id: ${r.file.id}, ${r.file.bytes} bytes). Read it with read_file.`, details: { ...details(r.file), links: r.links } };
     }
   };
 

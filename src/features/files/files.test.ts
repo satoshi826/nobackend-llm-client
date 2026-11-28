@@ -99,7 +99,7 @@ function memDeps(scope = new Set<string>(), folder = 'work/') {
     async fetch(url) {
       if (url.includes('decline')) return null;
       if (url.endsWith('.png')) return { kind: 'image', name: 'cat.png' };
-      return { kind: 'file', file: (await deps.create('page.txt', 'fetched text')).file };
+      return { kind: 'file', file: (await deps.create('page.txt', 'fetched text')).file, links: ['https://a.example/next'] };
     }
   };
   return { deps, files, texts, scope, images };
@@ -536,6 +536,9 @@ describe('fetch_file', () => {
     const { deps } = memDeps();
     const file = await run(deps, 'fetch_file', { url: 'https://example.com/a.txt' });
     expect(file.content).toMatch(/id: f1/);
+    // Its links stay with the result (not for the model): addresses it may fetch next
+    expect(file.details).toMatchObject({ links: ['https://a.example/next'] });
+    expect(file.content).not.toContain('a.example');
     expect((await run(deps, 'read_file', { file_id: 'f1' })).content).toContain('fetched text');
     expect((await run(deps, 'fetch_file', { url: 'https://example.com/cat.png' })).content).toMatch(/image "cat.png"/);
     expect((await run(deps, 'fetch_file', { url: 'https://example.com/decline' })).content).toMatch(/declined/);

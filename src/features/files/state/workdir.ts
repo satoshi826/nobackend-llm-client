@@ -14,6 +14,7 @@ import { registerToolProvider } from '../../../state/tool-registry';
 import { filesNote, makeFileTools, MAX_MATCHES, type Match } from '../tools';
 import { t } from '../messages';
 import { fetchFromWeb } from '../../../state/fetch-page';
+import { checkFetch } from '../../../state/fetch-check';
 import type { Fetched } from '../../../lib/fetcher/protocol';
 import { inspectPage, runJavaScript } from '../../../lib/sandbox/client';
 import { importImage, importOne } from './imports';
@@ -189,8 +190,13 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
     {
       folder: dir,
       async fetch(url, signal) {
-        const r = await fetchFromWeb(url, 'save', signal);
-        return r && (await saveFetched(r, conv));
+        const r = await fetchFromWeb(url, 'save', signal, checkFetch(url, conv, history));
+        if (!r) return null;
+        const saved = await saveFetched(r, conv);
+        if (saved?.kind !== 'file') return saved;
+        // Its own chunk (with DOMPurify), as when a page is read
+        const { fileLinks } = await import('../../../lib/fetcher/page-text');
+        return { ...saved, links: fileLinks(r) };
       },
       create: (path, text, folder) => writeInWorkDir(conv, path, text, folder),
       get: (ref) => readableFile(conv.id, history, ref),

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { htmlToText, MAX_PAGE_CHARS, pageText } from './page-text';
+import { fileLinks, htmlToText, MAX_PAGE_CHARS, pageText } from './page-text';
 
 const bytes = (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer;
 
@@ -20,6 +20,25 @@ describe('page text', () => {
     expect(p.text).toContain('| Item | Price |\n| --- | --- |\n| Tea | 3 |');
     expect(p.text).toContain('```\ncode  here\n```');
     expect(p.text).not.toMatch(/steal|Home|© 2026/);
+  });
+  it('keeps the links of the whole page, absolute against where it came from, http(s) only, each once', () => {
+    const html = `<html><body><nav><a href="/">Home</a> <a href="/docs/">Docs</a></nav>
+      <main><p><a href="setup#install">Setup</a> <a href="setup">again</a> <a href="mailto:a@b.example">mail</a> <a href="javascript:x()">js</a></p>
+      <p style="display:none"><a href="https://other.example/x?y=1">hidden</a></p><img src="/img.png"></main><footer><a href="http://old.example/">old</a></footer></body></html>`;
+    expect(htmlToText(html, 'https://shop.example/guide/').links).toEqual([
+      'https://shop.example/',
+      'https://shop.example/docs/',
+      'https://shop.example/guide/setup',
+      'https://other.example/x?y=1',
+      'http://old.example/'
+    ]);
+  });
+  it('takes the addresses written in a text as its links, for reading and for saving', async () => {
+    const md = bytes('# Mock\n\nSee [the guide](https://a.example/guide) and https://b.example/p.');
+    expect((await pageText({ name: 'm.md', mime: 'text/markdown', data: md, url: 'https://x/' }, async () => '')).links).toEqual(['https://a.example/guide', 'https://b.example/p']);
+    expect(fileLinks({ name: 'm.md', mime: 'text/markdown', data: md, url: 'https://x/' })).toEqual(['https://a.example/guide', 'https://b.example/p']);
+    expect(fileLinks({ name: 'i.html', mime: 'text/html', data: bytes('<a href="/n">n</a>'), url: 'https://x.example/a/' })).toEqual(['https://x.example/n']);
+    expect(fileLinks({ name: 'a.png', mime: 'image/png', data: bytes('https://a.example/'), url: 'https://x/a.png' })).toEqual([]);
   });
   it('reads text as is, refuses what is not text, and caps the length', async () => {
     const pdf = async () => 'pdf text';

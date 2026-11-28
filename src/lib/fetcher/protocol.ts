@@ -38,6 +38,40 @@ export interface Fetched {
   via: FetchVia;
 }
 
+/**
+ * What the app found about an address the model asked for that did not appear in the conversation as it is (it was
+ * put together): the parts of its href that appeared nowhere (start and end offsets). The fetch page always asks about
+ * such an address, also on a site not asked about
+ */
+export interface FetchCheck {
+  composed: [number, number][];
+}
+
+/**
+ * A check as the fetch page takes it (from its address): null when there is none. One not in its shape still counts as
+ * a put-together address, with nothing marked: it is asked about
+ */
+export function parseCheck(raw: string | null, href: string): FetchCheck | null {
+  if (raw === null) return null;
+  const unmarked: FetchCheck = { composed: [] };
+  let v: any;
+  try {
+    v = JSON.parse(raw);
+  } catch {
+    return unmarked;
+  }
+  const ranges: unknown = v?.composed;
+  if (!Array.isArray(ranges)) return unmarked;
+  const composed: [number, number][] = [];
+  let end = 0;
+  for (const r of ranges) {
+    if (!Array.isArray(r) || !Number.isInteger(r[0]) || !Number.isInteger(r[1]) || r[0] < end || r[1] <= r[0] || r[1] > href.length) return unmarked;
+    composed.push([r[0], r[1]]);
+    end = r[1];
+  }
+  return { composed };
+}
+
 /** The app to a fetch page opened with mode=page, which stays open and takes the shown pages' requests in turn */
 export type ToPageFetcher = { type: 'page-get'; id: string; url: string } | { type: 'page-cancel'; id: string };
 

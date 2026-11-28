@@ -3,7 +3,6 @@
 // the page can at worst bend the answer, never call a tool.
 import type { AuthRef, ChatMessage, ChatParams, ProviderConfig, ProviderPreset, Transport, Usage } from '../providers/types';
 import { getAdapter } from '../providers/registry';
-import type { PageText } from '../fetcher/page-text';
 
 const INSTRUCTION = [
   'You read one web page for an assistant and answer its request using only that page.',
@@ -24,7 +23,7 @@ export interface ExtractOptions {
 }
 
 /** The answer to a request about one page (text only; reasoning dropped) */
-export async function extractFromPage(page: PageText & { url: string }, request: string, o: ExtractOptions): Promise<string> {
+export async function extractFromPage(page: { title: string; text: string; url: string }, request: string, o: ExtractOptions): Promise<string> {
   const out = await completeText(
     [
       { id: 's', role: 'system', parts: [{ type: 'text', text: INSTRUCTION }] },

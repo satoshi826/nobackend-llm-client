@@ -1,0 +1,24 @@
+/* The fetch page's own parts, on the vault's styles (../vault/style.css): the caution about an address the model put
+   together (amber, as the app's caution) and its parts marked. Same tokens and values as src/styles.css */
+:root {
+  --warn: #a16207;
+  --warn-soft: rgba(245, 158, 11, 0.14);
+}
+:root.dark {
+  --warn: #fcd34d;
+  --warn-soft: rgba(251, 191, 36, 0.14);
+}
+.caution {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--warn-soft);
+}
+mark {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-radius: 3px;
+  box-shadow: inset 0 -1px 0 var(--warn);
+}

@@ -67,7 +67,7 @@ function pickRoute(native: boolean, tavily: boolean): SearchRoute {
  */
 function pageReader(conv: Conversation, history: MessageRecord[]) {
   return async (url: string, prompt: string, signal: AbortSignal): Promise<ToolResult> => {
-    const got = await fetchFromWeb(url, 'read', signal, checkFetch(url, conv, history));
+    const got = await fetchFromWeb(url, 'read', signal, await checkFetch(url, conv, history));
     if (!got) return { content: 'The user declined to fetch this page.', isError: true, details: { url, declined: true } };
     // Its own chunk (with DOMPurify), loaded when a page is first read
     const { pageText } = await import('../../lib/fetcher/page-text');

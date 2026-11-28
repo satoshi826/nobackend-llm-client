@@ -1,5 +1,6 @@
 /* The fetch page's own parts, on the vault's styles (../vault/style.css): the caution about an address the model put
-   together (amber, as the app's caution) and its parts marked. Same tokens and values as src/styles.css */
+   together (amber, as the app's caution), its parts marked, and the alert when it holds the conversation's text
+   (rose, as the app's danger). Same tokens and values as src/styles.css */
 :root {
   --warn: #a16207;
   --warn-soft: rgba(245, 158, 11, 0.14);
@@ -8,13 +9,23 @@
   --warn: #fcd34d;
   --warn-soft: rgba(251, 191, 36, 0.14);
 }
-.caution {
+.caution,
+.alert {
   display: flex;
   flex-direction: column;
   gap: 6px;
   border-radius: 12px;
   padding: 10px 12px;
+}
+.caution {
   background: var(--warn-soft);
+}
+.alert {
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.alert > strong {
+  color: var(--danger);
 }
 mark {
   background: var(--warn-soft);

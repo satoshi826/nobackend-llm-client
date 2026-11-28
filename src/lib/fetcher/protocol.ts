@@ -38,13 +38,17 @@ export interface Fetched {
   via: FetchVia;
 }
 
+/** Where text of the conversation found in an address is: a file (its path), a message, a tool's result, the instructions */
+export type LeakPlace = { kind: 'file'; name: string } | { kind: 'message' } | { kind: 'result' } | { kind: 'instructions' };
+
 /**
  * What the app found about an address the model asked for that did not appear in the conversation as it is (it was
- * put together): the parts of its href that appeared nowhere (start and end offsets). The fetch page always asks about
- * such an address, also on a site not asked about
+ * put together): the parts of its href that appeared nowhere (start and end offsets), and text of the conversation
+ * found in them. The fetch page always asks about such an address, also on a site not asked about
  */
 export interface FetchCheck {
   composed: [number, number][];
+  match?: { place: LeakPlace; text: string };
 }
 
 /**
@@ -69,8 +73,17 @@ export function parseCheck(raw: string | null, href: string): FetchCheck | null 
     composed.push([r[0], r[1]]);
     end = r[1];
   }
-  return { composed };
+  const m = v.match;
+  if (m === undefined) return { composed };
+  const p = m?.place;
+  const place: LeakPlace | null =
+    p?.kind === 'file' && typeof p.name === 'string' ? { kind: 'file', name: p.name.slice(0, 200) } : p?.kind === 'message' || p?.kind === 'result' || p?.kind === 'instructions' ? { kind: p.kind } : null;
+  if (!place || typeof m.text !== 'string' || !m.text) return { composed };
+  return { composed, match: { place, text: m.text.slice(0, MAX_MATCH_CHARS) } };
 }
+
+/** Most characters of a match shown in the question */
+export const MAX_MATCH_CHARS = 120;
 
 /** The app to a fetch page opened with mode=page, which stays open and takes the shown pages' requests in turn */
 export type ToPageFetcher = { type: 'page-get'; id: string; url: string } | { type: 'page-cancel'; id: string };

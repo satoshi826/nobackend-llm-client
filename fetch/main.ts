@@ -1,8 +1,8 @@
 // The fetch page. The app opens it in a frame: #url=<address>&mode=read|save&app=<app origin>&lang=..&theme=..
 // It is the only page allowed to reach any https address (its own CSP), and it asks the user before every fetch,
 // unless they chose not to be asked again for that site and mode (kept in this page's storage) and the address came
-// from the conversation as it is: one the model put together is always asked about, its new parts marked (the app's
-// check, #check=, composed.ts). A redirect to another
+// from the conversation as it is: one the model put together is always asked about, its new parts marked, with a
+// warning when they hold text of the conversation (the app's check, #check=, composed.ts). A redirect to another
 // site is asked about the same way (redirect.ts).
 // read: a page for a model to read. Straight from the site, then through the user's relay, and as text from Jina
 // Reader when neither works or the HTML holds almost no text (a page drawn by scripts). save: a file, kept as it is.
@@ -12,7 +12,7 @@
 // app can fetch without the user (fully so when this page is on its own origin, VITE_FETCH_URL).
 // No dependencies on the app. The DOM is built with createElement and textContent only (no innerHTML).
 import { detectLang, formatNumber, getLang, setLang } from '../src/lib/i18n';
-import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, pagesReachWeb, parseCheck, type FetchCheck, type FetchMode, type FromFetcher, type ToPageFetcher } from '../src/lib/fetcher/protocol';
+import { fetchableUrl, fetchRoutes, MAX_FETCH_BYTES, nameFor, pagesReachWeb, parseCheck, type FetchCheck, type FetchMode, type LeakPlace, type FromFetcher, type ToPageFetcher } from '../src/lib/fetcher/protocol';
 import '../vault/style.css';
 import './style.css';
 import { markedPieces, skipsQuestion } from './composed';
@@ -462,9 +462,18 @@ const toRemember: string[] = [];
 const address = (u: URL, c: FetchCheck | null) =>
   h('p', { class: 'mono secret' }, ...markedPieces(u.href, c?.composed ?? []).map((p) => (p.marked ? h('mark', {}, p.text) : p.text)));
 
-/** Why an address the model put together is asked about */
-const composedNote = (u: URL, remembered: boolean) =>
-  h('div', { class: 'caution' }, h('p', {}, t('composed')), remembered && h('p', {}, t('composedRemembered', { host: u.host })));
+/** Where the conversation's text found in an address is */
+const LEAK = { message: 'leakMessage', result: 'leakResult', instructions: 'leakInstructions' } as const;
+const leakWhere = (p: LeakPlace) => (p.kind === 'file' ? t('leakFile', { name: p.name }) : t(LEAK[p.kind]));
+
+/** Why an address the model put together is asked about, and which text of the conversation it holds */
+function composedNote(u: URL, c: FetchCheck, remembered: boolean): Child[] {
+  const m = c.match;
+  return [
+    m && h('div', { class: 'alert', role: 'alert' }, h('strong', {}, leakWhere(m.place)), h('p', { class: 'mono secret' }, m.text), h('p', {}, t('leakNote', { host: u.host }))),
+    h('div', { class: 'caution' }, h('p', {}, t('composed')), remembered && h('p', {}, t('composedRemembered', { host: u.host })))
+  ];
+}
 
 /** The question for one address (read or save); a redirect to a site that is not allowed asks again about where it leads */
 function question(r: Req) {
@@ -472,8 +481,9 @@ function question(r: Req) {
   // The app's check is about the address the model asked for, not where a redirect leads
   const c = r.hops === 0 ? check : null;
   const status = h('p', { class: 'muted', role: 'status', 'aria-live': 'polite' });
-  const cancel = h('button', { type: 'button', class: 'btn outline', onClick: close }, t('cancel'));
-  const go = h('button', { type: 'button', class: 'btn primary' }, t(mode === 'read' ? 'read' : 'fetch'));
+  // With the conversation's text in the address, cancelling is the action offered first
+  const cancel = h('button', { type: 'button', class: c?.match ? 'btn primary' : 'btn outline', onClick: close }, t('cancel'));
+  const go = h('button', { type: 'button', class: c?.match ? 'btn outline' : 'btn primary' }, t(mode === 'read' ? 'read' : 'fetch'));
   const remember = h('input', { type: 'checkbox' });
   const run = async () => {
     go.disabled = true;
@@ -511,7 +521,7 @@ function question(r: Req) {
       h('strong', {}, t(mode === 'read' ? 'titleRead' : 'title')),
       h('div', {}, h('span', { class: 'muted' }, `${t('from')}: `), h('strong', {}, u.host)),
       address(u, c),
-      c && composedNote(u, allowed.includes(u.host)),
+      ...(c ? composedNote(u, c, allowed.includes(u.host)) : []),
       redirectNote(r),
       h('p', { class: 'muted' }, t('noteDirect', { host: u.host })),
       RELAY && h('p', { class: 'muted' }, t('noteRelay', { host: u.host, relay: new URL(RELAY).host })),
@@ -531,9 +541,9 @@ function question(r: Req) {
     void run();
     return;
   }
-  // Fetching needs the user's own action; start on the button that does it (no focus on touch, like the vault), with the
-  // address and any note at the top still in view
-  if (!matchMedia('(pointer: coarse)').matches) go.focus({ preventScroll: true });
+  // Fetching needs the user's own action; start on the button offered first (no focus on touch, like the vault), with the
+  // address and any warning at the top still in view
+  if (!matchMedia('(pointer: coarse)').matches) (c?.match ? cancel : go).focus({ preventScroll: true });
 }
 
 // Nothing is shown until the frame's parent proves it is the app it claims to be (it says hello once this page has

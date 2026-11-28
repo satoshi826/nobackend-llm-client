@@ -190,7 +190,7 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
     {
       folder: dir,
       async fetch(url, signal) {
-        const r = await fetchFromWeb(url, 'save', signal, checkFetch(url, conv, history));
+        const r = await fetchFromWeb(url, 'save', signal, await checkFetch(url, conv, history));
         if (!r) return null;
         const saved = await saveFetched(r, conv);
         if (saved?.kind !== 'file') return saved;

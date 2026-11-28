@@ -114,7 +114,7 @@ if (process.argv[3] === 'fail') { console.error('failing on purpose'); process.e
   it('runs a script with its arguments, its skill\'s files and the working-folder files given, then saves what the user chose', async () => {
     asked.length = saved.length = 0;
     const tool = makeRunSkillScriptTool(deps(['out.txt', 'notes.md']));
-    expect(tool.alwaysAsk).toBe(true);
+    expect(tool.alwaysAsk).toBeUndefined();
     expect(tool.risk).toBe('exec');
     expect(tool.description).not.toContain('libraries');
     expect(tool.summarize(tool.prepare({ skill: 'greeter', path: 'scripts/hello.js', args: ['world'] }))).toBe('greeter/scripts/hello.js world');

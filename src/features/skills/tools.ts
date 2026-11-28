@@ -211,7 +211,7 @@ export function makeRunSkillScriptTool(deps: ScriptDeps): Tool<{ skill: string; 
   return {
     name: RUN_SKILL_SCRIPT,
     label: t('tool.runScript'),
-    description: `Run a JavaScript file of a skill loaded in this conversation, as \`node <path> <args>\` would, in an isolated sandbox with no network and no access to this app, and get back its exit code, what it printed (stdout, stderr) and the files it wrote. CommonJS only (.js, .cjs: require and module.exports, not import/export). It has process (argv, exit, exitCode, env, stdout/stderr.write), console, timers, __dirname, __filename and require of fs (sync, callback and promise forms), path, util${libs} and the skill's own .js and .json files by relative path; no other packages, no child processes. Only JavaScript runs here: a .py or .sh script cannot. The skill's files are at ${SKILL_ROOT}/<path> (read-only). The script starts in ${WORK}: the working-folder files given in file_ids are there at their paths, and the files it writes under ${WORK} are offered to the user to save in the working folder at the same paths (the result says what was saved). It is stopped after ${RUN_TIMEOUT_MS / 1000} seconds. The user approves every run.`,
+    description: `Run a JavaScript file of a skill loaded in this conversation, as \`node <path> <args>\` would, in an isolated sandbox with no network and no access to this app, and get back its exit code, what it printed (stdout, stderr) and the files it wrote. CommonJS only (.js, .cjs: require and module.exports, not import/export). It has process (argv, exit, exitCode, env, stdout/stderr.write), console, timers, __dirname, __filename and require of fs (sync, callback and promise forms), path, util${libs} and the skill's own .js and .json files by relative path; no other packages, no child processes. Only JavaScript runs here: a .py or .sh script cannot. The skill's files are at ${SKILL_ROOT}/<path> (read-only). The script starts in ${WORK}: the working-folder files given in file_ids are there at their paths, and the files it writes under ${WORK} are offered to the user to save in the working folder at the same paths (the result says what was saved). It is stopped after ${RUN_TIMEOUT_MS / 1000} seconds.`,
     parameters: {
       type: 'object',
       properties: {
@@ -223,8 +223,6 @@ export function makeRunSkillScriptTool(deps: ScriptDeps): Tool<{ skill: string; 
       required: ['skill', 'path']
     },
     risk: 'exec',
-    // Code from a skill, which may have come from anywhere: the user approves each run, whatever the settings say
-    alwaysAsk: true,
     summarize: (i) => [`${i.skill}/${i.path}`, ...i.args].join(' '),
     prepare(raw) {
       const r = obj(raw);

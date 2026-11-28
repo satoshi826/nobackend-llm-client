@@ -798,11 +798,11 @@ const skillScripts: Flow = {
     await page.getByRole('button', { name: 'Edit greeter' }).waitFor();
     await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Close' }).click();
 
-    // The mock loads the skill named, then runs its script: asked every time, with no "Always allow"
+    // The mock loads the skill named, then runs its script: asked by default, and it may be allowed always
     await send(page, 'greeter のスクリプトを実行して');
     const approval = page.getByRole('group', { name: 'Confirm tool run' });
     await approval.getByText('Runs scripts/hello.js of the skill "greeter" in an isolated space').waitFor();
-    if (await approval.getByRole('button', { name: 'Always allow' }).count()) throw new Error('A skill script can be allowed always');
+    await approval.getByRole('button', { name: 'Always allow' }).waitFor();
     await a11y('skill script approval');
     await shot('skill script approval');
     await approval.getByRole('button', { name: 'Run', exact: true }).click();

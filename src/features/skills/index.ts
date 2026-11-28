@@ -13,6 +13,7 @@ import { ScriptRun } from './components/ScriptRun';
 import { t } from './messages';
 
 export { allSkills } from './state';
+export { RUN_SKILL_SCRIPT } from './tools';
 
 registerComposerAddon({
   id: 'skills',

@@ -3,6 +3,7 @@ import type { Tool } from '../../../lib/tools/types';
 import { cleanFileName, extOf } from '../../../lib/paths';
 import type { ImageModelInfo } from './providers/common';
 import { t } from './messages';
+import { TranslatedError } from '../../../lib/i18n';
 
 export const GENERATE_IMAGE = 'generate_image';
 const ASPECTS = ['1:1', '4:3', '3:4', '16:9', '9:16'];
@@ -84,7 +85,7 @@ export function makeImageTool(run: ImageToolRun, model?: ImageToolModel): Tool<I
     prepare(raw) {
       const r = (raw ?? {}) as Record<string, unknown>;
       const prompt = typeof r.prompt === 'string' ? r.prompt.trim() : '';
-      if (!prompt) throw new Error(t('tool.noPrompt'));
+      if (!prompt) throw new TranslatedError(() => t('tool.noPrompt'));
       const aspect = typeof r.aspect_ratio === 'string' && ASPECTS.includes(r.aspect_ratio) ? r.aspect_ratio : undefined;
       const negative = typeof r.negative_prompt === 'string' && r.negative_prompt.trim() ? r.negative_prompt.trim() : undefined;
       const path = typeof r.path === 'string' && r.path.trim() ? cleanFileName(r.path, 'png') : undefined;

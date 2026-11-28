@@ -28,7 +28,7 @@ import { imageProviderList, imageProviderOf, registerImageProvider, type ImageCa
 import { imageStems, makeImageTool, type ImageToolInput } from './tool';
 import { extOfMime } from '../../../lib/paths';
 import { TAG_PRESETS, isPresetNegative, sentPrompt } from './presets';
-import { formatNumber } from '../../../lib/i18n';
+import { formatNumber, TranslatedError } from '../../../lib/i18n';
 import { modelLists } from '../models';
 import { t } from './messages';
 
@@ -366,9 +366,15 @@ export function promptRoom(p: ImageParams): number | undefined {
 }
 
 /** Refuse a prompt longer than its model takes, before it is sent */
-function checkPromptLength(p: ImageParams) {
+/** Why the prompt cannot be sent (longer than the model takes), else undefined */
+function promptTooLong(p: ImageParams): TranslatedError | undefined {
   const use = promptUse(p);
-  if (use && use.n > use.limit) throw new ImageApiError({ kind: 'bad-request', message: t('err.tooLong', { n: formatNumber(use.n), limit: formatNumber(use.limit) }) });
+  return use && use.n > use.limit ? new TranslatedError(() => t('err.tooLong', { n: formatNumber(use.n), limit: formatNumber(use.limit) })) : undefined;
+}
+
+function checkPromptLength(p: ImageParams) {
+  const e = promptTooLong(p);
+  if (e) throw new ImageApiError({ kind: 'bad-request', message: e.message });
 }
 
 /** Call the provider for one job */
@@ -481,11 +487,13 @@ export function toolParams(conv: Conversation | undefined, input: Partial<ImageT
 async function runImageTool(conv: Conversation, messageId: string, input: ImageToolInput, signal: AbortSignal) {
   if (!imageModels.value.length) await loadImageModels();
   const p = toolParams(conv, input);
-  if (!p.model) throw new Error(t('err.modelsFailed'));
-  checkPromptLength(p);
+  // The app's own errors are read by the chat model in English (TranslatedError)
+  if (!p.model) throw new TranslatedError(() => t('err.modelsFailed'));
+  const tooLong = promptTooLong(p);
+  if (tooLong) throw tooLong;
   const model = imageModelOf(p.providerId, p.model);
   const r = await providerFor(p.providerId).generate({ ...p, prompt: sentPrompt(p) }, model, callContext(p.providerId, signal));
-  if (!r.images.length) throw new Error(r.violations ? t('err.policy') : t('err.noImage'));
+  if (!r.images.length) throw new TranslatedError(() => (r.violations ? t('err.policy') : t('err.noImage')));
   // As the chat is now: a file written earlier in this answer may have made its working folder
   const now = conversations.value.find((c) => c.id === conv.id) ?? conv;
   const dir = now.workDir ?? '';

@@ -16,6 +16,7 @@ registerMessageTransform(imageNote);
 import { validate } from '../../../lib/db/export';
 import { generationCost, ImageApiError } from './providers/common';
 import { imageStems, makeImageTool } from './tool';
+import { TranslatedError } from '../../../lib/i18n';
 import { savedPathOf, storeImages } from '../../../state/media';
 import type { Transport } from '../../../lib/providers/types';
 
@@ -205,7 +206,8 @@ describe('images in conversations', () => {
 
   it('generate_image tool validates input', async () => {
     const tool = makeImageTool(async (input) => ({ blobIds: ['b1'], paths: ['20261127-160816.webp'], inWorkDir: true, model: 'Flux', blurred: false, ...(input as object) }) as never);
-    expect(() => tool.prepare({})).toThrow();
+    // The chat model reads the app's own errors in English, whatever the UI language
+    expect(() => tool.prepare({})).toThrow(TranslatedError);
     expect(tool.prepare({ prompt: ' a cat ', aspect_ratio: '5:7' })).toEqual({ prompt: 'a cat' });
     const r = await tool.execute({ prompt: 'a cat' }, { signal: new AbortController().signal } as never);
     expect(r.details).toMatchObject({ blobIds: ['b1'] });

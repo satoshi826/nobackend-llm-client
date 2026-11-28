@@ -1,15 +1,19 @@
 // Settings > Skills: list, create, edit, import/export SKILL.md
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useContext, useEffect, useRef, useState } from 'preact/hooks';
+import { memo } from 'preact/compat';
 import { showToast } from '../../../state/ui';
 import type { Skill } from '../../../lib/db/schema';
 import { DESCRIPTION_MAX, NAME_MAX, type SkillDraft } from '../../../lib/skills/skill';
 import { askConfirm } from '../../../components/ConfirmDialog';
-import { Button, Chevron, Collapse, EmptyState, Icon, IconButton, TextArea, TextField, Checkbox, cx } from '../../../components/ui';
+import { Button, Chevron, Collapse, EmptyState, Icon, IconButton, MoreMark, ScrollArea, TextArea, TextField, Checkbox, cx, useBatches } from '../../../components/ui';
 import { skillSettings, builtinSkills, downloadSkill, importSkillFiles, removeSkill, saveSkill, setBuiltinEnabled, setModelInvocable, skills } from '../state';
 import { formatNumber } from '../../../lib/i18n';
 import { t } from '../messages';
 
 const EMPTY: SkillDraft = { name: '', description: '', body: '', modelInvocable: true };
+/** The user's skills drawn at first, and added each time the list scrolls near its end */
+const BATCH = 40;
+const NO_AREA = { current: null };
 
 function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
   const [d, setD] = useState<SkillDraft>(skill ? { name: skill.name, description: skill.description, body: skill.body, modelInvocable: skill.modelInvocable } : EMPTY);
@@ -121,7 +125,8 @@ function BuiltinRow({ s }: { s: Skill }) {
   );
 }
 
-function SkillRow({ s, onEdit }: { s: Skill; onEdit(): void }) {
+/** One of the user's skills; drawn again only when it changes (not when more of the list is drawn) */
+const SkillRow = memo(function SkillRow({ s, onEdit }: { s: Skill; onEdit(id: string): void }) {
   return (
     <li class="rounded-lg border border-line p-3">
       <div class="flex items-start gap-2">
@@ -141,7 +146,7 @@ function SkillRow({ s, onEdit }: { s: Skill; onEdit(): void }) {
           </Checkbox>
         </div>
         <div class="flex shrink-0 items-center">
-          <IconButton label={t('tab.editAria', { name: s.name })} title={t('edit')} onClick={onEdit}>
+          <IconButton label={t('tab.editAria', { name: s.name })} title={t('edit')} onClick={() => onEdit(s.id)}>
             <Icon name="edit" class="size-4" />
           </IconButton>
           <IconButton label={t('tab.exportAria', { name: s.name })} title={t('tab.export')} onClick={() => downloadSkill(s)}>
@@ -163,13 +168,14 @@ function SkillRow({ s, onEdit }: { s: Skill; onEdit(): void }) {
       </div>
     </li>
   );
-}
+});
 
 export function SkillsTab() {
   const list = skills.value;
   const [editing, setEditing] = useState<string | null>(null); // 'new' | skill id
   const file = useRef<HTMLInputElement>(null);
   const [about, setAbout] = useState(false);
+  const batches = useBatches(list.length, BATCH, useContext(ScrollArea) ?? NO_AREA, []);
 
   const onImport = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -224,9 +230,10 @@ export function SkillsTab() {
         <EmptyState icon="book">{t('none')}</EmptyState>
       ) : (
         <ul class="space-y-2">
-          {list.map((s) => (editing === s.id ? <SkillEditor key={s.id} skill={s} onDone={() => setEditing(null)} /> : <SkillRow key={s.id} s={s} onEdit={() => setEditing(s.id)} />))}
+          {list.slice(0, batches.limit).map((s) => (editing === s.id ? <SkillEditor key={s.id} skill={s} onDone={() => setEditing(null)} /> : <SkillRow key={s.id} s={s} onEdit={setEditing} />))}
         </ul>
       )}
+      <MoreMark batches={batches} />
     </div>
   );
 }

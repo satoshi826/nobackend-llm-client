@@ -196,7 +196,21 @@ export const SCENARIOS: Scenario[] = [
       // The menu by the input box, as a person opens it to attach one
       out.menu = await probe.action(() => probe.page.getByRole('button', { name: 'Skills', exact: true }).first().click(), `document.querySelectorAll('[role="menu"] [role="menuitem"], [role="menu"] [role="menuitemcheckbox"]').length > 0`);
       await probe.page.keyboard.press('Escape');
-      out.tab = await probe.action(() => probe.page.evaluate(() => (window as unknown as Tools).__perf.settingsTab('skills')), `document.body.textContent.includes('skill-299')`);
+      // Ready when a screenful shows (a list that draws every skill first is ready only after all of them)
+      out.tab = await probe.action(() => probe.page.evaluate(() => (window as unknown as Tools).__perf.settingsTab('skills')), `document.body.textContent.includes('skill-019')`);
+      // Down to the end of the list, a screenful at a time
+      out.scroll = await probe.action(async () => {
+        for (let i = 0; i < 200; i++) {
+          const done = await probe.page.evaluate(() => {
+            const area = document.querySelector('[role="tabpanel"]') as HTMLElement | null;
+            if (!area) return false;
+            area.scrollBy(0, area.clientHeight);
+            return area.scrollTop + area.clientHeight >= area.scrollHeight - 2 && document.body.textContent.includes('skill-299');
+          });
+          if (done) break;
+          await probe.page.waitForTimeout(50);
+        }
+      }, `document.body.textContent.includes('skill-299')`);
       out.heap = { heap: await probe.heap() };
       return out;
     }

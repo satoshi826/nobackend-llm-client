@@ -1,7 +1,8 @@
 // Settings: core tabs, tabs registered by features, then privacy & data and about
 import { modal, settingsTab, type SettingsTab } from '../state/ui';
 import { settingsTabs, textOf, type SettingsTabDef } from './extensions';
-import { Modal, SideTabs, TabStrip } from './ui';
+import { useRef } from 'preact/hooks';
+import { Modal, ScrollArea, SideTabs, TabStrip } from './ui';
 import { AppearanceTab } from './settings/AppearanceTab';
 import { ChatTab } from './settings/ChatTab';
 import { ConnectionsTab } from './settings/ConnectionsTab';
@@ -26,6 +27,7 @@ export function SettingsModal() {
   const tab = tabs.some((x) => x.id === settingsTab.value) ? settingsTab.value : 'connections';
   const Active = tabs.find((x) => x.id === tab)!.Component;
   const list = tabs.map((x) => ({ id: x.id, label: textOf(x.label), icon: x.icon }));
+  const panel = useRef<HTMLDivElement>(null);
   return (
     // Fixed size: switching tabs never resizes the dialog. Tabs in a column with icons on wide screens, a row of
     // labels on phones (icons would make the row scroll further)
@@ -35,9 +37,11 @@ export function SettingsModal() {
           <SideTabs label={t('settings.title')} tabs={list} value={tab} onChange={(id) => (settingsTab.value = id)} />
         </nav>
         <TabStrip class="shrink-0 px-3 sm:hidden" label={t('settings.title')} tabs={list} value={tab} onChange={(id) => (settingsTab.value = id)} />
-        <div role="tabpanel" key={tab} class="fade-in scroll-thin min-h-0 flex-1 overflow-y-auto p-5">
-          <Active />
-        </div>
+        <ScrollArea.Provider value={panel}>
+          <div ref={panel} role="tabpanel" key={tab} class="fade-in scroll-thin min-h-0 flex-1 overflow-y-auto p-5">
+            <Active />
+          </div>
+        </ScrollArea.Provider>
       </div>
     </Modal>
   );

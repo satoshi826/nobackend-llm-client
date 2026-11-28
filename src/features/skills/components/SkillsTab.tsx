@@ -1,4 +1,4 @@
-// Settings > Skills: list, create, edit, import/export SKILL.md
+// Settings > Skills: list, create, edit (with the skill's files), import (zip, folder, SKILL.md) after a review, export
 import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { memo } from 'preact/compat';
 import { showToast } from '../../../state/ui';
@@ -6,8 +6,12 @@ import type { Skill } from '../../../lib/db/schema';
 import { DESCRIPTION_MAX, NAME_MAX, type SkillDraft } from '../../../lib/skills/skill';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { Button, Chevron, Collapse, EmptyState, Icon, IconButton, MoreMark, ScrollArea, TextArea, TextField, Checkbox, cx, useBatches } from '../../../components/ui';
-import { skillSettings, builtinSkills, downloadSkill, importSkillFiles, removeSkill, saveSkill, setBuiltinEnabled, setModelInvocable, skills } from '../state';
-import { formatNumber } from '../../../lib/i18n';
+import { skillSettings, builtinSkills, downloadSkill, removeSkill, saveImported, saveSkill, setBuiltinEnabled, setModelInvocable, skills } from '../state';
+import { listSkillFiles } from '../../../lib/db/skills';
+import { readSkillSources, type ImportSource, type SkillPackage } from '../../../lib/skills/package';
+import { droppedSources, pickedSources } from '../sources';
+import { SkillFiles, type DraftFile } from './SkillFiles';
+import { ImportReview } from './ImportReview';
 import { t } from '../messages';
 
 const EMPTY: SkillDraft = { name: '', description: '', body: '', modelInvocable: true };
@@ -17,14 +21,20 @@ const NO_AREA = { current: null };
 
 function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
   const [d, setD] = useState<SkillDraft>(skill ? { name: skill.name, description: skill.description, body: skill.body, modelInvocable: skill.modelInvocable } : EMPTY);
+  // Its files, once read (a new skill has none)
+  const [files, setFiles] = useState<DraftFile[] | null>(skill ? null : []);
   const [error, setError] = useState('');
   const box = useRef<HTMLDivElement>(null);
   // Opened from the button at the top, the form may be below the screen (on a phone it always is): bring it into view
   useEffect(() => box.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), []);
+  const id = skill?.id;
+  useEffect(() => {
+    if (id) void listSkillFiles(id).then(setFiles);
+  }, [id]);
   const set = (patch: Partial<SkillDraft>) => setD({ ...d, ...patch });
   const save = async () => {
     try {
-      await saveSkill(d, skill?.id);
+      await saveSkill(d, skill?.id, undefined, files?.map((f) => (f.data ? { path: f.path, mime: f.mime, data: f.data } : { id: f.id!, path: f.path })));
       showToast(skill ? t('tab.saved', { name: d.name }) : t('tab.created', { name: d.name }));
       onDone();
     } catch (e) {
@@ -72,6 +82,7 @@ function SkillEditor({ skill, onDone }: { skill?: Skill; onDone(): void }) {
           <span class="block text-xs text-muted">{t('tab.invocableHelp')}</span>
         </span>
       </Checkbox>
+      {files && <SkillFiles files={files} onChange={setFiles} />}
       {error && (
         <p role="alert" class="text-xs text-danger">
           {error}
@@ -174,25 +185,41 @@ export function SkillsTab() {
   const list = skills.value;
   const [editing, setEditing] = useState<string | null>(null); // 'new' | skill id
   const file = useRef<HTMLInputElement>(null);
+  const folder = useRef<HTMLInputElement>(null);
   const [about, setAbout] = useState(false);
+  const [over, setOver] = useState(false);
+  // Skills read from what was picked or dropped, each saved or skipped after its review
+  const [queue, setQueue] = useState<SkillPackage[]>([]);
   const batches = useBatches(list.length, BATCH, useContext(ScrollArea) ?? NO_AREA, []);
 
-  const onImport = async (files: FileList | null) => {
-    if (!files?.length) return;
-    const r = await importSkillFiles([...files]);
-    const done = [...r.added, ...r.updated];
-    const n = done.length;
-    const updated = r.updated.length;
-    if (n) {
-      const params = { n: formatNumber(n), updated: formatNumber(updated) };
-      showToast(n === 1 ? t(updated ? 'tab.importedOneUpdated' : 'tab.importedOne') : t(updated ? 'tab.importedUpdated' : 'tab.imported', params));
-    }
+  const onImport = async (sources: ImportSource[]) => {
+    if (!sources.length) return;
+    const r = await readSkillSources(sources);
     if (r.errors.length) showToast(t('tab.importFailed', { list: r.errors.join(' / ') }), 'error');
-    if (file.current) file.current.value = '';
+    setQueue((q) => [...q, ...r.packages]);
   };
+  const picked = (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    if (input.files?.length) void onImport(pickedSources(input.files));
+    input.value = '';
+  };
+  const next = () => setQueue((q) => q.slice(1));
+  const pkg = queue[0];
 
   return (
-    <div class="space-y-4">
+    <div
+      class={cx('-m-2 space-y-4 rounded-2xl p-2 transition', over && 'bg-glass-strong')}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={(e) => e.currentTarget === e.target && setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        if (e.dataTransfer) void droppedSources(e.dataTransfer).then(onImport);
+      }}
+    >
       <div class="flex items-start gap-2">
         <p class="flex-1 text-xs leading-5 text-muted">{t('tab.intro')}</p>
         <IconButton onClick={() => setAbout(!about)} label={t('tab.about')} aria-expanded={about} class={cx('-mt-1 shrink-0', about && 'text-ink-strong')}>
@@ -214,8 +241,15 @@ export function SkillsTab() {
           <Icon name="upload" class="size-4" />
           {t('tab.import')}
         </Button>
-        <input ref={file} type="file" accept=".md,.markdown,text/markdown,text/plain" multiple class="hidden" onChange={(e) => void onImport((e.target as HTMLInputElement).files)} />
+        <Button variant="outline" onClick={() => folder.current?.click()}>
+          <Icon name="folder" class="size-4" />
+          {t('tab.importFolder')}
+        </Button>
+        <input ref={file} type="file" accept=".md,.markdown,.zip,text/markdown,text/plain,application/zip" multiple class="hidden" onChange={picked} />
+        {/* A folder picker (the attribute is not in Preact's types) */}
+        <input ref={folder} type="file" {...{ webkitdirectory: true }} class="hidden" onChange={picked} />
       </div>
+      <p class="-mt-2 text-xs text-muted">{t('tab.importHint')}</p>
       <section class="space-y-2">
         <h4 class="text-xs font-semibold text-muted">{t('tab.builtin')}</h4>
         <ul class="space-y-2">
@@ -230,10 +264,32 @@ export function SkillsTab() {
         <EmptyState icon="book">{t('none')}</EmptyState>
       ) : (
         <ul class="space-y-2">
-          {list.slice(0, batches.limit).map((s) => (editing === s.id ? <SkillEditor key={s.id} skill={s} onDone={() => setEditing(null)} /> : <SkillRow key={s.id} s={s} onEdit={setEditing} />))}
+          {list.slice(0, batches.limit).map((s) =>
+            editing === s.id ? (
+              <li key={s.id}>
+                <SkillEditor skill={s} onDone={() => setEditing(null)} />
+              </li>
+            ) : (
+              <SkillRow key={s.id} s={s} onEdit={setEditing} />
+            )
+          )}
         </ul>
       )}
       <MoreMark batches={batches} />
+      {pkg && (
+        <ImportReview
+          key={queue.length}
+          pkg={pkg}
+          left={queue.length - 1}
+          onSkip={next}
+          onSave={async () => {
+            const existed = skills.value.some((s) => s.name === pkg.draft.name);
+            await saveImported(pkg);
+            showToast(existed ? t('tab.importedUpdated', { name: pkg.draft.name }) : t('tab.imported', { name: pkg.draft.name }));
+            next();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 // Approval card for save_skill: shows the full draft for editing, and the changes when updating an existing skill. There is no "Always allow".
-import { useMemo, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import type { Part } from '../../../lib/providers/types';
 import { resolveApproval } from '../../../state/approvals';
-import { lineDiff } from '../../../lib/skills/diff';
-import { Button, Icon, Segmented, TextArea, TextField, cx, Checkbox } from '../../../components/ui';
+import { Diff } from './Diff';
+import { Button, Icon, Segmented, TextArea, TextField, Checkbox } from '../../../components/ui';
 import { allSkills } from '../state';
 import { t } from '../messages';
 
@@ -14,30 +14,6 @@ interface Draft {
   description: string;
   body: string;
   model_invocable: boolean;
-}
-
-
-function Diff({ before, after }: { before: string; after: string }) {
-  const lines = useMemo(() => lineDiff(before, after), [before, after]);
-  const changed = lines.some((l) => l.type !== 'same');
-  if (!changed) return <p class="text-xs text-muted">{t('approval.noBodyChange')}</p>;
-  return (
-    <pre class="max-h-72 overflow-auto rounded-lg border border-line bg-glass p-2 font-mono text-xs leading-5" aria-label={t('approval.diffLabel')}>
-      {lines.map((l, i) => (
-        <div
-          key={i}
-          class={cx(
-            'whitespace-pre-wrap',
-            l.type === 'add' && 'bg-ok-soft text-ok',
-            l.type === 'del' && 'bg-danger-soft text-danger line-through decoration-rose-400/60'
-          )}
-        >
-          {l.type === 'add' ? '+ ' : l.type === 'del' ? '- ' : '  '}
-          {l.text || ' '}
-        </div>
-      ))}
-    </pre>
-  );
 }
 
 export function SkillApproval({ p }: { p: ToolPart }) {

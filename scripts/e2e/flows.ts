@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { crc32, deflateRawSync } from 'node:zlib';
 import type { BrowserContext, Page } from 'playwright';
 
 export interface FlowContext {
@@ -623,6 +624,100 @@ const skills: Flow = {
   }
 };
 
+/** A zip as other tools write one: each entry deflated (the app inflates it in the browser) */
+function deflatedZip(entries: Record<string, string>): Buffer {
+  const parts: Buffer[] = [];
+  const central: Buffer[] = [];
+  let offset = 0;
+  for (const [entry, text] of Object.entries(entries)) {
+    const name = Buffer.from(entry);
+    const plain = Buffer.from(text);
+    const packed = deflateRawSync(plain);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(8, 8);
+    local.writeUInt32LE(crc32(plain), 14);
+    local.writeUInt32LE(packed.length, 18);
+    local.writeUInt32LE(plain.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    const c = Buffer.alloc(46);
+    c.writeUInt32LE(0x02014b50, 0);
+    c.writeUInt16LE(20, 4);
+    c.writeUInt16LE(20, 6);
+    c.writeUInt16LE(8, 10);
+    c.writeUInt32LE(crc32(plain), 16);
+    c.writeUInt32LE(packed.length, 20);
+    c.writeUInt32LE(plain.length, 24);
+    c.writeUInt16LE(name.length, 28);
+    c.writeUInt32LE(offset, 42);
+    parts.push(local, name, packed);
+    central.push(c, name);
+    offset += 30 + name.length + packed.length;
+  }
+  const cd = Buffer.concat(central);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(Object.keys(entries).length, 8);
+  end.writeUInt16LE(Object.keys(entries).length, 10);
+  end.writeUInt32LE(cd.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...parts, cd, end]);
+}
+
+const skillFiles: Flow = {
+  name: 'skill-files',
+  label: 'import a skill from a zip with a SKILL.md and files in folders → every file is shown before saving, a script\'s text read → the skill lists its files → a backup, restored after deleting everything, brings them back',
+  async run({ page, url, a11y, shot, tmp }) {
+    await conversation(page, url, 'A chat before the skill');
+    await openSettings(page, 'Skills');
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Import from files' }).click();
+    const zipFile = deflatedZip({
+      'trip-planner/SKILL.md': '---\nname: trip-planner\ndescription: Plans trips day by day.\nlicense: MIT\n---\nRead reference/a.md, then run scripts/b.js.\n',
+      'trip-planner/reference/a.md': '# Places\nKyoto',
+      'trip-planner/scripts/b.js': 'export const days = 2;\n'
+    });
+    await (await chooser).setFiles({ name: 'trip-planner.zip', mimeType: 'application/zip', buffer: zipFile });
+    const review = page.getByRole('dialog', { name: 'Import the skill "trip-planner"' });
+    await review.getByText('Files (3, ').waitFor();
+    await review.getByRole('button', { name: /^scripts\/b\.js/ }).click();
+    await review.getByText('export const days = 2;').waitFor();
+    await a11y('skill import review');
+    await shot('skill import review');
+    await review.getByRole('button', { name: 'Import', exact: true }).click();
+    await review.waitFor({ state: 'detached' });
+    const listed = async () => {
+      await page.getByRole('button', { name: 'Edit trip-planner' }).click();
+      const files = page.getByRole('region', { name: 'Files' });
+      await files.getByRole('button', { name: 'Open reference/a.md' }).waitFor();
+      await files.getByRole('button', { name: 'Open scripts/b.js' }).waitFor();
+      return files;
+    };
+    await listed();
+    await a11y('skill files');
+    await shot('skill files');
+    await page.getByRole('button', { name: 'Cancel' }).click();
+
+    await page.getByRole('tab', { name: 'Privacy and data' }).click();
+    const file = join(tmp, 'backup.zip');
+    await exportBackup(page, file);
+    await page.getByRole('button', { name: 'Delete all data' }).click();
+    const confirm = page.getByRole('alertdialog');
+    await until('the confirmation field to be focused', () => confirm.getByRole('textbox').evaluate((e) => e === document.activeElement));
+    await confirm.getByRole('textbox').fill('delete');
+    await confirm.getByRole('button', { name: 'Delete everything' }).click();
+    await page.getByText('Add your first provider').waitFor();
+    await openSettings(page, 'Privacy and data');
+    await importBackup(page, file);
+    await page.getByRole('tab', { name: 'Skills' }).click();
+    const files = await listed();
+    await files.getByRole('button', { name: 'Open scripts/b.js' }).click();
+    const text = page.getByRole('dialog', { name: 'scripts/b.js' }).getByRole('textbox');
+    await until('the script\'s text', async () => (await text.inputValue()) === 'export const days = 2;\n');
+  }
+};
+
 const usage: Flow = {
   name: 'usage',
   label: 'a few answers from two models → the header\'s cost opens Usage → its totals, and its split by model and by use',
@@ -845,4 +940,4 @@ const phone: Flow = {
   }
 };
 
-export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update, offline, phone, models, temporary, skills, usage, errors, video, sidebar, branches];
+export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update, offline, phone, models, temporary, skills, skillFiles, usage, errors, video, sidebar, branches];

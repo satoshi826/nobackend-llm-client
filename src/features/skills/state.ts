@@ -2,10 +2,11 @@
 // contribute to a reply (load_skill, the catalog in the system prompt, save_skill once unlocked)
 import { computed, signal } from '@preact/signals';
 import * as repo from '../../lib/db/repo';
-import { deleteSkill, listSkillFiles, listSkills, putSkill, readSkillFileData, type SkillFileWrite } from '../../lib/db/skills';
+import { deleteSkill, listSkillFiles, listSkills, putSkill, readSkillFileData, type SkillFileEntry, type SkillFileWrite } from '../../lib/db/skills';
 import type { Skill } from '../../lib/db/schema';
-import { parseSkillMd, serializeSkillMd, skillCatalog, unlockedTools, validateSkill, type SkillDraft } from '../../lib/skills/skill';
+import { serializeSkillMd, skillCatalog, unlockedTools, validateSkill, type SkillDraft } from '../../lib/skills/skill';
 import { cleanSkillPath, isTextMime, SKILL_MD, type SkillFile } from '../../lib/skills/files';
+import type { SkillPackage } from '../../lib/skills/package';
 import { pathKey } from '../../lib/paths';
 import { zip } from '../../lib/zip';
 import { BUILTIN_NAMES, BUILTIN_SKILLS } from '../../lib/skills/builtin';
@@ -109,27 +110,41 @@ export async function readSkillFile(skillId: string, path: string): Promise<stri
   return isTextMime(f.mime) ? data.text() : data;
 }
 
-export interface SkillImportResult {
-  added: string[];
-  updated: string[];
-  errors: string[];
+// ---- Bringing skills in ----
+
+/** What saving a skill brought in would change: the skill of the same name, and its files added, changed or removed */
+export interface ImportReview {
+  existing?: Skill;
+  /** By path: whether each file of the package is new, different or the same as the existing skill's */
+  status: Map<string, 'added' | 'changed' | 'same'>;
+  removed: SkillFileEntry[];
 }
 
-/** Import a SKILL.md (.md). If a skill with the same name exists, replace its content */
-export async function importSkillFiles(files: File[]): Promise<SkillImportResult> {
-  const res: SkillImportResult = { added: [], updated: [], errors: [] };
-  for (const f of files) {
-    try {
-      if (f.size > 1_000_000) throw new Error(t('state.tooBig', { max: 1 }));
-      const draft = parseSkillMd(await f.text());
-      const existing = skills.value.find((s) => s.name === draft.name.trim());
-      await saveSkill(draft, existing?.id);
-      (existing ? res.updated : res.added).push(draft.name);
-    } catch (e) {
-      res.errors.push(t('state.importError', { name: f.name, error: (e as Error).message }));
-    }
+/** Compare a skill brought in with the one of the same name (its files read to tell changed from the same) */
+export async function reviewImport(pkg: SkillPackage): Promise<ImportReview> {
+  const existing = skills.value.find((s) => s.name === pkg.draft.name);
+  const had = existing ? await listSkillFiles(existing.id) : [];
+  const byKey = new Map(had.map((f) => [pathKey(f.path), f]));
+  const status = new Map<string, 'added' | 'changed' | 'same'>();
+  for (const f of pkg.files) {
+    const old = byKey.get(pathKey(f.path));
+    byKey.delete(pathKey(f.path));
+    if (!old) status.set(f.path, 'added');
+    else status.set(f.path, old.bytes === f.bytes && (await sameBytes(await readSkillFileData(old.id), f.data)) ? 'same' : 'changed');
   }
-  return res;
+  return { existing, status, removed: [...byKey.values()] };
+}
+
+async function sameBytes(a: Blob | undefined, b: Blob): Promise<boolean> {
+  if (!a || a.size !== b.size) return false;
+  const [x, y] = [new Uint8Array(await a.arrayBuffer()), new Uint8Array(await b.arrayBuffer())];
+  return x.every((v, i) => v === y[i]);
+}
+
+/** Save a skill brought in: a new one, or the one of the same name replaced whole (its files too) */
+export async function saveImported(pkg: SkillPackage): Promise<Skill> {
+  const existing = skills.value.find((s) => s.name === pkg.draft.name);
+  return saveSkill({ ...pkg.draft, frontmatter: pkg.draft.frontmatter ?? '' }, existing?.id, undefined, pkg.files.map(({ path, mime, data }) => ({ path, mime, data })));
 }
 
 /** Download a skill: its SKILL.md alone, or with files a zip of its folder (named after it, as Claude's skills are) */

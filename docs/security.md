@@ -179,7 +179,7 @@ A reply may take at most 8 tool steps (`src/lib/chat/runner.ts`). Tool results, 
 
 ### 3.9 Skills
 
-A skill's instructions go to the model as they are: a skill is trusted text. Importing a `SKILL.md` keeps only the name, description, body and whether models may load it on their own; it cannot unlock tools (`src/lib/skills/skill.ts`). A model can create or change a skill only through `save_skill`, which asks every time and lets you read and edit the draft first.
+A skill's instructions go to the model as they are: a skill is trusted text. A skill is imported from a `SKILL.md`, a zip or a folder (`src/lib/skills/package.ts`), and nothing is saved before you have seen it: its `SKILL.md` and every file with its size, each text file readable, and, when it replaces a skill of the same name, the changes to the instructions and which files are added, changed or removed. Import keeps the name, description, body and whether models may load it on their own; other front matter keys (`allowed-tools` among them) are kept only as text written back when the skill is exported, and do nothing; a skill cannot unlock tools (`src/lib/skills/skill.ts`). A skill's files stay inside its folder: a path that leaves it (`..`, a leading `/`, a drive letter) refuses the whole skill, and so do more than 200 files, a file over 5 MiB, more than 20 MiB in all, or a zip entry that inflates past the size it gives, which is checked before anything is read (`src/lib/skills/files.ts`, `src/lib/zip.ts`). The app stores a skill's files and never runs them. A model can create or change a skill only through `save_skill`, which asks every time and lets you read and edit the draft first.
 
 ### 3.10 Backups
 

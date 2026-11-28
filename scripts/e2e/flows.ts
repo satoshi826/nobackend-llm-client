@@ -17,11 +17,15 @@ export interface FlowContext {
   deploy(): void;
   /** Runs the accessibility checks on what the page shows now (a11y.ts) */
   a11y(screen: string): Promise<void>;
+  /** Saves a screenshot of what the page shows now, at its width and (unless phone is false) at a phone's, for a person to look at */
+  shot(name: string, o?: { phone?: boolean }): Promise<void>;
 }
 
 export interface Flow {
   name: string;
   label: string;
+  /** Console errors the flow causes on purpose (parts of their text) */
+  expected?: string[];
   run(c: FlowContext): Promise<void>;
 }
 
@@ -92,14 +96,35 @@ const chat: Flow = {
   }
 };
 
-/** A provider, and a conversation with one complete answer */
-async function conversation(page: Page, url: string, message: string) {
-  await page.goto(url);
-  await addVenice(page);
+/** Sends a message and waits until the mock's answer to it is complete and saved */
+async function ask(page: Page, message: string) {
   await send(page, message);
   await answer(page, message).waitFor();
   await settled(page);
 }
+
+/** A provider, and a conversation with one complete answer */
+async function conversation(page: Page, url: string, message: string) {
+  await page.goto(url);
+  await addVenice(page);
+  await ask(page, message);
+}
+
+const modelButton = (page: Page) => page.getByRole('button', { name: /^Choose a model:/ });
+
+/** Chooses a model in the picker by its name */
+async function pickModel(page: Page, name: string) {
+  await modelButton(page).click();
+  const picker = page.getByRole('dialog', { name: 'Choose a model' });
+  await picker.getByRole('button', { name: new RegExp(`^${name}`) }).last().click();
+  await page.getByRole('button', { name: `Choose a model: ${name}` }).waitFor();
+}
+
+/**
+ * The reply suggestions under the last answer have arrived: until then the list may still grow under the pointer
+ * and scroll, moving what a click aims at
+ */
+const suggested = (page: Page) => page.locator('[data-message-id]').last().getByRole('group', { name: 'Reply suggestions' }).getByRole('button').first().waitFor();
 
 /** Whether any record in the page's IndexedDB databases holds the text as it is */
 const stored = (page: Page, text: string) =>
@@ -444,6 +469,291 @@ const offline: Flow = {
   }
 };
 
+const models: Flow = {
+  name: 'models',
+  label: 'the model picker: search → bookmark → pick → the choice and the bookmark are still there after a reload, and the answer comes from it',
+  async run({ page, url, a11y, shot }) {
+    await page.goto(url);
+    await addVenice(page);
+    await shot('new chat');
+    await modelButton(page).click();
+    const picker = page.getByRole('dialog', { name: 'Choose a model' });
+    await picker.getByRole('button', { name: /^Mock Private Reasoner/ }).waitFor();
+    await shot('picker');
+    await picker.getByRole('textbox', { name: 'Search models' }).fill('reason');
+    await until('the search to leave one model', async () => (await picker.getByRole('button', { name: /^Mock / }).count()) === 1);
+    await picker.getByRole('button', { name: 'Bookmark Mock Private Reasoner' }).click();
+    // Listed under Bookmarks too
+    await until('the bookmark to be listed', async () => (await picker.getByRole('button', { name: 'Remove bookmark for Mock Private Reasoner' }).count()) === 2);
+    await shot('search and bookmark');
+    await a11y('model picker');
+    await picker.getByRole('button', { name: /^Mock Private Reasoner/ }).first().click();
+    await picker.waitFor({ state: 'detached' });
+    await page.getByRole('button', { name: 'Choose a model: Mock Private Reasoner' }).waitFor();
+    await page.reload();
+    await page.getByRole('button', { name: 'Choose a model: Mock Private Reasoner' }).waitFor();
+    await modelButton(page).click();
+    // The bookmark is listed on its own at the top, with the search cleared
+    await picker.getByRole('button', { name: /^Bookmarks/ }).waitFor();
+    await shot('bookmarks after a reload');
+    await page.keyboard.press('Escape');
+    await ask(page, 'Which model answers');
+    await page.locator('[data-message-id]').getByText('mock-private-reasoner', { exact: true }).waitFor();
+    await shot('answer from the picked model');
+  }
+};
+
+const temporary: Flow = {
+  name: 'temporary',
+  label: 'a temporary chat is answered, written nowhere (conversations, usage records), listed until the tab is reloaded, and gone after',
+  async run({ page, url, shot }) {
+    await page.goto(url);
+    await addVenice(page);
+    await page.getByRole('button', { name: 'Temporary chat', exact: true }).click();
+    await page.getByRole('button', { name: 'Temporary chat: on' }).waitFor();
+    await shot('temporary new chat');
+    const message = 'A message not to keep';
+    await ask(page, message);
+    await shot('temporary chat answered');
+    const plain = await stored(page, message);
+    if (plain) throw new Error(`The temporary chat is stored (${plain})`);
+    await openSettings(page, 'Usage');
+    await page.getByText('No records for this period').waitFor();
+    await page.keyboard.press('Escape');
+    // Listed, to go back to, while the tab lives
+    await page.getByRole('button', { name: 'New chat' }).click();
+    await page.getByRole('navigation').getByRole('button', { name: message }).click();
+    await answer(page, message).waitFor();
+    await page.reload();
+    await page.getByText('No conversations yet').waitFor();
+    await shot('after a reload');
+  }
+};
+
+const skills: Flow = {
+  name: 'skills',
+  label: 'write a skill in Settings → Skills → choose it in the input box → it is sent with the message',
+  async run({ page, url, a11y, shot }) {
+    await page.goto(url);
+    await addVenice(page);
+    await openSettings(page, 'Skills');
+    await shot('skills tab');
+    await page.getByRole('button', { name: 'New skill' }).click();
+    const form = page.getByRole('group', { name: 'New skill' });
+    await form.getByLabel('Name').fill('meeting-notes');
+    await form.getByLabel('Description').fill('Turns rough meeting notes into decisions and to-dos.');
+    await form.getByLabel('Instructions (Markdown)').fill('# Steps\n1. List the decisions\n2. List the to-dos with owners');
+    await shot('new skill');
+    await a11y('new skill');
+    await form.getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('button', { name: 'Edit meeting-notes' }).waitFor();
+    await shot('skill saved');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Skills', exact: true }).click();
+    await page.getByRole('menuitemcheckbox', { name: /meeting-notes/ }).click();
+    await page.getByRole('button', { name: 'Skills: 1' }).waitFor();
+    const message = 'Notes from today';
+    await composer(page).fill(message);
+    await shot('skill chosen');
+    await page.getByRole('button', { name: 'Send' }).click();
+    // The mock lists the skills sent with the message
+    await page.locator('[data-message-id]').filter({ hasText: 'モック応答' }).getByText('指定スキル: meeting-notes').waitFor();
+    await settled(page);
+    await shot('answer with the skill');
+  }
+};
+
+const usage: Flow = {
+  name: 'usage',
+  label: 'a few answers from two models → the header\'s cost opens Usage → its totals, and its split by model and by use',
+  async run({ page, url, a11y, shot }) {
+    await page.goto(url);
+    await addVenice(page);
+    // Each answer, and the reply suggestions made after it: two requests
+    const answered = async (message: string) => {
+      await ask(page, message);
+      await suggested(page);
+    };
+    await answered('First question');
+    await answered('Second question');
+    await pickModel(page, 'Mock Uncensored');
+    await answered('Third question');
+    await page.getByRole('button', { name: /^Estimated cost of this conversation/ }).click();
+    const usageTab = page.getByRole('tabpanel');
+    await usageTab.getByText('Cost in this period').waitFor();
+    const requests = await usageTab.getByRole('term').filter({ hasText: 'Requests' }).locator('xpath=following-sibling::dd[1]').innerText();
+    if (requests !== '6') throw new Error(`Usage shows ${requests} requests, not 6`);
+    await shot('usage');
+    await a11y('usage');
+    const split = usageTab.getByRole('tablist', { name: 'Split by' });
+    await split.getByRole('tab', { name: 'Model' }).click();
+    await usageTab.getByRole('list', { name: 'Model' }).getByText('Mock Uncensored').waitFor();
+    await shot('split by model');
+    await split.getByRole('tab', { name: 'Use' }).click();
+    await usageTab.getByRole('list', { name: 'Use' }).getByText('Reply suggestions').waitFor();
+    await shot('split by use');
+  }
+};
+
+/** Sends a message the mock answers with a failure, and waits until the failure shows */
+async function fails(page: Page, message: string) {
+  await send(page, message);
+  await settled(page);
+  await page.locator('[data-message-id]').last().getByRole('alert').waitFor();
+}
+
+const errors: Flow = {
+  name: 'errors',
+  label: 'a refused key → its button opens Connections and keys; a conversation too long for the model → its button opens the compaction panel → compacted',
+  // The browser reports the mock's failures
+  expected: ['status of 401 (Unauthorized)', 'status of 400 (Bad Request)'],
+  async run({ page, url, a11y, shot }) {
+    await page.goto(url);
+    await addVenice(page);
+    await fails(page, 'Hello #err:auth');
+    await shot('key refused');
+    await a11y('error');
+    await page.getByRole('button', { name: 'Open connections and keys' }).click();
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('tab', { name: 'Connections and keys', selected: true }).waitFor();
+    await shot('connections and keys');
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: 'New chat' }).click();
+    for (const n of ['one', 'two', 'three', 'four']) await ask(page, `Message ${n}`);
+    await fails(page, 'Message five #err:context');
+    await shot('too long');
+    await page.getByRole('button', { name: 'Compact conversation' }).click();
+    const panel = page.getByRole('dialog', { name: 'Context usage' });
+    await panel.getByText(/^Keeps the latest/).waitFor();
+    await shot('compaction panel');
+    await a11y('compaction panel');
+    await panel.getByRole('button', { name: 'Compact now' }).click();
+    await page.getByText(/^Summarized the messages so far/).waitFor();
+    await shot('compacted');
+  }
+};
+
+const video: Flow = {
+  name: 'video',
+  label: 'video mode with the mock video model → its options and price → the job is waited for → the video plays from storage',
+  async run({ page, url, a11y, shot }) {
+    await page.goto(url);
+    await addVenice(page);
+    await page.getByRole('button', { name: 'Video', exact: true }).click();
+    await page.getByRole('button', { name: /^Video model: Mock Video/ }).waitFor();
+    await page.getByPlaceholder('Describe the video').fill('Waves on a quiet beach');
+    await shot('video mode');
+    await page.getByRole('button', { name: /^Video settings/ }).click();
+    await page.getByRole('dialog', { name: 'Video settings' }).waitFor();
+    await shot('video options');
+    await a11y('video options');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await page.getByText('Making the video').waitFor();
+    await shot('making the video');
+    // The mock answers on its third ask, five seconds apart
+    const play = page.getByRole('button', { name: 'Play the video' });
+    await play.waitFor({ timeout: 30_000 });
+    await settled(page);
+    await shot('video made');
+    await play.click();
+    const clip = page.locator('[data-message-id] video').first();
+    await until('the video to load', () => clip.evaluate((e: HTMLVideoElement) => e.readyState >= 1 && e.duration > 0));
+    await a11y('video answer');
+  }
+};
+
+const sidebar: Flow = {
+  name: 'sidebar',
+  label: 'three conversations → search finds one → rename it in place → delete another, asked first',
+  async run({ page, url, a11y, shot }) {
+    await page.goto(url);
+    await addVenice(page);
+    for (const message of ['Plans for the weekend', 'Recipe ideas', 'Travel checklist']) {
+      await page.getByRole('button', { name: 'New chat' }).click();
+      await ask(page, message);
+    }
+    const list = page.getByRole('navigation');
+    await shot('three conversations');
+    await page.getByRole('textbox', { name: 'Search chats' }).fill('Recipe');
+    await until('the search to leave one conversation', async () => (await list.getByRole('button', { name: /^Recipe ideas/ }).count()) === 1 && (await list.getByRole('button', { name: /Travel/ }).count()) === 0);
+    await shot('search');
+    await a11y('sidebar search');
+    await page.getByRole('textbox', { name: 'Search chats' }).fill('');
+    const row = list.getByRole('button', { name: 'Recipe ideas', exact: true });
+    // A row's own buttons show while it is hovered
+    const rowOf = (title: string) => list.locator('div').filter({ has: page.getByRole('button', { name: title, exact: true }) }).last();
+    await row.hover();
+    await rowOf('Recipe ideas').getByRole('button', { name: 'Rename' }).click();
+    const name = page.getByRole('textbox', { name: 'Chat name' });
+    await name.fill('Dinner recipes');
+    // Not at a phone's width, where the sidebar closes, and the name with it
+    await shot('rename', { phone: false });
+    await name.press('Enter');
+    await list.getByRole('button', { name: 'Dinner recipes', exact: true }).waitFor();
+    const travel = list.getByRole('button', { name: 'Travel checklist', exact: true });
+    await travel.hover();
+    await rowOf('Travel checklist').getByRole('button', { name: 'Delete' }).click();
+    const confirm = page.getByRole('alertdialog');
+    await confirm.getByText('This deletes "Travel checklist".').waitFor();
+    await shot('delete asked');
+    await a11y('delete conversation');
+    await confirm.getByRole('button', { name: 'Delete' }).click();
+    await travel.waitFor({ state: 'detached' });
+    await page.reload();
+    await list.getByRole('button', { name: 'Dinner recipes', exact: true }).waitFor();
+    if (await list.getByRole('button', { name: 'Travel checklist' }).count()) throw new Error('The deleted conversation is back after a reload');
+    await shot('after a reload');
+  }
+};
+
+const branches: Flow = {
+  name: 'branches',
+  label: 'regenerate an answer and edit a message → each makes a version → switch between versions, also after a reload',
+  async run({ page, url, a11y, shot }) {
+    await page.goto(url);
+    await addVenice(page);
+    await ask(page, 'Tell me a story');
+    await suggested(page);
+    const reply = page.locator('[data-message-id]').filter({ hasText: 'モック応答' }).last();
+    await reply.getByRole('button', { name: 'Regenerate', exact: true }).click();
+    await settled(page);
+    await reply.getByText('2/2').waitFor();
+    await suggested(page);
+    await shot('regenerated');
+    await reply.getByRole('button', { name: 'Previous version' }).click();
+    await reply.getByText('1/2').waitFor();
+    // By its id: while edited, its text is in a text box
+    const id = await page.locator('[data-message-id]').filter({ hasText: 'Tell me a story' }).first().getAttribute('data-message-id');
+    const mine = page.locator(`[data-message-id="${id}"]`);
+    await mine.hover();
+    await mine.getByRole('button', { name: 'Edit' }).click();
+    const edit = mine.getByRole('textbox');
+    await edit.fill('Tell me a short story');
+    await shot('editing');
+    await a11y('editing a message');
+    await mine.getByRole('button', { name: 'Send' }).click();
+    await answer(page, 'Tell me a short story').waitFor();
+    await settled(page);
+    await suggested(page);
+    const edited = page.locator('[data-message-id]').filter({ hasText: 'Tell me a short story' }).first();
+    await edited.getByText('2/2').waitFor();
+    await shot('edited');
+    await edited.getByRole('button', { name: 'Previous version' }).click();
+    await mine.getByText('1/2').waitFor();
+    // With the newest answer of that version: the regenerated one
+    await reply.getByText('2/2').waitFor();
+    // Reloaded once the version shown is saved
+    const leaf = await reply.getAttribute('data-message-id');
+    await until('the version shown to be saved', () => stored(page, `"currentLeafId":"${leaf}"`));
+    await page.reload();
+    // The versions last shown are the ones shown again
+    await mine.getByText('1/2').waitFor();
+    await reply.getByText('2/2').waitFor();
+    await shot('after a reload');
+  }
+};
+
 /** At a phone's width the sidebar is a drawer, opened by the header's Menu button, which every screen has */
 const phone: Flow = {
   name: 'phone',
@@ -466,4 +776,4 @@ const phone: Flow = {
   }
 };
 
-export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update, offline, phone];
+export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update, offline, phone, models, temporary, skills, usage, errors, video, sidebar, branches];

@@ -189,7 +189,7 @@ A skill's instructions go to the model as they are: a skill is trusted text. Imp
 
 ### 3.11 The Service Worker
 
-`sw/sw.js` caches only the app's own static files, so it can start offline. It never touches requests to other origins or non-`GET` requests, and it leaves the vault and fetch pages alone. The page itself is network-first, so an update applies on the next load. The previous release's files are kept until the next update, so a tab opened before an update can still load the parts it loads later.
+`sw/sw.js` caches only the app's own static files, so it can start offline. It never touches requests to other origins or non-`GET` requests, and it leaves the fetch page and the sandbox alone. It serves two pages, network-first (from the cache only when the network fails), so an update applies on the next load: the app, and the vault when it is on the app's origin (the app waits for the vault before its first screen). A vault on its own origin is out of its reach. The previous release's files are kept until the next update, so a tab opened before an update can still load the parts it loads later.
 
 *Prevents:* conversation content ending up in a cache.
 

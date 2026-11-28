@@ -421,4 +421,27 @@ const update: Flow = {
   }
 };
 
-export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update];
+/**
+ * Installable (what Chrome asks of a web app: manifest, icons, Service Worker), and starts offline after one visit:
+ * the Service Worker serves the app, the key vault and every script, stylesheet and font
+ */
+const offline: Flow = {
+  name: 'offline',
+  label: 'installable → offline after one visit, a reload starts the app with its conversations',
+  async run({ page, url }) {
+    const message = 'A conversation to read offline';
+    await conversation(page, url, message);
+    await swReady(page);
+    const cdp = await page.context().newCDPSession(page);
+    const { installabilityErrors } = await cdp.send('Page.getInstallabilityErrors');
+    if (installabilityErrors.length) throw new Error(`Not installable: ${installabilityErrors.map((e) => e.errorId).join(', ')}`);
+    const { errors } = await cdp.send('Page.getAppManifest');
+    if (errors.length) throw new Error(`Manifest: ${errors.map((e) => e.message).join('; ')}`);
+    await page.context().setOffline(true);
+    await page.reload();
+    // Within the default timeout: sooner than the app gives up on a vault that does not answer
+    await answer(page, message).waitFor();
+  }
+};
+
+export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update, offline];

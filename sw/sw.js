@@ -1,24 +1,29 @@
 // Service Worker: caches only the app itself (same-origin static files) so it can start offline.
 // - never touches requests to other origins such as APIs (conversation content is never cached)
-// - the page (index.html) is network-first, falling back to cache only on failure (so updates apply immediately)
+// - the pages are network-first, falling back to cache only on failure (so updates apply immediately): the app, and
+//   the key vault when it is on this origin (the app waits for it before its first screen, so it has to open offline
+//   too). Not the fetch page (it is for reaching the web) or the sandbox
 // - assets/ is cache-first since file names carry a hash
-// - every built script and stylesheet is cached at install (PRECACHE, filled in by the build:
+// - every built script, stylesheet and font is cached at install (PRECACHE, filled in by the build:
 //   vite.config.ts serviceWorkerPlugin), so screens that load their code later (components/lazy.tsx)
-//   also open offline. Files that did not change keep their cached copy across updates.
+//   also open offline, and look the same (the first visit loads its fonts before the worker controls the page).
+//   Files that did not change keep their cached copy across updates.
 // - a tab opened before an update keeps running its build, and may load more of that build's files later (PDF
 //   reading, code highlighting), which the host no longer has. So the files of the build before stay cached until
 //   the next update; only older ones are removed when a new worker activates
-// - handles only the app page (the scope itself). Leaves the vault page (vault/) alone
-// - index.html gets redirected to the scope by the host, so the cache key is always the scope
-//   (browsers refuse to render a page from a redirected response)
+// - <page>index.html gets redirected to <page> by the host, so the cache key is always the folder
+//   (browsers refuse to render a page from a redirected response); the vault's address carries its options after ?,
+//   which the key leaves out
 // - paths are under the scope: '/' at a domain root, '/repo/' under a subpath (VITE_BASE_PATH)
 const CACHE = 'app-shell-v3';
 const BASE = new URL(self.registration.scope).pathname;
 const ASSETS = `${BASE}assets/`;
-const SHELL = [BASE, `${BASE}favicon.svg`, `${BASE}manifest.webmanifest`];
-/** Scripts and stylesheets of this build (filled in by the build) */
+/** The pages it serves (filled in by the build) */
+const PAGES = self.__PAGES__ ?? [BASE];
+const SHELL = [...PAGES, `${BASE}favicon.svg`, `${BASE}manifest.webmanifest`];
+/** Scripts, stylesheets and fonts of this build (filled in by the build) */
 const PRECACHE = self.__PRECACHE__ ?? [];
-/** Every file under assets/ in this build, including ones only cached when used (fonts) */
+/** Every file under assets/ in this build, including ones only cached when used (the image tag list) */
 const KNOWN = new Set(self.__ASSETS__ ?? []);
 /** Where the cache keeps the asset list of the build that activated last, for the next one to read */
 const LISTED = `${BASE}sw-assets.json`;
@@ -70,17 +75,18 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // external (APIs etc.) passes through
   if (req.mode === 'navigate') {
-    if (url.pathname !== BASE && url.pathname !== `${BASE}index.html`) return; // pages other than the app (e.g. the vault) pass through
+    const page = PAGES.find((p) => url.pathname === p || url.pathname === `${p}index.html`);
+    if (!page) return; // other pages (the fetch page, the sandbox) pass through
     event.respondWith(
       fetch(req)
         .then((res) => {
           if (res.ok && !res.redirected) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(BASE, copy));
+            caches.open(CACHE).then((c) => c.put(page, copy));
           }
           return res;
         })
-        .catch(() => caches.match(BASE))
+        .catch(() => caches.match(page))
     );
     return;
   }

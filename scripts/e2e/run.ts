@@ -69,7 +69,9 @@ function screensDir() {
 /** Console errors that are expected */
 const EXPECTED = [
   // The sandbox's CSP refuses peer connections in browsers that know the directive; Chrome does not, and says so
-  "Unrecognized Content-Security-Policy directive 'webrtc'"
+  "Unrecognized Content-Security-Policy directive 'webrtc'",
+  // Requests made while offline (the offline flow): the update check, model lists
+  'net::ERR_INTERNET_DISCONNECTED'
 ];
 
 /**

@@ -95,8 +95,9 @@ function pdfCmapsPlugin(base: string): Plugin {
 }
 
 /**
- * The Service Worker (sw/sw.js → /sw.js) with this build's file list, so it can cache every script and
- * stylesheet at install, including screens that load their code later (components/lazy.tsx).
+ * The Service Worker (sw/sw.js → /sw.js) with this build's file list, so it can cache every script, stylesheet and
+ * font at install, including screens that load their code later (components/lazy.tsx), and its pages: the app, and
+ * the key vault when it is built on the app's origin (the app waits for it before its first screen).
  */
 function serviceWorkerPlugin(base: string): Plugin {
   return {
@@ -109,9 +110,13 @@ function serviceWorkerPlugin(base: string): Plugin {
         .filter((f) => f.startsWith('assets/'))
         .map((f) => `${base}${f}`)
         .sort();
-      const precache = assets.filter((f) => /\.(js|css)$/.test(f));
+      const precache = assets.filter((f) => /\.(js|css|woff2)$/.test(f));
+      const pages = [base, ...('vault/index.html' in bundle ? [`${base}vault/`] : [])];
       const source =
-        `self.__PRECACHE__ = ${JSON.stringify(precache)};\n` + `self.__ASSETS__ = ${JSON.stringify(assets)};\n` + readFileSync(resolve(__dirname, 'sw/sw.js'), 'utf8');
+        `self.__PAGES__ = ${JSON.stringify(pages)};\n` +
+        `self.__PRECACHE__ = ${JSON.stringify(precache)};\n` +
+        `self.__ASSETS__ = ${JSON.stringify(assets)};\n` +
+        readFileSync(resolve(__dirname, 'sw/sw.js'), 'utf8');
       this.emitFile({ type: 'asset', fileName: 'sw.js', source });
     } }
   };

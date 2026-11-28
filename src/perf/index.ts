@@ -8,7 +8,7 @@ import { currentId, currentPath, touchConversation } from '../state/conversation
 import { scheduleMessageUpdate } from '../state/generation';
 import { beginRun, endRun } from '../state/runs';
 import { saveSettings } from '../state/settings';
-import { openModelPicker } from '../state/ui';
+import { openModelPicker, openSettings } from '../state/ui';
 import type { ModelInfo } from '../lib/providers/types';
 import type { PerfCounts } from './counter';
 import { generateDataKey } from '../lib/crypto/data';
@@ -29,6 +29,10 @@ export interface SeedSpec {
   images?: number;
   /** Models of the perf provider, as a long list from an aggregator (prices, context, capabilities, badges) */
   models?: number;
+  /** Usage records (one per request), spread over the last year */
+  usage?: number;
+  /** Skills of the user's own (the model may save many) */
+  skills?: number;
 }
 
 export const LONG_CONVERSATION = 'perf-long';
@@ -120,6 +124,37 @@ async function seed(spec: SeedSpec) {
     const name = c === null ? `folder-${i % folders}/notes-${i}.md` : `work-${c}/notes-${i}.md`;
     await createFile(newFile({ id: `perf-f${i}`, name, origin: { kind: 'made' }, text, by: 'model', conversationId: c === null ? undefined : `perf-c${c}` }), text);
   }
+  if (spec.usage) {
+    const n = spec.usage;
+    await db().usage.bulkPut(
+      Array.from({ length: n }, (_, i) => ({
+        id: `perf-u${i}`,
+        at: now - Math.floor((i / n) * 365 * 86_400_000),
+        providerId: PERF_PROVIDER,
+        model: `vendor-${i % 23}/model-${i % 40}`,
+        kind: i % 10 === 0 ? ('summary' as const) : ('chat' as const),
+        inputTokens: 1000 + (i % 5000),
+        cachedInputTokens: i % 3 === 0 ? 500 : 0,
+        outputTokens: 200 + (i % 900),
+        reasoningTokens: 0,
+        costUsd: 0.0005 * (1 + (i % 20)),
+        costEstimated: i % 4 === 0 || undefined,
+        conversationId: spec.conversations ? `perf-c${i % spec.conversations}` : undefined
+      }))
+    );
+  }
+  if (spec.skills)
+    await db().skills.bulkPut(
+      Array.from({ length: spec.skills }, (_, i) => ({
+        id: `perf-s${i}`,
+        name: `skill-${String(i).padStart(3, '0')}`,
+        description: `Does task ${i}: a sentence that says when to use it, as skill descriptions do.`,
+        body: `# Skill ${i}\n\nSteps for task ${i}.`,
+        modelInvocable: true,
+        createdAt: now - i * 60_000,
+        updatedAt: now - i * 60_000
+      }))
+    );
   if (spec.models) await repo.replaceModels(PERF_PROVIDER, Array.from({ length: spec.models }, (_, i) => model(i)));
   for (let i = 0; i < (spec.images ?? 0); i++) await putImage({ id: `perf-i${i}`, mime: 'image/png', origin: { kind: 'upload' }, name: `image-${i}.png` }, await tinyImage(i), false);
 }
@@ -141,6 +176,11 @@ async function search(query: string): Promise<number> {
 /** The model picker, as the button by the input box opens it */
 function openModels() {
   openModelPicker();
+}
+
+/** A tab of the settings, as the app opens it */
+function settingsTab(tab: string) {
+  openSettings(tab);
 }
 
 /** A message sent in conversation `id`: it moves to the top of the list, as after a real one */
@@ -210,5 +250,5 @@ function stop() {
 }
 
 export function exposePerfTools() {
-  (window as unknown as { __perf: unknown }).__perf = { seed, stream, touch, addFiles, encrypt, search, openModels, start, stop, LONG_CONVERSATION, PERF_PROVIDER };
+  (window as unknown as { __perf: unknown }).__perf = { seed, stream, touch, addFiles, encrypt, search, openModels, settingsTab, start, stop, LONG_CONVERSATION, PERF_PROVIDER };
 }

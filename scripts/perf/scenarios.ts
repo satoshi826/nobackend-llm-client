@@ -25,7 +25,7 @@ async function prepare(probe: Probe, base: string, cpu: number, seed: object = S
 }
 
 const shown = (id: string) => `!!document.querySelector('[data-message-id="${id}"]')`;
-type Tools = { __perf: { touch(id: string): void; openModels(): void; addFiles(n: number): Promise<void>; encrypt(): Promise<void>; seed(s: unknown): Promise<void>; search(q: string): Promise<number> } };
+type Tools = { __perf: { touch(id: string): void; openModels(): void; settingsTab(tab: string): void; addFiles(n: number): Promise<void>; encrypt(): Promise<void>; seed(s: unknown): Promise<void>; search(q: string): Promise<number> } };
 const touch = (probe: Probe, id: string) => probe.page.evaluate((x) => (window as unknown as Tools).__perf.touch(x), id);
 const entries = () => `document.querySelectorAll('[data-entry]').length`;
 const MODELS = 600;
@@ -166,6 +166,58 @@ export const SCENARIOS: Scenario[] = [
           await probe.page.waitForTimeout(50);
         }
       }, 'true');
+      out.heap = { heap: await probe.heap() };
+      return out;
+    }
+  },
+  {
+    name: 'usage',
+    label: 'Usage tab (20,000 requests over a year)',
+    async run(probe, base, cpu) {
+      await prepare(probe, base, cpu, { conversations: 3, usage: 20_000 });
+      await probe.page.goto(`${base}/#/c/perf-c0`);
+      await probe.page.waitForFunction(shown('perf-c0-a'), undefined, { timeout: 60_000 });
+      const out: Record<string, Metrics> = {};
+      const table = `document.querySelectorAll('[role="dialog"] tbody tr').length`;
+      out.open = await probe.action(() => probe.page.evaluate(() => (window as unknown as Tools).__perf.settingsTab('usage')), `${table} > 0`);
+      out.all = await probe.action(() => probe.page.locator('[role="dialog"]').getByText('All', { exact: true }).first().click(), `${table} > 0 && !document.querySelector('[role="dialog"]')?.textContent?.includes('Loading')`);
+      out.heap = { heap: await probe.heap() };
+      return out;
+    }
+  },
+  {
+    name: 'skills',
+    label: 'Skills (300 of the user\'s own)',
+    async run(probe, base, cpu) {
+      await prepare(probe, base, cpu, { conversations: 3, skills: 300 });
+      await probe.page.goto(`${base}/#/c/perf-c0`);
+      await probe.page.waitForFunction(shown('perf-c0-a'), undefined, { timeout: 60_000 });
+      const out: Record<string, Metrics> = {};
+      // The menu by the input box, as a person opens it to attach one
+      out.menu = await probe.action(() => probe.page.getByRole('button', { name: 'Skills', exact: true }).first().click(), `document.querySelectorAll('[role="menu"] [role="menuitem"], [role="menu"] [role="menuitemcheckbox"]').length > 0`);
+      await probe.page.keyboard.press('Escape');
+      out.tab = await probe.action(() => probe.page.evaluate(() => (window as unknown as Tools).__perf.settingsTab('skills')), `document.body.textContent.includes('skill-299')`);
+      out.heap = { heap: await probe.heap() };
+      return out;
+    }
+  },
+  {
+    name: 'imagePage',
+    label: 'An image among 1,500, and the next ones',
+    async run(probe, base, cpu) {
+      await probe.page.goto(`${base}/`);
+      await probe.page.waitForFunction(() => !!(window as unknown as { __perf?: unknown }).__perf, undefined, { timeout: 60_000 });
+      await probe.page.evaluate(() => (window as unknown as Tools).__perf.seed({ images: 1500 }));
+      await probe.page.goto('about:blank');
+      await probe.page.goto(`${base}/#/files?type=image`);
+      await probe.page.waitForFunction(`${entries()} >= 30`, undefined, { timeout: 60_000 });
+      await probe.throttle(cpu);
+      const out: Record<string, Metrics> = {};
+      const img = `document.querySelector('main img, [data-image-page] img')`;
+      out.open = await probe.action(() => probe.page.locator('[data-entry] img').first().click(), `!document.querySelector('[data-entry]') && !!document.querySelector('img')`);
+      out.next = await probe.action(async () => {
+        for (let i = 0; i < 10; i++) await probe.page.getByRole('button', { name: 'Next image', exact: true }).click();
+      }, `!!${img} || !!document.querySelector('img')`);
       out.heap = { heap: await probe.heap() };
       return out;
     }

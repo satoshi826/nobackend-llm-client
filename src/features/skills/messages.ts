@@ -166,11 +166,11 @@ export const t = defineMessages(
       'tab.bodyPlaceholder': '# Steps\n1. ...\n2. ...',
       'tab.invocableHelp': "When off, it's used only when you choose it in the input box.",
       'tab.builtin': 'Built-in',
-      'tab.unlocksSave': 'In chats that use this skill, models can save skills (you confirm every save).',
+      'tab.unlocksSave': 'In conversations that use this skill, models can save skills (you confirm every save).',
       'tab.use': 'Use',
       'tab.body': 'Instructions',
       'tab.byModel': 'Made by a model',
-      'tab.byModelTitle': 'Created by a model in a chat (you approved it before it was saved)',
+      'tab.byModelTitle': 'Created by a model in a conversation (you approved it before it was saved)',
       'tab.editAria': 'Edit {name}',
       'tab.export': 'Export as SKILL.md',
       'tab.exportAria': 'Export {name} as SKILL.md',
@@ -187,7 +187,7 @@ export const t = defineMessages(
       'tab.warning':
         "A skill's instructions go to the model as they are. Check skills made by others before you import them.",
       'tab.details':
-        'Models get only a skill’s name and description, and load the instructions when a request matches (models with tool calling only). Ask in a chat to “turn these steps into a skill” and a model drafts it with the built-in skill-creator; it is saved after you confirm (fixing an existing skill works the same way). You can import Claude SKILL.md files, but bundled scripts and reference files aren’t supported yet.',
+        'Models get only a skill’s name and description, and load the instructions when a request matches (models with tool calling only). Ask in a conversation to “turn these steps into a skill” and a model drafts it with the built-in skill-creator; it is saved after you confirm (fixing an existing skill works the same way). You can import Claude SKILL.md files, but bundled scripts and reference files aren’t supported yet.',
       'tab.about': 'About skills',
       'tab.import': 'Import SKILL.md',
       'tab.yours': 'Your skills'
@@ -262,7 +262,7 @@ export const t = defineMessages(
       'tab.use': '启用',
       'tab.body': '指令',
       'tab.byModel': '模型创建',
-      'tab.byModelTitle': '模型在对话中创建的技能（保存前已经你批准）',
+      'tab.byModelTitle': '模型在对话中创建的技能（保存前已由你批准）',
       'tab.editAria': '编辑 {name}',
       'tab.export': '导出为 SKILL.md',
       'tab.exportAria': '将 {name} 导出为 SKILL.md',

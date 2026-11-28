@@ -6,7 +6,7 @@ export const t = defineMessages(
     // input box
     'mode.placeholder': '作りたい動画を説明',
     'mode.touchPlaceholder': '作りたい動画を説明',
-    'mode.titleOn': '動画モード: 入力した文で動画を作ります（押すとチャットに戻ります）',
+    'mode.titleOn': '動画モード: 入力した文で動画を作ります（押すと会話に戻ります）',
     'mode.titleOff': '動画を作る（動画モード）',
     'mode.button': '動画',
     videoModel: '動画モデル',
@@ -26,7 +26,7 @@ export const t = defineMessages(
     'bar.frameImage': '画像',
     'bar.frameClear': '最初の場面を外す',
     'bar.costAsking': '料金を確認中',
-    'bar.costPriceTitle': '提供元が示した、この内容の料金',
+    'bar.costPriceTitle': '接続先が示した、この内容の料金',
     'bar.costEstimateTitle': '秒あたりの単価からの目安',
     seconds: '{n} 秒',
     // the user's request
@@ -38,7 +38,7 @@ export const t = defineMessages(
     'answer.progress': '{p}%',
     'answer.waitNote': '数分かかることがあります。ページを閉じても、開き直すと続きを待ちます。',
     'answer.waitNoteOnce': '数分かかることがあります。待っている間は、このページを閉じないでください。',
-    'answer.stopped': '待つのをやめました。動画はサービス側で作られていて、料金もかかります。',
+    'answer.stopped': '待つのをやめました。動画は接続先で作られ続けていて、料金もかかります。',
     'answer.waitAgain': 'もう一度待つ',
     'answer.deleted': '動画は削除されました。',
     'answer.play': '動画を再生',
@@ -108,7 +108,7 @@ export const t = defineMessages(
       'err.noJob': 'The video request wasn’t accepted. Try again.',
       'err.noVideo': 'Couldn’t get the video. Try again.',
       'err.failed': 'Couldn’t make the video. Try again.',
-      'err.unsupportedProvider': 'This connection ({id}) can’t make videos.',
+      'err.unsupportedProvider': 'This provider ({id}) can’t make videos.',
       'err.modelsFailed': 'Couldn’t load the video models. Wait a moment and try again.',
       'err.noFrame': 'The first-frame image is missing. Pick another image.',
       'privacy.private': 'Private',
@@ -121,7 +121,7 @@ export const t = defineMessages(
     zh: {
       'mode.placeholder': '描述想要的视频',
       'mode.touchPlaceholder': '描述想要的视频',
-      'mode.titleOn': '视频模式：用输入的文字生成视频（点击返回聊天）',
+      'mode.titleOn': '视频模式：用输入的文字生成视频（点击返回对话）',
       'mode.titleOff': '生成视频（视频模式）',
       'mode.button': '视频',
       videoModel: '视频模型',
@@ -169,7 +169,7 @@ export const t = defineMessages(
       'privacy.privateTitle': '由 Venice 托管、不保存提示词的视频模型',
       'privacy.anonymized': '外部中转',
       'privacy.anonymizedTitle': '由 Venice 匿名化后中转给外部公司的视频模型',
-      'privacy.openrouterTitle': 'OpenRouter 会转发给视频模型的提供方。保留方式取决于提供方。',
+      'privacy.openrouterTitle': 'OpenRouter 会中转给视频模型的提供方。数据保留政策取决于该提供方。',
       'privacy.geminiTitle': 'Google 的 Gemini。发送的内容按 Google 的条款处理。'
     }
   }

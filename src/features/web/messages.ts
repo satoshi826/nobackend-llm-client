@@ -80,7 +80,7 @@ export const t = defineMessages(
       'settings.viaDirectDesc': 'Sites that allow fetching from a browser (common for file hosts)',
       'settings.viaRelay': 'Relay server',
       'settings.viaRelayDesc': "{host}. Used for pages and files that can't be fetched directly. The address and the content pass through the relay.",
-      'settings.noRelay': "No relay server is set (it is set at build time), so files from sites that don't allow fetching from a browser can't be brought in.",
+      'settings.noRelay': "No relay server is set (it is set at build time), so files from sites that don't allow fetching from a browser can't be imported.",
       'settings.viaJina': 'Jina Reader',
       'settings.pageSettings': 'Fetch page settings',
       'settings.pageSettingsDesc': 'Jina Reader key and sites not asked about, kept by the fetch page',

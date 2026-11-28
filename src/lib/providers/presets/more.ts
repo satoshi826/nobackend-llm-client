@@ -4,6 +4,7 @@ import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
 import { checkKey, flexTier, joinUrl, numberOf } from '../openai-compatible';
 import { builtinBaseUrl, parseCustomProviders, type CustomProviderDef } from '../endpoints';
 import { t as tp } from '../messages';
+import { timeOf } from './hosts';
 
 const env = ((import.meta as any).env ?? {}) as Record<string, string | undefined>;
 
@@ -52,6 +53,7 @@ export const anthropicPreset: ProviderPreset = {
     const has = (c: any) => (cap ? c?.supported === true : true);
     const ends = typeof raw.retires_at === 'string' ? raw.retires_at.slice(0, 10) : undefined;
     return model(providerId, String(raw.id), String(raw.display_name ?? raw.id), {
+      releasedAt: timeOf(raw.created_at),
       contextLength: typeof raw.max_input_tokens === 'number' ? raw.max_input_tokens : undefined,
       maxOutputTokens: typeof raw.max_tokens === 'number' ? raw.max_tokens : undefined,
       capabilities: { tools: true, vision: has(cap?.image_input), webSearch: has(cap?.server_tools?.web_search), jsonSchema: cap ? has(cap.structured_outputs) : undefined },
@@ -150,6 +152,7 @@ export const openaiPreset: ProviderPreset = {
     if (!/^(gpt-|o\d|chatgpt-)/.test(id) || OPENAI_SKIP.test(id)) return null;
     const reasoning = /^o\d|^gpt-5/.test(id);
     return model(providerId, id, id, {
+      releasedAt: timeOf(raw.created),
       capabilities: { tools: true, vision: /gpt-4o|gpt-4\.1|gpt-5|^o[34]|chatgpt/.test(id), reasoning, reasoningEffort: reasoning ? ['low', 'medium', 'high'] : undefined },
       deprecated: typeof raw.shutdown_date === 'string' ? { date: raw.shutdown_date } : undefined
     });
@@ -265,6 +268,7 @@ export const groqPreset: ProviderPreset = {
     const id = String(raw.id);
     if (GROQ_SKIP.test(id)) return null;
     return model(providerId, id, id, {
+      releasedAt: timeOf(raw.created),
       contextLength: typeof raw.context_window === 'number' ? raw.context_window : undefined,
       maxOutputTokens: typeof raw.max_completion_tokens === 'number' ? raw.max_completion_tokens : undefined,
       capabilities: { tools: true, reasoning: /gpt-oss|qwen3|deepseek-r1|qwq/.test(id), webSearch: groqSearches(id) }

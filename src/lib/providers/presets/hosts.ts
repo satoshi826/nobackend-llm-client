@@ -11,6 +11,12 @@ const env = ((import.meta as any).env ?? {}) as Record<string, string | undefine
 
 const str = (x: unknown): string | undefined => (typeof x === 'string' && x ? x : undefined);
 
+/** A date from a model list (unix seconds, or an ISO 8601 string) in ms; undefined when missing, 0 or unreadable */
+export function timeOf(x: unknown): number | undefined {
+  const ms = typeof x === 'number' ? x * 1000 : typeof x === 'string' ? Date.parse(x) : NaN;
+  return Number.isFinite(ms) && ms > 0 ? ms : undefined;
+}
+
 function model(providerId: string, id: string, name: string | undefined, extra: Partial<ModelInfo>): ModelInfo {
   return { providerId, id, name: name ?? id, capabilities: {}, privacy: 'unknown', source: 'fetched', ...extra };
 }
@@ -88,6 +94,8 @@ export const nanogptPreset = host({
     const zdr = raw.privacy?.zero_data_retention === true || (routes.length > 0 && routes.every((r) => r?.zdr_policy_eligible === true));
     const cachePer1k = num(raw.pricing?.cacheReadInputPer1kTokens);
     return model(providerId, id, str(raw.name), {
+      description: str(raw.description),
+      releasedAt: timeOf(raw.created),
       contextLength: num(raw.context_length),
       maxOutputTokens: num(raw.max_output_tokens),
       capabilities: {
@@ -114,7 +122,9 @@ export const deepinfraPreset = host({
     const m = raw?.metadata ?? {};
     const tags: string[] = Array.isArray(m.tags) ? m.tags : [];
     if (!id || !tags.includes('chat')) return null;
+    // Its `created` is always 0
     return model(providerId, id, undefined, {
+      description: str(m.description),
       contextLength: num(m.context_length),
       maxOutputTokens: num(m.max_tokens),
       capabilities: { tools: true, vision: tags.includes('vision') || tags.includes('vlm'), reasoning: tags.includes('reasoning') },
@@ -140,6 +150,8 @@ export const cerebrasPreset = host({
       return n === undefined ? undefined : n * 1_000_000;
     };
     return model(providerId, id, str(raw.name), {
+      description: str(raw.description),
+      releasedAt: timeOf(raw.created),
       contextLength: num(raw.limits?.max_context_length),
       maxOutputTokens: num(raw.limits?.max_completion_tokens),
       capabilities: { tools: !!(c.tools ?? c.function_calling), vision: !!c.vision, reasoning: !!c.reasoning },
@@ -160,6 +172,8 @@ export const novitaPreset = host({
     const features: string[] = Array.isArray(raw.features) ? raw.features : [];
     const p = raw.pricing ?? {};
     return model(providerId, id, str(raw.display_name) ?? str(raw.title), {
+      description: str(raw.description),
+      releasedAt: timeOf(raw.created),
       contextLength: num(raw.context_size),
       maxOutputTokens: num(raw.max_output_tokens),
       capabilities: { tools: features.includes('function-calling'), vision: (raw.input_modalities ?? []).includes('image'), reasoning: features.includes('reasoning') },
@@ -178,11 +192,20 @@ export const chutesPreset = host({
     const id = str(raw?.id);
     if (!id || !(raw.output_modalities ?? ['text']).includes('text')) return null;
     const features: string[] = Array.isArray(raw.supported_features) ? raw.supported_features : [];
+    // `pricing` may be a time-limited price: then `regular_price` applies from `regular_price_from`
+    let p = pricing(num(raw.pricing?.prompt), num(raw.pricing?.completion), num(raw.pricing?.input_cache_read));
+    const regular = raw.regular_price;
+    const regularFrom = timeOf(raw.regular_price_from);
+    if (regular && regularFrom !== undefined) {
+      if (Date.now() >= regularFrom) p = pricing(num(regular.input?.usd), num(regular.output?.usd), num(regular.input_cache_read?.usd));
+      else if (p) p.saleEndsAt = regularFrom;
+    }
     return model(providerId, id, undefined, {
+      releasedAt: timeOf(raw.created),
       contextLength: num(raw.context_length) ?? num(raw.max_model_len),
       maxOutputTokens: num(raw.max_output_length),
       capabilities: { tools: features.includes('tools'), vision: (raw.input_modalities ?? []).includes('image'), reasoning: features.includes('reasoning') },
-      pricing: pricing(num(raw.pricing?.prompt), num(raw.pricing?.completion), num(raw.pricing?.input_cache_read)),
+      pricing: p,
       privacy: raw.confidential_compute === true ? 'private' : 'unknown'
     });
   }

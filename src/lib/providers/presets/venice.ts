@@ -1,6 +1,7 @@
 import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
 import { checkKey, joinUrl, numberOf } from '../openai-compatible';
 import { builtinBaseUrl } from '../endpoints';
+import { timeOf } from './hosts';
 import { t as tp } from '../messages';
 
 // In development it can point at the mock (scripts/mock-venice.mjs) via VITE_VENICE_BASE_URL
@@ -85,6 +86,7 @@ export const venicePreset: ProviderPreset = {
       id: String(raw.id),
       name: String(spec.name ?? raw.id),
       description: typeof spec.description === 'string' ? spec.description : undefined,
+      releasedAt: timeOf(raw.created),
       contextLength: spec.availableContextTokens ?? raw.context_length,
       maxOutputTokens: spec.maxCompletionTokens,
       capabilities: {

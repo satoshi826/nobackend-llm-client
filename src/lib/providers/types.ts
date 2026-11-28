@@ -32,6 +32,10 @@ export interface ModelInfo {
   id: string;
   name: string;
   description?: string;
+  /** When the provider made the model available (ms) */
+  releasedAt?: number;
+  /** The last day of the model's training data (ms, midnight UTC) */
+  knowledgeCutoff?: number;
   contextLength?: number;
   maxOutputTokens?: number;
   capabilities: ModelCapabilities;
@@ -43,6 +47,8 @@ export interface ModelInfo {
     currency: 'USD';
     /** Set when the price comes from the app's own price list (lib/providers/prices.ts), not the provider's API: that list's date */
     listedAt?: string;
+    /** Set when this price is time-limited: when it ends and the provider's higher regular price applies (ms) */
+    saleEndsAt?: number;
   };
   privacy?: 'private' | 'anonymized' | 'unknown';
   tags?: string[];

@@ -1,6 +1,7 @@
 import type { ModelInfo, ProviderEvent, ProviderPreset } from '../types';
 import { checkKey, joinUrl, numberOf } from '../openai-compatible';
 import { builtinBaseUrl } from '../endpoints';
+import { timeOf } from './hosts';
 import { t as tp } from '../messages';
 
 const BASE_URL = builtinBaseUrl('openrouter', (import.meta as any).env ?? {});
@@ -106,6 +107,8 @@ export const openrouterPreset: ProviderPreset = {
       id: String(raw.id),
       name: String(raw.name ?? raw.id),
       description: typeof raw.description === 'string' ? raw.description : undefined,
+      releasedAt: timeOf(raw.created),
+      knowledgeCutoff: timeOf(raw.knowledge_cutoff),
       contextLength: raw.context_length ?? raw.top_provider?.context_length,
       maxOutputTokens: raw.top_provider?.max_completion_tokens ?? undefined,
       capabilities: {

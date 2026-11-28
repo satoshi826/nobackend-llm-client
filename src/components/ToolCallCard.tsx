@@ -43,7 +43,8 @@ function ApprovalCard({ p }: { p: ToolPart }) {
           aria-label={t('tool.editableLabel', { label: textOf(field.label) })}
         />
       ) : (
-        <pre class="overflow-x-auto rounded bg-glass p-2 text-xs">{p.argsText}</pre>
+        // Wrapped in full too: what the tool is given is read whole before it runs
+        <pre class="rounded bg-glass p-2 text-xs break-all whitespace-pre-wrap">{p.argsText}</pre>
       )}
       <p class="mt-1.5 text-xs text-muted">
         {sentences(note, !!field && t('tool.editableNote'))}

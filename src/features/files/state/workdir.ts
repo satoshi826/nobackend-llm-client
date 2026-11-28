@@ -64,6 +64,49 @@ async function ensureWorkDir(convId: string, firstFile: string, name = ''): Prom
   );
 }
 
+/**
+ * Write a text file at `path` (cleaned, relative to the working folder, which this makes when there is none: named
+ * `folder`, else after the file), as write_file writes: one file per path, so a path the folder has gets the new text
+ * (the one before stays for undo; the same text again saves nothing). Throws when an image or a folder has the path
+ */
+async function writeInWorkDir(conv: Conversation, path: string, text: string, folder?: string): Promise<{ file: FileRecord; replaced: boolean; unchanged?: boolean }> {
+  const d = await ensureWorkDir(conv.id, path, folder);
+  return withTakenPaths(async (space) => {
+    const full = d + path;
+    const at = atPath(full);
+    if (at?.kind === 'file' && (await fdb.readText(at.file.id)) === text) return { file: at.file, replaced: true, unchanged: true };
+    if (at?.kind === 'file') return { file: await fdb.setText(at.file.id, text, 'model'), replaced: true };
+    if (!pathFree(full, space)) throw new TranslatedError(() => t('tool.pathTaken', { name: path }));
+    const f = fdb.newFile({ id: newId(), name: full, origin: { kind: 'made' }, text, by: 'model', conversationId: conv.id });
+    return { file: await fdb.createFile(f, text, !!conv.temporary), replaced: false };
+  });
+}
+
+/**
+ * Text files another feature's tool made, saved in the conversation's working folder as write_file saves them (the
+ * user agreed; `folder` names the folder when this makes it): for each, whether it replaced a file's text, or why it
+ * was not saved (an image or a folder at its path)
+ */
+export async function saveInWorkDir(conv: Conversation, files: { path: string; text: string }[], folder?: string): Promise<({ path: string; replaced: boolean } | { path: string; error: string })[]> {
+  const out: ({ path: string; replaced: boolean } | { path: string; error: string })[] = [];
+  for (const f of files) {
+    try {
+      out.push({ path: f.path, replaced: (await writeInWorkDir(conv, f.path, f.text, folder)).replaced });
+    } catch (e) {
+      out.push({ path: f.path, error: e instanceof TranslatedError ? e.english : String(e) });
+    }
+  }
+  return out;
+}
+
+/** Which of these paths (relative to the working folder) a file there has: what saving there would replace */
+export async function filesInWorkDir(conv: Conversation, paths: string[]): Promise<Set<string>> {
+  const dir = workDirOf(conv.id);
+  if (!dir) return new Set();
+  await fdb.listFiles();
+  return new Set(paths.filter((p) => atPath(dir + p)?.kind === 'file'));
+}
+
 /** Files attached to the conversation's messages: the model may read them, wherever they are */
 function attachedIds(history: MessageRecord[]): Set<string> {
   return new Set(history.flatMap((m) => (m.attachments ?? []).map((a) => a.fileId)));
@@ -149,20 +192,7 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
         const r = await fetchFromWeb(url, 'save', signal);
         return r && (await saveFetched(r, conv));
       },
-      async create(path, text, folder) {
-        const d = await ensureWorkDir(conv.id, path, folder);
-        return withTakenPaths(async (space) => {
-          const full = d + path;
-          const at = atPath(full);
-          // One file per path: writing to a path the folder has replaces that file's text. The same text again saves
-          // nothing, so the text from before the last change stays
-          if (at?.kind === 'file' && (await fdb.readText(at.file.id)) === text) return { file: at.file, replaced: true, unchanged: true };
-          if (at?.kind === 'file') return { file: await fdb.setText(at.file.id, text, 'model'), replaced: true };
-          if (!pathFree(full, space)) throw new TranslatedError(() => t('tool.pathTaken', { name: path }));
-          const f = fdb.newFile({ id: newId(), name: full, origin: { kind: 'made' }, text, by: 'model', conversationId: conv.id });
-          return { file: await fdb.createFile(f, text, !!conv.temporary), replaced: false };
-        });
-      },
+      create: (path, text, folder) => writeInWorkDir(conv, path, text, folder),
       get: (ref) => readableFile(conv.id, history, ref),
       text: (f, previous) => fdb.readText(f.id, previous ? 'previous' : 'current'),
       async update(id, text, append) {

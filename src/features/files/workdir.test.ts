@@ -15,7 +15,7 @@ import { moveItems, planRemoval, refreshFiles, refreshImages, siteOf, siteSignat
 import { pageApi } from './state/page-api';
 import { setText } from '../../lib/db/files';
 
-const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
+const ctx = { signal: new AbortController().signal, toolCallId: 't', transport: {} as never, authFor: () => undefined };
 const model = { capabilities: { tools: true } } as ModelInfo;
 const conv = (id: string, extra: Partial<Conversation> = {}): Conversation =>
   ({ id, title: id, createdAt: new Date(2026, 10, 27).getTime(), updatedAt: 1, currentLeafId: null, providerId: 'p', modelId: 'm', systemPrompt: '', webSearch: 'off', pinned: 0, tags: [], ...extra }) as Conversation;

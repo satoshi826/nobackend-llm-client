@@ -1,8 +1,11 @@
+import { runInThisContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import type { SkillFile } from '../../lib/skills/files';
-import { makeReadSkillFileTool, makeSkillTool, type SkillFilesDeps } from './tools';
+import type { ScriptJob, ScriptResult } from '../../lib/sandbox/client';
+import { makeReadSkillFileTool, makeRunSkillScriptTool, makeSkillTool, type ScriptDeps, type ScriptOutputFile, type SkillFilesDeps } from './tools';
+import nodeSource from '../../../sandbox/node.js?raw';
 
-const ctx = { signal: new AbortController().signal } as any;
+const ctx = { signal: new AbortController().signal, toolCallId: 'call-1' } as any;
 const file = (path: string, mime = 'text/markdown', bytes = 3): SkillFile => ({ path, mime, bytes });
 
 describe('load_skill', () => {
@@ -20,7 +23,7 @@ describe('load_skill', () => {
       async (id) => files[id] ?? []
     );
     expect((await tool.execute({ name: 'forms' }, ctx)).content).toBe(
-      '<skill name="forms">\nRun scripts/b.js.\n</skill>\n\nFiles in this skill\'s folder (3; paths inside it; read them with read_skill_file):\n- assets/x.png (binary: image/png, 9 bytes)\n- reference/a.md (3 bytes)\n- scripts/b.js (12 bytes)'
+      '<skill name="forms">\nRun scripts/b.js.\n</skill>\n\nFiles in this skill\'s folder (3; paths inside it; read them with read_skill_file, run a .js script with run_skill_script):\n- assets/x.png (binary: image/png, 9 bytes)\n- reference/a.md (3 bytes)\n- scripts/b.js (12 bytes)'
     );
     const many = (await tool.execute({ name: 'many' }, ctx)).content;
     expect(many).toContain('(53; paths inside it; ');
@@ -63,5 +66,128 @@ describe('read_skill_file', () => {
     expect(() => tool.prepare({ skill: 'forms', path: '/etc/passwd' })).toThrow();
     expect(() => tool.prepare({ skill: 'forms' })).toThrow();
     await expect(run({ skill: 'other', path: 'a.md' })).rejects.toMatchObject({ english: 'There is no skill "other". Available skills: forms' });
+  });
+});
+
+describe('run_skill_script', () => {
+  // The sandbox's shim, run here as the worker runs it (each module a script of its own)
+  const nodeScript = new Function(`${nodeSource}\nreturn nodeScript;`)() as (job: ScriptJob, compile: (code: string) => string) => Promise<ScriptResult>;
+  let n = 0;
+  const compile = (code: string) => {
+    const url = `blob:null/tool-${++n}`;
+    runInThisContext(code, { filename: url });
+    return url;
+  };
+  const skillFiles: Record<string, string | Blob> = {
+    'scripts/hello.js': `const fs = require('fs');
+const path = require('path');
+const data = JSON.parse(fs.readFileSync(path.join(__dirname, '../reference/data.json'), 'utf8'));
+const input = fs.existsSync('notes.md') ? fs.readFileSync('notes.md', 'utf8') : '';
+console.log('Hello, ' + process.argv[2] + '! ' + data.greeting + (input ? ' / ' + input : ''));
+fs.writeFileSync('out.txt', 'made by hello.js');
+fs.writeFileSync('notes.md', input + ' (seen)');
+fs.writeFileSync('logo.bin', new Uint8Array([0, 159, 146]));
+if (process.argv[3] === 'fail') { console.error('failing on purpose'); process.exit(2); }`,
+    'reference/data.json': '{"greeting":"from the skill"}',
+    'assets/logo.png': new Blob([new Uint8Array([137, 80])], { type: 'image/png' })
+  };
+  const asked: { id: string; files: ScriptOutputFile[] }[] = [];
+  const saved: { path: string; text: string }[][] = [];
+  const deps = (answer: string[] | null, over: Partial<ScriptDeps> = {}): ScriptDeps => ({
+    skills: [{ id: 's1', name: 'greeter' }],
+    files: async () => Object.entries(skillFiles).map(([path, v]) => file(path, typeof v === 'string' ? (path.endsWith('.js') ? 'text/javascript' : 'application/json') : 'image/png', 1)),
+    read: async (_id, path) => skillFiles[path],
+    input: async (ref) => (ref === 'notes.md' ? { name: 'notes.md', text: 'my notes' } : undefined),
+    libraries: async () => ({}),
+    libraryNames: [],
+    run: (job) => nodeScript(job, compile),
+    existing: async (paths) => new Set(paths.filter((p) => p === 'notes.md')),
+    ask: async (id, files) => (asked.push({ id, files }), answer),
+    save: async (files) => (saved.push(files), files.map((f) => ({ path: f.path, replaced: f.path === 'notes.md' }))),
+    ...over
+  });
+  const run = async (d: ScriptDeps, raw: unknown) => {
+    const tool = makeRunSkillScriptTool(d);
+    return tool.execute(tool.prepare(raw), ctx);
+  };
+
+  it('runs a script with its arguments, its skill\'s files and the working-folder files given, then saves what the user chose', async () => {
+    asked.length = saved.length = 0;
+    const tool = makeRunSkillScriptTool(deps(['out.txt', 'notes.md']));
+    expect(tool.alwaysAsk).toBe(true);
+    expect(tool.risk).toBe('exec');
+    expect(tool.description).not.toContain('libraries');
+    expect(tool.summarize(tool.prepare({ skill: 'greeter', path: 'scripts/hello.js', args: ['world'] }))).toBe('greeter/scripts/hello.js world');
+    const r = await run(deps(['out.txt', 'notes.md']), { skill: 'greeter', path: 'scripts/hello.js', args: ['world'], file_ids: ['notes.md'] });
+    expect(r.isError).toBe(false);
+    expect(r.content).toBe(
+      [
+        'Ran scripts/hello.js of the skill "greeter": exit code 0.',
+        'stdout:\nHello, world! from the skill / my notes\n',
+        'It wrote 3 files in /work: out.txt (16 bytes), notes.md (15 bytes), logo.bin (3 bytes).',
+        'Not offered for saving: logo.bin (binary: the working folder keeps text files).',
+        'Saved in the working folder: "out.txt" (new), "notes.md" (replaced its text).'
+      ].join('\n')
+    );
+    expect(asked).toEqual([{ id: 'call-1', files: [{ path: 'out.txt', bytes: 16, replaces: false }, { path: 'notes.md', bytes: 15, replaces: true }] }]);
+    expect(saved).toEqual([[{ path: 'out.txt', text: 'made by hello.js' }, { path: 'notes.md', text: 'my notes (seen)' }]]);
+    expect(r.details).toMatchObject({ code: 0, stdout: 'Hello, world! from the skill / my notes\n', saved: ['out.txt', 'notes.md'] });
+  });
+
+  it('saves nothing when the user declines, or only the files chosen', async () => {
+    saved.length = 0;
+    const declined = await run(deps(null), { skill: 'greeter', path: 'scripts/hello.js', args: ['a'] });
+    expect(declined.content).toContain('The user chose not to save them in the working folder.');
+    expect(declined.details).toMatchObject({ declined: true });
+    const some = await run(deps(['out.txt']), { skill: 'greeter', path: 'scripts/hello.js', args: ['a'] });
+    expect(some.content).toContain('Saved in the working folder: "out.txt" (new).\nThe user chose not to save: "notes.md".');
+    expect(saved).toEqual([[{ path: 'out.txt', text: 'made by hello.js' }]]);
+  });
+
+  it('gives a failing script\'s exit code and stderr as an error', async () => {
+    const r = await run(deps(null), { skill: 'greeter', path: 'scripts/hello.js', args: ['a', 'fail'] });
+    expect(r.isError).toBe(true);
+    expect(r.content).toContain('exit code 2.');
+    expect(r.content).toContain('stderr:\nfailing on purpose\n');
+    expect(r.details).toMatchObject({ code: 2, stderr: 'failing on purpose\n' });
+  });
+
+  it('says when a run did not finish (stopped), and saves nothing', async () => {
+    const r = await run(deps(['out.txt'], { run: async () => ({ code: 1, stdout: '', stderr: '', stdoutChars: 0, stderrChars: 0, written: {}, error: 'Stopped.' }) }), { skill: 'greeter', path: 'scripts/hello.js' });
+    expect(r).toMatchObject({ content: 'scripts/hello.js of the skill "greeter" did not finish: Stopped.', isError: true });
+  });
+
+  it('cuts long output for the model: the start of stdout, the end of stderr', async () => {
+    const long = { code: 0, stdout: 'o'.repeat(9000), stderr: 'e'.repeat(4500) + 'END', stdoutChars: 2_000_000, stderrChars: 4503, written: {} };
+    const r = await run(deps(null, { run: async () => long }), { skill: 'greeter', path: 'scripts/hello.js' });
+    expect(r.content).toContain(`${'o'.repeat(8000)}\n[stdout is cut at 8000 of its 2000000 characters]`);
+    expect(r.content).toContain('[the first 503 characters of stderr are left out]\n');
+    expect(r.content).toMatch(/eEND\nIt wrote no files in \/work\.$/);
+  });
+
+  it('refuses what is not a JavaScript file of a loaded skill before running anything', async () => {
+    const tool = makeRunSkillScriptTool(deps(null));
+    expect(() => tool.prepare({ skill: 'greeter', path: 'scripts/fill.py' })).toThrow(expect.objectContaining({ english: expect.stringMatching(/^Only JavaScript scripts \(\.js, \.cjs\) run in this app, so "scripts\/fill\.py" can't be run/) }));
+    expect(() => tool.prepare({ skill: 'greeter', path: 'run.sh' })).toThrow(/JavaScript/);
+    expect(() => tool.prepare({ skill: 'greeter', path: 'scripts/x.mjs' })).toThrow(expect.objectContaining({ english: expect.stringContaining('is an ES module') }));
+    expect(() => tool.prepare({ skill: 'greeter', path: '../other/x.js' })).toThrow();
+    await expect(run(deps(null), { skill: 'greeter', path: 'scripts/none.js' })).rejects.toMatchObject({ english: 'The skill "greeter" has no file "scripts/none.js". Use a path listed in load_skill\'s result.' });
+    await expect(run(deps(null), { skill: 'other', path: 'a.js' })).rejects.toMatchObject({ english: 'There is no skill "other". Available skills: greeter' });
+    await expect(run(deps(null), { skill: 'greeter', path: 'scripts/hello.js', file_ids: ['missing.md'] })).rejects.toMatchObject({ english: expect.stringContaining('There is no file "missing.md"') });
+  });
+
+  it('names the libraries there are, and hands the ones the skill\'s scripts require to the run', async () => {
+    let job: ScriptJob | undefined;
+    const d = deps(null, {
+      libraryNames: ['tiny'],
+      libraries: async (sources): Promise<Record<string, string>> => (sources.some((x) => x.includes("require('tiny')")) ? { tiny: 'exports.n = 1;' } : {}),
+      read: async (_id, path) => (path === 'scripts/hello.js' ? "console.log(require('tiny').n)" : skillFiles[path]),
+      run: async (j) => ((job = j), nodeScript(j, compile))
+    });
+    expect(makeRunSkillScriptTool(d).description).toContain('the libraries tiny by name');
+    const r = await run(d, { skill: 'greeter', path: 'scripts/hello.js' });
+    expect(job?.libraries).toEqual({ tiny: 'exports.n = 1;' });
+    expect(job?.files['/skill/assets/logo.png']).toEqual(new Uint8Array([137, 80]));
+    expect(r.content).toContain('stdout:\n1\n');
   });
 });

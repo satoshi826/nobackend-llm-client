@@ -12,7 +12,7 @@ import { t } from './messages';
 import { registerMessageTransform } from '../../lib/chat/request';
 import { attachmentsTransform } from './transform';
 
-export { conversationFile, openFile, openFiler } from './state';
+export { conversationFile, filesInWorkDir, openFile, openFiler, saveInWorkDir } from './state';
 /** Text of a PDF (or other attachable file), for reading pages fetched from the web */
 export { extractText } from './extract';
 

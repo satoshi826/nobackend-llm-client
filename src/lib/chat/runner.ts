@@ -46,7 +46,7 @@ export interface RunOptions {
    * Lets a skill's tools become available from the step right after the skill is loaded
    */
   dynamicTools?(turn: MessageRecord): Tool[];
-  toolContext?: Omit<ToolContext, 'signal'>;
+  toolContext?: Omit<ToolContext, 'signal' | 'toolCallId'>;
   permissionFor?(tool: Tool): Permission;
   requestApproval?(req: ApprovalRequest): Promise<ApprovalDecision>;
   /** Use the provider's own web search for this reply */
@@ -261,7 +261,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
       call.startedAt = Date.now();
       o.onUpdate(msg);
       try {
-        const r = await tool.execute(input, { ...o.toolContext!, signal: o.signal });
+        const r = await tool.execute(input, { ...o.toolContext!, signal: o.signal, toolCallId: call.toolCallId });
         call.modelOutput = r.content;
         call.uiDetails = r.details;
         call.state = r.isError ? 'output-error' : 'output-available';

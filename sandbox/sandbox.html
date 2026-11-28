@@ -31,12 +31,17 @@
                                            (stopped after timeoutMs), or with dom on this page itself, where DOMParser
                                            exists (the app removes the frame if it does not answer in time); files is
                                            { name: text } for the code to read as \`files\`
+    { type: 'script', id, job, timeoutMs } run a skill's script as Node would (sandbox/node.js, job as nodeScript
+                                           takes it) in a worker of its own, stopped after timeoutMs, and answer
+                                           { type: 'scriptResult', id, code, stdout, stderr, stdoutChars, stderrChars,
+                                           written } or { type: 'scriptResult', id, error }
+    { type: 'stop', id }                   stop the run or script with that id at once (no answer)
     { type: 'ping', n }                    answered with { type: 'pong', n } while this page is not stuck
   A page without an origin has no localStorage or sessionStorage of its own: sandbox/storage.js stands in for both
   (in memory; a shown page's localStorage is kept by the app when the render gives storage).
   The script is inline: a page without an origin cannot load module scripts from the server. The build puts
-  sandbox/rewrite.js and sandbox/storage.js into it at REWRITE and STORAGE (vite.config.ts), inside its function, so
-  the shown page finds no names of ours.
+  sandbox/rewrite.js, sandbox/storage.js and sandbox/node.js into it at REWRITE, STORAGE and NODE (vite.config.ts),
+  inside its function, so the shown page finds no names of ours.
 -->
 <html>
   <head>
@@ -58,6 +63,7 @@
         }
         /*REWRITE*/
         /*STORAGE*/
+        /*NODE*/
         // Code run on this page (dom) gets storage in memory too, rather than an error
         installStorage(makeStorage(), makeStorage());
         // Runs code as the body of an async function and collects its console output: on this page (dom), and from
@@ -89,6 +95,18 @@
           }
         }
         const WORKER = `const runCode = ${runCode};\nonmessage = async (e) => postMessage(await runCode(e.data.code, e.data.files));`;
+        // Each module of a script is a classic script of its own (from a blob: URL), so its stack frames carry its lines
+        const NODE_WORKER = `const nodeScript = ${nodeScript};
+const compile = (code) => {
+  const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+  try {
+    importScripts(url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  return url;
+};
+onmessage = async (e) => postMessage(await nodeScript(e.data, compile));`;
         let port = null;
 
         // ---- experimental: the shown page's api (only when the app gives one: a page the user shows, in a build
@@ -179,26 +197,35 @@
           }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['src', 'srcset'] });
         }
 
-        function run(d) {
-          const url = URL.createObjectURL(new Blob([WORKER], { type: 'text/javascript' }));
+        /** Workers running, by the id of their job: stopped by { type: 'stop', id } */
+        const running = new Map();
+        // A job in a worker of its own, answered as `type`, stopped after timeoutMs
+        function inWorker(source, d, message, type) {
+          const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
           const worker = new Worker(url);
           URL.revokeObjectURL(url);
           let done = false;
-          const finish = (m) => {
-            if (done) return;
+          const end = () => {
             done = true;
             clearTimeout(timer);
+            running.delete(d.id);
             worker.terminate();
-            port.postMessage({ ...m, type: 'result', id: d.id });
           };
+          const finish = (m) => {
+            if (done) return;
+            end();
+            port.postMessage({ ...m, type, id: d.id });
+          };
+          running.set(d.id, end);
           const timer = setTimeout(() => finish({ logs: [], error: 'Stopped: it ran longer than ' + d.timeoutMs + ' ms.' }), d.timeoutMs);
           worker.onmessage = (m) => finish(m.data);
           worker.onerror = (ev) => {
             ev.preventDefault();
             finish({ logs: [], error: String(ev.message || 'Error') });
           };
-          worker.postMessage({ code: d.code, files: d.files });
+          worker.postMessage(message);
         }
+        const run = (d) => inWorker(WORKER, d, { code: d.code, files: d.files }, 'result');
 
         // With dom: on this page, so the code has DOMParser (e.g. to try a scraper on a saved HTML file)
         async function runHere(d) {
@@ -324,7 +351,9 @@
             const files = d.files && typeof d.files === 'object' ? d.files : {};
             if (d.dom) void runHere({ id: d.id, code: d.code, files });
             else run({ id: d.id, code: d.code, files, timeoutMs: d.timeoutMs });
-          } else if (d.type === 'eval' && typeof d.code === 'string') void evalHere(d);
+          } else if (d.type === 'script' && d.job && typeof d.job === 'object') inWorker(NODE_WORKER, d, d.job, 'scriptResult');
+          else if (d.type === 'stop') running.get(d.id)?.();
+          else if (d.type === 'eval' && typeof d.code === 'string') void evalHere(d);
           else if (d.type === 'render' && typeof d.html === 'string') {
             noPeers();
             const names = new Map();

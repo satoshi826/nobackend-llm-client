@@ -21,6 +21,8 @@ export interface ToolResult {
 
 export interface ToolContext {
   signal: AbortSignal;
+  /** The call being run: a tool that asks the user something while it runs shows it on this call's card */
+  toolCallId: string;
   transport: Transport;
   /** Key reference for the external service (undefined when no key is set or it is locked, i.e. send without a key) */
   authFor(serviceId: string): AuthRef | undefined;

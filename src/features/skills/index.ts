@@ -1,5 +1,5 @@
 // Skills feature (SKILL.md-compatible instructions with the files of their folder; load_skill, read_skill_file,
-// save_skill via skill-creator).
+// run_skill_script, save_skill via skill-creator).
 // Importing this module registers it with the core through extension points.
 import { registerComposerAddon, registerSettingsTab, registerToolView, registerUserMessageExtra } from '../../components/extensions';
 import { registerMessageTransform } from '../../lib/chat/request';
@@ -8,7 +8,8 @@ import { SkillButton, SkillsAbove, UserSkills, skillKeys } from './components/Co
 import { SkillApproval } from './components/SkillApproval';
 import { lazyComponent } from '../../components/lazy';
 import { attachedSkills, takeAttachedSkills } from './state';
-import { LOAD_SKILL, READ_SKILL_FILE, SAVE_SKILL } from './tools';
+import { LOAD_SKILL, READ_SKILL_FILE, RUN_SKILL_SCRIPT, SAVE_SKILL, type ScriptDetails } from './tools';
+import { ScriptRun } from './components/ScriptRun';
 import { t } from './messages';
 
 export { allSkills } from './state';
@@ -38,6 +39,24 @@ registerToolView({
     return i.skill && i.path !== undefined ? `${i.skill}/${i.path || '.'}` : undefined;
   },
   doneStatus: () => t('tool.loaded')
+});
+registerToolView({
+  names: [RUN_SKILL_SCRIPT],
+  label: () => t('tool.runScript'),
+  icon: 'code',
+  summary: (p) => {
+    const i = (p.input ?? {}) as { skill?: string; path?: string; args?: string[] };
+    return i.skill && i.path ? [`${i.skill}/${i.path}`, ...(i.args ?? [])].join(' ') : undefined;
+  },
+  approvalNote: (p) => {
+    const i = (p.input ?? {}) as { skill?: string; path?: string };
+    return t('script.approvalNote', { skill: i.skill ?? '', path: i.path ?? '' });
+  },
+  doneStatus: (p) => {
+    const code = (p.uiDetails as ScriptDetails | undefined)?.code;
+    return code ? t('script.exit', { code }) : undefined;
+  },
+  Detail: ScriptRun
 });
 registerToolView({
   names: [SAVE_SKILL],

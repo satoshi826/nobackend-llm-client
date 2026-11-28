@@ -18,7 +18,7 @@ import { checkArguments } from '../../lib/tools/check';
 import { filesNote, globSource, logText, makeFileTools, type FileToolDeps, type MovableImage } from './tools';
 import { READ_CHUNK, READ_LINES } from '../../lib/tools/lines';
 
-const ctx = { signal: new AbortController().signal, transport: {} as never, authFor: () => undefined };
+const ctx = { signal: new AbortController().signal, toolCallId: 't', transport: {} as never, authFor: () => undefined };
 
 function memDeps(scope = new Set<string>(), folder = 'work/') {
   const files = new Map<string, FileRecord>();

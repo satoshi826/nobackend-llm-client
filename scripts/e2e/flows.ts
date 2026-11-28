@@ -352,7 +352,7 @@ const images: Flow = {
     await page.getByRole('button', { name: 'Image model: Mock Image Flux' }).waitFor();
     const prompt = 'A lighthouse at dawn';
     await page.getByPlaceholder('Describe the image').fill(prompt);
-    await page.getByRole('button', { name: 'Send' }).click();
+    await page.getByRole('button', { name: 'Generate' }).click();
     // The mock's PNG, decoded and drawn
     const image = page.locator('[data-message-id] img').first();
     await image.waitFor();
@@ -776,6 +776,53 @@ const skillFiles: Flow = {
   }
 };
 
+const skillScripts: Flow = {
+  name: 'skill-scripts',
+  label: "import a skill zip with a script that reads its skill's data and writes a file → a chat loads the skill and runs the script (approved) → what it printed is shown → saving the file it wrote is asked, and it is saved in the working folder",
+  async run({ page, url, a11y, shot }) {
+    await page.goto(url);
+    await addVenice(page);
+    await openSettings(page, 'Skills');
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Import from files' }).click();
+    const zipFile = deflatedZip({
+      'greeter/SKILL.md': '---\nname: greeter\ndescription: Greets someone with a line from its data.\n---\nRun scripts/hello.js with the name to greet.\n',
+      'greeter/scripts/hello.js':
+        "const fs = require('fs');\nconst path = require('path');\nconst data = JSON.parse(fs.readFileSync(path.join(__dirname, '../reference/data.json'), 'utf8'));\nconsole.log('Hello, ' + process.argv[2] + '! ' + data.greeting);\nfs.writeFileSync('out.txt', 'Greeted ' + process.argv[2] + '\\n');\n",
+      'greeter/reference/data.json': '{"greeting": "Nice to meet you."}'
+    });
+    await (await chooser).setFiles({ name: 'greeter.zip', mimeType: 'application/zip', buffer: zipFile });
+    const review = page.getByRole('dialog', { name: 'Import the skill "greeter"' });
+    await review.getByRole('button', { name: 'Import', exact: true }).click();
+    await review.waitFor({ state: 'detached' });
+    await page.getByRole('button', { name: 'Edit greeter' }).waitFor();
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Close' }).click();
+
+    // The mock loads the skill named, then runs its script: asked every time, with no "Always allow"
+    await send(page, 'greeter のスクリプトを実行して');
+    const approval = page.getByRole('group', { name: 'Confirm tool run' });
+    await approval.getByText('Runs scripts/hello.js of the skill "greeter" in an isolated space').waitFor();
+    if (await approval.getByRole('button', { name: 'Always allow' }).count()) throw new Error('A skill script can be allowed always');
+    await a11y('skill script approval');
+    await shot('skill script approval');
+    await approval.getByRole('button', { name: 'Run', exact: true }).click();
+    // It ran: what it printed shows while the files it wrote wait for the user
+    const save = page.getByRole('group', { name: 'Save the files the script wrote' });
+    await save.getByText('out.txt').waitFor();
+    await page.getByText('Hello, world! Nice to meet you.').first().waitFor();
+    await a11y('skill script save');
+    await shot('skill script save');
+    await save.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.locator('[data-message-id]').last().getByText('Saved in the working folder: "out.txt" (new).').waitFor();
+    await settled(page);
+    await shot('skill script saved');
+    await page.getByRole('tab', { name: 'Files' }).click();
+    await page.getByRole('main').getByText('greeter', { exact: true }).dblclick();
+    await page.getByRole('main').getByText('out.txt').dblclick();
+    await page.getByText('Greeted world').waitFor();
+  }
+};
+
 const usage: Flow = {
   name: 'usage',
   label: 'a few answers from two models → the header\'s cost opens Usage → its totals, and its split by model and by use',
@@ -870,7 +917,7 @@ const video: Flow = {
     await shot('video options');
     await a11y('video options');
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Send' }).click();
+    await page.getByRole('button', { name: 'Generate' }).click();
     await page.getByText('Making the video').waitFor();
     await shot('making the video');
     // The mock answers on its third ask, five seconds apart
@@ -998,4 +1045,4 @@ const phone: Flow = {
   }
 };
 
-export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update, offline, phone, models, temporary, skills, skillFiles, usage, errors, video, sidebar, branches];
+export const FLOWS: Flow[] = [chat, lock, backup, files, images, settings, fetchPage, pdf, update, offline, phone, models, temporary, skills, skillFiles, skillScripts, usage, errors, video, sidebar, branches];

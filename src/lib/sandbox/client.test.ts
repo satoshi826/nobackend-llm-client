@@ -240,4 +240,45 @@ describe('running code in the sandbox', () => {
     void runJavaScript('return 1');
     await vi.waitFor(() => expect(frames).toHaveLength(2));
   });
+
+  it('stops a run at once when asked, telling the sandbox to stop its worker', async () => {
+    const { runJavaScript } = await load();
+    const ctrl = new AbortController();
+    const p = runJavaScript('while (true) {}', { signal: ctrl.signal });
+    await vi.waitFor(() => expect(sandboxes[0]?.got[0]?.type).toBe('run'));
+    ctrl.abort();
+    expect(await p).toEqual({ logs: [], error: 'Stopped.' });
+    await vi.waitFor(() => expect(sandboxes[0].got[1]).toEqual({ type: 'stop', id: sandboxes[0].got[0].id }));
+    // The shared frame stays for the next run
+    expect(frames[0].removed).toBe(false);
+  });
+});
+
+describe('running a skill\'s script in the sandbox', () => {
+  const job = { main: '/skill/a.js', args: ['x'], cwd: '/work', files: { '/skill/a.js': 'console.log(1)' }, readOnly: ['/skill'], libraries: {}, libraryNames: [] };
+  it('sends the job, and takes back its result in its own shape only', async () => {
+    const { runScript } = await load();
+    let got: any;
+    respond = (m, s) => {
+      got = m;
+      s.send({ type: 'scriptResult', id: m.id, code: 2, stdout: 'out', stderr: 5, stdoutChars: 3, written: { '/work/a.txt': 'A', '/work/b.bin': new Uint8Array([1]), 'relative.txt': 'no', '/work/c': { not: 'data' } } });
+    };
+    const r = await runScript(job);
+    expect(got).toMatchObject({ type: 'script', job, timeoutMs: 10_000 });
+    expect(r).toEqual({ code: 2, stdout: 'out', stderr: '', stdoutChars: 3, stderrChars: 0, written: { '/work/a.txt': 'A', '/work/b.bin': new Uint8Array([1]) } });
+  });
+
+  it('gives what stopped it: the time limit in the sandbox, or a stop asked for', async () => {
+    const { runScript } = await load();
+    let answers = true;
+    respond = (m, s) => answers && s.send({ type: 'scriptResult', id: m.id, logs: [], error: 'Stopped: it ran longer than 10000 ms.' });
+    expect(await runScript(job)).toMatchObject({ code: 1, error: 'Stopped: it ran longer than 10000 ms.', written: {} });
+    answers = false;
+    const ctrl = new AbortController();
+    const p = runScript(job, ctrl.signal);
+    await vi.waitFor(() => expect(sandboxes[0].got.length).toBe(2));
+    ctrl.abort();
+    expect((await p).error).toBe('Stopped.');
+    await vi.waitFor(() => expect(sandboxes[0].got.at(-1)).toEqual({ type: 'stop', id: sandboxes[0].got[1].id }));
+  });
 });

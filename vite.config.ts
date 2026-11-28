@@ -36,7 +36,7 @@ function cspMetaPlugin(policies: Record<string, string>): Plugin {
 }
 
 /**
- * The sandbox page (sandbox/sandbox.html → /sandbox/), with its CSP and sandbox/rewrite.js and storage.js put in
+ * The sandbox page (sandbox/sandbox.html → /sandbox/), with its CSP and sandbox/rewrite.js, storage.js and node.js put in
  * (into its inline script: the page has no origin to load scripts from); served by the dev server too
  */
 function sandboxPagePlugin(base: string): Plugin {
@@ -49,7 +49,8 @@ function sandboxPagePlugin(base: string): Plugin {
     readFileSync(resolve(__dirname, 'sandbox/sandbox.html'), 'utf8')
       .replace('<!--CSP-->', cspMetaTag(sandboxCsp(false)))
       .replace('/*REWRITE*/', () => part('rewrite.js'))
-      .replace('/*STORAGE*/', () => part('storage.js'));
+      .replace('/*STORAGE*/', () => part('storage.js'))
+      .replace('/*NODE*/', () => part('node.js'));
   return {
     name: 'sandbox-page',
     configureServer(server) {

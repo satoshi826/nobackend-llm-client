@@ -43,14 +43,14 @@ export function makeRunJavaScriptTool(readFile: FileReader): Tool<RunInput> {
       const file_ids = Array.isArray(r.file_ids) ? r.file_ids.filter((x): x is string => typeof x === 'string' && !!x.trim()).slice(0, 10) : [];
       return { code, file_ids, dom: r.dom === true };
     },
-    async execute(i) {
+    async execute(i, ctx) {
       const files: Record<string, string> = {};
       for (const id of i.file_ids) {
         const f = await readFile(id);
         if (!f) return { content: `No file ${JSON.stringify(id)} in this conversation.`, isError: true, details: { output: '', failed: true } };
         files[f.name] = f.text;
       }
-      const r = await runJavaScript(i.code, { files, dom: i.dom });
+      const r = await runJavaScript(i.code, { files, dom: i.dom, signal: ctx.signal });
       const text = runText(r) || '(no output)';
       return {
         content: text.length > MAX_OUTPUT ? `${text.slice(0, MAX_OUTPUT)}\n[output cut at ${MAX_OUTPUT} characters]` : text,

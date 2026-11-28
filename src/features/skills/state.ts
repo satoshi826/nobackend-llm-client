@@ -1,6 +1,6 @@
 // Skill list, editing (with the skill's files), import/export, the skills attached to the next send, and what skills
-// contribute to a reply (load_skill, the catalog in the system prompt, read_skill_file once a skill with files is
-// loaded, save_skill once unlocked)
+// contribute to a reply (load_skill, the catalog in the system prompt, read_skill_file and run_skill_script once a
+// skill with files is loaded, save_skill once unlocked)
 import { computed, signal } from '@preact/signals';
 import * as repo from '../../lib/db/repo';
 import { deleteSkill, listSkillFiles, listSkills, putSkill, readSkillFileData, type SkillFileEntry, type SkillFileWrite } from '../../lib/db/skills';
@@ -13,8 +13,12 @@ import { zip } from '../../lib/zip';
 import { BUILTIN_NAMES, BUILTIN_SKILLS } from '../../lib/skills/builtin';
 import { defineFeatureSettings } from '../../state/feature-settings';
 import { registerDataLoader } from '../../state/lifecycle';
-import { registerToolProvider } from '../../state/tool-registry';
-import { makeReadSkillFileTool, makeSaveSkillTool, makeSkillTool } from './tools';
+import { registerToolProvider, type ToolProviderContext } from '../../state/tool-registry';
+import { makeReadSkillFileTool, makeRunSkillScriptTool, makeSaveSkillTool, makeSkillTool } from './tools';
+import { askToSave } from './saving';
+import { conversationFile, filesInWorkDir, saveInWorkDir } from '../files';
+import { runScript } from '../../lib/sandbox/client';
+import { librariesFor, libraryNames } from '../../lib/sandbox/libraries';
 import { t } from './messages';
 import { TranslatedError } from '../../lib/i18n';
 
@@ -187,12 +191,25 @@ export function takeAttachedSkills(): { name: string; body: string }[] {
 
 const fileList = async (id: string) => filesOf(id);
 
-/** read_skill_file, over the skills loaded in the conversation that have files (none: not offered) */
-function skillFileTools(messages: MessageRecord[]) {
+/** read_skill_file and run_skill_script, over the skills loaded in the conversation that have files (none: not offered) */
+function skillFileTools({ conv, history }: ToolProviderContext, messages: MessageRecord[]) {
   const loaded = loadedSkills(messages);
   const withFiles = allSkills.value.filter((s) => loaded.has(s.name) && filesOf(s.id).length);
   if (!withFiles.length) return [];
-  return [makeReadSkillFileTool({ skills: withFiles, files: fileList, read: readSkillFile })];
+  const deps = { skills: withFiles, files: fileList, read: readSkillFile };
+  return [
+    makeReadSkillFileTool(deps),
+    makeRunSkillScriptTool({
+      ...deps,
+      input: (ref) => conversationFile(conv, history, ref),
+      libraries: librariesFor,
+      libraryNames: libraryNames(),
+      run: runScript,
+      existing: (paths) => filesInWorkDir(conv, paths),
+      ask: askToSave,
+      save: (files, folder) => saveInWorkDir(conv, files, folder)
+    })
+  ];
 }
 
 registerToolProvider({
@@ -201,11 +218,11 @@ registerToolProvider({
   tools: () => (modelSkills.value.length ? [makeSkillTool(modelSkills.value, fileList)] : []),
   // A loaded skill with files brings the tools for its files, from the step after it was loaded; skill-creator unlocks
   // save_skill (and load_skill over every skill) in the conversation that loaded it
-  dynamicTools: ({ history }, turn) => {
-    const messages = [...history, turn];
+  dynamicTools: (ctx, turn) => {
+    const messages = [...ctx.history, turn];
     const unlocked = unlockedTools(messages, allSkills.value);
     return [
-      ...skillFileTools(messages),
+      ...skillFileTools(ctx, messages),
       ...(unlocked.has('save_skill')
         ? [
             makeSkillTool(allSkills.value, fileList),

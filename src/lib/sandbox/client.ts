@@ -326,7 +326,8 @@ interface Hidden {
   port: Promise<MessagePort>;
 }
 let shared: Hidden | null = null;
-const pending = new Map<string, (r: RunResult) => void>();
+/** Jobs waiting for their answer, by id: each checks the shape of what arrives itself */
+const pending = new Map<string, (d: Record<string, unknown>) => void>();
 
 /** Drop the shared frame (stuck past its time limit); the next run makes a fresh one */
 function resetShared() {
@@ -342,13 +343,9 @@ function hiddenFrame(): Hidden {
   f.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
   const port = connect(f).then((port) => {
     port.onmessage = (e) => {
-      const d = e.data as { type?: string; id?: string } & RunResult;
-      if (d?.type !== 'result' || typeof d.id !== 'string') return;
-      pending.get(d.id)?.({
-        logs: Array.isArray(d.logs) ? d.logs.map(String) : [],
-        result: typeof d.result === 'string' ? d.result : undefined,
-        error: typeof d.error === 'string' ? d.error : undefined
-      });
+      const d = e.data as Record<string, unknown> | null;
+      if ((d?.type !== 'result' && d?.type !== 'scriptResult') || typeof d.id !== 'string') return;
+      pending.get(d.id)?.(d);
       pending.delete(d.id);
     };
     return port;
@@ -360,38 +357,112 @@ function hiddenFrame(): Hidden {
 
 export const RUN_TIMEOUT_MS = 10_000;
 
-export interface RunOptions {
-  /** Text files the code reads as `files` ({ name: text }) */
-  files?: Record<string, string>;
-  /** Run on the sandbox page instead of a worker, so the code has DOMParser (stopped by removing the frame) */
-  dom?: boolean;
-}
-
-/** Run JavaScript in the sandbox: no requests, no access to the app, stopped after RUN_TIMEOUT_MS */
-export async function runJavaScript(code: string, { files = {}, dom = false }: RunOptions = {}): Promise<RunResult> {
+/**
+ * Send a job to the sandbox and wait for its answer: `stopped` when it does not answer in time (the frame is dropped)
+ * or the signal stops it (the sandbox stops it at once)
+ */
+async function sandboxJob<T>(message: Record<string, unknown>, { dom = false, signal }: { dom?: boolean; signal?: AbortSignal }, answer: (d: Record<string, unknown>) => T, stopped: (why: string) => T): Promise<T> {
   const own = dom ? hiddenFrame() : null;
   const h = own ?? (shared ??= hiddenFrame());
   const port = await h.port;
   const id = crypto.randomUUID();
   return new Promise((resolve) => {
+    const end = (r: T) => {
+      clearTimeout(guard);
+      pending.delete(id);
+      signal?.removeEventListener('abort', onAbort);
+      own?.frame.remove();
+      resolve(r);
+    };
     // A worker is stopped by the sandbox itself; code on the page (dom) is stopped by dropping the frame
     const limit = dom ? RUN_TIMEOUT_MS : RUN_TIMEOUT_MS + 2000;
     const guard = setTimeout(() => {
-      pending.delete(id);
-      if (own) own.frame.remove();
-      else resetShared();
-      resolve({ logs: [], error: `Stopped: no answer within ${limit} ms.` });
+      if (!own) resetShared();
+      end(stopped(`Stopped: no answer within ${limit} ms.`));
     }, limit);
-    pending.set(id, (r) => {
-      clearTimeout(guard);
-      own?.frame.remove();
-      resolve(r);
-    });
-    port.postMessage({ type: 'run', id, code, files, dom, timeoutMs: RUN_TIMEOUT_MS });
+    const onAbort = () => {
+      if (!own) port.postMessage({ type: 'stop', id });
+      end(stopped('Stopped.'));
+    };
+    if (signal?.aborted) return onAbort();
+    signal?.addEventListener('abort', onAbort, { once: true });
+    pending.set(id, (d) => end(answer(d)));
+    port.postMessage({ ...message, id, timeoutMs: RUN_TIMEOUT_MS });
   });
+}
+
+export interface RunOptions {
+  /** Text files the code reads as `files` ({ name: text }) */
+  files?: Record<string, string>;
+  /** Run on the sandbox page instead of a worker, so the code has DOMParser (stopped by removing the frame) */
+  dom?: boolean;
+  /** Stops the run at once */
+  signal?: AbortSignal;
+}
+
+/** Run JavaScript in the sandbox: no requests, no access to the app, stopped after RUN_TIMEOUT_MS */
+export function runJavaScript(code: string, { files = {}, dom = false, signal }: RunOptions = {}): Promise<RunResult> {
+  return sandboxJob(
+    { type: 'run', code, files, dom },
+    { dom, signal },
+    (d): RunResult => ({
+      logs: Array.isArray(d.logs) ? d.logs.map(String) : [],
+      result: typeof d.result === 'string' ? d.result : undefined,
+      error: typeof d.error === 'string' ? d.error : undefined
+    }),
+    (error) => ({ logs: [], error })
+  );
 }
 
 /** A run's output as plain text (console lines, then the returned value or the error) */
 export function runText(r: RunResult): string {
   return [...r.logs, ...(r.result !== undefined ? [`→ ${r.result}`] : []), ...(r.error ? [`Error: ${r.error}`] : [])].join('\n');
+}
+
+// ---- a skill's script, run as Node would run it (sandbox/node.js) ----
+/** What a script runs with: paths are absolute; the files are in memory only, for this run */
+export interface ScriptJob {
+  /** The script's path ('/skill/scripts/fill.js') */
+  main: string;
+  args: string[];
+  /** Where relative paths start */
+  cwd: string;
+  /** The files it starts with: text, or bytes */
+  files: Record<string, string | Uint8Array>;
+  /** Directories nothing may be written in */
+  readOnly: string[];
+  /** Libraries require() gives by name: the source of a CommonJS module each (libraries.ts) */
+  libraries: Record<string, string>;
+  /** Every library the app has, loaded or not (to say why one is missing) */
+  libraryNames: string[];
+}
+
+export interface ScriptResult {
+  /** Its exit code (1 for an error nothing caught) */
+  code: number;
+  /** What it printed, each cut at a million characters; the *Chars say how much there was */
+  stdout: string;
+  stderr: string;
+  stdoutChars: number;
+  stderrChars: number;
+  /** The files it wrote, by path, as they were when it ended */
+  written: Record<string, string | Uint8Array>;
+  /** It did not end by itself: stopped (time limit, the user), or the sandbox failed */
+  error?: string;
+}
+
+/** A script's result as the sandbox sent it, in its own shape only */
+function cleanScriptResult(d: Record<string, unknown>): ScriptResult {
+  const str = (k: string) => (typeof d[k] === 'string' ? (d[k] as string) : '');
+  const num = (k: string, or: number) => (typeof d[k] === 'number' && Number.isFinite(d[k]) ? Math.round(d[k] as number) : or);
+  const written: Record<string, string | Uint8Array> = {};
+  if (d.written && typeof d.written === 'object')
+    for (const [path, v] of Object.entries(d.written)) if (path.startsWith('/') && (typeof v === 'string' || v instanceof Uint8Array)) written[path] = v;
+  if (typeof d.error === 'string') return { code: 1, stdout: '', stderr: '', stdoutChars: 0, stderrChars: 0, written: {}, error: d.error };
+  return { code: num('code', 1), stdout: str('stdout'), stderr: str('stderr'), stdoutChars: num('stdoutChars', str('stdout').length), stderrChars: num('stderrChars', str('stderr').length), written };
+}
+
+/** Run a script in a sandbox worker of its own: no requests, no access to the app, stopped after RUN_TIMEOUT_MS */
+export function runScript(job: ScriptJob, signal?: AbortSignal): Promise<ScriptResult> {
+  return sandboxJob({ type: 'script', job }, { signal }, cleanScriptResult, (error) => cleanScriptResult({ error }));
 }

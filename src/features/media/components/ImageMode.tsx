@@ -1,8 +1,9 @@
-// Image mode's parts of the input box: its options, its model, what goes beside the text (characters left, "to tags")
+// Image mode's parts of the input box: its options, its model, what goes beside the text (characters left) and under
+// it ("Convert to tags")
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComposerApi } from '../../../components/extensions';
-import { Button, Collapse, Icon, IconButton, Segmented, Select, Spinner, TextArea, TextField, cx } from '../../../components/ui';
-import { showToast } from '../../../state/ui';
+import { Button, Collapse, Icon, Segmented, Select, Spinner, TextArea, TextField, cx } from '../../../components/ui';
+import { openSettings, showToast } from '../../../state/ui';
 import { formatNumber, formatUsd } from '../../../lib/i18n';
 import { hasOption, sizeOf, type TagFamily } from '../image/providers/common';
 import { imageProviderOf } from '../image/providers/types';
@@ -253,60 +254,90 @@ function setText(api: ComposerApi, text: string) {
 }
 
 /**
- * "To tags" for tag models: the chat model rewrites the prompt as tags. While the tags are as they came, the button
- * puts the text from before back instead. Shown while a chat model can be used, and off while the prompt is empty
+ * "Convert to tags" for tag models: the chat model rewrites the prompt as tags. While the tags are as they came, the
+ * button puts the text from before back instead. Typing meanwhile stops it and keeps what was typed; so does the button
+ * going away (the image model or the mode changed), which says so. Without a chat model, it says why it can't run
  */
 function ToTags({ api, limit }: { api: ComposerApi; limit: number | undefined }) {
-  const [busy, setBusy] = useState(false);
+  /** The text being converted, while it is */
+  const [busy, setBusy] = useState<string | null>(null);
   const [done, setDone] = useState<{ from: string; to: string } | null>(null);
   const ctrl = useRef<AbortController | null>(null);
-  useEffect(() => () => ctrl.current?.abort(), []);
-  if (!tagWriter()) return null;
+  useEffect(
+    () => () => {
+      if (!ctrl.current) return;
+      ctrl.current.abort();
+      showToast(ti('bar.toTagsStopped'));
+    },
+    []
+  );
+  useEffect(() => {
+    if (busy === null || api.text === busy) return;
+    ctrl.current?.abort();
+    ctrl.current = null;
+    setBusy(null);
+  }, [api.text, busy]);
+  if (!tagWriter())
+    return (
+      <div class="flex flex-wrap items-center gap-2 px-3 pb-2.5 text-xs text-warn" role="status">
+        <span class="min-w-0 flex-1">{ti('bar.toTagsNoModel')}</span>
+        <Button class="text-xs" variant="outline" onClick={() => openSettings('connections')}>
+          <Icon name="key" class="size-3.5" />
+          {t('setKey')}
+        </Button>
+      </div>
+    );
   const run = async () => {
     const from = api.text;
-    ctrl.current = new AbortController();
-    setBusy(true);
+    const c = new AbortController();
+    ctrl.current = c;
+    setBusy(from);
     try {
-      const to = await toTags(from, limit, ctrl.current.signal);
-      if (!to) throw new Error(ti('bar.toTagsEmpty'));
+      const to = await toTags(from, limit, c.signal);
+      if (c.signal.aborted) return;
       setText(api, to);
       setDone({ from, to });
     } catch (e) {
-      if (!ctrl.current.signal.aborted) showToast(ti('bar.toTagsFailed', { error: (e as Error).message }), 'error');
+      if (!c.signal.aborted) showToast(ti('bar.toTagsFailed', { error: (e as Error).message }), 'error');
     } finally {
-      setBusy(false);
+      if (ctrl.current === c) {
+        ctrl.current = null;
+        setBusy(null);
+      }
     }
   };
-  if (done && api.text === done.to)
-    return (
-      <IconButton class="shrink-0 rounded-full! p-2! text-muted hover:text-ink" label={ti('bar.toTagsBack')} onClick={() => setText(api, done.from)}>
-        <Icon name="history" class="size-4" />
-      </IconButton>
-    );
+  const undo = done && api.text === done.to;
   return (
-    <IconButton class="shrink-0 rounded-full! p-2! text-muted hover:text-ink" label={ti('bar.toTags')} title={ti('bar.toTagsTitle')} disabled={busy || !api.text.trim()} onClick={() => void run()}>
-      {busy ? <Spinner class="size-4" /> : <Icon name="wand" class="size-4" />}
-    </IconButton>
+    <div class="flex px-1.5 pb-1.5">
+      {undo ? (
+        <Button class="text-xs text-muted hover:text-ink" title={ti('bar.toTagsBackTitle')} onClick={() => setText(api, done.from)}>
+          <Icon name="history" class="size-3.5" />
+          {ti('bar.toTagsBack')}
+        </Button>
+      ) : (
+        <Button class="text-xs text-muted hover:text-ink" title={ti('bar.toTagsTitle')} aria-busy={busy !== null} disabled={busy !== null || !api.text.trim()} onClick={() => void run()}>
+          {busy !== null ? <Spinner class="size-3.5" /> : <Icon name="wand" class="size-3.5" />}
+          {ti('bar.toTags')}
+        </Button>
+      )}
+    </div>
   );
 }
 
-/**
- * Beside the text: the characters left for a model with a prompt limit (in the last fifth before it, and over it why
- * the prompt can't be sent), and "to tags" for tag models
- */
+/** Beside the text: the characters left for a model with a prompt limit (in the last fifth before it, and over it why the prompt can't be sent) */
 export function ImageEnd({ api }: { api: ComposerApi }) {
-  const m = currentImageModel.value;
-  const params = modeParams(api.text.trim());
-  const use = promptUse(params);
+  const use = promptUse(modeParams(api.text.trim()));
   const left = use && use.limit - use.n;
+  if (!use || left === undefined || left > use.limit / 5) return null;
   return (
-    <>
-      {use && left !== undefined && left <= use.limit / 5 && (
-        <span class={cx('shrink-0 self-center px-1 text-xs tabular-nums', left < 0 ? 'text-danger' : 'text-warn')} data-tip={ti('bar.limitTitle', { limit: formatNumber(use.limit) })}>
-          {left < 0 ? ti('bar.overLimit', { n: formatNumber(-left), limit: formatNumber(use.limit) }) : ti('bar.charsLeft', { n: formatNumber(left) })}
-        </span>
-      )}
-      {m?.promptStyle === 'tags' && <ToTags api={api} limit={promptRoom(params)} />}
-    </>
+    <span class={cx('shrink-0 self-center px-1 text-xs tabular-nums', left < 0 ? 'text-danger' : 'text-warn')} data-tip={ti('bar.limitTitle', { limit: formatNumber(use.limit) })}>
+      {left < 0 ? ti('bar.overLimit', { n: formatNumber(-left), limit: formatNumber(use.limit) }) : ti('bar.charsLeft', { n: formatNumber(left) })}
+    </span>
   );
+}
+
+/** Under the text: "Convert to tags" for tag models */
+export function ImageBelow({ api }: { api: ComposerApi }) {
+  if (currentImageModel.value?.promptStyle !== 'tags') return null;
+  return <ToTags api={api} limit={promptRoom(modeParams(api.text.trim()))} />;
 }

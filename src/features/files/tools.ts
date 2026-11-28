@@ -153,10 +153,13 @@ async function syntaxNote(deps: FileToolDeps, f: FileRecord, text: string): Prom
   return `\nSyntax error${p.inline ? ' in an inline script' : ''} at ${at}: ${p.message}. The file is saved as written: fix it, unless append_file adds the rest.`;
 }
 
+/** A text file the model may use, else why not: an image at that path, or no such file within its reach */
 async function mustGet(deps: FileToolDeps, ref: string): Promise<FileRecord> {
   const f = await deps.get(ref);
-  if (!f) throw new TranslatedError(() => t('tool.notInConversation', { id: ref }));
-  return f;
+  if (f) return f;
+  const im = await deps.image(ref);
+  if (im) throw new TranslatedError(() => t('tool.isImage', { name: im.path }));
+  throw new TranslatedError(() => t('tool.notInConversation', { id: ref }));
 }
 
 /**

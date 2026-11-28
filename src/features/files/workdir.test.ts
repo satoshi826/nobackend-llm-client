@@ -82,7 +82,7 @@ describe('working folder', () => {
     await make({ id: 'out', name: 'theirs/secret.md', origin: { kind: 'made' }, text: 'secret', by: 'model', conversationId: 'other' });
     await make({ id: 'in', name: 'mine/a.md', origin: { kind: 'made' }, text: 'a', by: 'model', conversationId: 'c' });
     const plain = toolsFor(c);
-    await expect(plain.run('read_file', { file_id: 'out' })).rejects.toThrow(/使えません|can't be used/);
+    await expect(plain.run('read_file', { file_id: 'out' })).rejects.toThrow(/ありません|No file "out"/);
     await expect(plain.run('read_file', { file_id: '../theirs/secret.md' })).rejects.toThrow();
     // A file written to a path outside lands inside: there is no way to name another folder
     await plain.run('write_file', { name: '../theirs/secret.md', content: 'overwrite?' });
@@ -103,6 +103,10 @@ describe('working folder', () => {
     await make({ id: 'p', name: 'game/index.html', origin: { kind: 'made' }, text: '<img src="hero.png">', by: 'model', conversationId: 'c' });
     const tools = toolsFor(c);
     const pathOf = async (id: string) => (await listImages()).find((im) => im.id === id)!.path;
+    // The text tools tell an image from a missing file
+    await expect(tools.run('read_file', { file_id: 'hero.png' })).rejects.toThrow(/"hero.png" is an image|画像です/);
+    await expect(tools.run('delete_file', { file_id: 'hero.png' })).rejects.toThrow(/"hero.png" is an image|画像です/);
+    await expect(tools.run('read_file', { file_id: 'hero.md' })).rejects.toThrow(/No file "hero.md"|ありません/);
     await tools.run('move_file', { file_id: 'HERO.png', to: 'assets/hero.png' });
     expect(await pathOf('hero')).toBe('game/assets/hero.png');
     await expect(tools.run('move_file', { file_id: 'hero', to: 'index.html' })).rejects.toThrow(/拡張子|extension/);

@@ -225,8 +225,8 @@ describe('file tools', () => {
     const scope = new Set<string>();
     const { deps, files } = memDeps(scope);
     files.set('other', newFile({ id: 'other', name: 'secret.md', origin: { kind: 'upload' }, text: 'secret', by: 'upload' }));
-    await expect(run(deps, 'read_file', { file_id: 'other' })).rejects.toThrow(/使えません/);
-    await expect(run(deps, 'append_file', { file_id: 'other', content: 'x' })).rejects.toThrow(/使えません/);
+    await expect(run(deps, 'read_file', { file_id: 'other' })).rejects.toThrow(/ありません/);
+    await expect(run(deps, 'append_file', { file_id: 'other', content: 'x' })).rejects.toThrow(/ありません/);
   });
   it('reads with line numbers, in pages of lines (and of characters)', async () => {
     const { deps } = memDeps();

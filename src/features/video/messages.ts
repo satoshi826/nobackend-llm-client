@@ -55,9 +55,6 @@ export const t = defineMessages(
     'answer.tryModel': '{model} で試す',
     'answer.costEstimated': '約 {cost}',
     elapsed: '{n} 秒経過',
-    // what chat models see for a video answer
-    'note.made': '［動画を作りました: {prompt}］',
-    'note.deleted': '［作った動画は削除されました: {prompt}］',
     // making a video from an image (image viewer, image answers)
     'action.makeVideo': '動画にする',
     'action.makeVideoTitle': 'この画像を最初の場面にして、動画モードで動画を作ります',
@@ -129,8 +126,6 @@ export const t = defineMessages(
       'answer.tryModel': 'Try {model}',
       'answer.costEstimated': 'About {cost}',
       elapsed: '{n} s',
-      'note.made': '[Made a video: {prompt}]',
-      'note.deleted': '[The video made was deleted: {prompt}]',
       'action.makeVideo': 'Make a video',
       'action.makeVideoTitle': 'Make a video in video mode that starts from this image',
       'err.busy': 'This model is busy. Wait a moment or try another model.',
@@ -198,8 +193,6 @@ export const t = defineMessages(
       'answer.tryModel': '改用 {model}',
       'answer.costEstimated': '约 {cost}',
       elapsed: '已过 {n} 秒',
-      'note.made': '［已生成视频：{prompt}］',
-      'note.deleted': '［生成的视频已删除：{prompt}］',
       'action.makeVideo': '生成视频',
       'action.makeVideoTitle': '以此图像为首帧，在视频模式中生成视频',
       'err.busy': '此模型当前繁忙。请稍候，或换个模型再试。',

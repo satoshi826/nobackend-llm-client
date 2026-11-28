@@ -34,10 +34,11 @@ registerImageAction({
   run: (blobId, name) => makeVideoFrom(blobId, name)
 });
 
-// What chat models see for a video answer: a short note instead of the video
+// What chat models see for a video answer: a short note instead of the video (for the model only: English, like the
+// tool descriptions)
 registerMessageTransform((m: MessageRecord, parts: Part[]): Part[] => {
   if (m.role !== 'assistant' || !m.video) return parts;
   if (m.status !== 'done') return [];
   const prompt = m.video.params.prompt.slice(0, 200);
-  return [{ type: 'text', text: t(m.parts.some((p) => p.type === 'file') ? 'note.made' : 'note.deleted', { prompt }) }];
+  return [{ type: 'text', text: m.parts.some((p) => p.type === 'file') ? `[Made a video: ${prompt}]` : `[The video made here was deleted: ${prompt}]` }];
 });

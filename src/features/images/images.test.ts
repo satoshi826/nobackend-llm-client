@@ -169,7 +169,7 @@ describe('image storage', () => {
 });
 
 describe('images in conversations', () => {
-  it('chat models get a note instead of the image', () => {
+  it('chat models get a note instead of the image, in English whatever the UI language', () => {
     const a: MessageRecord = {
       id: 'a',
       conversationId: 'c',
@@ -181,7 +181,7 @@ describe('images in conversations', () => {
       image: { params: params() }
     };
     const out = buildRequestMessages([a], '');
-    expect((out[0].parts[0] as { text: string }).text).toContain('画像を 1 枚生成しました: a cat');
+    expect((out[0].parts[0] as { text: string }).text).toBe('[Generated an image: a cat]');
   });
 
   it('backups keep image parts and requests', () => {

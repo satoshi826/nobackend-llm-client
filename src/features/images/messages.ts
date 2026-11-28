@@ -171,15 +171,7 @@ export const t = defineMessages(
     'privacy.privateTitle': 'Venice がホストし、プロンプトを保存しない画像モデル',
     'privacy.relayed': '外部中継',
     'privacy.relayedTitle': '外部の事業者に中継される画像モデル',
-    'privacy.unknownTitle': '保持方針は提供元によります',
-    // notes the chat model sees instead of image answers
-    'note.deleted': '［生成した画像は削除されました: {prompt}］',
-    'note.inReply': '［この返答に画像を {n} 枚含めました］',
-    'note.generatedOne': '［画像を {n} 枚生成しました: {prompt}］',
-    'note.generatedMany': '［画像を {n} 枚生成しました: {prompt}］',
-    'note.upscaled': '［画像を高解像度化しました: {prompt}］',
-    'note.edited': '［画像を編集しました: {prompt}］',
-    'note.removedBg': '［画像の背景を除去しました: {prompt}］'
+    'privacy.unknownTitle': '保持方針は提供元によります'
   },
   {
     en: {
@@ -341,14 +333,7 @@ export const t = defineMessages(
       'privacy.privateTitle': "Image model hosted by Venice that doesn't store prompts",
       'privacy.relayed': 'Relayed',
       'privacy.relayedTitle': 'Image model relayed to an outside company',
-      'privacy.unknownTitle': 'Retention depends on the provider',
-      'note.deleted': '[The generated image was deleted: {prompt}]',
-      'note.inReply': '[Included {n} image(s) in this reply]',
-      'note.generatedOne': '[Generated {n} image: {prompt}]',
-      'note.generatedMany': '[Generated {n} images: {prompt}]',
-      'note.upscaled': '[Upscaled the image: {prompt}]',
-      'note.edited': '[Edited the image: {prompt}]',
-      'note.removedBg': '[Removed the image background: {prompt}]'
+      'privacy.unknownTitle': 'Retention depends on the provider'
     },
     zh: {
       'mode.placeholder': '描述想要的图像',
@@ -509,14 +494,7 @@ export const t = defineMessages(
       'privacy.privateTitle': '由 Venice 托管、不保存提示词的图像模型',
       'privacy.relayed': '外部中转',
       'privacy.relayedTitle': '会中转给外部服务商的图像模型',
-      'privacy.unknownTitle': '数据保留政策取决于提供方',
-      'note.deleted': '［生成的图像已删除：{prompt}］',
-      'note.inReply': '［此回复中包含 {n} 张图像］',
-      'note.generatedOne': '［已生成 {n} 张图像：{prompt}］',
-      'note.generatedMany': '［已生成 {n} 张图像：{prompt}］',
-      'note.upscaled': '［已放大图像：{prompt}］',
-      'note.edited': '［已编辑图像：{prompt}］',
-      'note.removedBg': '［已去除图像背景：{prompt}］'
+      'privacy.unknownTitle': '数据保留政策取决于提供方'
     }
   }
 );

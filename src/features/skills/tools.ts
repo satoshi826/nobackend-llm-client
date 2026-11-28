@@ -23,8 +23,8 @@ export function makeSkillTool(list: Pick<Skill, 'name' | 'body'>[]): Tool<{ name
     summarize: (i) => i.name,
     prepare(raw) {
       const name = (raw as { name?: unknown })?.name;
-      if (typeof name !== 'string' || !name.trim()) throw new TranslatedError(() => t('tool.missingName'));
-      return { name: name.trim().replace(/^\//, '') };
+      if (typeof name !== 'string' || !name) throw new TranslatedError(() => t('tool.missingName'));
+      return { name };
     },
     async execute({ name }) {
       const s = list.find((x) => x.name === name);

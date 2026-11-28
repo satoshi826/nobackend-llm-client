@@ -76,7 +76,7 @@ describe('skills sent to the model', () => {
   it('load_skill returns the body, or an error listing available skills', async () => {
     const tool = makeSkillTool([{ name: 'a', body: 'Body A' }]);
     expect((tool.parameters as any).properties.name.enum).toEqual(['a']);
-    expect(tool.prepare({ name: ' /a ' })).toEqual({ name: 'a' });
+    expect(tool.prepare({ name: 'a' })).toEqual({ name: 'a' });
     expect(() => tool.prepare({})).toThrow();
     const ok = await tool.execute({ name: 'a' }, ctx);
     expect(ok.content).toContain('Body A');

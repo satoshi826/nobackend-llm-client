@@ -5,6 +5,7 @@ import { getAdapter } from '../providers/registry';
 import type { MessageRecord } from '../db/schema';
 import { fitToContext, inputBudget } from './context';
 import { toDefinition, type Permission, type Tool, type ToolContext } from '../tools/types';
+import { checkArguments } from '../tools/check';
 import { applyEvent, type BlockMap } from './events';
 import { buildRequestMessages, turnMessages } from './request';
 import { t } from './messages';
@@ -208,7 +209,7 @@ export async function runAssistant(o: RunOptions): Promise<MessageRecord> {
       }
       let input: unknown;
       try {
-        input = tool.prepare(call.input);
+        input = tool.prepare(checkArguments(tool, call.input));
       } catch (e) {
         fail(call, e);
         continue;

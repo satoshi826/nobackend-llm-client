@@ -284,7 +284,7 @@ describe('tool execution loop', () => {
     name: 'echo',
     label: 'echo',
     description: 'echo',
-    parameters: { type: 'object' },
+    parameters: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] },
     risk: 'read',
     summarize: (i) => i.q,
     prepare: (raw: any) => ({ q: String(raw?.q ?? '') }),
@@ -354,7 +354,7 @@ describe('tool execution loop', () => {
 
   it('gives the model tool errors and denials in English whatever the UI language, and the card the UI language', async () => {
     const blocked: Tool = { ...echo, name: 'blocked', label: 'blocked' };
-    const calls = [{ choices: [{ delta: { tool_calls: [['nope', '{}'], ['blocked', '{}'], ['web_search', '{"query":""}'], ['echo', '{"q":']].map(([name, args], index) => ({ index, id: 'c' + index, function: { name, arguments: args } })) }, finish_reason: 'tool_calls' }] }];
+    const calls = [{ choices: [{ delta: { tool_calls: [['nope', '{}'], ['blocked', '{"q":""}'], ['web_search', '{"query":""}'], ['echo', '{"q":']].map(([name, args], index) => ({ index, id: 'c' + index, function: { name, arguments: args } })) }, finish_reason: 'tool_calls' }] }];
     const inLang = async (lang: 'ja' | 'en') => {
       setLang(lang);
       try {
@@ -378,6 +378,21 @@ describe('tool execution loop', () => {
       '設定でこのツールは禁止されています。',
       expect.stringContaining('検索'),
       expect.stringMatching(/^引数を解析できませんでした: /)
+    ]);
+  });
+
+  it('runs no call whose arguments do not fit the tool\'s parameters, and tells the model what was wrong', async () => {
+    const ran: string[] = [];
+    const counted: Tool<{ q: string }> = { ...echo, execute: async (i) => (ran.push(i.q), { content: 'ok' }) };
+    const args = ['{"q":"a","name":"x"}', '{}', '{"q":1}', '{"q":"b"}'];
+    const calls = [{ choices: [{ delta: { tool_calls: args.map((a, index) => ({ index, id: 'c' + index, function: { name: 'echo', arguments: a } })) }, finish_reason: 'tool_calls' }] }];
+    const { bodies } = await run([calls, answer('ok')], { tools: [counted] });
+    expect(ran).toEqual(['b']);
+    expect(bodies[1].messages.filter((m: any) => m.role === 'tool').map((m: any) => m.content)).toEqual([
+      'The tool failed: Unknown parameter "name". echo takes: q (required).',
+      'The tool failed: Missing required parameter "q".',
+      'The tool failed: Parameter "q" must be a string.',
+      'ok'
     ]);
   });
 

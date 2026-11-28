@@ -13,6 +13,8 @@
 
 画面は日本語・英語・中国語（簡体字）に対応しています（ブラウザに合わせて自動、または「設定 → 表示」で選択）。設計の原則と決まりは [docs/principles.md](docs/principles.md)（英語）にあります。
 
+セキュリティの設計が何を守り、どこから先は守れないかは [docs/security.ja.md](docs/security.ja.md) にまとめています。
+
 ## できること
 
 - **接続先**: Venice、OpenRouter、Anthropic、Google Gemini、OpenAI、DeepSeek、Groq、NanoGPT、DeepInfra、Cerebras、Novita、Chutes、Together と、ビルド時に足す OpenAI 互換の接続先（Ollama など）。特別扱いの接続先はなく、最初に使う接続先を選びます。

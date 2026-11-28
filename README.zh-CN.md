@@ -13,6 +13,8 @@
 
 界面支持日语、英语和简体中文（自动跟随浏览器，或在"设置 → 显示"中选择）。设计原则与规则见 [docs/principles.md](docs/principles.md)（英文）。
 
+安全设计保护什么、在哪里止步，见 [docs/security.md](docs/security.md)（英文）。
+
 ## 功能
 
 - **提供商**: Venice、OpenRouter、Anthropic、Google Gemini、OpenAI、DeepSeek、Groq、NanoGPT、DeepInfra、Cerebras、Novita、Chutes、Together，以及在构建时添加的 OpenAI 兼容端点（如 Ollama）。没有哪个提供商被特殊对待，首次启动时由你选择使用哪个。

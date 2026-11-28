@@ -13,6 +13,8 @@ A chat client for LLM APIs that doesn't need a server and doesn't keep logs. It'
 
 The UI is available in Japanese, English and Simplified Chinese (automatic, or chosen in Settings → Appearance). Principles and rules: [docs/principles.md](docs/principles.md).
 
+What the security design protects, and where it stops: [docs/security.md](docs/security.md).
+
 ## Features
 
 - **Providers**: Venice, OpenRouter, Anthropic, Google Gemini, OpenAI, DeepSeek, Groq, NanoGPT, DeepInfra, Cerebras, Novita, Chutes, Together, plus OpenAI-compatible endpoints added at build time (e.g. Ollama). No provider is privileged; you choose which to use on first launch.

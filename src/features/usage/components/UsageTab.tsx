@@ -8,7 +8,7 @@ import { PRESETS } from '../../../lib/providers/registry';
 import { showToast } from '../../../state/ui';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { Button, Chip, EmptyState, Icon, IconButton, Segmented, cx } from '../../../components/ui';
-import { formatDate, formatList, formatNumber, formatDateTime } from '../../../lib/i18n';
+import { formatDate, formatList, formatNumber, formatDateTime, formatUsd } from '../../../lib/i18n';
 import { t } from '../messages';
 
 type Range = 'today' | '7' | '30' | 'all';
@@ -23,8 +23,6 @@ function sinceOf(r: Range): number | null {
   return d.getTime();
 }
 
-const usd = (n: number, digits: number) => `$${formatNumber(n, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
-const fmtUsd = (n: number) => (n >= 1 ? usd(n, 2) : n > 0 ? usd(n, 4) : '$0');
 const fmtTok = (n: number) =>
   n >= 1_000_000 ? `${formatNumber(n / 1_000_000, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M` : n >= 10_000 ? `${formatNumber(Math.round(n / 1000))}k` : formatNumber(n);
 /** "2026-11-25" (local day key) → the date in the UI language */
@@ -34,14 +32,14 @@ const dayLabel = (day: string) => {
 };
 /** Cost as plain text (for the chart's hover line) */
 const costText = (v: UsageTotals) =>
-  v.requests > 0 && v.unknownCost === v.requests ? '—' : `${v.estimated ? t('cost.approx', { cost: fmtUsd(v.costUsd) }) : fmtUsd(v.costUsd)}${v.unknownCost > 0 ? '+?' : ''}`;
+  v.requests > 0 && v.unknownCost === v.requests ? '—' : `${v.estimated ? t('cost.approx', { cost: formatUsd(v.costUsd) }) : formatUsd(v.costUsd)}${v.unknownCost > 0 ? '+?' : ''}`;
 
 /** Cost display ("approx." if it includes estimates; a note if some records have unknown cost) */
 function Cost({ v }: { v: UsageTotals }) {
   if (v.requests > 0 && v.unknownCost === v.requests) return <span class="text-faint">—</span>;
   return (
     <span data-tip={v.estimated ? t('cost.estimatedTitle') : undefined}>
-      {v.estimated ? t('cost.approx', { cost: fmtUsd(v.costUsd) }) : fmtUsd(v.costUsd)}
+      {v.estimated ? t('cost.approx', { cost: formatUsd(v.costUsd) }) : formatUsd(v.costUsd)}
       {v.unknownCost > 0 && <span class="text-faint">+?</span>}
     </span>
   );
@@ -85,7 +83,7 @@ function DailyBars({ days, metric }: { days: { day: string; totals: UsageTotals 
               class="flex h-full min-w-0 flex-1 items-end justify-center"
               onMouseEnter={() => setHover(i)}
               onMouseLeave={() => setHover(null)}
-              data-tip={t('chart.barTitle', { day: dayLabel(d.day), value: metric === 'cost' ? fmtUsd(d.totals.costUsd) : fmtTok(v) })}
+              data-tip={t('chart.barTitle', { day: dayLabel(d.day), value: metric === 'cost' ? formatUsd(d.totals.costUsd) : fmtTok(v) })}
             >
               <div
                 class={cx('w-full max-w-8 rounded-t-[4px] bg-accent transition-opacity', hover !== null && hover !== i && 'opacity-50')}
@@ -143,7 +141,6 @@ function Table({ rows }: { rows: { key: string; label: string; sub?: string; t: 
 function BalanceSection() {
   useEffect(() => void fetchBalances(), []);
   const list = Object.entries(balances.value).filter(([, b]) => b.last);
-  const usd = (n: number) => `$${formatNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return (
     <section class="space-y-2">
       <h3 class="text-sm font-semibold">{t('balance.title')}</h3>
@@ -154,15 +151,15 @@ function BalanceSection() {
           {list.map(([pid, b]) => (
             <li key={pid} class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 py-2">
               <span class="font-medium">{providerById(pid)?.name ?? pid}</span>
-              <span class="tabular-nums">{usd(b.last!.usd)}</span>
+              <span class="tabular-nums">{formatUsd(b.last!.usd)}</span>
               {PRESETS[providerById(pid)?.preset ?? '']?.balanceApi?.scope === 'key' && <span class="text-xs text-muted">{t('balance.keyLimit')}</span>}
               <span class="text-xs text-muted">{t('balance.row', { time: formatDateTime(b.last!.at) })}</span>
-              {b.unexplainedUsd > 0 && <span class="text-xs text-warn">{t('balance.unexplained', { amount: usd(b.unexplainedUsd) })}</span>}
+              {b.unexplainedUsd > 0 && <span class="text-xs text-warn">{t('balance.unexplained', { amount: formatUsd(b.unexplainedUsd) })}</span>}
             </li>
           ))}
         </ul>
       )}
-      <p class="text-xs text-muted">{t('balance.alertNote', { amount: usd(BALANCE_ALERT_USD) })}</p>
+      <p class="text-xs text-muted">{t('balance.alertNote', { amount: formatUsd(BALANCE_ALERT_USD) })}</p>
     </section>
   );
 }

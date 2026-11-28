@@ -27,7 +27,8 @@ import {
   retryWithSuggestion,
   type LightboxItem
 } from '../state';
-import { t, usd } from '../messages';
+import { t } from '../messages';
+import { formatUsd } from '../../../lib/i18n';
 
 type FilePart = Extract<Part, { type: 'file' }>;
 
@@ -321,7 +322,7 @@ export function ToolImages({ blobIds, conversationId, messageId }: { blobIds: st
 /** The estimated cost of an edit, for the button titles */
 function costText(p: Pick<ImageParams, 'op' | 'providerId' | 'scale'> & { model?: string }): string {
   const cost = estimateCost({ model: '', prompt: '', variants: 1, safeMode: false, format: 'png', ...p });
-  return cost === undefined ? t('lb.costUnknown') : t('lb.cost', { cost: usd(cost, 2) });
+  return cost === undefined ? t('lb.costUnknown') : t('lb.cost', { cost: formatUsd(cost) });
 }
 
 function step(d: number) {

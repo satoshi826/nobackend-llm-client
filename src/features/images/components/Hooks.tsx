@@ -23,10 +23,10 @@ import {
   toolParams
 } from '../state';
 import { imageProviderList, imageProviderOf } from '../providers/types';
-import { formatList } from '../../../lib/i18n';
+import { formatList, formatUsd } from '../../../lib/i18n';
 import { ModelOptions } from './ModelOptions';
 import { ImageBar } from './ImageBar';
-import { t, usd } from '../messages';
+import { t } from '../messages';
 import { ToolImages } from './ImageView';
 
 /** Toggle in the input box's toolbar; shown only when a provider that makes images has a key (and while on, to turn it off) */
@@ -97,7 +97,7 @@ export function imageToolNote(): string {
   if (!m) return t('tool.noteNoModel');
   const cost = estimateCost(toolParams(currentConv.value, {}));
   const params = { model: m.name, privacy: currentPrivacyLabel().label || (imageProviderOf(m.providerId)?.label ?? '') };
-  return cost !== undefined ? t('tool.noteCost', { ...params, cost: usd(cost, 3) }) : t('tool.noteCostUnknown', params);
+  return cost !== undefined ? t('tool.noteCost', { ...params, cost: formatUsd(cost) }) : t('tool.noteCostUnknown', params);
 }
 
 interface ToolRequest {
@@ -112,7 +112,6 @@ interface ToolRequest {
   costEstimated?: boolean;
 }
 
-const money = (n: number) => usd(n, n < 0.1 ? 3 : 2);
 
 /** The full request of a generate_image call: before it runs (what it will send) and after (what was sent and its cost) */
 function ToolRequestDetails({ p, ran }: { p: ToolPart; ran?: ToolRequest & { model: string } }) {
@@ -135,7 +134,7 @@ function ToolRequestDetails({ p, ran }: { p: ToolPart; ran?: ToolRequest & { mod
       costEstimated: true
     };
   }
-  const cost = req.costUsd === undefined ? t('detail.costUnknown') : req.costEstimated ? t('detail.costEstimated', { cost: money(req.costUsd) }) : t('detail.costReported', { cost: money(req.costUsd) });
+  const cost = req.costUsd === undefined ? t('detail.costUnknown') : req.costEstimated ? t('detail.costEstimated', { cost: formatUsd(req.costUsd) }) : t('detail.costReported', { cost: formatUsd(req.costUsd) });
   const row = (label: string, value: string | undefined, pre = false) =>
     value ? (
       <div class="grid gap-0.5 sm:grid-cols-[8rem_1fr] sm:gap-2">
@@ -202,7 +201,7 @@ function DefaultModelSelect() {
       </Select>
       {m && (
         <span class="mt-1 block text-xs text-muted">
-          {[privacyLabelOf(m).title, cost !== undefined ? t('tool.costEach', { cost: money(cost) }) : t('settings.priceUnknown')].filter(Boolean).join(' ')}
+          {[privacyLabelOf(m).title, cost !== undefined ? t('tool.costEach', { cost: formatUsd(cost) }) : t('settings.priceUnknown')].filter(Boolean).join(' ')}
         </span>
       )}
     </label>

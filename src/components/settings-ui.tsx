@@ -6,6 +6,7 @@ import { modelKey, providerById, visibleModels } from '../state/models';
 import { saveSettings, settings } from '../state/settings';
 import { Select, cx } from './ui';
 import { t } from './messages';
+import { formatUsd } from '../lib/i18n';
 
 /** Label of a permission choice (call it at render time: the language can change) */
 const permLabel = (p: Permission): string => t(`perm.${p}`);
@@ -68,7 +69,7 @@ export function ModelSelect({ label, value, onChange, disabled }: { label: strin
             const price = m.pricing?.inputPerMTok;
             return (
               <option key={modelKey(m.providerId, m.id)} value={modelKey(m.providerId, m.id)}>
-                {price != null ? t('model.optionPriced', { provider, model: m.name, price: price.toFixed(2) }) : `${provider} / ${m.name}`}
+                {price != null ? t('model.optionPriced', { provider, model: m.name, price: formatUsd(price) }) : `${provider} / ${m.name}`}
               </option>
             );
           })}

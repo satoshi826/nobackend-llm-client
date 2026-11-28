@@ -1,5 +1,5 @@
 // Video feature messages (Japanese is the reference; see docs/writing.md)
-import { defineMessages, formatNumber } from '../../lib/i18n';
+import { defineMessages } from '../../lib/i18n';
 
 export const t = defineMessages(
   {
@@ -222,4 +222,3 @@ export const t = defineMessages(
 );
 
 /** "$0.40" */
-export const usd = (n: number) => `$${formatNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: n < 0.1 ? 3 : 2 })}`;

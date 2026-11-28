@@ -17,7 +17,7 @@ import { Button, EmptyState, Icon, IconButton, MoreMark, RowHighlight, SearchFie
 import { askConfirm, askConfirmWithCheck } from './ConfirmDialog';
 import { sidebarTabs, textOf } from './extensions';
 import { t } from './messages';
-import { formatDate, formatNumber } from '../lib/i18n';
+import { formatDate, formatNumber, formatUsd } from '../lib/i18n';
 
 /** The label of the group a conversation last changed at `ts` goes in, counted from today (made once per listing) */
 function grouper(): (ts: number) => string {
@@ -126,7 +126,7 @@ function Notices() {
     items.push(
       <div key={`balance-${pid}`} role="alert" class="rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger">
         <div class="font-semibold">
-          {t('side.balanceAlertTitle', { name, amount: b.unexplainedUsd.toFixed(2) })}
+          {t('side.balanceAlertTitle', { name, amount: formatUsd(b.unexplainedUsd) })}
         </div>
         {t('side.balanceAlertText', { name })}
       </div>

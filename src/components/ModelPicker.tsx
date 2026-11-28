@@ -10,8 +10,12 @@ import { modal, modelPickerTarget } from '../state/ui';
 import type { ModelInfo } from '../lib/providers/types';
 import { arrangeModels, FILTER_ORDER, matchesFilter, type ModelFilter, type ModelSort } from '../lib/model-list';
 import { PRESETS } from '../lib/providers/registry';
-import { Badge, Button, Chevron, Collapse, EmptyState, Icon, Modal, SearchField, Select, Spinner, cx, formatCtx, formatPrice } from './ui';
+import { Badge, Button, Chevron, Collapse, EmptyState, Icon, Modal, SearchField, Select, Spinner, cx, formatCtx } from './ui';
 import { t } from './messages';
+import { formatUsd } from '../lib/i18n';
+
+/** A list price per million tokens ('—' when the model has none) */
+const price = (n?: number) => (n === undefined ? '—' : formatUsd(n));
 
 function copyOf(providerId: string) {
   return PRESETS[providerId]?.copy ?? {};
@@ -54,7 +58,7 @@ function ModelRow({ m, selected, onPick, showProvider }: { m: ModelInfo; selecte
 ${t('picker.priceListed', { date: m.pricing.listedAt })}` : t('picker.priceTitle')}
           >
             {m.pricing?.listedAt && '≈ '}
-            {formatPrice(m.pricing?.inputPerMTok)} / {formatPrice(m.pricing?.outputPerMTok)}
+            {price(m.pricing?.inputPerMTok)} / {price(m.pricing?.outputPerMTok)}
           </span>
         </div>
         <div class="mt-1 flex flex-wrap items-center gap-1">

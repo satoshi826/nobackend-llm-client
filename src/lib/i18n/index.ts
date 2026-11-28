@@ -85,6 +85,15 @@ export function formatNumber(n: number, opts?: Intl.NumberFormatOptions): string
   return formatter('n', opts, (loc) => new Intl.NumberFormat(loc, opts)).format(n);
 }
 
+/**
+ * An amount in US dollars, written the same way everywhere: cents from $1 up ($12.34), two significant digits below
+ * ($0.50, $0.012, $0.00042), and $0 for nothing
+ */
+export function formatUsd(n: number): string {
+  if (n === 0) return '$0';
+  return `$${formatNumber(n, n >= 1 ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { minimumSignificantDigits: 2, maximumSignificantDigits: 2 })}`;
+}
+
 export function formatDate(ts: number | Date, opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }): string {
   return formatter('d', opts, (loc) => new Intl.DateTimeFormat(loc, opts)).format(ts);
 }

@@ -465,4 +465,3 @@ export const t = defineMessages(
 export const imageCount = (n: number) => t(n === 1 ? 'countOne' : 'countMany', { n: formatNumber(n) });
 
 /** "$0.040" (digits after the point fixed) */
-export const usd = (n: number, digits: number) => `$${formatNumber(n, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;

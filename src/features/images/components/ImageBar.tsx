@@ -20,7 +20,8 @@ import {
   paramsFromBar,
   setImageDefaults
 } from '../state';
-import { imageCount, t, usd } from '../messages';
+import { imageCount, t } from '../messages';
+import { formatUsd } from '../../../lib/i18n';
 
 export function ImageBar() {
   const [details, setDetails] = useState(false);
@@ -142,7 +143,7 @@ export function ImageBar() {
           <Chevron open={details} />
         </button>
         <span class="ml-auto text-muted tabular-nums" data-tip={t('bar.costTitle')}>
-          {cost !== undefined ? t(d.enhancePrompt ? 'bar.costEnhance' : 'bar.cost', { cost: usd(cost, cost < 0.1 ? 3 : 2) }) : t('bar.costUnknown')}
+          {cost !== undefined ? t(d.enhancePrompt ? 'bar.costEnhance' : 'bar.cost', { cost: formatUsd(cost) }) : t('bar.costUnknown')}
         </span>
       </div>
       <Collapse open={details}>

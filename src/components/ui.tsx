@@ -679,11 +679,6 @@ export function Badge({ children, tone = 'zinc', title }: { children: ComponentC
   );
 }
 
-export function formatPrice(n?: number): string {
-  if (n === undefined) return '—';
-  return n < 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(n % 1 === 0 ? 0 : 2)}`;
-}
-
 export function formatCtx(n?: number): string {
   if (!n) return '';
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M` : `${Math.round(n / 1000)}K`;

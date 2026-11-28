@@ -6,8 +6,8 @@ import { Button, Checkbox, Icon, IconButton, Select, Spinner } from '../../../co
 import { ImageThumb } from '../../images';
 import { barQuote, chooseVideoModel, currentVideoModel, firstFrame, loadVideoModels, modelRef, offeredModels, paramsFromBar, pickFirstFrame, readyVideoProviders, setVideoDefaults, videoModels, videoModelsError, videoReady } from '../state';
 import { videoProviderOf } from '../providers/types';
-import { t, usd } from '../messages';
-import { formatNumber } from '../../../lib/i18n';
+import { t } from '../messages';
+import { formatNumber, formatUsd } from '../../../lib/i18n';
 
 export function VideoBar() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -126,7 +126,7 @@ export function VideoBar() {
           </Checkbox>
         )}
         <span class="ml-auto text-muted tabular-nums" data-tip={price ? t('bar.costPriceTitle') : t('bar.costEstimateTitle')}>
-          {q.asking ? t('bar.costAsking') : q.usd !== undefined ? t(price ? 'bar.costPrice' : 'bar.costEstimate', { cost: usd(q.usd) }) : t('bar.costUnknown')}
+          {q.asking ? t('bar.costAsking') : q.usd !== undefined ? t(price ? 'bar.costPrice' : 'bar.costEstimate', { cost: formatUsd(q.usd) }) : t('bar.costUnknown')}
         </span>
       </div>
     </div>

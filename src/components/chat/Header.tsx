@@ -14,7 +14,7 @@ import { PageHeader } from '../PageHeader';
 import { sentences } from '../messages';
 import { t } from './messages';
 import { ChatOptionsButton } from './ChatOptions';
-import { formatNumber } from '../../lib/i18n';
+import { formatNumber, formatUsd } from '../../lib/i18n';
 
 /** Where the context goes, in the order shown; the shades tell the parts of the bar apart (no colors of their own) */
 const PARTS = [
@@ -122,7 +122,7 @@ function ContextDetails({ pct, tone, busy, onSettings }: { pct: number | null; t
           {plan
             ? sentences(
                 t('context.plan', { kept: formatNumber(plan.kept), n: formatNumber(plan.count), model: plan.model }),
-                plan.inputUsd != null ? t('context.planSendCost', { tokens: formatNumber(plan.tokens), cost: usd(plan.inputUsd) }) : t('context.planSend', { tokens: formatNumber(plan.tokens) })
+                plan.inputUsd != null ? t('context.planSendCost', { tokens: formatNumber(plan.tokens), cost: formatUsd(plan.inputUsd) }) : t('context.planSend', { tokens: formatNumber(plan.tokens) })
               )
             : t('context.tooShort')}
         </p>
@@ -135,7 +135,6 @@ function ContextDetails({ pct, tone, busy, onSettings }: { pct: number | null; t
   );
 }
 
-const usd = (n: number) => (n > 0 && n < 0.001 ? '<$0.001' : '$' + formatNumber(n, { minimumFractionDigits: n < 1 ? 3 : 2, maximumFractionDigits: n < 1 ? 3 : 2 }));
 
 /** Estimated total cost of this conversation (replies, summaries, reply suggestions, images); opens the usage tab */
 function ConversationCost() {
@@ -147,9 +146,9 @@ function ConversationCost() {
   if (!c || (c.usd === 0 && c.unknown === 0)) return null;
   const title = [t('header.costTitle'), c.unknown ? t('header.costUnknown', { n: formatNumber(c.unknown) }) : '', c.estimated ? t('header.costEstimated') : ''].filter(Boolean).join('\n');
   return (
-    <Button aria-label={`${t('header.cost')}: ${usd(c.usd)}`} title={title} class="text-xs tabular-nums text-muted" onClick={() => openSettings('usage')}>
+    <Button aria-label={`${t('header.cost')}: ${formatUsd(c.usd)}`} title={title} class="text-xs tabular-nums text-muted" onClick={() => openSettings('usage')}>
       <span aria-hidden="true">≈</span>
-      {usd(c.usd)}
+      {formatUsd(c.usd)}
       {c.unknown > 0 && <span aria-hidden="true">+</span>}
     </Button>
   );

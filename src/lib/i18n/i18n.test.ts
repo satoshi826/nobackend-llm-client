@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { defineMessages, detectLang, getLang, interpolate, setLang } from './index';
+import { defineMessages, detectLang, formatUsd, getLang, interpolate, setLang } from './index';
 
 afterEach(() => setLang('ja'));
 
@@ -22,5 +22,9 @@ describe('i18n', () => {
   });
   it('leaves unknown placeholders alone', () => {
     expect(interpolate('{a} {b}', { a: 1 })).toBe('1 {b}');
+  });
+  it('writes amounts in dollars one way: cents from $1, two significant digits below', () => {
+    setLang('en');
+    expect([0, 12.345, 1, 0.5, 0.0123, 0.00042].map(formatUsd)).toEqual(['$0', '$12.35', '$1.00', '$0.50', '$0.012', '$0.00042']);
   });
 });

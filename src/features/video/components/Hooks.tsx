@@ -2,14 +2,14 @@
 // request, and the answer (progress while it is made, then the player)
 import { useEffect, useState } from 'preact/hooks';
 import type { Conversation, MessageRecord } from '../../../lib/db/schema';
-import { formatNumber } from '../../../lib/i18n';
+import { formatNumber, formatUsd } from '../../../lib/i18n';
 import { IdleButton } from '../../../components/IdleButton';
 import { Chip, Icon, Shimmer, Spinner } from '../../../components/ui';
 import { currentVideoModel, offeredModels, privacyLabelOf, resumeVideoJob, runVideoJob, setVideoMode, videoModelOf, videoProgress, videoProviderReady, videoReady } from '../state';
 import { videoProviderOf } from '../providers/types';
 import { useBlobUrl } from '../../images';
 import { VideoBar } from './VideoBar';
-import { t, usd } from '../messages';
+import { t } from '../messages';
 
 /** Toggle in the input box's toolbar; shown only when a provider that makes videos has a key */
 export function VideoModeButton({ conv }: { conv: Conversation }) {
@@ -149,7 +149,7 @@ function VideoAnswerBody({ m }: { m: MessageRecord }) {
         <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
           <span>{model?.name ?? p.model}</span>
           <span class="tabular-nums">{[secondsText(p.duration), p.resolution, p.aspectRatio].filter(Boolean).join(' · ')}</span>
-          {v.costUsd !== undefined && <span class="tabular-nums">{v.costEstimated ? t('answer.costEstimated', { cost: usd(v.costUsd) }) : usd(v.costUsd)}</span>}
+          {v.costUsd !== undefined && <span class="tabular-nums">{v.costEstimated ? t('answer.costEstimated', { cost: formatUsd(v.costUsd) }) : formatUsd(v.costUsd)}</span>}
         </div>
       )}
       {(m.status === 'done' || m.status === 'error') && m.parentId && rerun && (

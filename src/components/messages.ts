@@ -44,6 +44,9 @@ export const t = defineMessages(
     'conn.chooseHeading': '追加する接続先',
     'conn.keyNote': 'キーを保存すると接続先に加わります。',
     'conn.back': 'ほかの接続先を選ぶ',
+    'conn.freeTier': '無料枠あり',
+    'conn.others': 'そのほか',
+    'conn.makeKey': 'キーを作る（{host}）',
 
     // LockScreen
     'lock.forgotTitle': 'パスフレーズを忘れた',
@@ -298,6 +301,9 @@ export const t = defineMessages(
       'conn.chooseHeading': 'Provider to add',
       'conn.keyNote': 'Saving the key adds the provider.',
       'conn.back': 'Choose another provider',
+      'conn.freeTier': 'Free tier',
+      'conn.others': 'Others',
+      'conn.makeKey': 'Create a key ({host})',
 
       'lock.forgotTitle': 'Forgot passphrase',
       'lock.deleteEncryptedTitle': 'Delete encrypted conversations',
@@ -544,6 +550,9 @@ export const t = defineMessages(
       'conn.chooseHeading': '要添加的服务商',
       'conn.keyNote': '保存密钥后即添加该服务商。',
       'conn.back': '选择其他服务商',
+      'conn.freeTier': '有免费额度',
+      'conn.others': '其他',
+      'conn.makeKey': '创建密钥（{host}）',
 
       'lock.forgotTitle': '忘记口令',
       'lock.deleteEncryptedTitle': '删除已加密的对话',

@@ -28,7 +28,7 @@ function pricing(input: number | undefined, output: number | undefined, cached?:
 /** The shared parts of these presets: OpenAI-compatible, reasoning never sent back */
 function host(
   id: string,
-  o: Pick<ProviderPreset, 'mapModel' | 'modelsPath' | 'balanceApi'> & {
+  o: Pick<ProviderPreset, 'mapModel' | 'modelsPath' | 'balanceApi' | 'keyUrl' | 'defaultModels'> & {
     hasPrivateModels?: boolean;
     /** Its cheaper flex tier, as the part of the list price it costs */
     flexPriceFactor?: number;
@@ -38,6 +38,8 @@ function host(
     reasoningResend: 'never',
     modelsPath: o.modelsPath ?? 'models',
     mapModel: o.mapModel,
+    keyUrl: o.keyUrl,
+    defaultModels: o.defaultModels,
     ...(o.hasPrivateModels
       ? {
           copy: {
@@ -54,6 +56,8 @@ function host(
 
 // ---- NanoGPT: many models behind one key; per-key spend limits; zero-data-retention routes on some models ----
 export const nanogptPreset = host('nanogpt', {
+  keyUrl: 'https://nano-gpt.com/api',
+  defaultModels: ['deepseek/deepseek-v4.1-flash-1017', 'deepseek/deepseek-v4.1-flash', 'openai/gpt-oss-120b'],
   modelsPath: 'models?detailed=true',
   hasPrivateModels: true,
   balanceApi: { path: '../check-balance', method: 'POST', read: (j) => num(j?.usd_balance) },
@@ -85,6 +89,8 @@ export const nanogptPreset = host('nanogpt', {
 
 // ---- DeepInfra: open models; per-key monthly spend limits; prompts kept in memory only ----
 export const deepinfraPreset = host('deepinfra', {
+  keyUrl: 'https://deepinfra.com/dash/keys',
+  defaultModels: ['deepseek-ai/DeepSeek-V4.1-Flash-1017', 'deepseek-ai/DeepSeek-V4.1-Flash', 'openai/gpt-oss-120b'],
   // Flex is billed at 0.8 of the standard price, on the models that offer it
   flexPriceFactor: 0.8,
   mapModel(raw, providerId) {
@@ -105,6 +111,9 @@ export const deepinfraPreset = host('deepinfra', {
 
 // ---- Cerebras: very fast inference; its public model list sits outside /v1 ----
 export const cerebrasPreset = host('cerebras', {
+  // The console; keys are under API Keys in its menu
+  keyUrl: 'https://cloud.cerebras.ai',
+  defaultModels: ['gpt-oss-120b'],
   modelsPath: '../public/v1/models',
   mapModel(raw, providerId) {
     const id = str(raw?.id);
@@ -129,6 +138,8 @@ export const cerebrasPreset = host('cerebras', {
 
 // ---- Novita: open models; per-key budgets; no data kept by default ----
 export const novitaPreset = host('novita', {
+  keyUrl: 'https://novita.ai/settings/key-management',
+  defaultModels: ['deepseek/deepseek-v4.1-flash-1017', 'deepseek/deepseek-v4.1-flash'],
   mapModel(raw, providerId) {
     const id = str(raw?.id);
     if (!id || raw.model_type !== 'chat' || (raw.status !== undefined && raw.status !== 1)) return null;
@@ -147,6 +158,7 @@ export const novitaPreset = host('novita', {
 
 // ---- Chutes: decentralized inference; some models run in confidential computing (TEE) ----
 export const chutesPreset = host('chutes', {
+  defaultModels: ['deepseek-ai/DeepSeek-V4.1-Flash-1017'],
   hasPrivateModels: true,
   mapModel(raw, providerId) {
     const id = str(raw?.id);
@@ -174,6 +186,8 @@ export const chutesPreset = host('chutes', {
 // ---- Together: open models; zero data retention by default; the model list needs a key ----
 // Its list is a plain array (not { data }); `type` tells chat models apart and prices are per 1M tokens
 export const togetherPreset = host('together', {
+  keyUrl: 'https://api.together.ai/settings/projects/~current/api-keys',
+  defaultModels: ['deepseek-ai/DeepSeek-V4.1-Flash-1017', 'deepseek-ai/DeepSeek-V4.1-Flash'],
   mapModel(raw, providerId) {
     const id = str(raw?.id);
     if (!id || (raw.type !== undefined && raw.type !== 'chat')) return null;

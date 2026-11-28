@@ -218,6 +218,15 @@ export interface ProviderPreset {
   tagline?: string;
   /** Guide on creating a key and configuring it safely */
   keyGuide?: string;
+  /** The provider's page where a key is made */
+  keyUrl?: string;
+  /** The catch of the provider's free tier, for providers that have one (they are listed first on the provider picker) */
+  freeTier?: string;
+  /**
+   * Model ids a new chat starts with until the user chooses one, the first one listed wins (after a model the
+   * provider's own list marks as its default, tag 'default'); without a match, the first model of the list
+   */
+  defaultModels?: string[];
   corsHint?: string;
   /** Fetching the model list needs a key (fetched through the vault); decided by the connection (publicModels) */
   modelsNeedKey: boolean;

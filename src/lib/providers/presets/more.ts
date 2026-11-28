@@ -13,6 +13,8 @@ function model(providerId: string, id: string, name: string, extra: Partial<Mode
 
 // ---- Anthropic (native Messages API) ----
 export const anthropicPreset = definePreset(ENDPOINTS.anthropic, {
+  keyUrl: 'https://console.anthropic.com/settings/keys',
+  defaultModels: ['claude-sonnet-5-5', 'claude-sonnet-5', 'claude-sonnet-4-6'],
   modelsPath: 'models?limit=100',
   // Anthropic's web search server tool (added by the adapter when ChatRequest.webSearch is set)
   nativeWebSearch: {
@@ -44,6 +46,12 @@ const geminiImageOut = (id: string) => /-image(-|$)|nano-banana/.test(id);
 /** Google Search together with function calling: Gemini 3 and later (text models) */
 const geminiSearches = (id: string) => /^gemini-([3-9]|\d{2})/.test(id) && !geminiImageOut(id);
 export const geminiPreset = definePreset(ENDPOINTS.gemini, {
+  keyUrl: 'https://aistudio.google.com/apikey',
+  get freeTier() {
+    return tp('gemini.freeTier');
+  },
+  // Models of the free tier, so a free key can answer
+  defaultModels: ['gemini-4-hydrogen', 'gemini-3.8-flash', 'gemini-flash-latest'],
   // Google Search grounding (added by the adapter when ChatRequest.webSearch is set)
   nativeWebSearch: {
     supports: (id) => geminiSearches(id),
@@ -81,6 +89,8 @@ export const geminiPreset = definePreset(ENDPOINTS.gemini, {
 // ---- OpenAI (Chat Completions; images go through the images feature with the same key) ----
 const OPENAI_SKIP = /image|audio|realtime|tts|transcribe|embedding|moderation|search|instruct|dall-e|whisper|babbage|davinci|codex|computer-use|deep-research/;
 export const openaiPreset = definePreset(ENDPOINTS.openai, {
+  keyUrl: 'https://platform.openai.com/api-keys',
+  defaultModels: ['gpt-6.2-sol', 'gpt-6.1-sol', 'gpt-6-sol'],
   // Chat Completions does not take earlier reasoning back
   reasoningResend: 'never',
   copy: {
@@ -105,6 +115,8 @@ export const openaiPreset = definePreset(ENDPOINTS.openai, {
 
 // ---- DeepSeek ----
 export const deepseekPreset = definePreset(ENDPOINTS.deepseek, {
+  keyUrl: 'https://platform.deepseek.com/api_keys',
+  defaultModels: ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-chat'],
   // Accounts topped up in CNY have no USD entry
   balanceApi: { path: 'user/balance', read: (j) => numberOf((Array.isArray(j?.balance_infos) ? j.balance_infos : []).find((b: any) => b?.currency === 'USD')?.total_balance) },
   // Sending reasoning back on a different message is rejected, so send it back only in the middle of tool calls
@@ -163,6 +175,11 @@ export function groqExtras(chunk: any, seen: Set<string>): ProviderEvent[] {
   return out;
 }
 export const groqPreset = definePreset(ENDPOINTS.groq, {
+  keyUrl: 'https://console.groq.com/keys',
+  get freeTier() {
+    return tp('groq.freeTier');
+  },
+  defaultModels: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile'],
   reasoningResend: 'never',
   modelsPath: 'models',
   // Groq's browser search on the gpt-oss models

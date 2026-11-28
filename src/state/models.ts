@@ -136,7 +136,10 @@ export async function setProviderEnabled(id: string, enabled: boolean) {
   if (enabled && !modelsStates.value[id]?.fetchedAt) void refreshModels(id);
 }
 
-/** Model for a new chat: the last used one -> the first enabled provider's default model -> its first model */
+/**
+ * Model for a new chat: the last used one -> the first enabled provider's default (the model its list marks as
+ * default, else the first of its preset's defaultModels it lists) -> its first model
+ */
 export function defaultModel(): { providerId: string; modelId: string } {
   const s = settings.value;
   const vis = visibleModels.value;
@@ -145,7 +148,8 @@ export function defaultModel(): { providerId: string; modelId: string } {
   const ordered = [...enabledProviders.value].sort((a, b) => Number(accountInUse(b.id)) - Number(accountInUse(a.id)));
   for (const p of ordered) {
     const list = vis.filter((m) => m.providerId === p.id);
-    const m = list.find((x) => x.tags?.includes('default')) ?? list[0];
+    const hinted = (getPreset(p.preset).defaultModels ?? []).map((id) => list.find((m) => m.id === id)).find((m) => m);
+    const m = list.find((x) => x.tags?.includes('default')) ?? hinted ?? list[0];
     if (m) return { providerId: m.providerId, modelId: m.id };
   }
   return { providerId: enabledProviders.value[0]?.id ?? '', modelId: '' };

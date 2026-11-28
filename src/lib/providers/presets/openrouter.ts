@@ -51,6 +51,8 @@ function perMTok(v: unknown): number | undefined {
 }
 
 export const openrouterPreset = definePreset(ENDPOINTS.openrouter, {
+  keyUrl: 'https://openrouter.ai/keys',
+  defaultModels: ['deepseek/deepseek-v4.1-flash-1017', 'deepseek/deepseek-v4.1-flash', 'openai/gpt-6-luna'],
   // The account's credits need a management key; a normal key sees only its own limit (none when unlimited)
   balanceApi: { path: 'key', scope: 'key', read: (j) => numberOf(j?.data?.limit_remaining) },
   // Texts are getters so they follow the current language

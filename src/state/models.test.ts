@@ -4,7 +4,7 @@ import { accountInUse, connections, defaultModel, enabledProviders, isFavorite, 
 import { authFor, keyInfos, keyReady } from './keys';
 import { DEFAULT_SETTINGS, settings, type Settings } from './settings';
 import { EMPTY_KEY_STATUS } from '../lib/keys/accounts';
-import { PRESET_ORDER } from '../lib/providers/registry';
+import { getPreset, PRESET_ORDER } from '../lib/providers/registry';
 import type { ModelInfo } from '../lib/providers/types';
 
 const model = (providerId: string, id: string, extra: Partial<ModelInfo> = {}): ModelInfo => ({ providerId, id, name: id, capabilities: {}, source: 'fetched', ...extra });
@@ -90,6 +90,16 @@ describe('defaultModel', () => {
     use({ enabledProviders: ['venice', 'openrouter'], lastProviderId: 'openrouter', lastModelId: 'o1' });
     withKeys('venice');
     expect(defaultModel()).toEqual({ providerId: 'venice', modelId: 'v2' });
+  });
+
+  it("otherwise starts with the first of the preset's default models that the provider lists", () => {
+    const [first, second] = getPreset('openrouter').defaultModels!;
+    models.value = [model('openrouter', 'a-first'), model('openrouter', second), model('openrouter', first)];
+    use({ enabledProviders: ['openrouter'] });
+    withKeys('openrouter');
+    expect(defaultModel()).toEqual({ providerId: 'openrouter', modelId: first });
+    models.value = [model('openrouter', 'a-first'), model('openrouter', second)];
+    expect(defaultModel().modelId).toBe(second);
   });
 
   it('skips a last used model that is no longer offered', () => {

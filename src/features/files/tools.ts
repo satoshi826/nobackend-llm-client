@@ -3,7 +3,7 @@
 // Everything stays in the browser. Pure definitions: storage and access rules come in through FileToolDeps.
 import type { FileRecord } from '../../lib/db/schema';
 import { MAX_FILE_CHARS } from '../../lib/db/files';
-import { cleanFileName, extOf, extOfMime } from '../../lib/paths';
+import { cleanFileName, cleanFolderName, extOf, extOfMime, pathKey } from '../../lib/paths';
 import type { Tool } from '../../lib/tools/types';
 import { INSPECT_VIEW, isProblem, type PageInspection, type PageLayout } from '../../lib/sandbox/client';
 import { fetchableUrl } from '../../lib/fetcher/protocol';
@@ -83,9 +83,11 @@ export interface Match {
 }
 
 export interface FileToolDeps {
+  /** The working folder's name as it is now ('todo-app/'; '' before its first file) */
+  folder(): string;
   /**
    * Write a file at `path` (relative to the working folder) and return it; replaced: the folder already had a file
-   * there, and this is its new text. folder: the working folder's name, when this file makes it
+   * there, and this is its new text. folder: the working folder's name, used when this file makes it
    */
   create(path: string, text: string, folder?: string): Promise<{ file: FileRecord; replaced: boolean }>;
   /** A file the model may read (in the working folder, or attached), by id or by path; undefined otherwise */
@@ -107,7 +109,7 @@ export interface FileToolDeps {
   image(ref: string): Promise<MovableImage | undefined>;
   /**
    * Give such an image a path in the working folder; throws when that path is taken. folder: the working folder's
-   * name, when this move makes it
+   * name, used when this move makes it
    */
   moveImage(id: string, to: string, folder?: string): Promise<void>;
   /** Delete a file in the working folder */
@@ -188,11 +190,16 @@ function checkGlob(glob: string) {
   }
 }
 
-/** The name of the working folder, asked of the call that makes it */
-const FOLDER = {
+/**
+ * The name of the working folder: asked of the call that makes it, and still taken (and ignored) once it exists, so a
+ * model that keeps sending it is not refused
+ */
+const FOLDER = (has: boolean) => ({
   type: 'string',
-  description: 'Name of the working folder this call makes, which holds every file of this conversation: a few lowercase words joined by hyphens that say what it holds, e.g. "todo-app".'
-};
+  description: has
+    ? 'Ignored: this conversation has its working folder already.'
+    : 'Name of the working folder this call makes, which holds every file of this conversation: a few lowercase words joined by hyphens that say what it holds, e.g. "todo-app".'
+});
 
 /** The working folder's name from the call that makes it: one the model chose, one level */
 function folderName(r: Record<string, unknown>): string {
@@ -204,6 +211,21 @@ function folderName(r: Record<string, unknown>): string {
   return folder;
 }
 
+/** folder as a call gives it: required while there is no working folder, else whatever it says (it is ignored) */
+const folderOf = (r: Record<string, unknown>, has: boolean): { folder?: string } => {
+  const folder = has ? str(r, 'folder').trim() : folderName(r);
+  return folder ? { folder } : {};
+};
+
+/**
+ * What a call is told when the folder it named was not used, the working folder existing already under another name:
+ * so a model starting something new knows its files went in with the others
+ */
+function ignoredFolder(asked: string | undefined, folder: string): string {
+  if (!asked || pathKey(cleanFolderName(asked)) === pathKey(folder)) return '';
+  return `\nfolder ${JSON.stringify(asked)} was ignored: this conversation's files all go in its working folder ${JSON.stringify(folder)}.`;
+}
+
 const FILE_ID = { type: 'string', description: 'The file\'s path in the working folder (e.g. "js/app.js"), or its id.' };
 
 /**
@@ -211,7 +233,8 @@ const FILE_ID = { type: 'string', description: 'The file\'s path in the working 
  * fetch_file, and move_file when the conversation has made images (it can bring one in, making the folder): the
  * others have nothing to work on until then
  */
-export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { hasFolder: boolean; madeImages: boolean }): Tool[] {
+export function makeFileTools(deps: FileToolDeps, { madeImages }: { madeImages: boolean }): Tool[] {
+  const hasFolder = !!deps.folder();
   const shown = (f: FileRecord) => JSON.stringify(deps.pathOf(f));
 
   const list: Tool<{ pattern: string }> = {
@@ -334,7 +357,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { h
       properties: {
         name: { type: 'string', description: 'Path of the file in the working folder, with an extension, e.g. "report.md" or "css/style.css".' },
         content: { type: 'string', description: 'The text of the file, or its first part when you continue with append_file.' },
-        ...(hasFolder ? {} : { folder: FOLDER })
+        folder: FOLDER(hasFolder)
       },
       required: hasFolder ? ['name', 'content'] : ['name', 'content', 'folder']
     },
@@ -348,14 +371,15 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { h
       const name = cleanFileName(str(r, 'name'));
       const content = str(r, 'content');
       checkSize(content);
-      return { name, content, ...(!hasFolder ? { folder: folderName(r) } : {}) };
+      return { name, content, ...folderOf(r, hasFolder) };
     },
     async execute(i) {
       const { file: f, replaced } = await deps.create(i.name, i.content, i.folder);
       const saved = replaced
         ? `Replaced the text of ${shown(f)} (id: ${f.id}, ${f.bytes} bytes).`
-        : `Created ${shown(f)} (id: ${f.id}, ${f.bytes} bytes) in the working folder ${JSON.stringify(f.name.slice(0, f.name.length - deps.pathOf(f).length))}. The user sees it as a file card and can open it from the Files tab.`;
-      return { content: saved + (await syntaxNote(deps, f, i.content)), details: details(f) };
+        : `Created ${shown(f)} (id: ${f.id}, ${f.bytes} bytes) in the working folder ${JSON.stringify(deps.folder())}. The user sees it as a file card and can open it from the Files tab.`;
+      const ignored = hasFolder ? ignoredFolder(i.folder, deps.folder()) : '';
+      return { content: saved + ignored + (await syntaxNote(deps, f, i.content)), details: details(f) };
     }
   };
 
@@ -454,7 +478,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { h
           description: hasFolder ? 'The path in the working folder of the file or image (e.g. "js/app.js"), or its id.' : "The image's id, as generate_image gave it."
         },
         to: { type: 'string', description: 'Its new path in the working folder, with an extension, e.g. "js/app.js".' },
-        ...(hasFolder ? {} : { folder: FOLDER })
+        folder: FOLDER(hasFolder)
       },
       required: hasFolder ? ['file_id', 'to'] : ['file_id', 'to', 'folder']
     },
@@ -466,15 +490,16 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { h
       const file_id = requireId(r);
       const to = str(r, 'to').trim();
       if (!to) throw new TranslatedError(() => t('tool.missingTo'));
-      return { file_id, to, ...(!hasFolder ? { folder: folderName(r) } : {}) };
+      return { file_id, to, ...folderOf(r, hasFolder) };
     },
     async execute(i) {
+      const ignored = () => (hasFolder ? ignoredFolder(i.folder, deps.folder()) : '');
       const f = await deps.get(i.file_id);
       if (f) {
         const from = deps.pathOf(f);
         // A path given without an extension keeps the file's type
         const u = await deps.move(f.id, cleanFileName(i.to, extOf(f.name) || 'md'));
-        return { content: `Moved ${JSON.stringify(from)} to ${shown(u)}.`, details: details(u) };
+        return { content: `Moved ${JSON.stringify(from)} to ${shown(u)}.${ignored()}`, details: details(u) };
       }
       const im = await deps.image(i.file_id);
       if (!im) throw new TranslatedError(() => t('tool.moveNotHere', { id: i.file_id }));
@@ -486,7 +511,7 @@ export function makeFileTools(deps: FileToolDeps, { hasFolder, madeImages }: { h
       const moved = im.inFolder
         ? `Moved the image ${JSON.stringify(im.path)} to ${JSON.stringify(to)}. Pages that load it by its old path need editing.`
         : `Moved the image ${JSON.stringify(im.path)} from the Files tab into the working folder as ${JSON.stringify(to)}: pages there can load it by that path.`;
-      return { content: moved, details: { name: to } };
+      return { content: moved + ignored(), details: { name: to } };
     }
   };
 

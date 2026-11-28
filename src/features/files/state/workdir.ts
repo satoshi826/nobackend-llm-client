@@ -144,6 +144,7 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
   };
   return makeFileTools(
     {
+      folder: dir,
       async fetch(url, signal) {
         const r = await fetchFromWeb(url, 'save', signal);
         return r && (await saveFetched(r, conv));
@@ -212,7 +213,7 @@ function fileTools(conv: Conversation, history: MessageRecord[], turn?: MessageR
       pathOf: (f) => relativeTo(dir(), f.name),
       syntax: (path, text) => syntaxProblem(path, text, parseInSandbox)
     },
-    { hasFolder: !!dir(), madeImages: showsToolImages(turn ? [...history, turn] : history) }
+    { madeImages: showsToolImages(turn ? [...history, turn] : history) }
   );
 }
 

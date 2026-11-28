@@ -653,8 +653,7 @@ const server = http.createServer(async (req, res) => {
     const madeImage = [...msgs].reverse().map((m) => m.role === 'tool' && /Saved in the Files tab as "[^"]*\.(\w+)" \(id: ([\w-]+)\)/.exec(String(m.content ?? ''))).find(Boolean);
     if (toolNames.includes('move_file') && lastMsg?.role === 'user' && userText.includes('絵をページに入れて') && madeImage) {
       await send({ content: '絵を作業フォルダに入れて、ページを作ります。' });
-      const folder = body.tools.find((t) => t.function?.name === 'move_file')?.function.parameters?.properties?.folder ? { folder: 'cat-page' } : {};
-      return finishTools('move_file', { file_id: madeImage[2], to: `assets/cat.${madeImage[1]}`, ...folder });
+      return finishTools('move_file', { file_id: madeImage[2], to: `assets/cat.${madeImage[1]}`, folder: 'cat-page' });
     }
     if (lastMsg?.role === 'tool' && lastCallName === 'move_file' && userText.includes('絵をページに入れて')) {
       const to = /as "([^"]+)"/.exec(String(lastMsg.content ?? ''))?.[1] ?? 'assets/cat.png';
@@ -663,8 +662,8 @@ const server = http.createServer(async (req, res) => {
     // File tools: "レポートにまとめて" creates a Markdown file, "追記して" appends to the file listed in the
     // system prompt, "結論を直して" edits it, "読んで" (with a file listed) reads it
     const fileInSys = /\(id: ([\w-]+),/.exec(String(sys ?? ''))?.[1];
-    // write_file asks for the working folder's name while the conversation has none
-    const newFolder = (folder) => (body.tools.find((t) => t.function?.name === 'write_file')?.function.parameters?.properties?.folder ? { folder } : {});
+    // write_file asks for the working folder's name while the conversation has none; the mock names it on every first
+    // write of a request, as a model may, also in a chat whose folder exists (under another name: it is ignored)
     // Sandbox: "計算して" runs JavaScript, "ページを作って" creates a counter page in two files: its script (which keeps
     // the count in localStorage and logs), then the HTML that loads it by a relative path
     if (toolNames.includes('run_javascript') && lastMsg?.role === 'user' && userText.includes('計算して')) {
@@ -675,13 +674,15 @@ const server = http.createServer(async (req, res) => {
       await send({ content: 'ページを作ります。' });
       return finishTools('write_file', {
         name: 'counter.js',
-        ...newFolder('counter-page'),
+        folder: 'counter-page',
         content: "const n = document.getElementById('n');\nlet c = Number(localStorage.getItem('count') || 0);\nn.textContent = c;\ndocument.getElementById('b').onclick = () => {\n  n.textContent = ++c;\n  localStorage.setItem('count', String(c));\n};\nconsole.log('Counter ready in ' + document.compatMode);\n"
       });
     }
     if (lastMsg?.role === 'tool' && msgs.at(-2)?.tool_calls?.[0]?.function?.arguments?.includes('"counter.js"')) {
       return finishTools('write_file', {
         name: 'counter.html',
+        // Named again after the folder exists: taken, and ignored
+        folder: 'counter-page',
         content: '<!doctype html>\n<html><body style="font:16px sans-serif;padding:16px">\n<h1>Counter</h1>\n<button id="b">+1</button> <span id="n">0</span>\n<script src="counter.js"></script>\n</body></html>\n'
       });
     }
@@ -689,7 +690,7 @@ const server = http.createServer(async (req, res) => {
       await send({ content: 'レポートをファイルにまとめます。' });
       return finishTools('write_file', {
         name: '調査レポート.md',
-        ...newFolder('research-report'),
+        folder: 'research-report',
         content: '# 調査レポート\n\n## 概要\nモックで作ったレポートです。\n\n## 比較\n\n| 項目 | A | B |\n|---|---|---|\n| 価格 | 安い | 高い |\n| 速度 | 速い | 普通 |\n\n## 結論\n結論は未定です。\n'
       });
     }
@@ -724,7 +725,7 @@ const server = http.createServer(async (req, res) => {
       await send({ content: 'ゲームを作って試します。' });
       return finishTools('write_file', {
         name: 'game.html',
-        ...newFolder('raf-game'),
+        folder: 'raf-game',
         content:
           "<!doctype html>\n<html><body>\n<h1>Game</h1>\n<p id=\"n\">counting</p>\n<script>\nconst t0 = performance.now();\nlet frames = 0;\nfunction loop() {\n  if (performance.now() - t0 < 1000) {\n    frames++;\n    requestAnimationFrame(loop);\n  } else document.getElementById('n').textContent = 'frames: ' + frames;\n}\nrequestAnimationFrame(loop);\n</script>\n</body></html>\n"
       });

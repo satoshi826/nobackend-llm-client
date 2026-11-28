@@ -9,6 +9,7 @@ import { db, type Conversation, type MessageRecord } from '../../lib/db/schema';
 import { putConversation } from '../../lib/db/repo';
 import { conversations } from '../../state/conversations';
 import { contributedTools } from '../../state/tool-registry';
+import { checkArguments } from '../../lib/tools/check';
 import type { ModelInfo } from '../../lib/providers/types';
 import { moveItems, planRemoval, refreshFiles, refreshImages, siteOf, siteSignature, workDirOf, writeAsPage } from './state';
 import { pageApi } from './state/page-api';
@@ -25,7 +26,7 @@ function toolsFor(c: Conversation, history: MessageRecord[] = []) {
   const run = async (name: string, raw: unknown) => {
     const t = tools.find((x) => x.name === name);
     if (!t) throw new Error(`no ${name}`);
-    return t.execute(t.prepare(raw), ctx);
+    return t.execute(t.prepare(checkArguments(t, raw)), ctx);
   };
   return { names: tools.map((t) => t.name), run };
 }
@@ -50,8 +51,9 @@ describe('working folder', () => {
     expect(workDirOf('c1')).toBe('Todo App/');
     const next = toolsFor(c);
     expect(next.names).toContain('read_file');
-    // Paths are relative to the folder; a leading "/" means the folder too
-    await next.run('write_file', { name: '/js/app.js', content: 'x' });
+    // Paths are relative to the folder; a leading "/" means the folder too. A model that keeps naming the folder is
+    // not refused: the name is ignored
+    await next.run('write_file', { name: '/js/app.js', content: 'x', folder: 'Todo App' });
     expect((await listFiles()).map((f) => f.name).sort()).toEqual(['Todo App/index.html', 'Todo App/js/app.js']);
     expect((await next.run('read_file', { file_id: 'JS/APP.js' })).content).toContain('x');
     // The same path again is the same file

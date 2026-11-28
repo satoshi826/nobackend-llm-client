@@ -132,7 +132,7 @@ export const t = defineMessages(
       'chutes.tagline': 'Decentralized inference. Some models run in confidential computing (TEE).',
       'chutes.keyGuide': 'Create a key on Chutes (chutes.ai). How to set a spending limit could not be confirmed, so top up small amounts.',
       'chutes.private': 'Runs in confidential computing (TEE)',
-      'together.tagline': 'A wide range of open models. Data is said to be kept zero days by default and not used for training.',
+      'together.tagline': 'A wide range of open models. It says it keeps no data by default and does not use it for training.',
       'together.keyGuide': "Create a key in Together AI's Settings → API Keys (api.together.ai). It is prepaid with no per-key spending limit, so top up small amounts.",
       'custom.tagline': 'OpenAI-compatible API at {host} (provider added at build time)',
       'custom.keyGuideOptional': 'Works without a key. Set one only if it is required.',

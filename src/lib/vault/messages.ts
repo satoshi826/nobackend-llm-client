@@ -12,7 +12,7 @@ export const t = defineMessages(
   {
     en: {
       'connectFailed': 'Could not connect to the key vault. Reload the page.',
-      'versionMismatch': 'The key vault is another version than the app. Deploy both at the same version, then reload the page.',
+      'versionMismatch': 'The key vault and the app are different versions. Deploy both at the same version, then reload the page.',
       'vaultFailed': 'The key vault could not complete the operation.',
       'methodNotAllowed': 'This method is not allowed.',
       'bodyMustBeString': 'Only a string body can be sent.'

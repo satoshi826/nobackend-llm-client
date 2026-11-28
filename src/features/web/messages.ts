@@ -45,7 +45,7 @@ export const t = defineMessages(
     // sent to the model (tool descriptions, results and errors)
     'search.emptyQuery': '検索語（query）が空です。検索語を指定してください。',
     'fetch.badUrl': 'URL の形式が正しくありません。https で始まる URL を指定してください（認証情報は含めない）。',
-    'fetch.noPrompt': 'ページから知りたいこと（prompt）が空です。',
+    'fetch.noPrompt': 'ページから知りたいこと（prompt）が空です。知りたいことを指定してください。',
   },
   {
     en: {
@@ -58,7 +58,7 @@ export const t = defineMessages(
       'card.showResults': 'Show results',
       'card.read': 'Read {title}',
       'card.readJina': 'Read {title} (via Jina Reader)',
-      'card.prompt': 'Wanted',
+      'card.prompt': 'Looking for',
       'settings.enabled': 'Use web search',
       'settings.routeNative': "Model's built-in search",
       'settings.readToggle': 'Let models read pages',
@@ -73,9 +73,9 @@ export const t = defineMessages(
       'settings.tavilyPermission': 'Searching with Tavily',
       'settings.fetchTitle': 'Fetching pages',
       'settings.readDesc': 'Models with tool calling can read the page at a URL (HTML, text or PDF).',
-      'settings.readNote': "A separate call takes only what was asked for out of the page before the conversation's model sees it, so instructions written on the page have little hold.",
+      'settings.readNote': "A separate call takes only what was asked for out of the page before the conversation's model sees it, so instructions written on the page are less likely to affect it.",
       'settings.ways': 'How pages are fetched',
-      'settings.waysDesc': 'For reading pages and bringing in files alike, the fetch page asks you each time, then tries these in order (you can also stop being asked for a site).',
+      'settings.waysDesc': 'For reading pages and importing files alike, the fetch page asks you each time, then tries these in order (for each site, you can also stop being asked, separately for reading and for importing).',
       'settings.viaDirect': 'From the site directly',
       'settings.viaDirectDesc': 'Sites that allow fetching from a browser (common for file hosts)',
       'settings.viaRelay': 'Relay server',
@@ -83,12 +83,12 @@ export const t = defineMessages(
       'settings.noRelay': "No relay server is set (it is set at build time), so files from sites that don't allow fetching from a browser can't be imported.",
       'settings.viaJina': 'Jina Reader',
       'settings.pageSettings': 'Fetch page settings',
-      'settings.pageSettingsDesc': 'Jina Reader key and sites not asked about, kept by the fetch page',
+      'settings.pageSettingsDesc': 'Jina Reader API key and sites not asked about, kept by the fetch page',
       'settings.open': 'Open',
       'settings.viaJinaDesc': 'Reads pages the ways above can’t, or with almost no text. Sends the address to {host}.',
       'search.emptyQuery': 'The search query (query) is empty. Provide a search query.',
       'fetch.badUrl': 'The URL is not valid. Provide a URL that starts with https (without credentials).',
-      'fetch.noPrompt': 'What you want from the page (prompt) is empty.',
+      'fetch.noPrompt': 'What you want from the page (prompt) is empty. Provide what you want to know.',
     },
     zh: {
       webSearch: '网页搜索',
@@ -117,7 +117,7 @@ export const t = defineMessages(
       'settings.readDesc': '支持工具调用的模型可以读取 URL 对应的网页（HTML、文本或 PDF）。',
       'settings.readNote': '网页正文会先由另一次调用只提取所需内容，再交给对话模型，因此网页中写的指令不容易产生影响。',
       'settings.ways': '获取途径',
-      'settings.waysDesc': '无论是读取网页还是导入文件，获取页面都会每次确认，然后按顺序尝试以下途径（也可以对某个网站选择不再询问）。',
+      'settings.waysDesc': '无论是读取网页还是导入文件，获取页面都会每次确认，然后按顺序尝试以下途径（也可以按网站分别为读取和导入选择不再询问）。',
       'settings.viaDirect': '直接从网站获取',
       'settings.viaDirectDesc': '允许从浏览器获取的网站（文件托管站点大多允许）',
       'settings.viaRelay': '中转服务器',
@@ -125,12 +125,12 @@ export const t = defineMessages(
       'settings.noRelay': '未设置中转服务器（在构建时设置），因此无法导入不允许从浏览器获取的网站上的文件。',
       'settings.viaJina': 'Jina Reader',
       'settings.pageSettings': '获取页面设置',
-      'settings.pageSettingsDesc': 'Jina Reader 密钥和不再询问的网站（保存在获取页面）',
+      'settings.pageSettingsDesc': 'Jina Reader API 密钥和不再询问的网站（保存在获取页面）',
       'settings.open': '打开',
       'settings.viaJinaDesc': '读取以上途径无法获取或几乎没有正文的网页。地址会发送到 {host}。',
       'search.emptyQuery': '搜索词（query）为空。请提供搜索词。',
       'fetch.badUrl': 'URL 格式不正确。请提供以 https 开头的 URL（不含认证信息）。',
-      'fetch.noPrompt': '想从网页了解的内容（prompt）为空。',
+      'fetch.noPrompt': '想从网页了解的内容（prompt）为空。请提供想了解的内容。',
     }
   }
 );

@@ -146,9 +146,9 @@ export const t = defineMessages(
       'approval.updateQuestion': 'Update the skill "{name}"?',
       'approval.saveQuestion': 'Save this new skill?',
       'approval.help':
-        'Once saved, models load these instructions in future chats. Review the content and fix it if needed before saving. Also check that no instructions from anyone but you (from a web page, for example) slipped in.',
+        'Once saved, models load these instructions in future conversations. Review the content and fix it if needed before saving. Also check that no instructions from anyone but you (from a web page, for example) are mixed in.',
       'approval.tabDiff': 'Changes',
-      'approval.tabEdit': 'Full text',
+      'approval.tabEdit': 'Full text and editing',
       'approval.viewLabel': 'View',
       'approval.invocableChange': 'Let models use it when needed: {before} → {after}',
       'approval.update': 'Update',

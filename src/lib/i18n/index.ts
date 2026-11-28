@@ -122,9 +122,10 @@ export function formatUsd(n: number): string {
 /** A size in bytes: B, KB, MB with one decimal, GB with one decimal */
 export function formatBytes(n: number): string {
   if (n < 1024) return `${formatNumber(n)} B`;
-  if (n < 1024 * 1024) return `${formatNumber(Math.round(n / 1024))} KB`;
+  // The unit follows the shown value, so 1,048,575 bytes is 1.0 MB and not 1,024 KB
+  if (Math.round(n / 1024) < 1024) return `${formatNumber(Math.round(n / 1024))} KB`;
   const one = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
-  if (n < 1024 ** 3) return `${formatNumber(n / 1024 / 1024, one)} MB`;
+  if (Math.round(n / 1024 ** 2 * 10) / 10 < 1024) return `${formatNumber(n / 1024 ** 2, one)} MB`;
   return `${formatNumber(n / 1024 ** 3, one)} GB`;
 }
 

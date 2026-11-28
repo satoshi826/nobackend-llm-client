@@ -30,6 +30,8 @@ describe('i18n', () => {
   it('writes sizes in B, whole KB, and MB / GB with one decimal', () => {
     setLang('en');
     expect([0, 1023, 1024, 1536, 1.25 * 1024 ** 2, 2.5 * 1024 ** 3].map(formatBytes)).toEqual(['0 B', '1,023 B', '1 KB', '2 KB', '1.3 MB', '2.5 GB']);
+    // Just under a unit is shown in that unit
+    expect([1024 ** 2 - 1, 1024 ** 3 - 1].map(formatBytes)).toEqual(['1.0 MB', '1.0 GB']);
   });
   it('formats lists and dates in the language in use, also after it changes', () => {
     const day = Date.UTC(2026, 0, 5, 12);

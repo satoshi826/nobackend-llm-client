@@ -5,6 +5,7 @@ import { Group, PermissionRow, Row, ToggleRow } from '../../../components/settin
 import { formatList, formatUsd } from '../../../lib/i18n';
 import { defaultImageModel, estimateCost, generationModels, imageReady, imageSettings, loadImageModels, modelRef, privacyLabelOf, setDefaultImageModel, toolParams } from '../image/state';
 import { imageProviderList, imageProviderOf } from '../image/providers/types';
+import { tagModelLabel } from '../image/presets';
 import { t } from '../image/messages';
 
 /** Every image provider, A to Z (for texts that name them) */
@@ -30,11 +31,15 @@ function DefaultModelRow() {
           <SearchChoice
             label={t('settings.model')}
             value={m ? modelRef(m) : ''}
-            choices={list.map((x) => ({
-              value: modelRef(x),
-              label: x.privacy === 'anonymized' ? t('bar.relayed', { name: x.name }) : x.name,
-              sub: imageProviderOf(x.providerId)?.label ?? x.providerId
-            }))}
+            choices={list.map((x) => {
+              const kind = tagModelLabel(x);
+              return {
+                value: modelRef(x),
+                label: x.privacy === 'anonymized' ? t('bar.relayed', { name: x.name }) : x.name,
+                sub: imageProviderOf(x.providerId)?.label ?? x.providerId,
+                badge: kind ? { label: kind, title: t('model.tagsTitle') } : undefined
+              };
+            })}
             onChange={(v) => {
               const x = list.find((y) => modelRef(y) === v);
               if (x) void setDefaultImageModel(x);

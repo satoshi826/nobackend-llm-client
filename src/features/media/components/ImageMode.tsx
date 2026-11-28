@@ -6,7 +6,7 @@ import { showToast } from '../../../state/ui';
 import { formatNumber, formatUsd } from '../../../lib/i18n';
 import { hasOption, sizeOf, type TagFamily } from '../image/providers/common';
 import { imageProviderOf } from '../image/providers/types';
-import { TAG_PRESETS } from '../image/presets';
+import { TAG_PRESETS, tagModelLabel } from '../image/presets';
 import { tagWriter, toTags } from '../image/to-tags';
 import {
   currentImageModel,
@@ -209,12 +209,14 @@ export function ImageModel() {
   for (const x of list) {
     const p = imageProviderOf(x.providerId);
     const cost = estimateCost({ ...modeParams(''), providerId: x.providerId, model: x.id, variants: 1, size: undefined });
+    const kind = tagModelLabel(x);
     const entry: ModelEntry = {
       ref: modelRef(x),
       name: x.name,
       sub: cost !== undefined ? ti('model.perImage', { cost: formatUsd(cost) }) : t('cost.unknown'),
       relayed: x.privacy === 'anonymized',
-      isDefault: !!def && modelRef(def) === modelRef(x)
+      isDefault: !!def && modelRef(def) === modelRef(x),
+      badge: kind ? { label: kind, title: ti('model.tagsTitle') } : undefined
     };
     const key = p?.label ?? x.providerId;
     groups.set(key, [...(groups.get(key) ?? []), entry]);

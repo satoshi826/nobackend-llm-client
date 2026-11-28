@@ -3,7 +3,7 @@
 // without its rating tags "safe" / "nsfw"), WAI-Illustrious for Illustrious models (civitai.com/models/827184), and
 // Pony Diffusion V6 XL (civitai.com/models/257749; it needs no negative prompt).
 import type { ImageParams } from '../../../lib/db/schema';
-import type { TagFamily } from './providers/common';
+import type { ImageModelInfo, TagFamily } from './providers/common';
 
 export interface TagPreset {
   /** The family's name, as Civitai and the community name the base model (not translated) */
@@ -31,6 +31,9 @@ export const TAG_PRESETS: Record<TagFamily, TagPreset> = {
   pony: { name: 'Pony', quality: 'score_9, score_8_up, score_7_up, score_6_up, score_5_up, score_4_up', at: 'start', negative: '' },
   illustrious: { name: 'Illustrious', quality: 'masterpiece, best quality, amazing quality', at: 'start', negative: 'bad quality, worst quality, worst detail, sketch, censor' }
 };
+
+/** A tag model's badge: its family, else "Danbooru"; none for a model prompted with sentences */
+export const tagModelLabel = (m: Pick<ImageModelInfo, 'promptStyle' | 'family'>) => (m.promptStyle !== 'tags' ? undefined : m.family ? TAG_PRESETS[m.family].name : 'Danbooru');
 
 /** Whether a negative prompt is one of the presets (filled in by the app, not written by the user) */
 export const isPresetNegative = (s: string) => Object.values(TAG_PRESETS).some((p) => p.negative === s);

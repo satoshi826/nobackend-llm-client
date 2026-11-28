@@ -643,11 +643,22 @@ export function SearchField({ value, onInput, placeholder, label, autoFocus, cla
   );
 }
 
-/** One of the choices of a SearchChoice: `sub` is a quieter second part (a provider, a price) */
+/** One of the choices of a SearchChoice: `sub` is a quieter second part (a provider, a price); `badge` marks a kind, with what it means */
 export interface Choice {
   value: string;
   label: string;
   sub?: string;
+  badge?: { label: string; title: string };
+}
+
+/** A choice's name, with its badge after it */
+function ChoiceName({ c }: { c: Choice }) {
+  return (
+    <span class="flex flex-wrap items-center gap-1.5">
+      <span class="[overflow-wrap:anywhere]">{c.label}</span>
+      {c.badge && <Badge title={c.badge.title}>{c.badge.label}</Badge>}
+    </span>
+  );
 }
 
 /**
@@ -659,7 +670,7 @@ export function SearchChoice({ label, value, choices, onChange, disabled }: { la
   const [q, setQ] = useState('');
   const current = choices.find((c) => c.value === value);
   const words = q.trim().toLowerCase();
-  const shown = words ? choices.filter((c) => `${c.label} ${c.sub ?? ''}`.toLowerCase().includes(words)) : choices;
+  const shown = words ? choices.filter((c) => `${c.label} ${c.sub ?? ''} ${c.badge?.label ?? ''}`.toLowerCase().includes(words)) : choices;
   const pick = (v: string) => {
     onChange(v);
     setOpen(false);
@@ -677,7 +688,7 @@ export function SearchChoice({ label, value, choices, onChange, disabled }: { la
         {/* Its name is what it shows, after what it chooses */}
         <span class="sr-only">{label}: </span>
         <span class="min-w-0 flex-1">
-          <span class="block [overflow-wrap:anywhere]">{current?.label ?? value}</span>
+          {current ? <ChoiceName c={current} /> : <span class="block [overflow-wrap:anywhere]">{value}</span>}
           {current?.sub && <span class="block text-xs text-muted">{current.sub}</span>}
         </span>
         <Chevron open={open} />
@@ -690,7 +701,7 @@ export function SearchChoice({ label, value, choices, onChange, disabled }: { la
               <li key={c.value} role="option" aria-selected={c.value === value}>
                 <button type="button" onClick={() => pick(c.value)} class={cx('flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left', c.value === value ? 'bg-glass-strong' : 'hover:bg-glass')}>
                   <span class="min-w-0 flex-1">
-                    <span class="block [overflow-wrap:anywhere]">{c.label}</span>
+                    <ChoiceName c={c} />
                     {c.sub && <span class="block text-xs text-muted">{c.sub}</span>}
                   </span>
                   {c.value === value && <Icon name="check" class="mt-0.5 size-4 shrink-0 text-ink-strong" />}

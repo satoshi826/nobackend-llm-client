@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TAG_PRESETS, isPresetNegative, qualityTagsAdded, sentPrompt, withQualityTags } from './presets';
+import { TAG_PRESETS, isPresetNegative, qualityTagsAdded, sentPrompt, tagModelLabel, withQualityTags } from './presets';
 import { makeImageTool } from './tool';
 
 describe('quality tag presets', () => {
@@ -20,6 +20,11 @@ describe('quality tag presets', () => {
     const own = withQualityTags({}, 'animagine', 'masterpiece');
     expect(withQualityTags(own, 'animagine', TAG_PRESETS.animagine.quality)).toEqual({});
     expect(withQualityTags(own, 'animagine', undefined)).toEqual({});
+  });
+  it('name a tag model by its family, else as a Danbooru model', () => {
+    expect(tagModelLabel({ promptStyle: 'tags', family: 'noobai' })).toBe('NoobAI');
+    expect(tagModelLabel({ promptStyle: 'tags' })).toBe('Danbooru');
+    expect(tagModelLabel({ promptStyle: 'natural' })).toBeUndefined();
   });
   it('tell presets from negative prompts the user wrote', () => {
     expect(isPresetNegative(TAG_PRESETS.noobai.negative)).toBe(true);

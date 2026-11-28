@@ -75,6 +75,8 @@ export interface ModelEntry {
   sub: string;
   relayed?: boolean;
   isDefault?: boolean;
+  /** A badge of the model's own (what kind of prompt it takes), with what it means */
+  badge?: { label: string; title: string };
 }
 
 /**
@@ -151,6 +153,7 @@ export function ModelButton({
                 >
                   <span class="flex flex-wrap items-center gap-1.5">
                     <span class="break-words">{m.name}</span>
+                    {m.badge && <Badge title={m.badge.title}>{m.badge.label}</Badge>}
                     {m.isDefault && <Badge>{t('model.default')}</Badge>}
                     {m.relayed && <Badge tone="amber">{t('model.relayed')}</Badge>}
                   </span>

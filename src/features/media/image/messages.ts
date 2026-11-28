@@ -10,6 +10,7 @@ export const t = defineMessages(
     'mode.titleOff': '画像を作る（画像モード）',
     'mode.button': '画像',
     imageModel: '画像モデル',
+    'model.tagsTitle': 'Danbooru タグで指示するモデル',
     countOne: '{n} 枚',
     countMany: '{n} 枚',
     // user message label
@@ -151,6 +152,7 @@ export const t = defineMessages(
       'mode.titleOff': 'Create images (image mode)',
       'mode.button': 'Image',
       imageModel: 'Image model',
+      'model.tagsTitle': 'Prompted with Danbooru tags',
       countOne: '{n} image',
       countMany: '{n} images',
       'request.title': 'Image request',
@@ -283,6 +285,7 @@ export const t = defineMessages(
       'mode.titleOff': '生成图像（图像模式）',
       'mode.button': '图像',
       imageModel: '图像模型',
+      'model.tagsTitle': '使用 Danbooru 标签提示的模型',
       countOne: '{n} 张',
       countMany: '{n} 张',
       'request.title': '图像请求',

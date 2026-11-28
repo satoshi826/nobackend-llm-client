@@ -64,7 +64,7 @@ The rules every screen follows: principles for judgment calls (§1), concrete ru
 | `--danger` / `--danger-soft` | `#fda4af` / `rgba(244,63,94,.16)` | errors, destructive actions |
 | `--scrim` | `rgba(0,0,0,.5)` | Fields laid over an image |
 | `--series-1` … `--series-8` | `#3987e5` `#d95926` `#199e70` `#c98500` `#d55181` `#0ca30c` `#9085e9` `#e66767` | Data series in charts, in this order (validated for colour-blind separation on the dark surface); nothing else uses them |
-| `--series-other` | `#7d8196` | The series past the eighth, or no longer connected |
+| `--series-other` | `#7d8196` | Entries past the coloured ones (providers past the eighth, models and conversations past the period's top seven), and providers no longer connected |
 
 **Dark only for now**: the light theme is not offered (`DARK_ONLY` in `state/settings.ts`; the theme picker is hidden and the stored setting is kept). When it comes back, it uses the same token names with light values (`:root` in `src/styles.css`): ground `#eceef4`, white glass, slate accent `#334155`.
 

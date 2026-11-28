@@ -14,3 +14,8 @@ export function fromBase64(s: string): Uint8Array<ArrayBuffer> {
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
+
+/** A blob's bytes as base64, and as a data: URL (how APIs take an input image) */
+export const blobToBase64 = async (b: Blob): Promise<string> => toBase64(await b.arrayBuffer());
+export const blobToDataUrl = async (b: Blob) => `data:${b.type || 'image/png'};base64,${await blobToBase64(b)}`;
+export const base64ToBlob = (data: string, mime: string): Blob => new Blob([fromBase64(data)], { type: mime });

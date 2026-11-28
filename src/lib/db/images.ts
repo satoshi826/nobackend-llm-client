@@ -10,7 +10,7 @@ import { cleanFileName, extOfMime, freePath, timeName } from '../paths';
 import type { DataTable } from './data-tables';
 import { storeChanged } from './changes';
 import { t } from './messages';
-import { fromBase64, toBase64 } from '../base64';
+import { base64ToBlob, toBase64 } from '../base64';
 
 const mem = new Map<string, BlobRecord>();
 
@@ -221,12 +221,6 @@ export interface ExportedImage {
   /** base64 */
   data: string;
 }
-
-/** Bytes as base64, and as a data: URL (how APIs take an input image) */
-export const blobToBase64 = async (b: Blob): Promise<string> => toBase64(await b.arrayBuffer());
-export const blobToDataUrl = async (b: Blob) => `data:${b.type || 'image/png'};base64,${await blobToBase64(b)}`;
-
-export const base64ToBlob = (data: string, mime: string): Blob => new Blob([fromBase64(data)], { type: mime });
 
 export async function exportImages(): Promise<ExportedImage[]> {
   const out: ExportedImage[] = [];

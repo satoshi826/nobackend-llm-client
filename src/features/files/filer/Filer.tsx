@@ -6,7 +6,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { baseName, folderOf, isInside, pathKey } from '../../../lib/paths';
-import { confirmAndDelete } from '../../images';
+import { confirmDeleteMedia } from '../../../components/media/Viewer';
 import { askConfirm } from '../../../components/ConfirmDialog';
 import { FilesHeader } from '../components/FilesHeader';
 import { openConversation } from '../../../state/conversations';
@@ -169,7 +169,7 @@ export function Filer() {
     const r = planRemoval(fs.map((f) => f.path), entryKeys.map(itemOfKey).filter((i) => !!i));
     // Images alone: asked and deleted as everywhere else images are
     if (!fs.length && !r.fileIds.length) {
-      if (r.imageIds.length) await confirmAndDelete(r.imageIds);
+      if (r.imageIds.length) await confirmDeleteMedia(r.imageIds);
     } else {
       const ok = await askConfirm({
         title: entryKeys.length === 1 ? t('filer.deleteTitleOne') : t('filer.deleteTitle', { n: formatNumber(entryKeys.length) }),

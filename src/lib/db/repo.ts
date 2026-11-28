@@ -77,7 +77,7 @@ export async function listMessages(conversationId: string): Promise<MessageRecor
  * Save a message; a temporary conversation's (its conversation saved before it) stays in memory.
  * The second argument is not read (the conversation decides); it goes once the image and video features stop passing it
  */
-export async function putMessage(m: MessageRecord, _temporary?: boolean): Promise<void> {
+export async function putMessage(m: MessageRecord): Promise<void> {
   if (temporaryIds.has(m.conversationId)) {
     memMessages.set(m.id, structuredClone(m));
     return;

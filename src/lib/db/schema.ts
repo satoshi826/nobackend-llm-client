@@ -71,6 +71,9 @@ export interface ImageResult {
   enhancedPrompt?: string;
   /** Alternatives the provider suggested after a content-policy rejection */
   suggestion?: { prompt?: string; model?: string };
+  /** USD: as the provider reported it, else estimated from the model's prices */
+  costUsd?: number;
+  costEstimated?: boolean;
 }
 
 /** What a video request asks for (saved on the user message so it can be made again) */

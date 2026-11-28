@@ -1,7 +1,1 @@
-[
-  {
-    "rule": "label-content-name-mismatch",
-    "element": "aria-label=\"Image\"",
-    "reason": "The image mode chip shows \"Image: on\" while on; its name stays \"Image\""
-  }
-]
+[]

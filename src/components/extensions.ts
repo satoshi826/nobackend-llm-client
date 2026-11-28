@@ -4,6 +4,7 @@ import type { ComponentType } from 'preact';
 import type { Conversation, MessageRecord } from '../lib/db/schema';
 import type { Part } from '../lib/providers/types';
 import type { SendExtras } from '../state/generation';
+import type { MediaItem } from '../state/media';
 import type { IconName } from './ui';
 
 export type ToolPart = Extract<Part, { type: 'tool' }>;
@@ -25,6 +26,11 @@ export interface ComposerMode {
   /** Whether sending can work now (e.g. a model with a key is chosen); the send button waits for it */
   ready: boolean;
   send(text: string, conv: Conversation): void | Promise<void>;
+  /** Inside the box, before the text (where attaching is in a chat) and after it (before the send button) */
+  Start?: ComponentType<{ api: ComposerApi }>;
+  End?: ComponentType<{ api: ComposerApi }>;
+  /** Where its prompts go, in place of the chat model (bottom right) */
+  Model?: ComponentType;
 }
 
 /** What a key handler or add-on can do with the input box */
@@ -74,13 +80,6 @@ export interface MainView {
   Component: ComponentType<{ id?: string }>;
 }
 
-/** Replaces the model button in the input box while it applies (e.g. image mode shows the image model) */
-export interface ModelSlot {
-  id: string;
-  when(conv: Conversation): boolean;
-  Component: ComponentType<{ conv: Conversation }>;
-}
-
 // ---- messages and tool cards ----
 /** How a tool card shows calls of specific tools */
 export interface ToolView {
@@ -108,6 +107,8 @@ export interface AssistantExtra {
   Component: ComponentType<{ m: MessageRecord }>;
   /** The message is answered by the feature, not a chat model (no "waiting" text, no "regenerate with another model") */
   owns?(m: MessageRecord): boolean;
+  /** For a message it owns: what the line under the answer shows after regenerate, in place of a chat model's name, tokens and cost */
+  Footer?: ComponentType<{ m: MessageRecord }>;
 }
 
 /** Extra content above a user message's text (e.g. attached files, picked skills, an image request) */
@@ -126,13 +127,10 @@ export interface SettingsTabDef {
 export const composerAddons: ComposerAddon[] = [];
 export const sidebarTabs: SidebarTab[] = [];
 export const mainViews: MainView[] = [];
-export const modelSlots: ModelSlot[] = [];
 export const toolViews: ToolView[] = [];
 export const assistantExtras: AssistantExtra[] = [];
 export const userMessageExtras: MessageExtra[] = [];
 export const settingsTabs: SettingsTabDef[] = [];
-/** Components rendered once at the app root (e.g. the image viewer) */
-export const overlays: ComponentType[] = [];
 
 const upsert = <T extends { id?: string; kind?: string }>(list: T[], item: T, key: keyof T) => {
   const i = list.findIndex((x) => x[key] === item[key]);
@@ -146,12 +144,10 @@ const once = <T>(list: T[], item: T) => {
 export const registerComposerAddon = (a: ComposerAddon) => upsert(composerAddons, a, 'id');
 export const registerSidebarTab = (t: SidebarTab) => upsert(sidebarTabs, t, 'id');
 export const registerMainView = (v: MainView) => upsert(mainViews, v, 'kind');
-export const registerModelSlot = (s: ModelSlot) => upsert(modelSlots, s, 'id');
 export const registerToolView = (v: ToolView) => once(toolViews, v);
 export const registerAssistantExtra = (x: AssistantExtra) => upsert(assistantExtras, x, 'id');
 export const registerUserMessageExtra = (c: MessageExtra) => once(userMessageExtras, c);
 export const registerSettingsTab = (t: SettingsTabDef) => upsert(settingsTabs, t, 'id');
-export const registerOverlay = (c: ComponentType) => once(overlays, c);
 
 export const toolViewFor = (name: string) => toolViews.find((v) => v.names.includes(name));
 
@@ -193,3 +189,18 @@ export interface ConnectionFeature {
 }
 export const connectionFeatures: ConnectionFeature[] = [];
 export const registerConnectionFeature = (f: ConnectionFeature) => upsert(connectionFeatures, f, 'id');
+
+// ---- the image viewer ----
+/** Something a feature makes from an image in the viewer (an edit, an upscale, a video); it runs in the image's chat */
+export interface MediaAction {
+  id: string;
+  icon: IconName;
+  label: Text;
+  /** Whether it is offered for this image now, and what it does and costs (its tooltip); undefined: not offered */
+  offer(item: MediaItem): { title: string } | undefined;
+  /** It runs on an instruction (an edit): the placeholder of the field that asks for it; run gets the text */
+  instruction?: Text;
+  run(item: MediaItem, text?: string): void | Promise<void>;
+}
+export const mediaActions: MediaAction[] = [];
+export const registerMediaAction = (a: MediaAction) => upsert(mediaActions, a, 'id');

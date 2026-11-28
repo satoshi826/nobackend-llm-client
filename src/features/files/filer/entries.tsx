@@ -3,7 +3,7 @@
 import type { ComponentChildren } from 'preact';
 import { useRef, useState } from 'preact/hooks';
 import { memo } from 'preact/compat';
-import { ImageThumb } from '../../images';
+import { MediaThumb } from '../../../components/media/Thumb';
 import { Checkbox, Icon, cx, type IconName } from '../../../components/ui';
 import { formatBytes, formatNumber } from '../../../lib/i18n';
 import { previewText, type FilerItem, type FolderItem } from './items';
@@ -211,7 +211,7 @@ export const Card = memo(function Card({ it, picked, api }: { it: FilerItem; pic
       <div class="relative">
         {it.type === 'image' ? (
           <>
-            <ImageThumb blobId={it.id} alt={it.name} class="aspect-[4/3] w-full rounded-none!" onOpen={entry.click} />
+            <MediaThumb blobId={it.id} alt={it.name} class="aspect-[4/3] w-full rounded-none!" onOpen={entry.click} />
             {it.video && (
               <span class="pointer-events-none absolute inset-0 grid place-items-center">
                 <span class="grid size-10 place-items-center rounded-full bg-black/60 text-white">

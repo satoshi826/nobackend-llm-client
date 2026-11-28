@@ -1,0 +1,76 @@
+// UI text of stored images and videos: thumbnails, the viewer, deleting (Japanese is the reference; see docs/writing.md)
+import { defineMessages } from '../../lib/i18n';
+
+export const t = defineMessages(
+  {
+    'thumb.open': '{alt} を拡大',
+    'thumb.failed': '画像を読み込めません',
+    'thumb.alt': '画像 {n}',
+    'viewer.label': '画像の表示',
+    'viewer.download': 'ダウンロード',
+    'viewer.copyPrompt': 'プロンプトをコピー',
+    'viewer.copied': 'プロンプトをコピーしました',
+    'viewer.delete': 'この画像を削除',
+    'viewer.deleteVideo': 'この動画を削除',
+    'viewer.close': '閉じる',
+    'viewer.prev': '前の画像',
+    'viewer.next': '次の画像',
+    'viewer.alt': '画像',
+    'viewer.make': 'この画像から作る',
+    'viewer.instructionSubmit': '作る',
+    'delete.titleOne': '削除',
+    'delete.titleMany': '{n} 件を削除',
+    'delete.message': '元に戻せません。会話には「削除されました」と残ります。',
+    'delete.confirm': '削除',
+    'delete.doneOne': '削除しました',
+    'delete.doneMany': '{n} 件を削除しました'
+  },
+  {
+    en: {
+      'thumb.open': 'Enlarge {alt}',
+      'thumb.failed': "Can't load image",
+      'thumb.alt': 'Image {n}',
+      'viewer.label': 'Image viewer',
+      'viewer.download': 'Download',
+      'viewer.copyPrompt': 'Copy prompt',
+      'viewer.copied': 'Prompt copied',
+      'viewer.delete': 'Delete this image',
+      'viewer.deleteVideo': 'Delete this video',
+      'viewer.close': 'Close',
+      'viewer.prev': 'Previous image',
+      'viewer.next': 'Next image',
+      'viewer.alt': 'Image',
+      'viewer.make': 'Make from this image',
+      'viewer.instructionSubmit': 'Make',
+      'delete.titleOne': 'Delete',
+      'delete.titleMany': 'Delete {n} items',
+      'delete.message': 'This can\'t be undone. The conversation will show "Deleted" in their place.',
+      'delete.confirm': 'Delete',
+      'delete.doneOne': 'Deleted',
+      'delete.doneMany': 'Deleted {n} items'
+    },
+    zh: {
+      'thumb.open': '放大{alt}',
+      'thumb.failed': '无法加载图像',
+      'thumb.alt': '图像 {n}',
+      'viewer.label': '图像查看器',
+      'viewer.download': '下载',
+      'viewer.copyPrompt': '复制提示词',
+      'viewer.copied': '已复制提示词',
+      'viewer.delete': '删除此图像',
+      'viewer.deleteVideo': '删除此视频',
+      'viewer.close': '关闭',
+      'viewer.prev': '上一张',
+      'viewer.next': '下一张',
+      'viewer.alt': '图像',
+      'viewer.make': '用这张图像制作',
+      'viewer.instructionSubmit': '制作',
+      'delete.titleOne': '删除',
+      'delete.titleMany': '删除 {n} 项',
+      'delete.message': '删除后无法恢复。对话中会保留“已删除”的提示。',
+      'delete.confirm': '删除',
+      'delete.doneOne': '已删除',
+      'delete.doneMany': '已删除 {n} 项'
+    }
+  }
+);

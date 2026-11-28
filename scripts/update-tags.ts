@@ -1,4 +1,4 @@
-// Rebuilds the Danbooru tag list for prompt autocomplete (src/features/images/tags/danbooru.txt) from a Danbooru list
+// Rebuilds the Danbooru tag list for prompt autocomplete (src/features/media/image/tags/danbooru.txt) from a Danbooru list
 // of DraconicDragon/dbr-e621-lists-archive (Unlicense), trimmed the same way: tags with at least 50 posts, artists
 // with at least 500. Run by hand, never by the build:
 //
@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-const OUT = join(resolve(import.meta.dirname, '..'), 'src/features/images/tags/danbooru.txt');
+const OUT = join(resolve(import.meta.dirname, '..'), 'src/features/media/image/tags/danbooru.txt');
 const ARCHIVE = 'DraconicDragon/dbr-e621-lists-archive';
 const FOLDER = 'tag-lists/danbooru';
 /** The archive's file names: date, post threshold (pt), active (ia) and deleted (dd) aliases included */

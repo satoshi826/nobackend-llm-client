@@ -5,7 +5,7 @@ import { moveFolder } from '../../../lib/db/paths';
 import {  catalogImage, catalogSpace, withTakenPaths } from '../../../lib/db/catalog';
 import { baseName, cleanFileName, cleanFolderName, extOf, folderOf, freeFolder, freePath, isInside, mimeFromName, pathFree, pathKey } from '../../../lib/paths';
 import { getImage, renameImages } from '../../../lib/db/images';
-import { deleteImages } from '../../images';
+import { deleteMedia } from '../../../state/media';
 import type {  FileRecord } from '../../../lib/db/schema';
 import { conversations, showChat, startNewChat, updateConversation } from '../../../state/conversations';
 import { mainView, showToast } from '../../../state/ui';
@@ -130,7 +130,7 @@ export function planRemoval(folders: string[], items: { id: string; type: 'file'
 /** Delete what a removal takes (asked first by the caller); the open folder, when it went, gives way to its parent */
 export async function removeEntries(r: Removal) {
   if (r.fileIds.length) await deleteFiles(r.fileIds);
-  if (r.imageIds.length) await deleteImages(r.imageIds);
+  if (r.imageIds.length) await deleteMedia(r.imageIds);
   dropNewFolders(r.folders);
   const open = filerFolder.value;
   if (open && r.folders.some((f) => isInside(open, f))) openFolder(folderOf(open.slice(0, -1)) || null);

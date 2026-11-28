@@ -244,7 +244,8 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
   const usage = m.meta?.usage;
   const estimated = m.meta?.costUsd == null && usage ? estimateCost(usage, model?.pricing) : undefined;
   // A feature answers this message itself (e.g. images): no waiting text, no "another model"
-  const owned = assistantExtras.some((x) => x.owns?.(m));
+  const owner = assistantExtras.find((x) => x.owns?.(m));
+  const owned = !!owner;
   // Its request runs again only when the feature can run it now (e.g. its provider still has a key)
   // (computed: the message list changes on every streaming frame, the answer is the same)
   const rerunnable = useComputed(() => {
@@ -315,35 +316,41 @@ function AssistantMessage({ m }: { m: MessageRecord }) {
               <Icon name="code" class="size-3.5" />
             </IconButton>
           )}
-          <span class="ml-1 truncate" data-tip={m.meta?.model}>
-            {model?.name ?? m.meta?.model}
-          </span>
-          {usage && (
-            <span class="ml-2 tabular-nums" data-tip={t('msg.tokensTitle')}>
-              {t('msg.tokens', { input: usage.inputTokens != null ? formatNumber(usage.inputTokens) : '?', output: usage.outputTokens != null ? formatNumber(usage.outputTokens) : '?' })}
-            </span>
-          )}
-          {!!usage?.cachedInputTokens && (
-            <span class="ml-1 text-ok tabular-nums" data-tip={t('msg.cachedTitle')}>
-              {t('msg.cached', { n: formatNumber(usage.cachedInputTokens) })}
-            </span>
-          )}
-          {!!usage?.webSearches && (
-            <span class="ml-2 tabular-nums" data-tip={t('msg.webSearchesTitle')}>
-              {t('msg.webSearches', { n: formatNumber(usage.webSearches) })}
-            </span>
-          )}
-          {m.meta?.costUsd != null ? (
-            <span class="ml-2 tabular-nums" data-tip={t('msg.costTitle')}>
-              {formatUsd(m.meta.costUsd)}
-            </span>
+          {owner?.Footer ? (
+            <owner.Footer m={m} />
           ) : (
-            estimated != null && (
-              // No cost reported (e.g. OpenAI, Anthropic): estimated from the model's list price, and marked so
-              <span class="ml-2 tabular-nums" data-tip={t('msg.costEstimatedTitle')}>
-                ≈{formatUsd(estimated)}
+            <>
+              <span class="ml-1 truncate" data-tip={m.meta?.model}>
+                {model?.name ?? m.meta?.model}
               </span>
-            )
+              {usage && (
+                <span class="ml-2 tabular-nums" data-tip={t('msg.tokensTitle')}>
+                  {t('msg.tokens', { input: usage.inputTokens != null ? formatNumber(usage.inputTokens) : '?', output: usage.outputTokens != null ? formatNumber(usage.outputTokens) : '?' })}
+                </span>
+              )}
+              {!!usage?.cachedInputTokens && (
+                <span class="ml-1 text-ok tabular-nums" data-tip={t('msg.cachedTitle')}>
+                  {t('msg.cached', { n: formatNumber(usage.cachedInputTokens) })}
+                </span>
+              )}
+              {!!usage?.webSearches && (
+                <span class="ml-2 tabular-nums" data-tip={t('msg.webSearchesTitle')}>
+                  {t('msg.webSearches', { n: formatNumber(usage.webSearches) })}
+                </span>
+              )}
+              {m.meta?.costUsd != null ? (
+                <span class="ml-2 tabular-nums" data-tip={t('msg.costTitle')}>
+                  {formatUsd(m.meta.costUsd)}
+                </span>
+              ) : (
+                estimated != null && (
+                  // No cost reported (e.g. OpenAI, Anthropic): estimated from the model's list price, and marked so
+                  <span class="ml-2 tabular-nums" data-tip={t('msg.costEstimatedTitle')}>
+                    ≈{formatUsd(estimated)}
+                  </span>
+                )
+              )}
+            </>
           )}
         </div>
       )}

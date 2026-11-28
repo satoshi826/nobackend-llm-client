@@ -247,12 +247,12 @@ const files: Flow = {
 
 const images: Flow = {
   name: 'images',
-  label: 'image mode with the mock image model → the generated image shows → it opens in the viewer',
+  label: 'image mode with the mock image model → the generated image shows → its options → it opens in the viewer',
   async run({ page, url, a11y }) {
     await page.goto(url);
     await addVenice(page);
     await page.getByRole('button', { name: 'Image', exact: true }).click();
-    await page.getByRole('combobox').filter({ hasText: 'Mock Image Flux' }).first().waitFor();
+    await page.getByRole('button', { name: 'Image model: Mock Image Flux' }).waitFor();
     const prompt = 'A lighthouse at dawn';
     await page.getByPlaceholder('Describe the image').fill(prompt);
     await page.getByRole('button', { name: 'Send' }).click();
@@ -262,6 +262,11 @@ const images: Flow = {
     await until('the image to load', () => image.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth > 0));
     await settled(page);
     await a11y('image answer');
+    // The options open over the input box
+    await page.getByRole('button', { name: /^Image settings/ }).click();
+    await page.getByRole('dialog', { name: 'Image settings' }).waitFor();
+    await a11y('image options');
+    await page.keyboard.press('Escape');
     await image.click();
     await page.getByRole('dialog').waitFor();
     await a11y('image view');

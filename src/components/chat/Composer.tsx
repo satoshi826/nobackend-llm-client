@@ -2,6 +2,7 @@
 // comes from composer add-ons that features register (components/extensions.ts).
 // Layout: inside the box, one line by default = 'inside' add-ons (attach) | text | send;
 // below the box = a row of chips for the other add-ons, and the model on the right.
+// A mode (image, video) puts its own parts in the box before and after the text, and its model in place of the chat's.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { currentConv } from '../../state/conversations';
 import { modelOf, providerById } from '../../state/models';
@@ -11,7 +12,7 @@ import { cancelSuggestions } from '../../state/suggestions';
 import { isStreaming, stopGeneration } from '../../state/runs';
 import { sendMessage } from '../../state/generation';
 import { composerFocus, composerText } from '../../state/ui';
-import { activeComposerMode, collectComposerExtras, modelSlots, visibleComposerAddons, type ComposerApi } from '../extensions';
+import { activeComposerMode, collectComposerExtras, visibleComposerAddons, type ComposerApi } from '../extensions';
 import { Icon, IconButton, cx } from '../ui';
 import { touchDevice } from '../device';
 import { t } from './messages';
@@ -90,7 +91,7 @@ export function Composer() {
   const placeholder = active ? (touchDevice ? active.mode.touchPlaceholder : active.mode.placeholder) : t('composer.placeholder');
   const inside = addons.filter((a) => a.Button && a.placement === 'inside');
   const below = addons.filter((a) => a.Button && a.placement !== 'inside');
-  const Slot = modelSlots.find((s) => s.when(conv))?.Component;
+  const Mode = active?.mode;
 
   // 16px wider than the message column on each side (max-w-3xl + 2rem), so text scrolling under it never shows past its rounded corners
   return (
@@ -119,13 +120,14 @@ export function Composer() {
         {/* One line by default: attach | text | send; the text grows upward and the buttons stay at the bottom */}
         <div class="flex items-end gap-0.5 p-1.5">
           {inside.map((a) => a.Button && <a.Button key={a.id} conv={conv} />)}
+          {Mode?.Start && <Mode.Start api={api} />}
           <textarea
           ref={ref}
           rows={1}
           value={text}
           placeholder={placeholder}
           aria-label={t('composer.label')}
-          class={cx('block max-h-60 min-w-0 flex-1 resize-none bg-transparent py-1 text-[15px] leading-6 text-ink-strong outline-none placeholder:text-faint', inside.length ? 'pr-1 pl-0' : 'px-2.5')}
+          class={cx('block max-h-60 min-w-0 flex-1 resize-none bg-transparent py-1 text-[15px] leading-6 text-ink-strong outline-none placeholder:text-faint', inside.length || Mode?.Start ? 'pr-1 pl-0' : 'px-2.5')}
           onPaste={(e) => {
             const files = [...(e.clipboardData?.files ?? [])];
             if (files.length && takeFiles(files)) e.preventDefault();
@@ -144,6 +146,7 @@ export function Composer() {
             }
           }}
         />
+          {Mode?.End && <Mode.End api={api} />}
           {streaming ? (
             <IconButton variant="primary" label={t('composer.stop')} onClick={() => stopGeneration()} class="shrink-0 rounded-full! p-2!">
               <Icon name="stop" class="size-4" />
@@ -159,7 +162,7 @@ export function Composer() {
           only their icons (their labels: @max-[22rem]:hidden), and the model's name gives way last (ellipsis) */}
       <div class="@container mt-2 flex items-center gap-1.5 px-1">
         {below.map((a) => a.Button && <a.Button key={a.id} conv={conv} />)}
-        <div class="flex min-w-0 flex-1 items-center justify-end">{Slot ? <Slot conv={conv} /> : <ModelButton />}</div>
+        <div class="flex min-w-0 flex-1 items-center justify-end">{Mode?.Model ? <Mode.Model /> : <ModelButton />}</div>
       </div>
     </div>
   );

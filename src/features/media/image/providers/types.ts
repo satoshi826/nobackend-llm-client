@@ -1,0 +1,64 @@
+// Image providers: one adapter per service (Venice, OpenRouter, Gemini, OpenAI, NanoGPT, DeepInfra, Together).
+// The image state calls providers only through this interface.
+import type { Connection } from '../../connection';
+import type { ImageParams } from '../../../../lib/db/schema';
+import type { AuthRef, Transport } from '../../../../lib/providers/types';
+import type { ImageModelInfo } from './common';
+
+export type { ImageModelInfo };
+
+export interface ImageCallContext {
+  config: Connection;
+  auth: AuthRef | undefined;
+  transport: Transport;
+  signal?: AbortSignal;
+}
+
+export interface GeneratedImages {
+  images: Blob[];
+  blurred?: boolean;
+  /** Variants dropped by the provider's content policy */
+  violations?: number;
+  enhancedPrompt?: string;
+  /** Cost the provider reported for this request (recorded as spend, not an estimate) */
+  costUsd?: number;
+}
+
+export interface ImageProvider {
+  id: string;
+  label: string;
+  /** Vault account holding the key (an LLM provider id or a service id) */
+  account: string;
+  /** Image models. auth is set for providers whose list needs the key (keyedList) */
+  listModels(config: Connection, transport: Transport, auth?: AuthRef): Promise<ImageModelInfo[]>;
+  /** The model list needs the key (fetched through the key vault) */
+  keyedList?: boolean;
+  /** Prices fetched separately for one model (OpenRouter); returns the model with pricing filled in */
+  loadPricing?(model: ImageModelInfo, config: Connection, transport: Transport): Promise<ImageModelInfo>;
+  listStyles?(ctx: ImageCallContext): Promise<string[]>;
+  generate(p: ImageParams, model: ImageModelInfo | undefined, ctx: ImageCallContext): Promise<GeneratedImages>;
+  upscale?(source: Blob, scale: 2 | 4, ctx: ImageCallContext): Promise<Blob>;
+  /** Edit from p.prompt with the model p.model (a model whose `edits` is set, or '' with ownEditModel) */
+  edit?(source: Blob, p: ImageParams, ctx: ImageCallContext): Promise<Blob>;
+  /** Edits run on the provider's own edit model, so no model of the list is needed (Venice) */
+  ownEditModel?: boolean;
+  removeBackground?(source: Blob, ctx: ImageCallContext): Promise<Blob>;
+  /** Estimated USD of an edit (upscale, edit, background removal); undefined when unknown. Generating is priced from the model's sizes */
+  editCost?(p: ImageParams): number | undefined;
+  /** Who sees the prompt, for the header badge and the tool approval card */
+  privacyLabel(model: ImageModelInfo | undefined): { tone: 'green' | 'amber' | 'zinc'; label: string; title: string };
+}
+
+const providers = new Map<string, ImageProvider>();
+
+export function registerImageProvider(p: ImageProvider) {
+  providers.set(p.id, p);
+}
+
+export function imageProviderOf(id: string): ImageProvider | undefined {
+  return providers.get(id);
+}
+
+export function imageProviderList(): ImageProvider[] {
+  return [...providers.values()];
+}

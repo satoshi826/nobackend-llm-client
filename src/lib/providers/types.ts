@@ -4,11 +4,8 @@ import type { Endpoint } from './endpoints';
 
 export type { AdapterKind } from './endpoints';
 
-/**
- * A provider's connection as the adapters use it (fixed at build time: endpoints.ts). `preset` repeats the id, and
- * `modelListMode` / `enabled` are read nowhere: they stay while the image feature (its code and tests) still uses them
- */
-export type ProviderConfig = Pick<Endpoint, 'id' | 'name' | 'kind' | 'baseUrl' | 'headers'> & { preset: string; modelListMode?: string; enabled?: boolean };
+/** A provider's connection as the adapters use it (fixed at build time: endpoints.ts). `preset` repeats the id */
+export type ProviderConfig = Pick<Endpoint, 'id' | 'name' | 'kind' | 'baseUrl' | 'headers'> & { preset: string };
 
 export interface ModelCapabilities {
   vision?: boolean;

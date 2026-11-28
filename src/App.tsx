@@ -16,7 +16,8 @@ import { FetchDialog, PageFetcher } from './components/FetchDialog';
 import { PAGE_WEB } from './lib/fetcher/config';
 import { Button, cx, Icon, Spinner } from './components/ui';
 import { ConfirmDialog } from './components/ConfirmDialog';
-import { mainViews, overlays } from './components/extensions';
+import { mainViews } from './components/extensions';
+import { Lightbox } from './components/media/Viewer';
 import { mainView } from './state/ui';
 import { t } from './components/messages';
 import { t as ts } from './components/settings/messages';
@@ -204,9 +205,7 @@ export function App() {
       <Sidebar />
       <MainArea />
       <Modals />
-      {overlays.map((O, i) => (
-        <O key={i} />
-      ))}
+      <Lightbox />
       <FetchDialog />
       {PAGE_WEB && <PageFetcher />}
       <ConfirmDialog />

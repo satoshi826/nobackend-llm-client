@@ -257,11 +257,6 @@ export async function removeConversation(id: string, { beforeRemove, withItems =
   conversations.value = conversations.value.filter((c) => c.id !== id);
 }
 
-/** Save a message without showing it. Only for the image and video features until they move to saveMessage */
-export async function putMessage(m: MessageRecord, _conv?: Conversation) {
-  await repo.putMessage(m);
-}
-
 // ---- URL（#/c/<id>）----
 function setHash(id: string | null) {
   const conv = id ? conversations.value.find((c) => c.id === id) : null;

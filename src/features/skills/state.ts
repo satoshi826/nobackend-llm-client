@@ -179,13 +179,13 @@ export function takeAttachedSkills(): { name: string; body: string }[] {
 registerToolProvider({
   id: 'skills',
   label: () => t('tabLabel'),
-  tools: () => (modelSkills.value.length ? [makeSkillTool(modelSkills.value)] : []),
+  tools: () => (modelSkills.value.length ? [makeSkillTool(modelSkills.value, skillFileList)] : []),
   // skill-creator unlocks save_skill (and load_skill over every skill) in the conversation that loaded it
   dynamicTools: ({ history }, turn) => {
     const unlocked = unlockedTools([...history, turn], allSkills.value);
     if (!unlocked.has('save_skill')) return [];
     return [
-      makeSkillTool(allSkills.value),
+      makeSkillTool(allSkills.value, skillFileList),
       makeSaveSkillTool({
         find: (name) => allSkills.value.find((s) => s.name === name),
         save: (draft, id) => saveSkill(draft, id, 'model')

@@ -81,12 +81,12 @@ describe('skills sent to the model', () => {
     expect((u.parts[0] as { text: string }).text).toBe('hello');
   });
   it('load_skill returns the body, or an error listing available skills', async () => {
-    const tool = makeSkillTool([{ name: 'a', body: 'Body A' }]);
+    const tool = makeSkillTool([{ id: 'a1', name: 'a', body: 'Body A' }], async () => []);
     expect((tool.parameters as any).properties.name.enum).toEqual(['a']);
     expect(tool.prepare({ name: 'a' })).toEqual({ name: 'a' });
     expect(() => tool.prepare({})).toThrow();
     const ok = await tool.execute({ name: 'a' }, ctx);
-    expect(ok.content).toContain('Body A');
+    expect(ok.content).toBe('<skill name="a">\nBody A\n</skill>');
     expect(ok.isError).toBeFalsy();
     await expect(tool.execute({ name: 'b' }, ctx)).rejects.toMatchObject({ english: 'There is no skill "b". Available skills: a' });
   });

@@ -1,14 +1,25 @@
-// The skill tools: load_skill loads the body of a skill listed in the system prompt, save_skill creates or fixes one.
-// Both run entirely in the browser; nothing is sent out
+// The skill tools: load_skill loads the body of a skill listed in the system prompt (and lists the files of its folder),
+// save_skill creates or fixes one. Both run entirely in the browser; nothing is sent out
 import type { Skill } from '../../lib/db/schema';
 import { skillBlock, validateSkill, type SkillDraft } from '../../lib/skills/skill';
+import { isTextMime, type SkillFile } from '../../lib/skills/files';
 import type { Tool } from '../../lib/tools/types';
 import { t } from './messages';
 import { TranslatedError } from '../../lib/i18n';
 
 export const LOAD_SKILL = 'load_skill';
 
-export function makeSkillTool(list: Pick<Skill, 'name' | 'body'>[]): Tool<{ name: string }> {
+/** Files of a skill listed at once at most (load_skill's result) */
+const LISTED_FILES = 50;
+
+/** A skill's files for the model, one a line: 'reference/a.md (3 bytes)', 'assets/x.png (binary: image/png, 3 bytes)' */
+export function fileLines(files: SkillFile[], max = LISTED_FILES): string {
+  const lines = files.slice(0, max).map((f) => `- ${f.path} (${isTextMime(f.mime) ? '' : `binary: ${f.mime}, `}${f.bytes} bytes)`);
+  return lines.join('\n') + (files.length > max ? `\n[${files.length - max} more not listed]` : '');
+}
+
+/** files: a skill's files (none for a built-in one) */
+export function makeSkillTool(list: Pick<Skill, 'id' | 'name' | 'body'>[], files: (skillId: string) => Promise<SkillFile[]>): Tool<{ name: string }> {
   const names = list.map((s) => s.name);
   return {
     name: LOAD_SKILL,
@@ -29,7 +40,10 @@ export function makeSkillTool(list: Pick<Skill, 'name' | 'body'>[]): Tool<{ name
     async execute({ name }) {
       const s = list.find((x) => x.name === name);
       if (!s) throw new TranslatedError(() => (names.length ? t('tool.unknown', { name, names: names.join(', ') }) : t('tool.unknownNone', { name })));
-      return { content: skillBlock(s), details: { name: s.name, chars: s.body.length } };
+      const own = await files(s.id);
+      // After the instructions, so the model knows what the skill has; its paths come with it, like its body
+      const listed = own.length ? `\n\nFiles in this skill's folder (${own.length}; paths inside it):\n${fileLines(own)}` : '';
+      return { content: skillBlock(s) + listed, details: { name: s.name, chars: s.body.length } };
     }
   };
 }

@@ -32,6 +32,7 @@ export function mapGeminiImageModel(raw: any, providerId = 'gemini'): ImageModel
     name: String(raw.displayName ?? id),
     privacy: 'unknown',
     traits: [],
+    promptStyle: 'natural',
     constraints: {
       sizes: sizeGrid(ASPECTS, sized(id) ? ['1K', '2K', '4K'] : [], (_a, tier) => (tier ? price?.resolutions?.[tier] : undefined)),
       defaultSize: sized(id) ? '1:1 1K' : '1:1',

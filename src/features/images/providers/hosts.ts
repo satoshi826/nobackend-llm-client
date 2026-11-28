@@ -10,7 +10,7 @@ import type { AuthRef, ProviderConfig, Transport } from '../../../lib/providers/
 import { blobToDataUrl } from '../../../lib/db/images';
 import { joinUrl } from '../../../lib/providers/openai-compatible';
 import type { ImageProvider } from './types';
-import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, fetchModelList, imageCount, jsonPost, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, fetchModelList, imageCount, jsonPost, promptStyleOf, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const num = (x: unknown): number | undefined => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
@@ -52,12 +52,17 @@ export function mapNanoImageModel(raw: any, providerId = 'nanogpt'): ImageModelI
   if (!id || !inputs.includes('text') || raw?.capabilities?.image_generation === false) return null;
   const names: string[] = Array.isArray(raw?.supported_parameters?.resolutions) ? raw.supported_parameters.resolutions.filter((s: unknown) => typeof s === 'string') : [];
   const prices = raw?.pricing?.per_image ?? {};
+  // Ids do not always match the model (animagine-xl-31 is "Crystal Clear XL"), so the style comes from the name
+  const name = typeof raw.name === 'string' ? raw.name : id;
+  const limit = num(raw?.supported_parameters?.max_prompt_characters);
   return {
     providerId,
     id,
-    name: typeof raw.name === 'string' ? raw.name : id,
+    name,
     privacy: 'unknown',
     traits: [],
+    ...promptStyleOf(name, typeof raw.description === 'string' ? raw.description : ''),
+    ...(limit ? { promptLimit: limit } : {}),
     // The provider's own size names (e.g. square_hd, landscape_16_9, 2048x2048), each with its price
     constraints: { sizes: names.map((n) => ({ id: n, price: num(prices[n]) })), defaultSize: names[0] },
     pricing: {},
@@ -100,6 +105,7 @@ export function mapDeepInfraImageModel(raw: any, providerId = 'deepinfra'): Imag
     name: id,
     privacy: 'unknown',
     traits: [],
+    ...promptStyleOf(id, typeof m.description === 'string' ? m.description : ''),
     constraints: { sizes: sizeGrid(DEFAULT_ASPECTS), defaultSize: '1:1' },
     pricing: each !== undefined ? { generation: each } : {},
     options: { seed: false, negativePrompt: false, styles: false, enhance: false }
@@ -122,12 +128,14 @@ export const deepinfraImageProvider: ImageProvider = {
 export function mapTogetherImageModel(raw: any, providerId = 'together'): ImageModelInfo | null {
   const id = typeof raw?.id === 'string' ? raw.id : '';
   if (!id || raw?.type !== 'image') return null;
+  const name = typeof raw.display_name === 'string' ? raw.display_name : id;
   return {
     providerId,
     id,
-    name: typeof raw.display_name === 'string' ? raw.display_name : id,
+    name,
     privacy: 'unknown',
     traits: [],
+    ...promptStyleOf(name),
     constraints: { sizes: sizeGrid(DEFAULT_ASPECTS), defaultSize: '1:1' },
     pricing: {},
     options: { seed: false, negativePrompt: false, styles: false, enhance: false }

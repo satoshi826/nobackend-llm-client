@@ -4,12 +4,21 @@ import type { ImageParams } from '../../../lib/db/schema';
 import { classifyError, errorFromFetchFailure, ProviderFailure } from '../../../lib/providers/errors';
 import { t } from '../messages';
 
+/** Anime model families prompted with Danbooru tags, each with its own recommended quality tags (presets.ts) */
+export type TagFamily = 'animagine' | 'noobai' | 'pony' | 'illustrious';
+
 export interface ImageModelInfo {
   providerId: string;
   id: string;
   name: string;
   privacy: 'private' | 'anonymized' | 'unknown';
   traits: string[];
+  /** How the model wants its prompt: Danbooru-style tags (anime SDXL families) or natural sentences */
+  promptStyle: 'tags' | 'natural';
+  /** The tag family, when it is known */
+  family?: TagFamily;
+  /** Most characters a prompt may have, when the provider says */
+  promptLimit?: number;
   constraints: {
     /** Venice models sized by width x height: what they must be divisible by */
     widthHeightDivisor?: number;
@@ -78,6 +87,30 @@ export function generationCost(p: ImageParams, m: ImageModelInfo | undefined): n
   const each = sizeOf(m, p)?.price ?? m?.pricing.generation;
   return each === undefined ? undefined : each * imageCount(p, m);
 }
+
+// Checked in this order: NoobAI is built on Illustrious and says so. "ILL" (Illustrious in model names) only in capitals
+const FAMILIES: [TagFamily, RegExp][] = [
+  ['animagine', /animagine/i],
+  ['noobai', /noob/i],
+  ['pony', /\bpony\b/i],
+  ['illustrious', /illustrious|\bwai\b/i],
+  ['illustrious', /\bILL\b/]
+];
+
+/**
+ * How a model wants its prompt, from its name, else its description: tags for the anime families (and models
+ * described as prompted with Danbooru tags), natural sentences otherwise
+ */
+export function promptStyleOf(name: string, description = ''): Pick<ImageModelInfo, 'promptStyle' | 'family'> {
+  for (const text of [name, description]) {
+    const family = FAMILIES.find(([, re]) => re.test(text))?.[0];
+    if (family) return { promptStyle: 'tags', family };
+  }
+  return { promptStyle: /danbooru|booru|tag-driven/i.test(description) ? 'tags' : 'natural' };
+}
+
+/** A prompt's length as providers count it (code points, so an emoji is one) */
+export const promptLength = (s: string) => [...s].length;
 
 /** Whether the bar should offer an option for this model */
 export const hasOption = (m: ImageModelInfo | undefined, k: keyof NonNullable<ImageModelInfo['options']>) => !m?.options || !!m.options[k];

@@ -6,7 +6,7 @@ import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob, blobToDataUrl } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageProvider } from './types';
-import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, fetchModelList, jsonPost, perImage, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
+import { DEFAULT_ASPECTS, ImageApiError, aspectAndTier, fetchModelList, jsonPost, perImage, promptStyleOf, sendImageRequest, sizeGrid, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 const enumOf = (sp: any, k: string): string[] | undefined => (sp?.[k]?.type === 'enum' && Array.isArray(sp[k].values) ? sp[k].values.map(String).filter((v: string) => v !== 'auto') : undefined);
@@ -19,12 +19,14 @@ export function mapOpenRouterImageModel(raw: any, providerId = 'openrouter'): Im
   // input_references: how many images the model takes in; at least one means it only edits
   const refs = sp.input_references?.type === 'range' ? sp.input_references : undefined;
   const edits = refs && refs.max > 0 ? (refs.min >= 1 ? 'only' : 'also') : undefined;
+  const name = String(raw.name ?? raw.id);
   return {
     providerId,
     id: String(raw.id),
-    name: String(raw.name ?? raw.id),
+    name,
     privacy: 'unknown',
     traits: [],
+    ...promptStyleOf(name, typeof raw.description === 'string' ? raw.description : ''),
     constraints: {
       sizes: sizeGrid(aspects?.length ? aspects : DEFAULT_ASPECTS, resolutions ?? []),
       defaultSize: [aspects?.includes('1:1') || !aspects?.length ? '1:1' : aspects[0], resolutions?.includes('1K') ? '1K' : resolutions?.[0]].filter(Boolean).join(' '),

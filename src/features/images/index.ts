@@ -14,7 +14,8 @@ import { registerMessageTransform } from '../../lib/chat/request';
 import { ImageModelButton, ImageBarAbove, ImageModeButton, ImageSettings, ImageToolDetail, UserImageRequest, imageToolNote } from './components/Hooks';
 import { ImageAnswer, Lightbox, ReplyImages } from './components/ImageView';
 import { imageNote } from './transform';
-import { currentImageModel, imageReady, sendImagePrompt } from './state';
+import { composerText } from '../../state/ui';
+import { currentImageModel, imageReady, paramsFromBar, promptUse, sendImagePrompt } from './state';
 import { imageProviderList } from './providers/types';
 import { GENERATE_IMAGE } from './tool';
 import { imageCount, t } from './messages';
@@ -33,11 +34,17 @@ registerComposerAddon({
           id: 'images',
           placeholder: t('mode.placeholder'),
           touchPlaceholder: t('mode.touchPlaceholder'),
-          ready: imageReady.value && !!currentImageModel.value,
+          // A prompt over the model's limit is not sent (the bar says why)
+          ready: imageReady.value && !!currentImageModel.value && !promptTooLong(composerText.value),
           send: (text) => sendImagePrompt(text)
         }
       : null
 });
+function promptTooLong(text: string) {
+  const use = promptUse(paramsFromBar(text.trim()));
+  return !!use && use.n > use.limit;
+}
+
 registerModelSlot({ id: 'images', when: (conv) => !!conv.imageMode, Component: ImageModelButton });
 registerAssistantExtra({ id: 'images', Component: ImageAnswer, owns: (m) => !!m.image });
 // Images a chat model put in its reply (native image output; stored by state/media.ts)

@@ -24,11 +24,12 @@ import { veniceImageProvider } from './providers/venice';
 import { openrouterImageProvider } from './providers/openrouter';
 import { geminiImageProvider } from './providers/gemini';
 import { openaiImageProvider } from './providers/openai';
-import { ImageApiError, generationCost, hasOption, sizeOf, type ImageModelInfo } from './providers/common';
+import { ImageApiError, generationCost, hasOption, promptLength, sizeOf, type ImageModelInfo } from './providers/common';
 import { deepinfraImageProvider, nanogptImageProvider, togetherImageProvider } from './providers/hosts';
 import { imageProviderList, imageProviderOf, registerImageProvider, type ImageCallContext, type ImageProvider } from './providers/types';
 import { makeImageTool, type ImageToolInput } from './tool';
 import type { IconName } from '../../components/ui';
+import { formatNumber } from '../../lib/i18n';
 import { t } from './messages';
 
 // Image providers in menu order. A provider is offered once its key is set.
@@ -211,8 +212,8 @@ export function editTargetFor(op: EditOp, from: { providerId?: string; model?: s
   );
 }
 
-/** v2: models describe their sizes as one list */
-const cacheKey = (id: string) => `cache:imageModels:v2:${id}`;
+/** v3: models say how they want their prompt */
+const cacheKey = (id: string) => `cache:imageModels:v3:${id}`;
 let loading: Promise<void> | null = null;
 
 /** Image models of every provider in use (each list cached for 6 hours) */
@@ -457,11 +458,24 @@ async function storeImages(conv: Conversation, messageId: string, blobs: Blob[])
   return parts;
 }
 
+/** A prompt's length and its model's limit, when the model has one */
+export function promptUse(p: ImageParams): { n: number; limit: number } | undefined {
+  const limit = p.op === 'generate' ? imageModelOf(p.providerId, p.model)?.promptLimit : undefined;
+  return limit === undefined ? undefined : { n: promptLength(p.prompt), limit };
+}
+
+/** Refuse a prompt longer than its model takes, before it is sent */
+function checkPromptLength(p: ImageParams) {
+  const use = promptUse(p);
+  if (use && use.n > use.limit) throw new ImageApiError({ kind: 'bad-request', message: t('err.tooLong', { n: formatNumber(use.n), limit: formatNumber(use.limit) }) });
+}
+
 /** Call the provider for one job */
 async function call(p: ImageParams, signal: AbortSignal): Promise<{ blobs: Blob[]; result: Partial<ImageResult>; costUsd?: number }> {
   const provider = providerFor(p.providerId);
   const ctx = callContext(p.providerId, signal);
   if (p.op === 'generate') {
+    checkPromptLength(p);
     const r = await provider.generate(p, imageModelOf(p.providerId, p.model), ctx);
     return { blobs: r.images, result: { seed: p.seed, blurred: r.blurred || undefined, violations: r.violations || undefined, enhancedPrompt: r.enhancedPrompt }, costUsd: r.costUsd };
   }
@@ -608,6 +622,7 @@ async function runImageTool(conv: Conversation, messageId: string, input: ImageT
   if (!imageModels.value.length) await loadImageModels();
   const p = toolParams(conv, input);
   if (!p.model) throw new Error(t('err.modelsFailed'));
+  checkPromptLength(p);
   const model = imageModelOf(p.providerId, p.model);
   const r = await providerFor(p.providerId).generate(p, model, callContext(p.providerId, signal));
   if (!r.images.length) throw new Error(r.violations ? t('err.policy') : t('err.noImage'));
@@ -631,7 +646,7 @@ registerToolProvider({
     if (!imageSettings.value.value.imageTool || !imageReady.value) return [];
     // Load the model list now, so the approval card can name the model and its price
     if (!imageModels.value.length) void loadImageModels();
-    return [makeImageTool((input, signal) => runImageTool(conv, messageId, input, signal))];
+    return [makeImageTool((input, signal) => runImageTool(conv, messageId, input, signal), imageModelFor(conv))];
   }
 });
 

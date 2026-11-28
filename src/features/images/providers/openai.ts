@@ -34,6 +34,7 @@ export function mapOpenAIImageModel(raw: any, providerId = 'openai'): ImageModel
     name: id,
     privacy: 'unknown',
     traits: [],
+    promptStyle: 'natural',
     constraints: {
       // Square and other sizes cost differently, per quality
       sizes: sizeGrid(Object.keys(sizes), qualities, (aspect, quality) => (row ? (sizes[aspect] === '1024x1024' ? row.square : row.wide)[quality!] : undefined)),

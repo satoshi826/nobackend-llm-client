@@ -95,6 +95,19 @@ const IMAGE_MODELS = [
       constraints: { promptCharacterLimit: 4000, steps: { default: 8, max: 8 }, widthHeightDivisor: 16, aspectRatios: ['1:1', '3:2', '2:3', '16:9'], defaultAspectRatio: '1:1', resolutions: ['1K', '2K'], defaultResolution: '1K' },
       pricing: { resolutions: { '1K': { usd: 0.04, diem: 0.04 }, '2K': { usd: 0.08, diem: 0.08 } } }
     }
+  },
+  {
+    // An anime model prompted with Danbooru tags, with a short prompt limit (to see the characters left)
+    id: 'mock-image-anime',
+    type: 'image',
+    model_spec: {
+      name: 'Mock Anime (WAI)',
+      description: 'A community anime checkpoint built on Illustrious XL.',
+      privacy: 'private',
+      traits: [],
+      constraints: { promptCharacterLimit: 300, steps: { default: 25, max: 30 }, widthHeightDivisor: 16 },
+      pricing: { generation: { usd: 0.01, diem: 0.01 } }
+    }
   }
 ];
 function sizeOf(body) {

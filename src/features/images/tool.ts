@@ -1,5 +1,6 @@
 // generate_image: lets a chat model create images with the default image model. Off by default; asks before running.
 import type { Tool } from '../../lib/tools/types';
+import type { ImageModelInfo } from './providers/common';
 import { t } from './messages';
 
 export const GENERATE_IMAGE = 'generate_image';
@@ -16,18 +17,30 @@ export interface ImageToolRun {
   (input: ImageToolInput, signal: AbortSignal): Promise<{ blobIds: string[]; names: string[]; inWorkDir: boolean; model: string; blurred: boolean; request?: Record<string, unknown> }>;
 }
 
-export function makeImageTool(run: ImageToolRun): Tool<ImageToolInput> {
+/** How to write the prompt for the image model (for the model only: English, like the descriptions) */
+function promptAdvice(m: Pick<ImageModelInfo, 'promptStyle' | 'promptLimit'> | undefined): { how: string; param: string } {
+  const limit = m?.promptLimit ? ` Keep it within ${m.promptLimit} characters.` : '';
+  return m?.promptStyle === 'tags'
+    ? {
+        how: `The image model is an anime model prompted with Danbooru tags: write the prompt as comma-separated Danbooru tags in English, with spaces instead of underscores and parentheses escaped with a backslash (hatsune miku \\(cosplay\\)), not as sentences. Start with the subject count (1girl, 1boy, ...), then the character and series if any, then appearance, clothing, pose, setting and style (e.g. "1girl, solo, long hair, school uniform, sitting, classroom, window, sunlight, smile").${limit}`,
+        param: `Comma-separated Danbooru tags in English (spaces instead of underscores).${limit}`
+      }
+    : { how: `Write the prompt in English when possible, describing subject, style, composition and lighting.${limit}`, param: `A detailed description of the image, in English when possible.${limit}` };
+}
+
+/** model: the image model it will use, whose prompt style and limit the description tells the chat model */
+export function makeImageTool(run: ImageToolRun, model?: Pick<ImageModelInfo, 'promptStyle' | 'promptLimit'>): Tool<ImageToolInput> {
+  const advice = promptAdvice(model);
   return {
     name: GENERATE_IMAGE,
     get label() {
       return t('tool.label');
     },
-    description:
-      "Create an image from a text description with the user's image model and show it to the user. Use it only when the user asks for an image (a picture, an illustration, a photo, a diagram drawn as an image). Write the prompt in English when possible, describing subject, style, composition and lighting. You cannot see the result, so do not describe it as if you could.",
+    description: `Create an image from a text description with the user's image model and show it to the user. Use it only when the user asks for an image (a picture, an illustration, a photo, a diagram drawn as an image). ${advice.how} You cannot see the result, so do not describe it as if you could.`,
     parameters: {
       type: 'object',
       properties: {
-        prompt: { type: 'string', description: 'A detailed description of the image, in English when possible.' },
+        prompt: { type: 'string', description: advice.param },
         aspect_ratio: { type: 'string', enum: ASPECTS, description: 'Optional. Width:height; default 1:1.' },
         negative_prompt: { type: 'string', description: 'Optional. Things the image should not contain.' }
       },

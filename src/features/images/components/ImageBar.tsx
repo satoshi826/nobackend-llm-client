@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { hasOption, sizeOf } from '../providers/common';
 import { ModelOptions } from './ModelOptions';
 import { openSettings } from '../../../state/ui';
-import { Button, Chevron, Collapse, Select, Spinner, TextField, Checkbox, Icon } from '../../../components/ui';
+import { Button, Chevron, Collapse, Select, Spinner, TextField, Checkbox, Icon, cx } from '../../../components/ui';
 import {
   currentImageModel,
   defaultImageModel,
@@ -18,12 +18,28 @@ import {
   loadImageModels,
   loadImageStyles,
   paramsFromBar,
+  promptUse,
   setImageDefaults
 } from '../state';
 import { imageCount, t } from '../messages';
-import { formatUsd } from '../../../lib/i18n';
+import { formatNumber, formatUsd } from '../../../lib/i18n';
 
-export function ImageBar() {
+/**
+ * Characters left for a model with a prompt limit: its space is kept while it is hidden, so it never moves the bar;
+ * it shows in the last fifth before the limit, and over it says why the prompt can't be sent
+ */
+function PromptRoom({ use }: { use: { n: number; limit: number } }) {
+  const left = use.limit - use.n;
+  const limit = formatNumber(use.limit);
+  return (
+    <span class={cx('tabular-nums', left < 0 ? 'text-danger' : 'text-warn', left > use.limit / 5 && 'invisible')} data-tip={t('bar.limitTitle', { limit })}>
+      {left < 0 ? t('bar.overLimit', { n: formatNumber(-left), limit }) : t('bar.charsLeft', { n: formatNumber(left) })}
+    </span>
+  );
+}
+
+/** prompt: what is in the input box */
+export function ImageBar({ prompt }: { prompt: string }) {
   const [details, setDetails] = useState(false);
   const providerId = currentImageModel.value?.providerId;
   useEffect(() => {
@@ -75,7 +91,9 @@ export function ImageBar() {
   const tierLabel = m?.constraints.tierLabel === 'quality' ? t('bar.quality') : t('bar.resolution');
   const chooseAspect = (aspect: string) => setImageDefaults({ aspectRatio: aspect, size: sizeOf(m, { aspectRatio: aspect, resolution: size?.tier })?.id ?? '' });
   const counts = [1, 2, 3, 4].slice(0, m?.maxImages ?? 4);
-  const cost = estimateCost(paramsFromBar(''));
+  const params = paramsFromBar(prompt.trim());
+  const cost = estimateCost(params);
+  const use = promptUse(params);
   return (
     <div class="space-y-1.5 px-3 pt-2.5 text-xs" role="group" aria-label={t('bar.group')}>
       <div class="flex flex-wrap items-center gap-1.5">
@@ -142,8 +160,11 @@ export function ImageBar() {
           {t('bar.details')}
           <Chevron open={details} />
         </button>
-        <span class="ml-auto text-muted tabular-nums" data-tip={t('bar.costTitle')}>
-          {cost !== undefined ? t(d.enhancePrompt ? 'bar.costEnhance' : 'bar.cost', { cost: formatUsd(cost) }) : t('bar.costUnknown')}
+        <span class="ml-auto flex gap-2">
+          {use && <PromptRoom use={use} />}
+          <span class="text-muted tabular-nums" data-tip={t('bar.costTitle')}>
+            {cost !== undefined ? t(d.enhancePrompt ? 'bar.costEnhance' : 'bar.cost', { cost: formatUsd(cost) }) : t('bar.costUnknown')}
+          </span>
         </span>
       </div>
       <Collapse open={details}>

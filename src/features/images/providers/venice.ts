@@ -5,7 +5,7 @@ import { joinUrl } from '../../../lib/providers/openai-compatible';
 import { base64ToBlob, blobToBase64 } from '../../../lib/db/images';
 import type { ImageParams } from '../../../lib/db/schema';
 import type { ImageCallContext, ImageProvider } from './types';
-import { ImageApiError, DEFAULT_ASPECTS, fetchModelList, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
+import { ImageApiError, DEFAULT_ASPECTS, fetchModelList, promptStyleOf, sendImageRequest, sizeGrid, sizeOf, type ImageModelInfo } from './common';
 import { t } from '../messages';
 
 export function mapImageModel(raw: any, providerId = 'venice'): ImageModelInfo | null {
@@ -22,12 +22,15 @@ export function mapImageModel(raw: any, providerId = 'venice'): ImageModelInfo |
   const tiers: string[] = aspects && Array.isArray(c.resolutions) ? c.resolutions.map(String) : [];
   const defaultAspect = (typeof c.defaultAspectRatio === 'string' && c.defaultAspectRatio) || (aspects ?? DEFAULT_ASPECTS)[0];
   const defaultTier = typeof c.defaultResolution === 'string' && tiers.includes(c.defaultResolution) ? c.defaultResolution : tiers[0];
+  const name = String(spec.name ?? raw.id);
   return {
     providerId,
     id: String(raw.id),
-    name: String(spec.name ?? raw.id),
+    name,
     privacy: spec.privacy === 'private' ? 'private' : spec.privacy === 'anonymized' ? 'anonymized' : 'unknown',
     traits: Array.isArray(spec.traits) ? spec.traits.map(String) : [],
+    ...promptStyleOf(name, typeof spec.description === 'string' ? spec.description : ''),
+    ...(typeof c.promptCharacterLimit === 'number' && c.promptCharacterLimit > 0 ? { promptLimit: c.promptCharacterLimit } : {}),
     constraints: {
       widthHeightDivisor: aspects ? undefined : typeof c.widthHeightDivisor === 'number' ? c.widthHeightDivisor : 8,
       sizes: sizeGrid(aspects ?? DEFAULT_ASPECTS, tiers, (_a, tier) => (tier ? resolutionPrices[tier] : undefined)),

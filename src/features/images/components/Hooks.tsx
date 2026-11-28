@@ -3,7 +3,7 @@
 import type { Conversation, MessageRecord } from '../../../lib/db/schema';
 import { Chip, Disclosure, Icon, SearchChoice, Select, cx } from '../../../components/ui';
 import { Group, PermissionRow, Row, ToggleRow } from '../../../components/settings-ui';
-import type { ToolPart } from '../../../components/extensions';
+import type { ComposerApi, ToolPart } from '../../../components/extensions';
 import { useEffect } from 'preact/hooks';
 import { conversations, currentConv } from '../../../state/conversations';
 import {
@@ -41,8 +41,8 @@ export function ImageModeButton({ conv }: { conv: Conversation }) {
 }
 
 /** The option bar above the text area, only in image mode */
-export function ImageBarAbove({ conv }: { conv: Conversation }) {
-  return conv.imageMode ? <ImageBar /> : null;
+export function ImageBarAbove({ conv, api }: { conv: Conversation; api: ComposerApi }) {
+  return conv.imageMode ? <ImageBar prompt={api.text} /> : null;
 }
 
 /** In image mode the input box shows where prompts go: the image model, not the chat model */

@@ -57,6 +57,7 @@ npm run dev
 **メッセージ中のキーワード**でモックの動きが変わります。
 
 - 全般: `思考` / `think`、`コード`、`長文`、`エラー`、`残高`、`画像`、`xss`、`盗用`
+- 失敗（Venice・Anthropic・Gemini・OpenAI のモック。それぞれの API の形で返す）: `#err:auth`、`#err:balance`、`#err:rate`、`#err:model`、`#err:context`、`#err:policy`、`#err:overloaded`、`#err:server`、`#err:timeout`、`#err:network`（接続を切る）、`#err:stream`（回答の途中でエラー）
 - ツール方式の Web 検索: `検索`、`読んで`（検索のあと）。ページを直接読む: `ページを読んで`
 - 内蔵の検索（Anthropic と Gemini のモック）: `検索` / `天気`
 - スキル: `スキル` で一覧の先頭のスキルを読み込む

@@ -57,6 +57,7 @@ npm run dev
 消息中的**关键词**会改变模拟服务器的行为:
 
 - 通用: `思考` / `think`、`コード`、`長文`、`エラー`、`残高`、`画像`、`xss`、`盗用`
+- 失败（Venice、Anthropic、Gemini、OpenAI 的模拟服务，各按其 API 的格式返回）: `#err:auth`、`#err:balance`、`#err:rate`、`#err:model`、`#err:context`、`#err:policy`、`#err:overloaded`、`#err:server`、`#err:timeout`、`#err:network`（断开连接）、`#err:stream`（回答中途出错）
 - 工具方式的网页搜索: `検索`、`読んで`（搜索之后）。直接读取网页: `ページを読んで`
 - 内置搜索（Anthropic 和 Gemini 的模拟）: `検索` / `天気`
 - 技能: `スキル` 会读取列表中的第一个技能
